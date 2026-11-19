@@ -1,7 +1,8 @@
 // Streaming-read bandwidth probe through the DXA.
 //
 // Each CTA (one warp) has the DXA copy `tiles` tiles of `tile_elems` floats
-// into its local memory and sums them. The host never writes the buffer, so
+// into its local memory, `depth` of them outstanding at once, and sums them
+// (or, with -c0, reads one word of each). The host never writes the buffer, so
 // every line is a memory read that no cache holds. The grid is `rounds` CTAs
 // per CTA slot of the device (warps, or what local memory holds) unless -g
 // gives the CTA count; the bytes read are grid * tiles * tile_elems * 4. Read
@@ -34,6 +35,7 @@ uint32_t tiles   = 4;
 uint32_t rounds  = 1;
 uint32_t grid    = 0;
 uint32_t depth   = 1;
+uint32_t consume = 1;
 
 vx_device_h device = nullptr;
 vx_buffer_h src_buffer = nullptr;
@@ -46,25 +48,26 @@ kernel_arg_t kernel_arg = {};
 static void show_usage() {
   std::cout << "Vortex DXA streaming-read bandwidth probe." << std::endl;
   std::cout << "Usage: [-e tile elements] [-n tiles per CTA] [-r rounds] [-g grid] "
-               "[-d 1|2 buffers] [-k kernel] [-h]" << std::endl;
+               "[-d buffers 1..8] [-c 0|1 consume] [-k kernel] [-h]" << std::endl;
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "e:n:r:g:d:k:h")) != -1) {
+  while ((c = getopt(argc, argv, "e:n:r:g:d:c:k:h")) != -1) {
     switch (c) {
     case 'e': tile_elems = atoi(optarg); break;
     case 'n': tiles   = atoi(optarg); break;
     case 'r': rounds  = atoi(optarg); break;
     case 'g': grid    = atoi(optarg); break;
     case 'd': depth   = atoi(optarg); break;
+    case 'c': consume = atoi(optarg); break;
     case 'k': kernel_file = optarg; break;
     case 'h': show_usage(); exit(0);
     default:  show_usage(); exit(-1);
     }
   }
-  if (tile_elems == 0 || tile_elems > 0xffff || tiles == 0 || depth < 1 || depth > 2) {
-    std::cerr << "tile elements must be 1..65535, tiles nonzero, depth 1 or 2" << std::endl;
+  if (tile_elems == 0 || tile_elems > 0xffff || tiles == 0 || depth < 1 || depth > 8 || consume > 1) {
+    std::cerr << "tile elements must be 1..65535, tiles nonzero, depth 1..8, consume 0 or 1" << std::endl;
     exit(-1);
   }
 }
@@ -123,10 +126,10 @@ int main(int argc, char *argv[]) {
     cleanup();
     return -1;
   }
-  printf("cores=%u warps=%u threads=%u slots=%u grid=%u tile_elems=%u tiles=%u depth=%u "
+  printf("cores=%u warps=%u threads=%u slots=%u grid=%u tile_elems=%u tiles=%u depth=%u consume=%u "
          "pattern=dxa unroll=%u bytes=%llu\n",
          (unsigned)num_cores, (unsigned)num_warps, (unsigned)num_threads, (unsigned)slots, grid,
-         tile_elems, tiles, depth, depth, (unsigned long long)src_size);
+         tile_elems, tiles, depth, consume, depth, (unsigned long long)src_size);
 
   uint64_t src_addr = 0;
   RT_CHECK(vx_buffer_create(device, src_size, VX_MEM_READ, &src_buffer));
@@ -136,6 +139,7 @@ int main(int argc, char *argv[]) {
   kernel_arg.tile_elems = tile_elems;
   kernel_arg.tiles      = tiles;
   kernel_arg.depth      = depth;
+  kernel_arg.consume    = consume;
 
   // Unwritten device memory reads as one fill value; fetch it to predict the sums.
   float fill = 0.0f;
@@ -172,7 +176,7 @@ int main(int argc, char *argv[]) {
 
   // Every element reads as `fill`: redo the kernel's accumulation in its order.
   volatile float sum = 0.0f;
-  for (uint64_t i = 0; i < (uint64_t)tiles * (tile_elems / num_threads); ++i)
+  for (uint64_t i = 0; i < (uint64_t)tiles * (consume ? tile_elems / num_threads : 1); ++i)
     sum = sum + fill;
 
   uint64_t errors = 0;

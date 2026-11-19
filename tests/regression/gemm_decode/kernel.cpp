@@ -28,6 +28,9 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
     ctx::fill_fragment(fragC[decltype(m)::value], 0);
   });
 
+#ifdef PROFILE_ENABLE
+  __rdcycle_time t0 = vx_rdcycle_sync_begin();
+#endif
   for (size_t i = 0; i < K; i += ctx::tileK) {
     auto pTileB = pB + tile_col * K + i;
     ctx::load_matrix_sync<vt::col_major>(fragB, pTileB, K);
@@ -38,6 +41,12 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
       ctx::mma_sync(fragC[mt], fragA, fragB, fragC[mt]);
     });
   }
+
+#ifdef PROFILE_ENABLE
+  // the K walk of this block, without the launch and the host's uploads
+  __rdcycle_time t1 = vx_rdcycle_sync_end();
+  reinterpret_cast<uint32_t*>(arg->cycles_addr)[blockIdx.x] = vx_rdcycle_sync_diff(t0, t1);
+#endif
 
   vt::unroll_for<MTILES>([&](auto m) {
     constexpr uint32_t mt = decltype(m)::value;
