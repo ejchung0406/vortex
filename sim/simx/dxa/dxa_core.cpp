@@ -122,6 +122,7 @@ public:
     bool                    staged = false;
     DxaReq                  staged_req;
     uint64_t                staged_ready = 0;
+    uint64_t                started_cycle = 0;
 
     // addr_gen: pre-enumerated work list (one entry per GMEM CL +
     // multicast replays handled at smem_wr stage).
@@ -241,15 +242,20 @@ public:
 
     // 3) Start a set-up transfer on an idle worker; otherwise let the
     //    worker's setup engine take the next request.
-    for (auto& w : workers_) {
-      if (w.staged && w.state == WState::IDLE && cycle_ >= w.staged_ready) {
-        w.staged = false;
-        start_worker(w, w.staged_req);
-      } else if (!w.staged && !queue_.empty()) {
-        w.staged_req   = queue_.front();
-        w.staged_ready = cycle_ + this->setup_latency(w.staged_req);
-        w.staged       = true;
-        queue_.pop_front();
+    //    A request goes to an idle worker before it waits behind a running one.
+    for (uint32_t pass = 0; pass < 2; ++pass) {
+      for (auto& w : workers_) {
+        if (pass == 0 && w.staged && w.state == WState::IDLE && cycle_ >= w.staged_ready) {
+          w.staged = false;
+          w.started_cycle = cycle_;
+          start_worker(w, w.staged_req);
+        } else if (!w.staged && !queue_.empty() && w.started_cycle != cycle_
+                && (pass == 1 || w.state == WState::IDLE)) {
+          w.staged_req   = queue_.front();
+          w.staged_ready = cycle_ + this->setup_latency(w.staged_req);
+          w.staged       = true;
+          queue_.pop_front();
+        }
       }
     }
 
