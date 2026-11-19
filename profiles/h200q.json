@@ -1,0 +1,22 @@
+{
+  "name": "h200q",
+  "extends": "h100q",
+  "description": "A quarter of the H200 (h200): the quarter H100 (h100q) on a quarter of the H200's HBM3e, 1.2 TB/s. The H200 has the H100's SMs and more memory bandwidth, so each SM must keep more in flight; the study shape whose memory is hardest to fill.",
+  "core": {
+    "VX_CFG_DCACHE_MSHR_SIZE": 128,
+    "VX_CFG_LSU_PENDING_LIMIT": 128
+  },
+  "platform": {
+    "VX_CFG_PLATFORM_MEMORY_PEAK_BW": 1200000,
+    "VX_CFG_PLATFORM_MEMORY_DATA_RATE": 9375
+  },
+  "reference": {
+    "dram_bandwidth_gbs": 1200
+  },
+  "sources": {
+    "PLATFORM_MEMORY_PEAK_BW, PLATFORM_MEMORY_DATA_RATE": "A quarter of the H200's 4.8 TB/s: h100q's 8 channels at the h200 profile's 9375 MT/s",
+    "DCACHE_MSHR_SIZE, LSU_PENDING_LIMIT": "128 each. An SM's share of the peak is 36.4 GB/s (2424 B/cycle x 659 cycles / 132 SMs = 189 lines in flight); a coalesced FP32 stream with four loads outstanding measured 23.8 GB/s per SM at 64/64 and 45.6 at 128/128, so 64 fills 65% of the memory with every SM and 128 is the smallest power of two that fills it",
+    "SM, NUM_CORES, L2, TLB reach, latencies": "Inherited from h100q",
+    "reference": "dram_bandwidth_gbs is a quarter of the H200's"
+  }
+}

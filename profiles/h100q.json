@@ -1,0 +1,30 @@
+{
+  "name": "h100q",
+  "extends": "h100",
+  "description": "A quarter of the H100 (h100): 33 of its SMs on a quarter of its L2 and of its HBM3, so every per-SM ratio is the part's. A study shape for memory-bandwidth experiments, with the request tracking and the TLB reach sized so that all 33 SMs streaming reach the memory's peak.",
+  "core": {
+    "VX_CFG_DCACHE_MSHR_SIZE": 64,
+    "VX_CFG_LSU_PENDING_LIMIT": 64,
+    "VX_CFG_DTLB_SIZE": 64
+  },
+  "chip": {
+    "VX_CFG_NUM_CORES": 33,
+    "VX_CFG_L2_SIZE": 13107200,
+    "VX_CFG_L2_NUM_BANKS": 16,
+    "VX_CFG_L2_TLB_MEGA_SIZE": 64
+  },
+  "platform": {
+    "VX_CFG_PLATFORM_MEMORY_NUM_BANKS": 8,
+    "VX_CFG_PLATFORM_MEMORY_PEAK_BW": 837500
+  },
+  "reference": {
+    "fp32_lanes": 4224,
+    "dram_bandwidth_gbs": 837.5
+  },
+  "sources": {
+    "NUM_CORES, L2_SIZE, L2_NUM_BANKS, PLATFORM_MEMORY_NUM_BANKS, PLATFORM_MEMORY_PEAK_BW": "The H100's 132 SMs, 50 MB and 64 banks of L2, and 32 HBM3 channels at 3.35 TB/s, each divided by four; the channel data rate, the L2's ways and sets per bank, the L2 MSHR per bank and every latency are the H100's",
+    "DCACHE_MSHR_SIZE, LSU_PENDING_LIMIT": "64 each, twice what Little's law derives here. The derived 32 leaves one SM about 64 lines in flight where its share of the peak (1692 B/cycle x 659 cycles / 132 SMs) is 132: an LSU slot carries the 32 B of an 8-lane FP32 pass, not a 64 B line, and a line fetched in two passes holds two MSHR entries. Measured on 4 SMs with a coalesced FP32 stream: 11.9 GB/s per SM at 32/32, 23.8 at 64/64, against a 25.4 GB/s share; 128 would let half the SMs saturate the memory",
+    "DTLB_SIZE, L2_TLB_MEGA_SIZE": "64 entries each, for 128 MB of 2 MB pages per core. The default 16-entry dTLB and 8-entry megapage CAM reach 32 MB and 16 MB, and a 64 MB stream over 32 SMs dropped to a 25% hit rate and a third of the bandwidth; a GPU reads gigabytes through 2 MB pages at full bandwidth",
+    "reference": "fp32_lanes and dram_bandwidth_gbs are a quarter of the H100's"
+  }
+}
