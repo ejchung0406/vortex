@@ -99,7 +99,8 @@ static_assert((VX_CFG_NUM_CORES % VX_CFG_SOCKET_SIZE) == 0,
 inline constexpr uint32_t UMMU_TCACHE_IDX  = 0;
 inline constexpr uint32_t UMMU_RTCACHE_IDX = UMMU_TCACHE_IDX + VX_CFG_EXT_TEX_ENABLED;
 inline constexpr uint32_t UMMU_DXA_IDX     = UMMU_RTCACHE_IDX + VX_CFG_EXT_RTU_ENABLED;
-inline constexpr uint32_t UMMU_NUM_REQS    = VX_CFG_EXT_TEX_ENABLED + VX_CFG_EXT_RTU_ENABLED + VX_CFG_EXT_DXA_ENABLED;
+inline constexpr uint32_t UMMU_NUM_REQS    = VX_CFG_EXT_TEX_ENABLED + VX_CFG_EXT_RTU_ENABLED
+                                           + VX_CFG_EXT_DXA_ENABLED * VX_CFG_DXA_GMEM_PORTS;
 
 // Under VM, the cluster unit MMU translates the rcache and ocache memory ports.
 #if defined(VX_CFG_VM_ENABLE) && (defined(VX_CFG_EXT_RASTER_ENABLE) || defined(VX_CFG_EXT_OM_ENABLE))

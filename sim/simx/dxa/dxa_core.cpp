@@ -33,8 +33,12 @@ static_assert(VX_CFG_DXA_MAX_INFLIGHT >= 2 && (VX_CFG_DXA_MAX_INFLIGHT & (VX_CFG
 
 namespace {
 
-// One GMEM port: the DXA joins its socket's L2-facing arb as a single peer.
-constexpr uint32_t kDxaMemPorts = 1;
+// GMEM ports: port i joins the arb of the socket's L1 memory port i as a peer,
+// and the workers are split evenly over the ports.
+constexpr uint32_t kDxaMemPorts = VX_CFG_DXA_GMEM_PORTS;
+static_assert(kDxaMemPorts >= 1 && kDxaMemPorts <= VX_CFG_NUM_DXA_CORES
+           && kDxaMemPorts <= VX_CFG_L1_MEM_PORTS,
+              "DXA_GMEM_PORTS: at most one per worker and per socket memory port");
 
 // LMEM "word" granularity for splitting DXA writes. The LocalMem bank
 // model applies byteen relative to a VX_CFG_MEM_BLOCK_SIZE-aligned address,

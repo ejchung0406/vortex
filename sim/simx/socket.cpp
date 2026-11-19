@@ -263,36 +263,48 @@ public:
     dcaches_->mem_req_out.at(0).bind(&sock_arb->ReqIn.at(1));
     sock_arb->RspOut.at(1).bind(&dcaches_->mem_rsp_in.at(0));
     // A unit port reaches the arbiter through the unit MMU under VM.
-    auto bind_unit_port = [&](uint32_t arb_idx, uint32_t ummu_idx,
+    auto bind_unit_port = [&](MemArbiter::Ptr& arb, uint32_t arb_idx, uint32_t ummu_idx,
                               SimChannel<MemReq>& req_src,
                               SimChannel<MemRsp>& rsp_dst) {
     #ifdef SIMX_SOCKET_UNIT_MMU
       req_src.bind(&unit_mmu_->ReqIn.at(ummu_idx));
       unit_mmu_->RspOut.at(ummu_idx).bind(&rsp_dst);
-      unit_mmu_->ReqOut.at(ummu_idx).bind(&sock_arb->ReqIn.at(arb_idx));
-      sock_arb->RspOut.at(arb_idx).bind(&unit_mmu_->RspIn.at(ummu_idx));
+      unit_mmu_->ReqOut.at(ummu_idx).bind(&arb->ReqIn.at(arb_idx));
+      arb->RspOut.at(arb_idx).bind(&unit_mmu_->RspIn.at(ummu_idx));
     #else
       __unused(ummu_idx);
-      req_src.bind(&sock_arb->ReqIn.at(arb_idx));
-      sock_arb->RspOut.at(arb_idx).bind(&rsp_dst);
+      req_src.bind(&arb->ReqIn.at(arb_idx));
+      arb->RspOut.at(arb_idx).bind(&rsp_dst);
     #endif
     };
   #ifdef VX_CFG_EXT_TEX_ENABLE
     constexpr uint32_t kTexArbIdx = 2;
-    bind_unit_port(kTexArbIdx, UMMU_TCACHE_IDX, tcache_->mem_req_out.at(0), tcache_->mem_rsp_in.at(0));
+    bind_unit_port(sock_arb, kTexArbIdx, UMMU_TCACHE_IDX, tcache_->mem_req_out.at(0), tcache_->mem_rsp_in.at(0));
   #endif
   #ifdef VX_CFG_EXT_RTU_ENABLE
     constexpr uint32_t kRtuArbIdx = 2 + VX_CFG_EXT_TEX_ENABLED;
-    bind_unit_port(kRtuArbIdx, UMMU_RTCACHE_IDX, rtcache_->mem_req_out.at(0), rtcache_->mem_rsp_in.at(0));
+    bind_unit_port(sock_arb, kRtuArbIdx, UMMU_RTCACHE_IDX, rtcache_->mem_req_out.at(0), rtcache_->mem_rsp_in.at(0));
   #endif
   #ifdef VX_CFG_EXT_DXA_ENABLE
     constexpr uint32_t kDxaArbIdx = 2 + VX_CFG_EXT_TEX_ENABLED + VX_CFG_EXT_RTU_ENABLED;
-    bind_unit_port(kDxaArbIdx, UMMU_DXA_IDX, dxa_core_->gmem_req_out.at(0), dxa_core_->gmem_rsp_in.at(0));
+    bind_unit_port(sock_arb, kDxaArbIdx, UMMU_DXA_IDX, dxa_core_->gmem_req_out.at(0), dxa_core_->gmem_rsp_in.at(0));
   #endif
     bind_mem_port(0, sock_arb->ReqOut.at(0), sock_arb->RspIn.at(0));
 
-    // Remaining ports: extra dcache banks straight through.
+    // Remaining ports: extra dcache banks, straight through or, on a port the
+    // DXA also uses, ahead of it.
     for (uint32_t i = 1; i < VX_CFG_L1_MEM_PORTS; ++i) {
+    #ifdef VX_CFG_EXT_DXA_ENABLE
+      if (i < VX_CFG_DXA_GMEM_PORTS) {
+        snprintf(sname, 100, "%s-mem_arb%d", name.c_str(), i);
+        auto port_arb = MemArbiter::Create(sname, ArbiterType::Priority, 2, 1);
+        dcaches_->mem_req_out.at(i).bind(&port_arb->ReqIn.at(0));
+        port_arb->RspOut.at(0).bind(&dcaches_->mem_rsp_in.at(i));
+        bind_unit_port(port_arb, 1, UMMU_DXA_IDX + i, dxa_core_->gmem_req_out.at(i), dxa_core_->gmem_rsp_in.at(i));
+        bind_mem_port(i, port_arb->ReqOut.at(0), port_arb->RspIn.at(0));
+        continue;
+      }
+    #endif
       bind_mem_port(i, dcaches_->mem_req_out.at(i), dcaches_->mem_rsp_in.at(i));
     }
 #else

@@ -426,6 +426,10 @@ VX_CFG_TCU_FEDP2K = false
 # Cluster-level DXA engine count, decoupled from cores/socket size.
 VX_CFG_NUM_DXA_CORES = "expr: max(1, up($VX_CFG_NUM_CORES / 8))"
 VX_CFG_DXA_MEM_PORTS = "expr: min($VX_CFG_NUM_DXA_CORES, up($VX_CFG_NUM_CORES / $VX_CFG_SOCKET_SIZE) * $VX_CFG_L1_MEM_PORTS)"
+# Memory ports of a socket's DXA engine toward L2. Port i shares the socket's
+# L1 memory port i with the caches, below them in priority, and the engine's
+# workers are split evenly over the ports. SimX only: the RTL engine has one.
+VX_CFG_DXA_GMEM_PORTS = 1
 VX_CFG_DXA_QUEUE_SIZE = 16
 VX_CFG_DXA_MAX_INFLIGHT = 8
 
