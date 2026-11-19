@@ -1,0 +1,23 @@
+{
+  "name": "rtxspark",
+  "extends": "rtx5080",
+  "description": "An RTX Spark-class laptop SoC GPU: the RTX 5080's Blackwell SM (rtx5080), 48 of them, on 273 GB/s of unified LPDDR5X. A study shape, not a calibrated part: the clock, the L2 and every latency are the RTX 5080's.",
+  "chip": {
+    "VX_CFG_NUM_CORES": 48
+  },
+  "platform": {
+    "VX_CFG_PLATFORM_MEMORY_NUM_BANKS": 16,
+    "VX_CFG_PLATFORM_MEMORY_PEAK_BW": 273000,
+    "VX_CFG_PLATFORM_MEMORY_DATA_RATE": 8533
+  },
+  "reference": {
+    "fp32_lanes": 6144,
+    "dram_bandwidth_gbs": 273
+  },
+  "sources": {
+    "NUM_CORES": "6,144 CUDA cores in the top configuration (NVIDIA RTX Spark specifications), taken as 48 SMs of 128 FP32 lanes like the other Blackwell parts",
+    "PLATFORM_MEMORY_NUM_BANKS, PLATFORM_MEMORY_DATA_RATE, PLATFORM_MEMORY_PEAK_BW": "A 256-bit LPDDR5X-8533 interface: 16 16-bit channels x 2 B x 8533 MT/s = 273 GB/s, the reported effective bandwidth (NVIDIA quotes 300 GB/s). The simulators have no LPDDR5X timing, so the channels run the GDDR6 model at this data rate, as rtx5080 runs GDDR7",
+    "SM (all core knobs), L2, PLATFORM_CLOCK_RATE, L1_LINK_LATENCY, L2_LINK_LATENCY, PLATFORM_MEMORY_LATENCY": "Inherited from rtx5080 unchanged. None is published for this part: the laptop clock is lower, the L2 is likely smaller, and the memory is shared with the CPU through the SoC's memory subsystem",
+    "reference": "fp32_lanes is the vendor CUDA core count; dram_bandwidth_gbs the reported effective bandwidth. No latency reference: nothing here is measured on the part"
+  }
+}
