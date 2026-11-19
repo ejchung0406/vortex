@@ -577,7 +577,16 @@ public:
     for (auto& r : rsp_regs_) {
       idle = idle && !r.valid;
     }
-    if (idle && !this->dma_pending()) {
+    // A packet reserved toward an input this cycle is not delivered yet, so
+    // empty() does not see it; size() counts it. Sleeping past one would leave
+    // it unserved until some later packet happened to wake the unit.
+    for (auto& in : simobject_->DmaInputs) {
+      idle = idle && (in.size() == 0);
+    }
+    for (auto& in : simobject_->ReqIn) {
+      idle = idle && (in.size() == 0);
+    }
+    if (idle) {
       simobject_->tick_sleep();
     }
   }
