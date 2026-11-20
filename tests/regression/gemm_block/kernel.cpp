@@ -18,8 +18,14 @@
 //     issued ahead.
 // The core a CTA lands on decides how many A tiles it multiplies each chunk
 // with: the first bw_tiles on a core below bw_cores, all MTILES on any other.
-// Both stage the same chunks of B. A CTA stores only the tiles it computed and
-// records its core, so the host knows which rows of its columns to expect.
+// CTA b stages the chunks of the columns of B of CTA b % wrap, where each kind
+// has its own wrap: B holds as many columns as the larger one covers, and a
+// small wrap makes the CTAs of that kind read the same few columns again and
+// again. A CTA stores only the tiles it computed, into its own columns of C,
+// and records its core, so the host knows which rows of its columns to expect
+// and from which columns of B.
+// With idle_role set, the CTAs of that role do no work: the other role runs
+// alone on its cores.
 namespace vt = vortex::tensor;
 using ctx = vt::wmma_context<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, false, 8, 0, vt::ldst_matrix_enabled>;
 
@@ -45,7 +51,36 @@ static __attribute__((noinline)) void record_cta(kernel_arg_t* __UNIFORM__ arg, 
 #endif
 }
 
+// A CTA of the idle role. It holds its slot until the grid's last CTA has
+// recorded its core: were it to return at once, its core would take the whole
+// grid from the cores that work. The host sizes the grid so that the last CTA
+// goes to a working core.
+static __attribute__((noinline)) void idle_cta(kernel_arg_t* __UNIFORM__ arg) {
+  auto last = reinterpret_cast<volatile uint32_t*>(arg->core_addr) + arg->last_cta;
+  for (;;) {
+    // a core's data cache does not see another core's store: the fence
+    // empties it, so the load fetches the record from the shared L2
+    vx_fence();
+    if (*last != UINT32_MAX)
+      break;
+    // poll seldom: the idle core is to stay out of the L2
+    for (uint32_t i = 0; i < 4096; ++i) {
+      __asm__ volatile("nop");
+    }
+  }
+#ifdef PROFILE_ENABLE
+  reinterpret_cast<uint32_t*>(arg->cycles_addr)[blockIdx.x * get_num_sub_groups() + get_sub_group_id()] = 0;
+#endif
+  record_cta(arg, 0);
+}
+
 __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
+  const bool bw_role = cta_core_id() < arg->bw_cores;
+  if (arg->idle_role == (bw_role ? ROLE_BW : ROLE_CP)) {
+    idle_cta(arg);
+    return;
+  }
+
   auto pA = reinterpret_cast<ctx::input_t *>(arg->A_addr);
   auto pB = reinterpret_cast<ctx::input_t *>(arg->B_addr);
   auto pC = reinterpret_cast<ctx::output_t *>(arg->C_addr);
@@ -61,12 +96,14 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   const uint32_t cta_cols = num_warps * ctx::tileN;
   const size_t cta_col = (size_t)blockIdx.x * cta_cols;
   const size_t tile_col = cta_col + warp * ctx::tileN;
+  // the first of the CTA's columns of B
+  const size_t b_col = (size_t)(blockIdx.x % (bw_role ? arg->bw_wrap : arg->cp_wrap)) * cta_cols;
 
   auto smem = reinterpret_cast<ctx::input_t *>(__local_mem());
   const size_t buf_elems = (size_t)cta_cols * chunk;
   const uint32_t bar0 = get_local_group_id();
 
-  const uint32_t tiles = (cta_core_id() < arg->bw_cores) ? arg->bw_tiles : MTILES;
+  const uint32_t tiles = bw_role ? arg->bw_tiles : MTILES;
 
   ctx::fragment_a   fragA;
   ctx::fragment_b   fragB;
@@ -114,7 +151,7 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
         if (warp == 0) {
           const uint32_t bar = (issue_slot << 8) + bar0;
           vx_barrier_expect_tx(bar, 1);
-          vx_dxa_issue_2d_wg(kDescB, bar, smem + issue_slot * buf_elems, s * chunk, cta_col);
+          vx_dxa_issue_2d_wg(kDescB, bar, smem + issue_slot * buf_elems, s * chunk, b_col);
         }
         issue_slot = (issue_slot + 1 == depth) ? 0 : issue_slot + 1;
       }
@@ -140,7 +177,7 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
     const uint32_t off_step = T % col_words;
     const uint32_t first_off = t % col_words;
     auto dst = reinterpret_cast<word_t *>(smem) + t;
-    auto first = reinterpret_cast<const word_t *>(pB + cta_col * K)
+    auto first = reinterpret_cast<const word_t *>(pB + b_col * K)
                + (t / col_words) * col_stride + first_off;
     for (uint32_t i = 0; i < chunks; ++i) {
       auto src = first;

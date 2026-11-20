@@ -467,6 +467,9 @@ uint32_t xs = STAGE_LOAD; // staging mode
 uint32_t xd = 2;          // chunk buffers per CTA in dxa mode
 int      xb = -1;         // cores of the memory-bound role (-1: no split, every CTA multiplies MTILES tiles)
 uint32_t xt = 1;          // A tiles a CTA of the memory-bound role multiplies
+uint32_t xr = 1;          // rounds: the grid is this many times the N / cta_cols CTAs of one round
+uint32_t xR = 0;          // B columns the compute-bound CTAs share (0: each its own)
+uint32_t xo = ROLE_NONE;  // the role that runs alone (the other's CTAs do no work)
 
 vx_device_h device = nullptr;
 vx_buffer_h A_buffer = nullptr;
@@ -485,12 +488,14 @@ static void show_usage() {
   std::cout << "Vortex block-staged GEMM TCU Test." << std::endl;
   std::cout << "Usage: [-m M] [-n N] [-k K] [-w warps per CTA] [-c K elements per chunk] "
                "[-s 0|1 staging: load, dxa] [-d chunk buffers 1.." << MAX_DEPTH << " (dxa)] "
-               "[-b cores of the memory-bound role] [-t its A tiles 1.." << MTILES << "] [-h: help]" << std::endl;
+               "[-b cores of the memory-bound role] [-t its A tiles 1.." << MTILES << "] "
+               "[-r rounds of N columns] [-R B columns the compute-bound CTAs share] "
+               "[-o 1|2 run the memory-bound|compute-bound role alone] [-h: help]" << std::endl;
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "m:n:k:w:c:s:d:b:t:h")) != -1) {
+  while ((c = getopt(argc, argv, "m:n:k:w:c:s:d:b:t:r:R:o:h")) != -1) {
     switch (c) {
     case 'm':
       xm = atoi(optarg);
@@ -518,6 +523,15 @@ static void parse_args(int argc, char **argv) {
       break;
     case 't':
       xt = atoi(optarg);
+      break;
+    case 'r':
+      xr = atoi(optarg);
+      break;
+    case 'R':
+      xR = atoi(optarg);
+      break;
+    case 'o':
+      xo = atoi(optarg);
       break;
     case 'h':
       show_usage();
@@ -626,6 +640,13 @@ int main(int argc, char *argv[]) {
   if (xs == STAGE_DXA && (chunk_k > 0xffff || cta_cols > 0xffff))
     reject("a DXA chunk is at most 65535 elements a side");
 
+  if (xr < 1)
+    reject("-r must be at least 1 round");
+  if ((xR % cta_cols) != 0 || xR > N)
+    reject("-R must be a multiple of warps * tileN = " + std::to_string(cta_cols) + " columns, at most N");
+  if (xo != ROLE_NONE && (xo > ROLE_CP || !split || (xo == ROLE_BW ? bw_cores == 0 : bw_cores == num_cores)))
+    reject("-o must be 1 or 2, a role that -b gives a core");
+
   uint64_t chunk_bytes = (uint64_t)cta_cols * chunk_k * sizeof(itype_t);
   uint64_t local_mem = depth * chunk_bytes;
   if (local_mem > lmem_bytes)
@@ -633,10 +654,18 @@ int main(int argc, char *argv[]) {
            + " bytes exceed the device's " + std::to_string(lmem_bytes) + " bytes of local memory");
   RT_CHECK(vx_check_occupancy(device, W * (uint32_t)NT, (uint32_t)local_mem));
 
+  // The grid is xr rounds of the N / cta_cols CTAs that cover B once. B has
+  // its N columns on the device whatever the rounds (the runtime faults on a
+  // buffer of some 40 MB): CTA b stages the columns of CTA b % round_ctas, so
+  // a round reads all of B again, and B must be several times the L2 for a
+  // round to find none of it cached. C has NC columns: every CTA stores its
+  // own, and each is checked against the reference of the columns it staged.
+  uint32_t round_ctas = N / cta_cols;
+  uint32_t NC = N * xr;
   size_t sizeA = M * K;
-  size_t sizeB = K * N;
-  size_t sizeC = M * N;
-  uint32_t grid_dim[2]  = {N / cta_cols, 1};
+  size_t sizeB = (size_t)K * N;
+  size_t sizeC = (size_t)M * NC;
+  uint32_t grid_dim[2]  = {NC / cta_cols, 1};
   uint32_t block_dim[2] = {W * (uint32_t)NT, 1};
 
   std::cout << "input data type: " << vt::ITYPE::name << " (id=" << vt::ITYPE::id << ")" << std::endl;
@@ -646,6 +675,8 @@ int main(int argc, char *argv[]) {
   std::cout << "matrix A: " << M << "x" << K << std::endl;
   std::cout << "matrix B: " << K << "x" << N << std::endl;
   std::cout << "matrix C: " << M << "x" << N << std::endl;
+  if (xr != 1)
+    std::cout << "rounds: " << xr << " (" << NC << " columns of C)" << std::endl;
   // CTAs one SM holds at once: by its warps, and by its local memory
   uint64_t slots = std::min<uint64_t>(num_warps / W, lmem_bytes / local_mem);
   printf("staging=%s grid=%u warps_per_cta=%u cta_cols=%u chunk_k=%u chunk_bytes=%llu depth=%u "
@@ -655,13 +686,21 @@ int main(int argc, char *argv[]) {
          (unsigned long long)slots);
 
   kernel_arg.M = M;
-  kernel_arg.N = N;
+  kernel_arg.N = NC;
   kernel_arg.K = K;
   kernel_arg.chunk_k = chunk_k;
   kernel_arg.stage = xs;
   kernel_arg.depth = depth;
   kernel_arg.bw_cores = bw_cores;
   kernel_arg.bw_tiles = xt;
+  kernel_arg.bw_wrap = round_ctas;
+  kernel_arg.cp_wrap = xR ? xR / cta_cols : round_ctas;
+  kernel_arg.idle_role = (xo == ROLE_BW) ? ROLE_CP : (xo == ROLE_CP) ? ROLE_BW : ROLE_NONE;
+  kernel_arg.last_cta = grid_dim[0] - 1;
+  // An idle core takes `slots` CTAs and the launch lane's two more, and holds
+  // them until the last CTA is done: the last one must not be among them.
+  if (xo != ROLE_NONE && grid_dim[0] <= num_cores * (slots + 2))
+    reject("-o needs a grid of more than " + std::to_string(num_cores * (slots + 2)) + " CTAs (-r)");
 
   std::cout << "allocate device memory" << std::endl;
   RT_CHECK(vx_buffer_create(device, sizeA * sizeof(itype_t), VX_MEM_READ, &A_buffer));
@@ -747,7 +786,7 @@ int main(int argc, char *argv[]) {
   li.block_dim[1] = block_dim[1];
   li.lmem_size    = (uint32_t)local_mem;
 
-  std::vector<otype_t> h_ref(sizeC);
+  std::vector<otype_t> h_ref((size_t)M * N);
   matmul_cpu(h_ref.data(), h_A.data(), h_B.data(), M, N, K);
 
   auto time_start = std::chrono::high_resolution_clock::now();
@@ -798,6 +837,10 @@ int main(int argc, char *argv[]) {
 
   // the role of a CTA is the role of the core it ran on
   auto is_bw = [&](uint32_t b) { return h_core[b] < bw_cores; };
+  // a CTA that did not run, or one of the role that sits a solo run out
+  auto idle = [&](uint32_t b) {
+    return h_core[b] >= num_cores || (xo != ROLE_NONE && xo != (uint32_t)(is_bw(b) ? ROLE_BW : ROLE_CP));
+  };
 
   if (split) {
     uint64_t cta_weight_bytes = (uint64_t)cta_cols * K * sizeof(itype_t);
@@ -824,7 +867,7 @@ int main(int argc, char *argv[]) {
     // its first CTA within a few cycles of the launch, so the cores' counters
     // agree to within those cycles until a core runs out of CTAs.
     struct role_t {
-      uint32_t ctas = 0, max = 0, first = UINT32_MAX, last = 0;
+      uint32_t ctas = 0, max = 0, first = UINT32_MAX, last = 0, last_begin = 0;
       uint64_t sum = 0;
     } roles[2];
     std::vector<uint32_t> cta_begin(num_blocks), cta_end(num_blocks);
@@ -843,10 +886,13 @@ int main(int argc, char *argv[]) {
       cta_end[b] = end;
       auto& r = roles[is_bw(b) ? 0 : 1];
       ++r.ctas;
+      if (idle(b))
+        continue;
       r.max = std::max(r.max, cycles);
       r.sum += cycles;
       r.first = std::min(r.first, begin);
       r.last = std::max(r.last, end);
+      r.last_begin = std::max(r.last_begin, begin);
     }
     const char* names[2] = {"BW", "CP"};
     for (int i = 0; i < 2; ++i) {
@@ -854,19 +900,74 @@ int main(int argc, char *argv[]) {
       printf("TCU_CYCLES_%s: max=%u mean=%.0f ctas=%u\n", names[i], r.max,
              r.ctas ? (double)r.sum / r.ctas : 0.0, r.ctas);
     }
-    if (roles[0].ctas && roles[1].ctas) {
+    if (xo == ROLE_NONE && roles[0].ctas && roles[1].ctas) {
       // the window in which CTAs of both roles are running
       uint32_t lo = std::max(roles[0].first, roles[1].first);
       uint32_t hi = std::min(roles[0].last, roles[1].last);
       uint32_t inside[2] = {0, 0};
       for (uint32_t b = 0; b < num_blocks; ++b) {
-        if (h_core[b] < num_cores && cta_begin[b] >= lo && cta_end[b] <= hi)
+        if (!idle(b) && cta_begin[b] >= lo && cta_end[b] <= hi)
           ++inside[is_bw(b) ? 0 : 1];
       }
       printf("roles_time: bw_begin=%u bw_end=%u cp_begin=%u cp_end=%u both_running=%u "
              "bw_ctas_inside=%u/%u cp_ctas_inside=%u/%u\n",
              roles[0].first, roles[0].last, roles[1].first, roles[1].last, (hi > lo) ? hi - lo : 0,
              inside[0], roles[0].ctas, inside[1], roles[1].ctas);
+    }
+    // The work each role completed in a window of the run, and its rates over
+    // the window. With both roles running the window is the one above. A role
+    // running alone is measured from its first CTA's start to its last CTA's
+    // start: until then the grid had CTAs left, so its cores were full.
+    // `inside` counts the CTAs that began and ended in the window. `overlap`
+    // counts every CTA by the share of its K walk that fell in the window, so
+    // the CTAs under way at either edge count for the part they did there.
+    uint32_t lo = 0, hi = 0;
+    if (xo == ROLE_NONE) {
+      lo = std::max(roles[0].first, roles[1].first);
+      hi = std::min(roles[0].last, roles[1].last);
+    } else {
+      auto& r = roles[xo == ROLE_BW ? 0 : 1];
+      lo = r.first;
+      hi = r.last_begin;
+    }
+    if (hi > lo) {
+      uint32_t run_lo = UINT32_MAX, run_hi = 0;
+      for (int i = 0; i < 2; ++i) {
+        if (xo == ROLE_NONE || xo == (uint32_t)(i ? ROLE_CP : ROLE_BW)) {
+          run_lo = std::min(run_lo, roles[i].first);
+          run_hi = std::max(run_hi, roles[i].last);
+        }
+      }
+      double window = hi - lo;
+      printf("rate_window: %s begin=%u end=%u cycles=%u run_cycles=%u share_of_run=%.3f\n",
+             (xo == ROLE_NONE) ? "both" : (xo == ROLE_BW) ? "solo_BW" : "solo_CP",
+             lo, hi, hi - lo, run_hi - run_lo, window / (run_hi - run_lo));
+      for (int i = 0; i < 2; ++i) {
+        if (xo != ROLE_NONE && xo != (uint32_t)(i ? ROLE_CP : ROLE_BW))
+          continue;
+        uint64_t cta_mults = (uint64_t)W * (K / cfg::tileK) * (i ? MTILES : xt);
+        uint32_t inside = 0;
+        double overlap = 0, running = 0;
+        for (uint32_t b = 0; b < num_blocks; ++b) {
+          if (idle(b) || (is_bw(b) ? 0 : 1) != i)
+            continue;
+          if (cta_begin[b] >= lo && cta_end[b] <= hi)
+            ++inside;
+          uint32_t from = std::max(cta_begin[b], lo);
+          uint32_t to = std::min(cta_end[b], hi);
+          if (to > from) {
+            running += to - from;
+            overlap += (double)(to - from) / (cta_end[b] - cta_begin[b]);
+          }
+        }
+        printf("rate_%s: ctas_inside=%u bytes=%llu mults=%llu bytes_per_cycle=%.3f mults_per_cycle=%.5f "
+               "ctas_overlap=%.2f overlap_bytes_per_cycle=%.3f overlap_mults_per_cycle=%.5f ctas_running=%.2f\n",
+               names[i], inside, (unsigned long long)(inside * cta_weight_bytes),
+               (unsigned long long)(inside * cta_mults),
+               inside * cta_weight_bytes / window, inside * cta_mults / window,
+               overlap, overlap * cta_weight_bytes / window, overlap * cta_mults / window,
+               running / window);
+      }
     }
 #endif
   }
@@ -882,11 +983,15 @@ int main(int argc, char *argv[]) {
       ++errors;
       continue;
     }
-    uint32_t rows = (is_bw(b) ? xt : MTILES) * cfg::tileM;
+    // an idle CTA stores nothing
+    uint32_t rows = idle(b) ? 0 : (is_bw(b) ? xt : MTILES) * cfg::tileM;
+    // the CTA of the first round whose columns of B this one staged
+    uint32_t src = b % (is_bw(b) ? kernel_arg.bw_wrap : kernel_arg.cp_wrap);
     for (uint32_t m = 0; m < rows; ++m) {
-      for (uint32_t n = b * cta_cols; n < (b + 1) * cta_cols; ++n) {
-        uint32_t i = m * N + n;
-        if (!Comparator<vt::OTYPE>::compare(h_C[i], h_ref[i], i, errors)) {
+      for (uint32_t c = 0; c < cta_cols; ++c) {
+        size_t i = (size_t)m * NC + b * cta_cols + c;
+        size_t r = (size_t)m * N + src * cta_cols + c;
+        if (!Comparator<vt::OTYPE>::compare(h_C[i], h_ref[r], i, errors)) {
           ++errors;
         }
       }

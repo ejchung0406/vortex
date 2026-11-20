@@ -26,6 +26,11 @@
 
 #define MAX_DEPTH 8
 
+// the two roles a CTA takes from its core, and kernel_arg_t::idle_role's values
+#define ROLE_NONE 0
+#define ROLE_BW   1  // memory-bound: a core below bw_cores
+#define ROLE_CP   2  // compute-bound: any other core
+
 typedef struct {
   uint32_t M, N, K;
   uint32_t chunk_k;  // K elements of B staged per chunk
@@ -33,6 +38,10 @@ typedef struct {
   uint32_t depth;    // chunk buffers per CTA: chunks outstanding at once
   uint32_t bw_cores; // a CTA on a core below this multiplies bw_tiles A tiles,
   uint32_t bw_tiles; // one on any other core all MTILES
+  uint32_t bw_wrap;  // CTA b stages the B columns of CTA b % bw_wrap in the
+  uint32_t cp_wrap;  // memory-bound role, of CTA b % cp_wrap in the other
+  uint32_t idle_role;  // the role whose CTAs do no work, or ROLE_NONE
+  uint32_t last_cta;   // the grid's last CTA: a CTA of the idle role waits for its record
   uint64_t A_addr;
   uint64_t B_addr;
   uint64_t C_addr;
