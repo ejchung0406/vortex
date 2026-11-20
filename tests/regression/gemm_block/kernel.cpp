@@ -16,12 +16,34 @@
 //   STAGE_DXA: the first warp has the DXA copy the chunk. `depth` chunk
 //     buffers form a ring, each with its own barrier, and depth - 1 copies are
 //     issued ahead.
+// The core a CTA lands on decides how many A tiles it multiplies each chunk
+// with: the first bw_tiles on a core below bw_cores, all MTILES on any other.
+// Both stage the same chunks of B. A CTA stores only the tiles it computed and
+// records its core, so the host knows which rows of its columns to expect.
 namespace vt = vortex::tensor;
 using ctx = vt::wmma_context<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, false, 8, 0, vt::ldst_matrix_enabled>;
 
 constexpr uint32_t kDescB = 0;
 
 typedef uint64_t __attribute__((may_alias)) word_t;
+
+// the core is the same for every thread of a CTA
+static inline __attribute__((always_inline)) uint32_t cta_core_id() {
+  uint32_t __UNIFORM__ core = vx_core_id();
+  return core;
+}
+
+// Tells the host where and when the CTA ran. A call, made last, so that what
+// it needs is not held in registers over the K walk.
+static __attribute__((noinline)) void record_cta(kernel_arg_t* __UNIFORM__ arg, uint32_t begin) {
+  reinterpret_cast<uint32_t*>(arg->core_addr)[blockIdx.x] = cta_core_id();
+#ifdef PROFILE_ENABLE
+  const uint32_t warp = get_sub_group_id();
+  reinterpret_cast<uint32_t*>(arg->begin_addr)[blockIdx.x * get_num_sub_groups() + warp] = begin;
+#else
+  (void)begin;
+#endif
+}
 
 __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   auto pA = reinterpret_cast<ctx::input_t *>(arg->A_addr);
@@ -44,6 +66,8 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   const size_t buf_elems = (size_t)cta_cols * chunk;
   const uint32_t bar0 = get_local_group_id();
 
+  const uint32_t tiles = (cta_core_id() < arg->bw_cores) ? arg->bw_tiles : MTILES;
+
   ctx::fragment_a   fragA;
   ctx::fragment_b   fragB;
   ctx::fragment_acc fragC[MTILES];
@@ -65,9 +89,12 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
       ctx::load_matrix_sync<vt::col_major>(fragB, pChunkB + k, chunk);
       vt::unroll_for<MTILES>([&](auto m) {
         constexpr uint32_t mt = decltype(m)::value;
-        auto pTileA = pChunkA + (size_t)mt * ctx::tileM * K + k;
-        ctx::load_matrix_sync(fragA, pTileA, K);
-        ctx::mma_sync(fragC[mt], fragA, fragB, fragC[mt]);
+        // every CTA has a first tile
+        if (mt == 0 || mt < tiles) {
+          auto pTileA = pChunkA + (size_t)mt * ctx::tileM * K + k;
+          ctx::load_matrix_sync(fragA, pTileA, K);
+          ctx::mma_sync(fragC[mt], fragA, fragB, fragC[mt]);
+        }
       });
     }
     vx_barrier(bar, num_warps);
@@ -141,7 +168,15 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
 
   vt::unroll_for<MTILES>([&](auto m) {
     constexpr uint32_t mt = decltype(m)::value;
-    auto pTileC = pC + (size_t)mt * ctx::tileM * N + tile_col;
-    ctx::store_matrix_sync(pTileC, fragC[mt], N);
+    if (mt == 0 || mt < tiles) {
+      auto pTileC = pC + (size_t)mt * ctx::tileM * N + tile_col;
+      ctx::store_matrix_sync(pTileC, fragC[mt], N);
+    }
   });
+
+#ifdef PROFILE_ENABLE
+  record_cta(arg, t0.lo);
+#else
+  record_cta(arg, 0);
+#endif
 }

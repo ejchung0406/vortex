@@ -465,11 +465,14 @@ uint32_t xw = 4;          // warps per CTA
 uint32_t xc = 0;          // K elements per chunk (0: about 4 KB per chunk)
 uint32_t xs = STAGE_LOAD; // staging mode
 uint32_t xd = 2;          // chunk buffers per CTA in dxa mode
+int      xb = -1;         // cores of the memory-bound role (-1: no split, every CTA multiplies MTILES tiles)
+uint32_t xt = 1;          // A tiles a CTA of the memory-bound role multiplies
 
 vx_device_h device = nullptr;
 vx_buffer_h A_buffer = nullptr;
 vx_buffer_h B_buffer = nullptr;
 vx_buffer_h C_buffer = nullptr;
+vx_buffer_h core_buffer = nullptr;
 #ifdef PROFILE_ENABLE
 vx_buffer_h cycles_buffer = nullptr;
 #endif
@@ -481,12 +484,13 @@ kernel_arg_t kernel_arg = {};
 static void show_usage() {
   std::cout << "Vortex block-staged GEMM TCU Test." << std::endl;
   std::cout << "Usage: [-m M] [-n N] [-k K] [-w warps per CTA] [-c K elements per chunk] "
-               "[-s 0|1 staging: load, dxa] [-d chunk buffers 1.." << MAX_DEPTH << " (dxa)] [-h: help]" << std::endl;
+               "[-s 0|1 staging: load, dxa] [-d chunk buffers 1.." << MAX_DEPTH << " (dxa)] "
+               "[-b cores of the memory-bound role] [-t its A tiles 1.." << MTILES << "] [-h: help]" << std::endl;
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "m:n:k:w:c:s:d:h")) != -1) {
+  while ((c = getopt(argc, argv, "m:n:k:w:c:s:d:b:t:h")) != -1) {
     switch (c) {
     case 'm':
       xm = atoi(optarg);
@@ -509,6 +513,12 @@ static void parse_args(int argc, char **argv) {
     case 'd':
       xd = atoi(optarg);
       break;
+    case 'b':
+      xb = atoi(optarg);
+      break;
+    case 't':
+      xt = atoi(optarg);
+      break;
     case 'h':
       show_usage();
       exit(0);
@@ -525,6 +535,7 @@ void cleanup() {
     if (A_buffer) vx_buffer_release(A_buffer);
     if (B_buffer) vx_buffer_release(B_buffer);
     if (C_buffer) vx_buffer_release(C_buffer);
+    if (core_buffer) vx_buffer_release(core_buffer);
 #ifdef PROFILE_ENABLE
     if (cycles_buffer) vx_buffer_release(cycles_buffer);
 #endif
@@ -564,9 +575,10 @@ int main(int argc, char *argv[]) {
   if (xs == STAGE_DXA && (isa_flags & VX_ISA_EXT_DXA) == 0)
     reject("-s 1 needs the DXA extension");
 
-  uint64_t NT, num_warps, lmem_bytes;
+  uint64_t NT, num_warps, num_cores, lmem_bytes;
   RT_CHECK(vx_device_query(device, VX_CAPS_NUM_THREADS, &NT));
   RT_CHECK(vx_device_query(device, VX_CAPS_NUM_WARPS, &num_warps));
+  RT_CHECK(vx_device_query(device, VX_CAPS_NUM_CORES, &num_cores));
   RT_CHECK(vx_device_query(device, VX_CAPS_LOCAL_MEM_SIZE, &lmem_bytes));
   if (NT != VX_CFG_NUM_THREADS)
     reject("device warp size (" + std::to_string(NT) + ") must match VX_CFG_NUM_THREADS=" + std::to_string(VX_CFG_NUM_THREADS));
@@ -599,6 +611,12 @@ int main(int argc, char *argv[]) {
     reject("K must be a multiple of the chunk's K elements (" + std::to_string(chunk_k) + ")");
   if (depth < 1 || depth > MAX_DEPTH)
     reject("-d must be 1.." + std::to_string(MAX_DEPTH));
+  if (xt < 1 || xt > MTILES)
+    reject("-t must be 1..MTILES = " + std::to_string(MTILES) + " A tiles");
+  if (xb < -1 || xb > (int)num_cores)
+    reject("-b must be 0.." + std::to_string(num_cores) + ", the device's cores");
+  bool split = (xb >= 0);
+  uint32_t bw_cores = split ? xb : 0;
   // the load copy moves 8-byte words: a column's chunk must be whole words in B
   if ((chunk_k * sizeof(itype_t)) % 8 != 0 || (K * sizeof(itype_t)) % 8 != 0)
     reject("K and -c must be a whole number of 8-byte words");
@@ -642,6 +660,8 @@ int main(int argc, char *argv[]) {
   kernel_arg.chunk_k = chunk_k;
   kernel_arg.stage = xs;
   kernel_arg.depth = depth;
+  kernel_arg.bw_cores = bw_cores;
+  kernel_arg.bw_tiles = xt;
 
   std::cout << "allocate device memory" << std::endl;
   RT_CHECK(vx_buffer_create(device, sizeA * sizeof(itype_t), VX_MEM_READ, &A_buffer));
@@ -651,12 +671,16 @@ int main(int argc, char *argv[]) {
   RT_CHECK(vx_buffer_create(device, sizeC * sizeof(otype_t), VX_MEM_WRITE, &C_buffer));
   RT_CHECK(vx_buffer_address(C_buffer, &kernel_arg.C_addr));
 
-#ifdef PROFILE_ENABLE
-  // one cycle count per warp
   uint32_t num_blocks = grid_dim[0] * grid_dim[1];
+  RT_CHECK(vx_buffer_create(device, num_blocks * sizeof(uint32_t), VX_MEM_READ_WRITE, &core_buffer));
+  RT_CHECK(vx_buffer_address(core_buffer, &kernel_arg.core_addr));
+
+#ifdef PROFILE_ENABLE
+  // per warp: the cycles of its K walk, then the cycle each began
   uint32_t num_counts = num_blocks * W;
-  RT_CHECK(vx_buffer_create(device, num_counts * sizeof(uint32_t), VX_MEM_WRITE, &cycles_buffer));
+  RT_CHECK(vx_buffer_create(device, 2 * num_counts * sizeof(uint32_t), VX_MEM_WRITE, &cycles_buffer));
   RT_CHECK(vx_buffer_address(cycles_buffer, &kernel_arg.cycles_addr));
+  kernel_arg.begin_addr = kernel_arg.cycles_addr + num_counts * sizeof(uint32_t);
 #endif
 
   std::cout << "A_addr=0x" << std::hex << kernel_arg.A_addr << std::endl;
@@ -685,6 +709,11 @@ int main(int argc, char *argv[]) {
   RT_CHECK(vx_enqueue_write(queue, B_buffer, 0, h_B_col.data(),
                             sizeB * sizeof(itype_t), 0, nullptr, nullptr));
 
+  // a CTA that did not run leaves no core behind
+  std::vector<uint32_t> h_core(num_blocks, UINT32_MAX);
+  RT_CHECK(vx_enqueue_write(queue, core_buffer, 0, h_core.data(),
+                            num_blocks * sizeof(uint32_t), 0, nullptr, nullptr));
+
   if (xs == STAGE_DXA) {
     // A chunk is chunk_k elements along K (contiguous in B) by the CTA's
     // columns, K elements apart; the row-major destination is [column][k].
@@ -702,7 +731,7 @@ int main(int argc, char *argv[]) {
   // Host result buffers — must outlive the async reads enqueued below.
   std::vector<otype_t> h_C(sizeC);
 #ifdef PROFILE_ENABLE
-  std::vector<uint32_t> h_cycles(num_counts);
+  std::vector<uint32_t> h_cycles(2 * num_counts);
 #endif
 
   // args passed as a host blob (UVA)
@@ -732,10 +761,13 @@ int main(int argc, char *argv[]) {
   vx_event_h read_ev = nullptr;
   RT_CHECK(vx_enqueue_read(queue, h_C.data(), C_buffer, 0,
                            sizeC * sizeof(otype_t), 1, &launch_ev, &read_ev));
+  vx_event_h core_ev = nullptr;
+  RT_CHECK(vx_enqueue_read(queue, h_core.data(), core_buffer, 0,
+                           num_blocks * sizeof(uint32_t), 1, &read_ev, &core_ev));
 #ifdef PROFILE_ENABLE
   vx_event_h cyc_ev = nullptr;
   RT_CHECK(vx_enqueue_read(queue, h_cycles.data(), cycles_buffer, 0,
-                           num_counts * sizeof(uint32_t), 1, &read_ev, &cyc_ev));
+                           2 * num_counts * sizeof(uint32_t), 1, &core_ev, &cyc_ev));
 #endif
 
   std::cout << "wait for completion" << std::endl;
@@ -743,8 +775,9 @@ int main(int argc, char *argv[]) {
   RT_CHECK(vx_event_wait_value(cyc_ev, 1, VX_TIMEOUT_INFINITE));
   vx_event_release(cyc_ev);
 #else
-  RT_CHECK(vx_event_wait_value(read_ev, 1, VX_TIMEOUT_INFINITE));
+  RT_CHECK(vx_event_wait_value(core_ev, 1, VX_TIMEOUT_INFINITE));
 #endif
+  vx_event_release(core_ev);
   vx_event_release(read_ev);
   vx_event_release(launch_ev);
 
@@ -756,18 +789,107 @@ int main(int argc, char *argv[]) {
   // report TCU cycle counts
   {
     uint32_t max_cycles = 0;
-    for (auto c : h_cycles) {
-      max_cycles = std::max(max_cycles, c);
+    for (uint32_t i = 0; i < num_counts; ++i) {
+      max_cycles = std::max(max_cycles, h_cycles[i]);
     }
     printf("TCU_CYCLES: max=%u (across %u blocks)\n", max_cycles, num_blocks);
   }
 #endif
 
+  // the role of a CTA is the role of the core it ran on
+  auto is_bw = [&](uint32_t b) { return h_core[b] < bw_cores; };
+
+  if (split) {
+    uint64_t cta_weight_bytes = (uint64_t)cta_cols * K * sizeof(itype_t);
+    uint32_t ctas[2] = {0, 0}; // [0] memory-bound role, [1] compute-bound role
+    std::vector<uint32_t> core_ctas(num_cores, 0);
+    for (uint32_t b = 0; b < num_blocks; ++b) {
+      if (h_core[b] >= num_cores)
+        continue;
+      ++ctas[is_bw(b) ? 0 : 1];
+      ++core_ctas[h_core[b]];
+    }
+    printf("roles: bw_cores=%u bw_tiles=%u bw_ctas=%u bw_weight_bytes=%llu cp_cores=%u cp_tiles=%u "
+           "cp_ctas=%u cp_weight_bytes=%llu ctas_per_core=",
+           bw_cores, xt, ctas[0], (unsigned long long)(ctas[0] * cta_weight_bytes),
+           (uint32_t)num_cores - bw_cores, (uint32_t)MTILES, ctas[1],
+           (unsigned long long)(ctas[1] * cta_weight_bytes));
+    for (uint32_t c = 0; c < num_cores; ++c) {
+      printf("%s%u", c ? "," : "", core_ctas[c]);
+    }
+    printf("\n");
+#ifdef PROFILE_ENABLE
+    // A CTA's K walk runs from its first warp's start to its last warp's end.
+    // A core counts cycles only while it has work, and every core is handed
+    // its first CTA within a few cycles of the launch, so the cores' counters
+    // agree to within those cycles until a core runs out of CTAs.
+    struct role_t {
+      uint32_t ctas = 0, max = 0, first = UINT32_MAX, last = 0;
+      uint64_t sum = 0;
+    } roles[2];
+    std::vector<uint32_t> cta_begin(num_blocks), cta_end(num_blocks);
+    for (uint32_t b = 0; b < num_blocks; ++b) {
+      if (h_core[b] >= num_cores)
+        continue;
+      uint32_t cycles = 0, begin = UINT32_MAX, end = 0;
+      for (uint32_t w = 0; w < W; ++w) {
+        uint32_t c = h_cycles[b * W + w];
+        uint32_t t = h_cycles[num_counts + b * W + w];
+        cycles = std::max(cycles, c);
+        begin = std::min(begin, t);
+        end = std::max(end, t + c);
+      }
+      cta_begin[b] = begin;
+      cta_end[b] = end;
+      auto& r = roles[is_bw(b) ? 0 : 1];
+      ++r.ctas;
+      r.max = std::max(r.max, cycles);
+      r.sum += cycles;
+      r.first = std::min(r.first, begin);
+      r.last = std::max(r.last, end);
+    }
+    const char* names[2] = {"BW", "CP"};
+    for (int i = 0; i < 2; ++i) {
+      auto& r = roles[i];
+      printf("TCU_CYCLES_%s: max=%u mean=%.0f ctas=%u\n", names[i], r.max,
+             r.ctas ? (double)r.sum / r.ctas : 0.0, r.ctas);
+    }
+    if (roles[0].ctas && roles[1].ctas) {
+      // the window in which CTAs of both roles are running
+      uint32_t lo = std::max(roles[0].first, roles[1].first);
+      uint32_t hi = std::min(roles[0].last, roles[1].last);
+      uint32_t inside[2] = {0, 0};
+      for (uint32_t b = 0; b < num_blocks; ++b) {
+        if (h_core[b] < num_cores && cta_begin[b] >= lo && cta_end[b] <= hi)
+          ++inside[is_bw(b) ? 0 : 1];
+      }
+      printf("roles_time: bw_begin=%u bw_end=%u cp_begin=%u cp_end=%u both_running=%u "
+             "bw_ctas_inside=%u/%u cp_ctas_inside=%u/%u\n",
+             roles[0].first, roles[0].last, roles[1].first, roles[1].last, (hi > lo) ? hi - lo : 0,
+             inside[0], roles[0].ctas, inside[1], roles[1].ctas);
+    }
+#endif
+  }
+
+  // A CTA stores the tiles of its role only: the rows of the others are not checked.
   std::cout << "verify result" << std::endl;
   int errors = 0;
-  for (uint32_t i = 0; i < h_ref.size(); ++i) {
-    if (!Comparator<vt::OTYPE>::compare(h_C[i], h_ref[i], i, errors)) {
+  for (uint32_t b = 0; b < num_blocks; ++b) {
+    if (h_core[b] >= num_cores) {
+      if (errors < MAX_ERRORS) {
+        printf("*** error: CTA %u reported core %u of %u\n", b, h_core[b], (uint32_t)num_cores);
+      }
       ++errors;
+      continue;
+    }
+    uint32_t rows = (is_bw(b) ? xt : MTILES) * cfg::tileM;
+    for (uint32_t m = 0; m < rows; ++m) {
+      for (uint32_t n = b * cta_cols; n < (b + 1) * cta_cols; ++n) {
+        uint32_t i = m * N + n;
+        if (!Comparator<vt::OTYPE>::compare(h_C[i], h_ref[i], i, errors)) {
+          ++errors;
+        }
+      }
     }
   }
 
