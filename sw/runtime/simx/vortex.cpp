@@ -32,7 +32,9 @@
 #include <util.h>
 #include <cmd_processor.h>
 
+#include <cassert>
 #include <chrono>
+#include <iostream>
 #include <cstdlib>
 #include <cstring>
 #include <future>
@@ -93,28 +95,37 @@ public:
 
   // ----- CP-visible host memory (command ring + DMA staging) -----
   // Unified memory: a plain process allocation. cp_addr is the pointer
-  // value itself; the CP model's dram hooks route by registered region.
+  // tagged with kHostTag, a bit no device address has, so the CP model's
+  // dram hooks tell a host region from device memory by the address alone:
+  // an untagged pointer value can equal a device address.
+  static constexpr uint64_t kHostTag = uint64_t(1) << 62;
+  static_assert(VX_CFG_MEM_ADDR_WIDTH < 62, "device addresses must leave the host tag bit clear");
+
   int host_mem_alloc(uint64_t size, void** host_ptr, uint64_t* cp_addr) {
     uint64_t asize = aligned_size(size, CACHE_BLOCK_SIZE);
     void* ptr = aligned_alloc(CACHE_BLOCK_SIZE, asize);
     if (ptr == nullptr)
       return -1;
+    assert((reinterpret_cast<uint64_t>(ptr) & kHostTag) == 0);
     std::lock_guard<std::mutex> g(host_mu_);
     host_regions_[reinterpret_cast<uint64_t>(ptr)] = asize;
     *host_ptr = ptr;
-    *cp_addr  = reinterpret_cast<uint64_t>(ptr);
+    *cp_addr  = reinterpret_cast<uint64_t>(ptr) | kHostTag;
     return 0;
   }
 
   int host_mem_free(uint64_t cp_addr) {
+    if ((cp_addr & kHostTag) == 0)
+      return -1;
+    uint64_t ptr = cp_addr & ~kHostTag;
     {
       std::lock_guard<std::mutex> g(host_mu_);
-      auto it = host_regions_.find(cp_addr);
+      auto it = host_regions_.find(ptr);
       if (it == host_regions_.end())
         return -1;
       host_regions_.erase(it);
     }
-    free(reinterpret_cast<void*>(cp_addr));
+    free(reinterpret_cast<void*>(ptr));
     return 0;
   }
 
@@ -129,25 +140,32 @@ public:
 
 
 private:
-  // If `addr` falls in a registered host region, return it as a host
-  // pointer (cp_addr == the pointer); otherwise nullptr → device memory.
-  void* host_region_ptr(uint64_t addr) {
+  // If `addr` is a tagged host address, return its host pointer, checking
+  // that `bytes` from it lie in one registered region; otherwise nullptr →
+  // device memory.
+  void* host_region_ptr(uint64_t addr, std::size_t bytes) {
+    if ((addr & kHostTag) == 0)
+      return nullptr;
+    uint64_t ptr = addr & ~kHostTag;
     std::lock_guard<std::mutex> g(host_mu_);
-    if (host_regions_.empty())
-      return nullptr;
-    auto it = host_regions_.upper_bound(addr);
-    if (it == host_regions_.begin())
-      return nullptr;
+    auto it = host_regions_.upper_bound(ptr);
+    if (it == host_regions_.begin()) {
+      std::cerr << "*** CP access to an unregistered host address 0x" << std::hex << ptr << std::dec << std::endl;
+      std::abort();
+    }
     --it;
-    if (addr >= it->first && addr < it->first + it->second)
-      return reinterpret_cast<void*>(addr);
-    return nullptr;
+    if (ptr < it->first || ptr + bytes > it->first + it->second) {
+      std::cerr << "*** CP access [0x" << std::hex << ptr << ", +0x" << bytes
+                << ") outside host region [0x" << it->first << ", +0x" << it->second << ")" << std::dec << std::endl;
+      std::abort();
+    }
+    return reinterpret_cast<void*>(ptr);
   }
 
   vortex::CommandProcessor::Hooks make_cp_hooks() {
     vortex::CommandProcessor::Hooks h;
     h.dram_read = [this](uint64_t addr, void* dst, std::size_t bytes) {
-      if (void* hp = host_region_ptr(addr)) {
+      if (void* hp = host_region_ptr(addr, bytes)) {
         std::memcpy(dst, hp, bytes);
         return;
       }
@@ -161,7 +179,7 @@ private:
       ram_.read(static_cast<uint8_t*>(dst), addr, bytes);
     };
     h.dram_write = [this](uint64_t addr, const void* src, std::size_t bytes) {
-      if (void* hp = host_region_ptr(addr)) {
+      if (void* hp = host_region_ptr(addr, bytes)) {
         std::memcpy(hp, src, bytes);
         return;
       }
@@ -178,7 +196,7 @@ private:
       // The CP DMA is a client of the last-level cache: transfers stay
       // coherent with it, and those of at least half its size write around it.
       h.dma_write = [this](uint64_t addr, const void* src, std::size_t bytes, bool no_alloc) {
-        if (void* hp = host_region_ptr(addr)) {
+        if (void* hp = host_region_ptr(addr, bytes)) {
           std::memcpy(hp, src, bytes);
           return;
         }
