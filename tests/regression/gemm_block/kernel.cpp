@@ -17,7 +17,7 @@
 //     buffers form a ring, each with its own barrier, and depth - 1 copies are
 //     issued ahead.
 // The core a CTA lands on decides how many A tiles it multiplies each chunk
-// with: the first bw_tiles on a core below bw_cores, all MTILES on any other.
+// with: the first BW_TILES on a core below bw_cores, all MTILES on any other.
 // CTA b stages the chunks of the columns of B of CTA b % wrap, where each kind
 // has its own wrap: B holds as many columns as the larger one covers, and a
 // small wrap makes the CTAs of that kind read the same few columns again and
@@ -74,13 +74,12 @@ static __attribute__((noinline)) void idle_cta(kernel_arg_t* __UNIFORM__ arg) {
   record_cta(arg, 0);
 }
 
-__kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
-  const bool bw_role = cta_core_id() < arg->bw_cores;
-  if (arg->idle_role == (bw_role ? ROLE_BW : ROLE_CP)) {
-    idle_cta(arg);
-    return;
-  }
-
+// The K walk of a CTA that multiplies each chunk with TILES tiles of A. The
+// count is fixed at compile time so that each role has a walk of its own: the
+// accumulators of TILES tiles are all the walk keeps, and a walk of one tile
+// keeps them in registers.
+template <uint32_t TILES>
+static inline __attribute__((always_inline)) void walk(kernel_arg_t* __UNIFORM__ arg, bool bw_role) {
   auto pA = reinterpret_cast<ctx::input_t *>(arg->A_addr);
   auto pB = reinterpret_cast<ctx::input_t *>(arg->B_addr);
   auto pC = reinterpret_cast<ctx::output_t *>(arg->C_addr);
@@ -103,13 +102,11 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   const size_t buf_elems = (size_t)cta_cols * chunk;
   const uint32_t bar0 = get_local_group_id();
 
-  const uint32_t tiles = bw_role ? arg->bw_tiles : MTILES;
-
   ctx::fragment_a   fragA;
   ctx::fragment_b   fragB;
-  ctx::fragment_acc fragC[MTILES];
+  ctx::fragment_acc fragC[TILES];
 
-  vt::unroll_for<MTILES>([&](auto m) {
+  vt::unroll_for<TILES>([&](auto m) {
     ctx::fill_fragment(fragC[decltype(m)::value], 0);
   });
 
@@ -124,14 +121,11 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
     auto pChunkB = buf + (size_t)warp * ctx::tileN * chunk;
     for (uint32_t k = 0; k < chunk; k += ctx::tileK) {
       ctx::load_matrix_sync<vt::col_major>(fragB, pChunkB + k, chunk);
-      vt::unroll_for<MTILES>([&](auto m) {
+      vt::unroll_for<TILES>([&](auto m) {
         constexpr uint32_t mt = decltype(m)::value;
-        // every CTA has a first tile
-        if (mt == 0 || mt < tiles) {
-          auto pTileA = pChunkA + (size_t)mt * ctx::tileM * K + k;
-          ctx::load_matrix_sync(fragA, pTileA, K);
-          ctx::mma_sync(fragC[mt], fragA, fragB, fragC[mt]);
-        }
+        auto pTileA = pChunkA + (size_t)mt * ctx::tileM * K + k;
+        ctx::load_matrix_sync(fragA, pTileA, K);
+        ctx::mma_sync(fragC[mt], fragA, fragB, fragC[mt]);
       });
     }
     vx_barrier(bar, num_warps);
@@ -203,17 +197,41 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   reinterpret_cast<uint32_t*>(arg->cycles_addr)[blockIdx.x * num_warps + warp] = vx_rdcycle_sync_diff(t0, t1);
 #endif
 
-  vt::unroll_for<MTILES>([&](auto m) {
+  vt::unroll_for<TILES>([&](auto m) {
     constexpr uint32_t mt = decltype(m)::value;
-    if (mt == 0 || mt < tiles) {
-      auto pTileC = pC + (size_t)mt * ctx::tileM * N + tile_col;
-      ctx::store_matrix_sync(pTileC, fragC[mt], N);
-    }
+    auto pTileC = pC + (size_t)mt * ctx::tileM * N + tile_col;
+    ctx::store_matrix_sync(pTileC, fragC[mt], N);
   });
 
 #ifdef PROFILE_ENABLE
   record_cta(arg, t0.lo);
 #else
   record_cta(arg, 0);
+#endif
+}
+
+// The compute-bound role's walk is a function of its own, so that its many
+// accumulators do not take registers from the memory-bound role's walk, which
+// stays in the kernel's entry as it is when both roles have the same tiles.
+#if BW_TILES != MTILES
+static __attribute__((noinline)) void walk_cp(kernel_arg_t* __UNIFORM__ arg) {
+  walk<MTILES>(arg, false);
+}
+#endif
+
+__kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
+  const bool bw_role = cta_core_id() < arg->bw_cores;
+  if (arg->idle_role == (bw_role ? ROLE_BW : ROLE_CP)) {
+    idle_cta(arg);
+    return;
+  }
+#if BW_TILES == MTILES
+  walk<MTILES>(arg, bw_role);
+#else
+  if (bw_role) {
+    walk<BW_TILES>(arg, true);
+  } else {
+    walk_cp(arg);
+  }
 #endif
 }

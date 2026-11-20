@@ -20,6 +20,11 @@
 #define MTILES 1
 #endif
 
+// M tiles a CTA of the memory-bound role computes
+#ifndef BW_TILES
+#define BW_TILES 1
+#endif
+
 // how a CTA brings a chunk of B into shared memory
 #define STAGE_LOAD 0  // its threads copy it with coalesced loads
 #define STAGE_DXA  1  // the DXA copies it
@@ -36,8 +41,8 @@ typedef struct {
   uint32_t chunk_k;  // K elements of B staged per chunk
   uint32_t stage;    // STAGE_LOAD or STAGE_DXA
   uint32_t depth;    // chunk buffers per CTA: chunks outstanding at once
-  uint32_t bw_cores; // a CTA on a core below this multiplies bw_tiles A tiles,
-  uint32_t bw_tiles; // one on any other core all MTILES
+  uint32_t bw_cores; // a CTA on a core below this multiplies BW_TILES A tiles,
+                     // one on any other core all MTILES
   uint32_t bw_wrap;  // CTA b stages the B columns of CTA b % bw_wrap in the
   uint32_t cp_wrap;  // memory-bound role, of CTA b % cp_wrap in the other
   uint32_t idle_role;  // the role whose CTAs do no work, or ROLE_NONE

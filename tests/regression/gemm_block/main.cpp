@@ -454,6 +454,7 @@ static void matmul_cpu(otype_t *C, const itype_t *A, const itype_t *B, uint32_t 
 ///////////////////////////////////////////////////////////////////////////////
 
 
+static_assert(BW_TILES >= 1 && BW_TILES <= MTILES, "BW_TILES must be 1..MTILES");
 static_assert(vt::ITYPE::bits >= 8, "the chunk layout needs whole-byte elements");
 
 const char *kernel_file = "kernel.vxbin";
@@ -466,7 +467,7 @@ uint32_t xc = 0;          // K elements per chunk (0: about 4 KB per chunk)
 uint32_t xs = STAGE_LOAD; // staging mode
 uint32_t xd = 2;          // chunk buffers per CTA in dxa mode
 int      xb = -1;         // cores of the memory-bound role (-1: no split, every CTA multiplies MTILES tiles)
-uint32_t xt = 1;          // A tiles a CTA of the memory-bound role multiplies
+uint32_t xt = BW_TILES;   // A tiles a CTA of the memory-bound role multiplies: the kernel's BW_TILES
 uint32_t xr = 1;          // rounds: the grid is this many times the N / cta_cols CTAs of one round
 uint32_t xR = 0;          // B columns the compute-bound CTAs share (0: each its own)
 uint32_t xo = ROLE_NONE;  // the role that runs alone (the other's CTAs do no work)
@@ -488,7 +489,7 @@ static void show_usage() {
   std::cout << "Vortex block-staged GEMM TCU Test." << std::endl;
   std::cout << "Usage: [-m M] [-n N] [-k K] [-w warps per CTA] [-c K elements per chunk] "
                "[-s 0|1 staging: load, dxa] [-d chunk buffers 1.." << MAX_DEPTH << " (dxa)] "
-               "[-b cores of the memory-bound role] [-t its A tiles 1.." << MTILES << "] "
+               "[-b cores of the memory-bound role] [-t its A tiles: " << BW_TILES << "] "
                "[-r rounds of N columns] [-R B columns the compute-bound CTAs share] "
                "[-o 1|2 run the memory-bound|compute-bound role alone] [-h: help]" << std::endl;
 }
@@ -625,8 +626,8 @@ int main(int argc, char *argv[]) {
     reject("K must be a multiple of the chunk's K elements (" + std::to_string(chunk_k) + ")");
   if (depth < 1 || depth > MAX_DEPTH)
     reject("-d must be 1.." + std::to_string(MAX_DEPTH));
-  if (xt < 1 || xt > MTILES)
-    reject("-t must be 1..MTILES = " + std::to_string(MTILES) + " A tiles");
+  if (xt != BW_TILES)
+    reject("-t must be the BW_TILES the kernel was built with, " + std::to_string(BW_TILES));
   if (xb < -1 || xb > (int)num_cores)
     reject("-b must be 0.." + std::to_string(num_cores) + ", the device's cores");
   bool split = (xb >= 0);
@@ -692,7 +693,6 @@ int main(int argc, char *argv[]) {
   kernel_arg.stage = xs;
   kernel_arg.depth = depth;
   kernel_arg.bw_cores = bw_cores;
-  kernel_arg.bw_tiles = xt;
   kernel_arg.bw_wrap = round_ctas;
   kernel_arg.cp_wrap = xR ? xR / cta_cols : round_ctas;
   kernel_arg.idle_role = (xo == ROLE_BW) ? ROLE_CP : (xo == ROLE_CP) ? ROLE_BW : ROLE_NONE;
@@ -930,16 +930,18 @@ int main(int argc, char *argv[]) {
       lo = r.first;
       hi = r.last_begin;
     }
-    if (hi > lo) {
-      uint32_t run_lo = UINT32_MAX, run_hi = 0;
-      for (int i = 0; i < 2; ++i) {
-        if (xo == ROLE_NONE || xo == (uint32_t)(i ? ROLE_CP : ROLE_BW)) {
-          run_lo = std::min(run_lo, roles[i].first);
-          run_hi = std::max(run_hi, roles[i].last);
-        }
+    uint32_t run_lo = UINT32_MAX, run_hi = 0;
+    for (int i = 0; i < 2; ++i) {
+      if (xo == ROLE_NONE || xo == (uint32_t)(i ? ROLE_CP : ROLE_BW)) {
+        run_lo = std::min(run_lo, roles[i].first);
+        run_hi = std::max(run_hi, roles[i].last);
       }
+    }
+    auto report = [&](const char* tag, uint32_t lo, uint32_t hi) {
+      if (hi <= lo)
+        return;
       double window = hi - lo;
-      printf("rate_window: %s begin=%u end=%u cycles=%u run_cycles=%u share_of_run=%.3f\n",
+      printf("rate%s_window: %s begin=%u end=%u cycles=%u run_cycles=%u share_of_run=%.3f\n", tag,
              (xo == ROLE_NONE) ? "both" : (xo == ROLE_BW) ? "solo_BW" : "solo_CP",
              lo, hi, hi - lo, run_hi - run_lo, window / (run_hi - run_lo));
       for (int i = 0; i < 2; ++i) {
@@ -960,15 +962,36 @@ int main(int argc, char *argv[]) {
             overlap += (double)(to - from) / (cta_end[b] - cta_begin[b]);
           }
         }
-        printf("rate_%s: ctas_inside=%u bytes=%llu mults=%llu bytes_per_cycle=%.3f mults_per_cycle=%.5f "
+        printf("rate%s_%s: ctas_inside=%u bytes=%llu mults=%llu bytes_per_cycle=%.3f mults_per_cycle=%.5f "
                "ctas_overlap=%.2f overlap_bytes_per_cycle=%.3f overlap_mults_per_cycle=%.5f ctas_running=%.2f\n",
-               names[i], inside, (unsigned long long)(inside * cta_weight_bytes),
+               tag, names[i], inside, (unsigned long long)(inside * cta_weight_bytes),
                (unsigned long long)(inside * cta_mults),
                inside * cta_weight_bytes / window, inside * cta_mults / window,
                overlap, overlap * cta_weight_bytes / window, overlap * cta_mults / window,
                running / window);
       }
+    };
+    report("", lo, hi);
+    // The same without each role's first generation, the CTAs that began
+    // before any CTA of the role ended. Those start within a few thousand
+    // cycles of each other and walk K in step, which is faster than the mix
+    // of phases every later CTA runs in; a window that holds them reads high
+    // by the share of it they take.
+    uint32_t steady = lo;
+    for (int i = 0; i < 2; ++i) {
+      if (xo != ROLE_NONE && xo != (uint32_t)(i ? ROLE_CP : ROLE_BW))
+        continue;
+      uint32_t first_end = UINT32_MAX;
+      for (uint32_t b = 0; b < num_blocks; ++b) {
+        if (!idle(b) && (is_bw(b) ? 0 : 1) == i)
+          first_end = std::min(first_end, cta_end[b]);
+      }
+      for (uint32_t b = 0; b < num_blocks; ++b) {
+        if (!idle(b) && (is_bw(b) ? 0 : 1) == i && cta_begin[b] < first_end)
+          steady = std::max(steady, cta_end[b]);
+      }
     }
+    report("_steady", steady, hi);
 #endif
   }
 
