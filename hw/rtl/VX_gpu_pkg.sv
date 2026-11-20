@@ -2286,16 +2286,23 @@ package VX_gpu_pkg;
     localparam UMMU_DXA_IDX         = UMMU_RTCACHE_IDX + `VX_CFG_EXT_RTU_ENABLED;
     localparam UMMU_NUM_REQS        = `VX_CFG_EXT_TEX_ENABLED + `VX_CFG_EXT_RTU_ENABLED + `VX_CFG_EXT_DXA_ENABLED;
 
-    // Widest tag among the socket arb inputs (DXA adapts to the given budget)
+    // Widest tag among the socket arb inputs. The DXA's is a worker's in-flight
+    // slot behind the worker select, with the UUID.
 `ifdef VX_CFG_EXT_TEX_ENABLE
     localparam SOCKET_MEM_TAG_W1    = `MAX(L1_MEM_TAG_WIDTH, TCACHE_MEM_TAG_WIDTH);
 `else
     localparam SOCKET_MEM_TAG_W1    = L1_MEM_TAG_WIDTH;
 `endif
 `ifdef VX_CFG_EXT_RTU_ENABLE
-    localparam SOCKET_MEM_TAG_WIDTH = `MAX(SOCKET_MEM_TAG_W1, RTCACHE_MEM_TAG_WIDTH);
+    localparam SOCKET_MEM_TAG_W2    = `MAX(SOCKET_MEM_TAG_W1, RTCACHE_MEM_TAG_WIDTH);
 `else
-    localparam SOCKET_MEM_TAG_WIDTH = SOCKET_MEM_TAG_W1;
+    localparam SOCKET_MEM_TAG_W2    = SOCKET_MEM_TAG_W1;
+`endif
+`ifdef VX_CFG_EXT_DXA_ENABLE
+    localparam DXA_MEM_TAG_WIDTH    = UUID_WIDTH + `CLOG2(`VX_CFG_DXA_MAX_INFLIGHT) + `CLOG2(`VX_CFG_NUM_DXA_CORES);
+    localparam SOCKET_MEM_TAG_WIDTH = `MAX(SOCKET_MEM_TAG_W2, DXA_MEM_TAG_WIDTH);
+`else
+    localparam SOCKET_MEM_TAG_WIDTH = SOCKET_MEM_TAG_W2;
 `endif
     localparam SOCKET_MEM_ARB_TAG_WIDTH = (SOCKET_MEM_TAG_WIDTH + `CLOG2(SOCKET_MEM_ARB_REQS));
 

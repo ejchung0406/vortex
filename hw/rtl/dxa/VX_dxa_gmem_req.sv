@@ -305,6 +305,8 @@ module VX_dxa_gmem_req import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
 
     `UNUSED_VAR (transfer_active)
     `UNUSED_VAR (transfer_start)
-    `UNUSED_VAR (mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W])
+    if (GMEM_TAG_VALUEW > TAG_W) begin : g_tag_spare
+        `UNUSED_VAR (mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W])
+    end
 
 endmodule
