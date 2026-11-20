@@ -7,6 +7,7 @@ on GitHub.
 | Path | What |
 |---|---|
 | `notes/upstream-pr-candidates.md` | Every finding (bugs, calibration, tests) with evidence and status |
+| `notes/upstream-pr-candidates.ko.md` | The same in Korean, brought up to the current state |
 | `notes/upstream-issue-drafts.md` | Issue texts for the three SimX/runtime bugs |
 | `notes/open-threads.md` | In-flight state, newest section last |
 | `notes/corun-workloads.md` | The co-run scenario (Qwen3.5-9B decode beside Z-Image-Turbo) and its real-H200 measurements |
