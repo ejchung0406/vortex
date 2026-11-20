@@ -7,7 +7,8 @@
     "VX_CFG_LSU_PENDING_LIMIT": 128,
     "VX_CFG_DTLB_SIZE": 256,
     "VX_CFG_FPU_QUEUE_SIZE": 16,
-    "VX_CFG_DISPATCH_QUEUE_SIZE": 8
+    "VX_CFG_DISPATCH_QUEUE_SIZE": 8,
+    "VX_CFG_NUM_GPR_BANKS": 8
   },
   "chip": {
     "VX_CFG_L2_NUM_BANKS": 64,
@@ -25,7 +26,7 @@
     "PLATFORM_MEMORY_PEAK_BW, PLATFORM_MEMORY_DATA_RATE": "A quarter of the H200's 4.8 TB/s at the h200 profile's 9375 MT/s. PEAK_BW is the bandwidth the profile is meant to deliver, not channels x channel rate (see PLATFORM_MEMORY_NUM_BANKS)",
     "PLATFORM_MEMORY_NUM_BANKS, L2_NUM_BANKS": "64 each, set by measurement so that all 33 SMs streaming reach PEAK_BW. With h100q's 8 channels and 16 L2 banks the same stream stopped at 190-270 GB/s (16-22% of the peak) with the memory latency past 2000 cycles: about a thousand warps read at unrelated addresses, the channels see interleaved rows, and each delivers about 24 GB/s of its nominal 150 GB/s; the alternative bank model behaves the same. Measured on bwstream, 33 SMs: 32 channels 671 GB/s, 64 channels 804 GB/s, 128 channels 813 GB/s (L2 banks then bind), 64 channels with 64 L2 banks 1154-1277 GB/s, linear in SMs up to 16. A real H200 reaches its peak with every SM streaming, so the count is chosen for the delivered bandwidth, not the nominal one",
     "DCACHE_MSHR_SIZE, LSU_PENDING_LIMIT": "128 each. An SM's share of the peak is 36.4 GB/s (2424 B/cycle x 659 cycles / 132 SMs = 189 lines in flight); a coalesced FP32 stream with four loads outstanding measured 23.8 GB/s per SM at 64/64 and 45.6 at 128/128, so 64 fills 65% of the memory with every SM and 128 is the smallest power of two that fills it",
-    "FPU_QUEUE_SIZE, DISPATCH_QUEUE_SIZE": "16 and 8, so the FP pipeline can fill. An FPU block admits an operation only while fewer than FPU_QUEUE_SIZE are in flight; at the derived 2 and an FMA latency of 12 a block finished 2 operations per 14 cycles, and a register-only multiply-add kernel on 64 warps (corun -b0) ran at IPC 0.86 of an issue width of 4. With 16 (8 measured the same) it runs at 2.18, and with the dispatch queue at 8 instead of 4 at 2.96 (16 and 32 measured the same). The rest is the register file: two of the loop's six instructions read two operands from one of the 4 GPR banks and take a second cycle (3.30 with 8 banks), which is left as the design's",
+    "FPU_QUEUE_SIZE, DISPATCH_QUEUE_SIZE, NUM_GPR_BANKS": "16, 8 and 8, so the FP pipeline can fill. An FPU block admits an operation only while fewer than FPU_QUEUE_SIZE are in flight; at the derived 2 and an FMA latency of 12 a block finished 2 operations per 14 cycles, and a register-only multiply-add kernel on 64 warps (corun -b0) ran at IPC 0.86 of an issue width of 4. With 16 (8 measured the same) it runs at 2.18, and with the dispatch queue at 8 instead of 4 at 2.96 (16 and 32 measured the same). The register file follows: a bank is the register index modulo the bank count and serves one operand per cycle, so with 4 banks two of the loop's six instructions read two operands from one bank and take a second cycle. With 8 banks the kernel runs at 3.30 (16 measured the same), so the compute roof does not depend on which registers the compiler picked",
     "DTLB_SIZE, L2_TLB_MEGA_SIZE": "256 entries each, 512 MB of 2 MB pages. With h100q's 64 a decode-shaped product over 128 MiB of weights (16 SMs) ran at a 34% TLB hit rate and 43 GB/s; with 256 it runs at 100% and 294 GB/s. Raising the megapage CAM alone was not enough. The reach covers the data sets of this study, as a GPU's does for its own; it is not a model of a GPU's TLB",
     "SM, NUM_CORES, L2, latencies": "Inherited from h100q",
     "reference": "dram_bandwidth_gbs is a quarter of the H200's"
