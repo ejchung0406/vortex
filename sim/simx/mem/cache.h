@@ -56,6 +56,8 @@ public:
 		bool    merge_line = false;    // read merging takes any read of the same line, each merged port keeping its own tag and word
 		bool    core_req_skid = false; // banks behind a combinational request crossbar take requests through a skid register
 		bool    set_hash = false;      // hashed set index
+		uint16_t crsq_size = 0;        // extra slots in a bank's core-response queue, over the registered skid's two
+		bool    fwd_hold = false;      // a forwardable chain head waits on a full response queue instead of replaying
 	};
 
 	struct PerfStats {

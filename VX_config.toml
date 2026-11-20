@@ -319,6 +319,10 @@ VX_CFG_L1_LINK_LATENCY = 0
 VX_CFG_DCACHE_MRSQ_SIZE = 4
 VX_CFG_DCACHE_MREQ_SIZE = 0
 VX_CFG_DCACHE_CRSQ_SIZE = 0
+# SimX only: a fill-forward head that finds the bank's core-response queue full
+# waits for it, as the RTL's does (VX_cache_bank fwd_head), and fills wait with
+# it; 0 keeps the model's replay of that head through the bank pipeline.
+VX_CFG_DCACHE_FWD_HOLD = 0
 
 VX_CFG_NUM_ICACHES = "expr: up($VX_CFG_SOCKET_SIZE / 4) if $VX_CFG_ICACHE_ENABLE else 0"
 VX_CFG_NUM_DCACHES = "expr: up($VX_CFG_SOCKET_SIZE / 4) if $VX_CFG_DCACHE_ENABLE else 0"

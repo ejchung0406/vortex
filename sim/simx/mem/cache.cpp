@@ -942,6 +942,7 @@ protected:
     // directly (one per tick), leaving the input slot free for new requests.
     // On response backpressure the head falls back to the replay path.
     bool fwd_consumed = false;
+    fwd_held_ = false;
     if (fwd_active_ && !pipe_stall) {
         fwd_consumed = this->processForward();
     }
@@ -1007,7 +1008,7 @@ private:
     // 1) replay: one chain entry leaves per tick — when the fill-forward
     // drain completed the head this tick, this slot goes to new core
     // requests instead
-    if (mshr_.has_ready_reqs() && !fwd_consumed) {
+    if (mshr_.has_ready_reqs() && !fwd_consumed && !fwd_held_) {
       // A chain whose sector is partial cannot serve a load or AMO: park at
       // that head and refetch the sector; the rest of the chain waits.
       if (chain_partial_) {
@@ -1514,8 +1515,14 @@ private:
       fwd_data_.reset();
       return false;
     }
-    if (crsp_sent_ || this->core_rsp_out.full()) {
+    if (crsp_sent_) {
       return false; // the head falls back to the replay path this tick
+    }
+    if (this->core_rsp_out.full()) {
+      // with the hold, the head waits for the response queue, out of the
+      // arbiter's sight, and fills wait with it; without, it replays
+      fwd_held_ = config_.fwd_hold;
+      return false;
     }
     bank_req_t req;
     mshr_.dequeue(&req);
@@ -2306,6 +2313,7 @@ private:
   uint32_t fwd_sector_;
   std::shared_ptr<mem_block_t> fwd_data_;
   bool     crsp_sent_;  // core-response port used this tick (pipeline priority)
+  bool     fwd_held_ = false; // the forward head waits on a full response queue this tick
 
   // Partial state of the chain the last fill woke (lazy fetch).
   bool     chain_partial_;
@@ -2933,9 +2941,9 @@ public:
 
   CacheRspMcast(const SimContext& ctx, const char* name, uint32_t num_banks,
                 uint32_t num_outputs, uint32_t merge_group, bool merge_line,
-                uint32_t out_delay)
+                uint32_t out_delay, uint32_t rsp_queue_size)
     : SimObject<CacheRspMcast>(ctx, name)
-    , RspIn(num_banks, this)
+    , RspIn(num_banks, SimChannel<MemRsp>(this, rsp_queue_size))
     , RspOut(num_outputs, this)
     , lg2_outputs_(log2ceil(num_outputs))
     , merge_group_(merge_group)
@@ -3231,9 +3239,10 @@ public:
     if (config_.nc_enable) {
       ++core_rsp_delay_;
     }
+    __assert(config_.crsq_size == 0 || port_arb_->merge_bits() != 0, "a deeper core-response queue is modeled under read merging only");
     if (port_arb_->merge_bits() != 0) {
       rsp_mcast_ = CacheRspMcast::Create(sname, num_banks, config_.num_inputs, port_arb_->merge_bits(), merge_line,
-                                         core_rsp_delay_);
+                                         core_rsp_delay_, 1u << log2ceil(2 + config_.crsq_size));
       for (uint32_t i = 0; i < config_.num_inputs; ++i) {
         rsp_mcast_->RspOut.at(i).bind(&simobject->core_rsp_out.at(i));
       }

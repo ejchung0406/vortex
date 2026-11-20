@@ -119,6 +119,8 @@ public:
       false,                         // line merging
       false,                         // core-request skid
       VX_CFG_DCACHE_SET_HASH != 0,   // set_hash
+      VX_CFG_DCACHE_CRSQ_SIZE,       // crsq_size
+      VX_CFG_DCACHE_FWD_HOLD != 0,   // fwd_hold
     });
 
 #ifdef VX_CFG_EXT_TEX_ENABLE
