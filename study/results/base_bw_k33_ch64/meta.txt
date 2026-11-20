@@ -1,0 +1,8 @@
+name=base_bw_k33_ch64
+src_rev=a7b9d8a9d83bae12245178cdcc1f31a5db34807c
+src_dirty=5
+host=atl1-1-02-008-5-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=64
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200q --cores=33 --args=-n256 -r1 -p0 -u8
+rc=0
+wall_s=487

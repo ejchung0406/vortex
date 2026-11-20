@@ -1,0 +1,8 @@
+name=gs_k16_core
+src_rev=87f598f1620ea3d9ff62f85114f642dd1ea22c37
+src_dirty=1
+host=atl1-1-01-005-23-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DMTILES=1 -DPROFILE_ENABLE 
+blackbox=--driver=simx --app=gemm_decode --perf=1 --profile=h200q --cores=16 --args=-m16 -n16384 -k4096
+rc=0
+wall_s=2267

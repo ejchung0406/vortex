@@ -1,0 +1,8 @@
+name=par4_simx_blk_h1
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-10-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_DCACHE_FWD_HOLD=1
+blackbox=--driver=simx --app=bwstream --perf=4 --profile=h200s_nowg --cores=1 --args=-n64 -r1 -p0 -u4 -b32
+rc=0
+wall_s=208

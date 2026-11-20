@@ -1,0 +1,84 @@
+--- a/sim/simx/lsu_unit.cpp
++++ b/sim/simx/lsu_unit.cpp
+@@ -32,6 +32,28 @@
+ 
+ using namespace vortex;
+ 
++// DEBUG(m16): VX_MEMCHK=1 checks every global load of a thread against that
++// thread's own earlier stores in program order (order of address generation in
++// the LSU). A byte last written by another thread, an AMO, or never written by
++// the kernel is not checked.
++#include <unordered_map>
++#include <map>
++#include <cstdlib>
++namespace {
++struct MemByte { uint8_t v; uint32_t owner; uint64_t cyc; };
++struct MemExp { uint64_t addr; uint64_t val; uint8_t mask; uint64_t ld_cyc; uint64_t pc; uint32_t wid; };
++struct MemChk {
++  bool on = (getenv("VX_MEMCHK") != nullptr);
++  std::unordered_map<uint64_t, MemByte> mem;
++  std::map<std::pair<uint64_t,uint32_t>, MemExp> exp;
++  uint64_t checked = 0, bad = 0, stack_checked = 0, stack_bad = 0;
++  ~MemChk() { if (on) std::cout << "MEMCHK: checked=" << checked << " bad=" << bad
++                                << " (stack: checked=" << stack_checked << " bad=" << stack_bad << ")" << std::endl; }
++};
++MemChk g_mc;
++inline uint32_t mc_owner(uint32_t wid, uint32_t tid) { return (wid << 8) | tid; }
++}
++
+ uint32_t LsuUopGen::uop_count(const Instr& instr) {
+   // An atomic with .aq/.rl: [release fence] atomic [acquire fence]
+   if (auto amo = std::get_if<IntrAmoArgs>(&instr.get_args())) {
+@@ -300,6 +322,25 @@
+ 			if (is_cas) {
+ 				e.amo_cmp = trace->src_data[2][t].u64;
+ 			}
++			if (g_mc.on && get_addr_type(e.addr) == AddrType::Global) {
++				uint64_t now = SimPlatform::instance().cycles();
++				uint32_t me = mc_owner(trace->wid, t);
++				if (is_amo) {
++					for (uint32_t bo = 0; bo < e.size; ++bo) g_mc.mem.erase(e.addr + bo);
++				} else if (is_write) {
++					for (uint32_t bo = 0; bo < e.size; ++bo)
++						g_mc.mem[e.addr + bo] = MemByte{uint8_t(e.data >> (8 * bo)), me, now};
++				} else {
++					MemExp x{e.addr, 0, 0, now, trace->PC, trace->wid};
++					for (uint32_t bo = 0; bo < e.size; ++bo) {
++						auto it = g_mc.mem.find(e.addr + bo);
++						if (it == g_mc.mem.end() || it->second.owner != me) continue;
++						x.val |= uint64_t(it->second.v) << (8 * bo);
++						x.mask |= (1u << bo);
++					}
++					if (x.mask) g_mc.exp[{(uint64_t)(uintptr_t)trace, t}] = x;
++				}
++			}
+ 		}
+ 		state.addr_list.push_back(e);
+ 	}
+@@ -381,6 +422,26 @@
+ 			uint32_t off = lane_info.addr & (VX_CFG_MEM_BLOCK_SIZE - 1);
+ 			uint64_t read_data = 0;
+ 			std::memcpy(&read_data, lsu_rsp.data.at(lane)->data() + off, data_bytes);
++			if (g_mc.on) {
++				auto it = g_mc.exp.find({(uint64_t)(uintptr_t)trace, lane_info.tid});
++				if (it != g_mc.exp.end()) {
++					auto& x = it->second;
++					uint64_t m = 0;
++					for (uint32_t bo = 0; bo < 8; ++bo) if (x.mask & (1u << bo)) m |= 0xffull << (8 * bo);
++					bool stk = StackInterleave::contains(x.addr);
++					++g_mc.checked; if (stk) ++g_mc.stack_checked;
++					if ((read_data & m) != (x.val & m)) {
++						++g_mc.bad; if (stk) ++g_mc.stack_bad;
++						if (g_mc.bad <= 64)
++							std::cout << "MEMCHK-BAD cyc=" << SimPlatform::instance().cycles()
++							          << " wid=" << x.wid << " tid=" << lane_info.tid << std::hex
++							          << " pc=0x" << x.pc << " addr=0x" << x.addr
++							          << " exp=0x" << (x.val & m) << " got=0x" << (read_data & m) << std::dec
++							          << " ld_issue=" << x.ld_cyc << std::endl;
++					}
++					g_mc.exp.erase(it);
++				}
++			}
+ 			// Format the loaded value at low bits per RISC-V load semantics.
+ 			uint64_t formatted = 0;
+ 			switch (entry.lsu_args.width) {

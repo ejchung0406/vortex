@@ -1,0 +1,8 @@
+name=dx7_w16_p4_n64
+src_rev=ba00007ab095bcfd4761425bf5e90323a8df6246
+src_dirty=10
+host=atl1-1-02-018-19-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_DXA_MAX_INFLIGHT=256 -DVX_CFG_NUM_DXA_CORES=16 -DVX_CFG_DXA_GMEM_PORTS=4
+blackbox=--driver=simx --app=bwstream_dxa --perf=16 --profile=h200q --cores=4 --args=-e4096 -n64 -g64 -d4 -c0
+rc=0
+wall_s=362

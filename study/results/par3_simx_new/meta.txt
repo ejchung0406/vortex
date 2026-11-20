@@ -1,0 +1,8 @@
+name=par3_simx_new
+src_rev=a7b9d8a9d83bae12245178cdcc1f31a5db34807c
+src_dirty=15
+host=atl1-1-02-011-2-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3E -DVX_CFG_PLATFORM_MEMORY_BANK_GROUPS=8 -DVX_CFG_PLATFORM_MEMORY_SCHED_WINDOW=256 -DVX_CFG_PLATFORM_MEMORY_INTERLEAVE_SIZE=1024
+blackbox=--driver=simx --app=bwstream --perf=7 --cores=1 --args=-n64 -r1 -p0 -u4
+rc=0
+wall_s=152

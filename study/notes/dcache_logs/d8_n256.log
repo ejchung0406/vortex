@@ -1,0 +1,44 @@
+CONFIGS=-DVX_DBG_STALL_TIMEOUT=20000000 -DDCDBG -DVX_CFG_DCACHE_NUM_BANKS=8 -DVX_CFG_L1_MEM_PORTS=4 -DVX_CFG_NUM_CORES=1 -DPERF_ENABLE
+Running: VORTEX_RT_LIB="/tmp/tmp.G2RaAMp5OR" CONFIGS="-DVX_DBG_STALL_TIMEOUT=20000000 -DDCDBG -DVX_CFG_DCACHE_NUM_BANKS=8 -DVX_CFG_L1_MEM_PORTS=4 -DVX_CFG_NUM_CORES=1 -DPERF_ENABLE" make -C "./ci/../tests/regression/bwstream.trial.2884454.393967169" runtime-simx > /dev/null
+Running: VORTEX_RT_LIB="/tmp/tmp.G2RaAMp5OR" OPTS="-n256 -r1 -p0 -u8" CONFIGS="-DVX_DBG_STALL_TIMEOUT=20000000 -DDCDBG -DVX_CFG_DCACHE_NUM_BANKS=8 -DVX_CFG_L1_MEM_PORTS=4 -DVX_CFG_NUM_CORES=1 -DPERF_ENABLE" make -C "./ci/../tests/regression/bwstream.trial.2884454.393967169" run-simx
+CONFIGS="-DVX_PROFILE=h200s -DVX_CFG_CP_LLC_CLIENT=1 -DVX_CFG_DCACHE_MSHR_SIZE=512 -DVX_CFG_DCACHE_SIZE=262144 -DVX_CFG_DISPATCH_QUEUE_SIZE=8 -DVX_CFG_DTLB_SIZE=256 -DVX_CFG_DXA_MAX_INFLIGHT=256 -DVX_CFG_EXT_A_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_EXT_TEX_ENABLE -DVX_CFG_EXT_TFU_ENABLE -DVX_CFG_EXT_ZACAS_ENABLE -DVX_CFG_EXT_ZFHMIN_ENABLE -DVX_CFG_FCVT_PE_RATIO=8 -DVX_CFG_
+/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin/g++ -std=c++17 -Wall -Wextra -pedantic -Wfatal-errors -Werror -DOMPI_SKIP_MPICXX -DMPICH_SKIP_MPICXX -I/storage/project/r-hkim358-0/echung67/vortex-exp/src_dcache/sw/runtime/include -I/storage/project/r-hkim358-0/echung67/vortex-exp/src_dcache/sw/kernel/include -I/tmp/echung67/vx_dc
+/storage/project/r-hkim358-0/echung67/vortex-tools/llvm-vortex/bin/clang++ --target=riscv64-unknown-elf --sysroot=/storage/project/r-hkim358-0/echung67/vortex-tools/riscv64-gnu-toolchain/riscv64-unknown-elf --gcc-toolchain=/storage/project/r-hkim358-0/echung67/vortex-tools/riscv64-gnu-toolchain -Xclang -target-feature -Xclang +xvortex -Xclang -target-feature -Xclang +zicond -mllvm -disable-loop-id
+/storage/project/r-hkim358-0/echung67/vortex-tools/llvm-vortex/bin/clang++ --target=riscv64-unknown-elf --sysroot=/storage/project/r-hkim358-0/echung67/vortex-tools/riscv64-gnu-toolchain/riscv64-unknown-elf --gcc-toolchain=/storage/project/r-hkim358-0/echung67/vortex-tools/riscv64-gnu-toolchain -Xclang -target-feature -Xclang +xvortex -Xclang -target-feature -Xclang +zicond -mllvm -disable-loop-id
+/storage/project/r-hkim358-0/echung67/vortex-tools/llvm-vortex/bin/clang++ --target=riscv64-unknown-elf --sysroot=/storage/project/r-hkim358-0/echung67/vortex-tools/riscv64-gnu-toolchain/riscv64-unknown-elf --gcc-toolchain=/storage/project/r-hkim358-0/echung67/vortex-tools/riscv64-gnu-toolchain -Xclang -target-feature -Xclang +xvortex -Xclang -target-feature -Xclang +zicond -mllvm -disable-loop-id
+/storage/project/r-hkim358-0/echung67/vortex-tools/llvm-vortex/bin/clang++ --target=riscv64-unknown-elf --sysroot=/storage/project/r-hkim358-0/echung67/vortex-tools/riscv64-gnu-toolchain/riscv64-unknown-elf --gcc-toolchain=/storage/project/r-hkim358-0/echung67/vortex-tools/riscv64-gnu-toolchain -Xclang -target-feature -Xclang +xvortex -Xclang -target-feature -Xclang +zicond -mllvm -disable-loop-id
+/storage/project/r-hkim358-0/echung67/vortex-tools/llvm-vortex/bin/clang++ --target=riscv64-unknown-elf --sysroot=/storage/project/r-hkim358-0/echung67/vortex-tools/riscv64-gnu-toolchain/riscv64-unknown-elf --gcc-toolchain=/storage/project/r-hkim358-0/echung67/vortex-tools/riscv64-gnu-toolchain -Xclang -target-feature -Xclang +xvortex -Xclang -target-feature -Xclang +zicond -mllvm -disable-loop-id
+CONFIGS="-DVX_PROFILE=h200s -DVX_CFG_CP_LLC_CLIENT=1 -DVX_CFG_DCACHE_MSHR_SIZE=512 -DVX_CFG_DCACHE_SIZE=262144 -DVX_CFG_DISPATCH_QUEUE_SIZE=8 -DVX_CFG_DTLB_SIZE=256 -DVX_CFG_DXA_MAX_INFLIGHT=256 -DVX_CFG_EXT_A_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_EXT_TEX_ENABLE -DVX_CFG_EXT_TFU_ENABLE -DVX_CFG_EXT_ZACAS_ENABLE -DVX_CFG_EXT_ZFHMIN_ENABLE -DVX_CFG_FCVT_PE_RATIO=8 -DVX_CFG_
+PERF: core0: dcache: reqs=83539, miss_r=80943 (hit=1%), miss_w=1536 (hit=0%), evicts=0, bank_st=11470 (utility=88%)
+PERF: instrs=60288, cycles=100331, IPC=0.601
+PASSED!
+DCDBG coalescer ticks=198200 reqin_empty=57659 tags_full=0 drain=72445 drain_blocked=4349 build=68096 rsp=80737 rsp_blocked=772
+DCDBG window first=1445 last=102752
+DCDBG bank0 ticks=95667 in_core=10224 in_coal=10 in_fill=4127 in_replay=283 no_stall_rsp=220 no_stall_mem=4 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=757 no_fillblk_held=0 no_hold=0 no_idle=80042 fwd_ok=9759 fwd_blk=336 fillwait=990 corewait=524 sum_mshr=8602545 sum_rdy=18642 sum_mrsp=13462 sum_creq=21202 sum_crsp=3576 sum_pipe=73973 max_mshr=154
+DCDBG bank1 ticks=95672 in_core=10233 in_coal=17 in_fill=4127 in_replay=289 no_stall_rsp=280 no_stall_mem=5 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=705 no_fillblk_held=0 no_hold=0 no_idle=80016 fwd_ok=9769 fwd_blk=417 fillwait=967 corewait=662 sum_mshr=8611653 sum_rdy=18822 sum_mrsp=13450 sum_creq=21544 sum_crsp=3604 sum_pipe=74393 max_mshr=149
+DCDBG bank2 ticks=97688 in_core=11285 in_coal=513 in_fill=4128 in_replay=785 no_stall_rsp=291 no_stall_mem=0 no_stall_other=0 no_pipefull=0 no_mshrfull=10 no_coreheld=0 no_fillblk_fwd=708 no_fillblk_held=0 no_hold=0 no_idle=79968 fwd_ok=9761 fwd_blk=876 fillwait=892 corewait=1098 sum_mshr=8855642 sum_rdy=154716 sum_mrsp=13352 sum_creq=25487 sum_crsp=5346 sum_pipe=82039 max_mshr=512
+DCDBG bank3 ticks=95667 in_core=10244 in_coal=11 in_fill=4127 in_replay=278 no_stall_rsp=219 no_stall_mem=7 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=722 no_fillblk_held=0 no_hold=0 no_idle=80059 fwd_ok=9785 fwd_blk=388 fillwait=926 corewait=499 sum_mshr=8595921 sum_rdy=18771 sum_mrsp=13379 sum_creq=21216 sum_crsp=3725 sum_pipe=74071 max_mshr=150
+DCDBG bank4 ticks=95732 in_core=10241 in_coal=17 in_fill=4129 in_replay=313 no_stall_rsp=249 no_stall_mem=2 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=743 no_fillblk_held=0 no_hold=0 no_idle=80038 fwd_ok=9753 fwd_blk=376 fillwait=1002 corewait=602 sum_mshr=8622879 sum_rdy=18748 sum_mrsp=13474 sum_creq=21407 sum_crsp=3899 sum_pipe=74448 max_mshr=154
+DCDBG bank5 ticks=95730 in_core=10232 in_coal=14 in_fill=4129 in_replay=302 no_stall_rsp=252 no_stall_mem=2 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=744 no_fillblk_held=0 no_hold=0 no_idle=80055 fwd_ok=9752 fwd_blk=348 fillwait=949 corewait=621 sum_mshr=8599778 sum_rdy=18635 sum_mrsp=13395 sum_creq=21386 sum_crsp=3785 sum_pipe=74176 max_mshr=153
+DCDBG bank6 ticks=95736 in_core=10249 in_coal=5 in_fill=4129 in_replay=285 no_stall_rsp=224 no_stall_mem=2 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=724 no_fillblk_held=0 no_hold=0 no_idle=80118 fwd_ok=9777 fwd_blk=413 fillwait=939 corewait=541 sum_mshr=8591127 sum_rdy=18858 sum_mrsp=13387 sum_creq=21307 sum_crsp=3683 sum_pipe=74130 max_mshr=152
+DCDBG bank7 ticks=95742 in_core=10237 in_coal=7 in_fill=4129 in_replay=285 no_stall_rsp=289 no_stall_mem=2 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=685 no_fillblk_held=0 no_hold=0 no_idle=80108 fwd_ok=9767 fwd_blk=400 fillwait=879 corewait=608 sum_mshr=8585617 sum_rdy=18753 sum_mrsp=13350 sum_creq=21413 sum_crsp=3791 sum_pipe=74367 max_mshr=154
+DCDBG arb ticks=80043 ports_ne=162946 followers=63329 holds=995
+DCDBG arb bank0 want=10352 grant=10234 full=118 wants_sum=11311
+DCDBG arb bank1 want=10527 grant=10250 full=277 wants_sum=11591
+DCDBG arb bank2 want=12481 grant=11798 full=683 wants_sum=18898
+DCDBG arb bank3 want=10369 grant=10255 full=114 wants_sum=11300
+DCDBG arb bank4 want=10468 grant=10258 full=210 wants_sum=11577
+DCDBG arb bank5 want=10428 grant=10246 full=182 wants_sum=11494
+DCDBG arb bank6 want=10397 grant=10254 full=143 wants_sum=11352
+DCDBG arb bank7 want=10401 grant=10244 full=157 wants_sum=11414
+DCDBG arb port0 ne=21546 grant=17024 same_bank_as_prev=8886 rsp_send=16832 rsp_fail=767
+DCDBG arb port1 ne=20936 grant=14675 same_bank_as_prev=6738 rsp_send=16832 rsp_fail=1740
+DCDBG arb port2 ne=20129 grant=17024 same_bank_as_prev=8839 rsp_send=16832 rsp_fail=1143
+DCDBG arb port3 ne=20165 grant=256 same_bank_as_prev=38 rsp_send=16832 rsp_fail=1145
+DCDBG arb port4 ne=20049 grant=17024 same_bank_as_prev=8878 rsp_send=16832 rsp_fail=1184
+DCDBG arb port5 ne=20085 grant=256 same_bank_as_prev=50 rsp_send=16832 rsp_fail=1179
+DCDBG arb port6 ne=20007 grant=17024 same_bank_as_prev=8864 rsp_send=16832 rsp_fail=1230
+DCDBG arb port7 ne=20029 grant=256 same_bank_as_prev=39 rsp_send=16832 rsp_fail=1228
+DCDBG arb nwant_hist(distinct banks wanted per tick): 18775 41157 16451 3279 378 3 0 0 0
+DCDBG arb ngrant_hist(grants per tick): 20068 40327 16102 3179 364 3 0 0 0
+DCDBG mcast ticks=65559 b0:ne=12254,pop=10042 b1:ne=12262,pop=10058 b2:ne=13955,pop=11606 b3:ne=12379,pop=10063 b4:ne=12468,pop=10066 b5:ne=12366,pop=10054 b6:ne=12330,pop=10062 b7:ne=12379,pop=10052

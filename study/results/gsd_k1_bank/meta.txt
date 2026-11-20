@@ -1,0 +1,8 @@
+name=gsd_k1_bank
+src_rev=a7b9d8a9d83bae12245178cdcc1f31a5db34807c
+src_dirty=1
+host=atl1-1-02-011-26-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DMTILES=1 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_decode --perf=7 --profile=h200q --cores=1 --args=-m16 -n1024 -k4096
+rc=0
+wall_s=341

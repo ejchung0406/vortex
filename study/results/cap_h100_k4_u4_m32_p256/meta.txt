@@ -1,0 +1,8 @@
+name=cap_h100_k4_u4_m32_p256
+src_rev=01d0ac75059c50b191c646379df65ce14cf53636
+src_dirty=4
+host=atl1-1-02-002-27-2.pace.gatech.edu
+xconf=-DVX_CFG_DCACHE_MSHR_SIZE=32 -DVX_CFG_LSU_PENDING_LIMIT=256 -DVX_DBG_STALL_TIMEOUT=20000000
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h100 --cores=4 --args=-n256 -r1 -p0 -u4
+rc=0
+wall_s=265

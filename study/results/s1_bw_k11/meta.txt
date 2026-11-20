@@ -1,0 +1,8 @@
+name=s1_bw_k11
+src_rev=a7b9d8a9d83bae12245178cdcc1f31a5db34807c
+src_dirty=5
+host=atl1-1-02-011-26-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200s --cores=11 --args=-n256 -r1 -p0 -u8
+rc=0
+wall_s=277

@@ -1,0 +1,8 @@
+name=ordp1_co_k4_s1
+src_rev=
+src_dirty=0
+host=atl1-1-03-003-12-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_L2_REPL_POLICY=1 -DMTILES=4 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=4 --args=-m64 -n8192 -k1024 -b2 -t1 -r6 -s1 -R256
+rc=0
+wall_s=1265

@@ -1,0 +1,7 @@
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 mps_pct=none tag=
+model=Qwen/Qwen3.5-9B class=Qwen3_5ForCausalLM params=8953803264 lm_weight_bytes=17907606528 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: 'A GPU executes matrix multiplication by leveraging its massive parallelism, which is fundamentally different from the sequential processing of a CPU. Instead of calculating the result row-by-row'
+batch=1 step_ms_median=29.061 step_ms_min=28.623 step_ms_max=453.276 n=640 tok_per_s=34.4 weight_gb=17.908 weight_gbs=616.2 generate_s_median=3.774 generate_tok_per_s=33.9 (includes prefill)
+batch=4 step_ms_median=29.516 step_ms_min=29.124 step_ms_max=267.856 n=640 tok_per_s=135.5 weight_gb=17.908 weight_gbs=606.7 generate_s_median=3.815 generate_tok_per_s=134.2 (includes prefill)
+batch=16 step_ms_median=29.492 step_ms_min=29.037 step_ms_max=470.206 n=640 tok_per_s=542.5 weight_gb=17.908 weight_gbs=607.2 generate_s_median=3.816 generate_tok_per_s=536.8 (includes prefill)
+peak_mem_gb=19.1

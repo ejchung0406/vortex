@@ -1,0 +1,2 @@
+CONFIGS=-DVX_DBG_STALL_TIMEOUT=20000000  -DPERF_ENABLE -DVX_CFG_NUM_CORES=1
+Running: CONFIGS="-DVX_DBG_STALL_TIMEOUT=20000000  -DPERF_ENABLE -DVX_CFG_NUM_CORES=1" make -C "./ci/../tests/regression/war_order" runtime-rtlsim > /dev/null

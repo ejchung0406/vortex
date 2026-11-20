@@ -1,0 +1,8 @@
+name=par3_rtlsim_plain
+src_rev=a7b9d8a9d83bae12245178cdcc1f31a5db34807c
+src_dirty=15
+host=atl1-1-02-002-1-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=rtlsim --app=bwstream --perf=7 --cores=1 --args=-n64 -r1 -p0 -u4
+rc=0
+wall_s=38

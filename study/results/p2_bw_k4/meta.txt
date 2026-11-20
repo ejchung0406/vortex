@@ -1,0 +1,8 @@
+name=p2_bw_k4
+src_rev=ba00007ab095bcfd4761425bf5e90323a8df6246
+src_dirty=5
+host=atl1-1-02-005-13-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200q --cores=4 --args=-n256 -r1 -p0 -u4
+rc=0
+wall_s=253

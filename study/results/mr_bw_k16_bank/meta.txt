@@ -1,0 +1,8 @@
+name=mr_bw_k16_bank
+src_rev=ba00007ab095bcfd4761425bf5e90323a8df6246
+src_dirty=4
+host=atl1-1-03-003-2-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200q --cores=16 --args=-n256 -r1 -p0 -u4
+rc=0
+wall_s=440

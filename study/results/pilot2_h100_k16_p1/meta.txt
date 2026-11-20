@@ -1,0 +1,8 @@
+name=pilot2_h100_k16_p1
+src_rev=01d0ac75059c50b191c646379df65ce14cf53636
+src_dirty=3
+host=atl1-1-01-003-15-1.pace.gatech.edu
+xconf=-DVX_CFG_DCACHE_MSHR_SIZE=32 -DVX_CFG_LSU_PENDING_LIMIT=32
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h100 --cores=16 --args=-n256 -r1 -p1
+rc=2
+wall_s=330

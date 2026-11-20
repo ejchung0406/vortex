@@ -1,0 +1,8 @@
+name=ex_s2tcu_k1
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-2-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_DXA_MAX_INFLIGHT=256 -DVX_CFG_NUM_DXA_CORES=16 -DITYPE=fp16 -DOTYPE=fp32 -DEXP_GRAN=10 -DEXP_VISIT=5 -DEXP_JOINT -DEXP_LBG=3 -DEXP_CCDL=8
+blackbox=--driver=simx --app=sgemm2_tcu --perf=7 --profile=h200s --cores=1 --args=-m16 -n1024 -k4096 -w2
+rc=2
+wall_s=210

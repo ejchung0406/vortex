@@ -1,0 +1,8 @@
+name=mt_h200q_bw_k2_head2
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-5-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200q --cores=2 --args=-n32 -r1 -p0 -u4
+rc=0
+wall_s=219

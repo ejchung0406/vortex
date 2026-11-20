@@ -1,0 +1,8 @@
+name=dx2_k4_w32_f64_e4096
+src_rev=475250ec2356a279776ae608135eaf5a9beea4da
+src_dirty=3
+host=atl1-1-03-003-13-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_DXA_CORES=32 -DVX_CFG_DXA_MAX_INFLIGHT=64
+blackbox=--driver=simx --app=bwstream_dxa --perf=7 --profile=h200q --cores=4 --args=-e4096 -n8 -r1 -d1
+rc=0
+wall_s=233

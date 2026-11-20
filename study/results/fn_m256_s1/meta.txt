@@ -1,0 +1,8 @@
+name=fn_m256_s1
+src_rev=
+src_dirty=0
+host=atl1-1-03-003-9-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DMTILES=16 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_block --perf=1 --profile=h200s --cores=1 --args=-m256 -n1024 -k4096 -s1
+rc=2
+wall_s=1167

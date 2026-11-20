@@ -1,0 +1,8 @@
+name=wg_n32_r4p4_i128
+src_rev=
+src_dirty=0
+host=atl1-1-02-007-11-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DPROFILE_ENABLE -DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_BBUF_ROWS=4 -DVX_CFG_TCU_TBUF_PORTS=4 -DROOF_NRC=32
+blackbox=--driver=simx --app=tcu_roof --perf=1 --profile=h200s --cores=1 --args=-m 1 -g 16 -a 1 -i 128
+rc=0
+wall_s=242

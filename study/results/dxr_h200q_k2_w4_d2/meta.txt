@@ -1,0 +1,8 @@
+name=dxr_h200q_k2_w4_d2
+src_rev=475250ec2356a279776ae608135eaf5a9beea4da
+src_dirty=2
+host=atl1-1-02-006-24-1.pace.gatech.edu
+xconf=-DVX_CFG_NUM_DXA_CORES=4 -DVX_CFG_DXA_MAX_INFLIGHT=64 -DVX_DBG_STALL_TIMEOUT=2000000
+blackbox=--driver=simx --app=bwstream_dxa --perf=16 --profile=h200q --cores=2 --args=-e512 -n4 -r1 -d2
+rc=2
+wall_s=233

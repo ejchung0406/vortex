@@ -1,0 +1,8 @@
+name=bk3_gemm_k22
+src_rev=
+src_dirty=0
+host=atl1-1-02-009-28-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DEXP_LB=3 -DMTILES=1 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_decode --perf=7 --profile=h200s --cores=22 --args=-m16 -n22528 -k4096
+rc=0
+wall_s=1847

@@ -1,0 +1,88 @@
+--- src_l2/sim/simx/mem/cache.cpp	2026-11-20 10:30:41.000000000 -0500
++++ src_m16/sim/simx/mem/cache.cpp	2026-11-20 11:13:54.917018615 -0500
+@@ -456,6 +456,12 @@
+   // emit another response — only run sector_merge.
+   bool skip_core_rsp;
+ 
++  // A write-through store admitted while its word still had an undrained
++  // entry in its line's MSHR chain: its line merge must follow that entry's
++  // replay, which may have left the chain for the pipe by the time the store
++  // reaches the pipe exit.
++  bool chain_ordered;
++
+   // Fill flavors under lazy fetch: a data-less allocation for a write-miss
+   // root, or a refetch of a resident partial sector (merges under its dirty
+   // bytes).
+@@ -503,6 +509,7 @@
+     write = false;
+     op = MemOp::LD;
+     skip_core_rsp = false;
++    chain_ordered = false;
+     nodata = false;
+     refetch = false;
+     refetch_retry = false;
+@@ -633,6 +640,24 @@
+     return false;
+   }
+ 
++  // True if an undrained entry of the (set,tag,sector) chain touches the
++  // word of `addr` (2^word_log2 bytes).
++  bool has_word_reqs(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id,
++                     uint64_t addr, uint32_t word_log2) const {
++    for (const auto &entry : entries_) {
++      if (entry.bank_req.type == bank_req_t::None) {
++        continue;
++      }
++      if (entry.set_id != set_id || entry.addr_tag != addr_tag || entry.sector_id != sector_id) {
++        continue;
++      }
++      if ((entry.bank_req.addr >> word_log2) == (addr >> word_log2)) {
++        return true;
++      }
++    }
++    return false;
++  }
++
+   // Enqueue a new core request and return the allocated entry id.
+   int enqueue(const bank_req_t &bank_req, uint32_t set_id, uint64_t addr_tag, uint32_t sector_id,
+               bool refetch = false) {
+@@ -1254,7 +1279,8 @@
+       // emitted at the commit stage so same-line stores reach memory in
+       // pipeline order (an at-admission emission could overtake an older
+       // store still riding the pipe). The pipe-exit paths order them
+-      // correctly and defer only the line merge when a chain is pending.
++      // correctly and defer only the line merge when a chain is pending, or
++      // was pending on their word here (chain_ordered, below).
+       const bool is_wt_store = (core_req.op == MemOp::ST) && !config_.write_back;
+       if (!is_amo_passthru && !is_wt_store && mshr_.size() != 0) {
+         uint32_t adm_set_id   = params_.addr_set_id(core_req.addr);
+@@ -1322,6 +1348,15 @@
+       bank_req.op      = core_req.op;
+       bank_req.data    = core_req.data;
+       bank_req.byteen  = core_req.byteen;
++      // A write-through store skips the admission join above, but its line
++      // merge keeps the order it has here behind any undrained same-word
++      // chain entry (the RTL bank demotes such a hit to a chained miss at S0).
++      if (is_wt_store && mshr_.size() != 0) {
++        bank_req.chain_ordered = mshr_.has_word_reqs(params_.addr_set_id(core_req.addr),
++                                                     params_.addr_tag(core_req.addr),
++                                                     params_.addr_sector_id(core_req.addr),
++                                                     core_req.addr, config_.W);
++      }
+       bank_req.amo_cmp = core_req.amo_cmp;
+       bank_req.flags   = core_req.flags;
+       pipe_req_->push(bank_req);
+@@ -1964,9 +1999,10 @@
+         // Write-through stores keep their immediate memory write +
+         // response and defer only the line merge.
+         uint32_t chain_root = 0;
+-        if (mshr_.lookup(set_id, addr_tag, sector_id, &chain_root)
+-         && (mshr_.has_ordered_reqs(set_id, addr_tag, sector_id)
+-          || bank_req.write || memop_is_atomic(bank_req.op))) {
++        if ((mshr_.lookup(set_id, addr_tag, sector_id, &chain_root)
++          && (mshr_.has_ordered_reqs(set_id, addr_tag, sector_id)
++           || bank_req.write || memop_is_atomic(bank_req.op)))
++         || (bank_req.chain_ordered && bank_req.write && !config_.write_back)) {
+           if (bank_req.write && !config_.write_back) {
+             if (!this->emitWritethrough(set_id, addr_tag, sector_id,
+                                         bank_req.addr, bank_req.hart_id, bank_req.uuid,

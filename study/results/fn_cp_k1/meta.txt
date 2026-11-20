@@ -1,0 +1,8 @@
+name=fn_cp_k1
+src_rev=
+src_dirty=0
+host=atl1-1-02-009-8-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=simx --app=corun --perf=1 --profile=h200s --cores=1 --args=-b0 -i4096 -g128
+rc=0
+wall_s=220

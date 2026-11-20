@@ -1,0 +1,48 @@
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 mps_pct=100 tag=solo_pct100
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: 'A GPU executes matrix multiplication by leveraging its massive parallelism, which is fundamentally different from the sequential processing of a CPU. Instead of calculating the result row-by-row'
+segment=0 batch=1 window_s=30.0 steps=955 step_ms_median=26.479 tok_per_s_wall=31.8 tok_per_s_median=37.8 kernel_ms_per_step=7.555 matmul_kernel_ms_per_step=4.985 matmul_kernel_weight_gbs=3184
+segment=1 batch=4 window_s=30.0 steps=713 step_ms_median=34.655 tok_per_s_wall=95.0 tok_per_s_median=115.4 kernel_ms_per_step=8.250 matmul_kernel_ms_per_step=5.105 matmul_kernel_weight_gbs=3109
+segment=2 batch=16 window_s=30.0 steps=730 step_ms_median=34.640 tok_per_s_wall=389.0 tok_per_s_median=461.9 kernel_ms_per_step=9.641 matmul_kernel_ms_per_step=5.162 matmul_kernel_weight_gbs=3075
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 mps_pct=80 tag=solo_pct80
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+segment=0 batch=1 window_s=30.0 steps=959 step_ms_median=26.628 tok_per_s_wall=32.0 tok_per_s_median=37.6 kernel_ms_per_step=7.636 matmul_kernel_ms_per_step=5.007 matmul_kernel_weight_gbs=3170
+segment=1 batch=4 window_s=30.0 steps=724 step_ms_median=34.709 tok_per_s_wall=96.5 tok_per_s_median=115.2 kernel_ms_per_step=8.313 matmul_kernel_ms_per_step=5.102 matmul_kernel_weight_gbs=3111
+segment=2 batch=16 window_s=30.0 steps=730 step_ms_median=34.335 tok_per_s_wall=389.0 tok_per_s_median=466.0 kernel_ms_per_step=9.764 matmul_kernel_ms_per_step=5.121 matmul_kernel_weight_gbs=3100
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 mps_pct=70 tag=solo_pct70
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+segment=0 batch=1 window_s=30.0 steps=978 step_ms_median=26.339 tok_per_s_wall=32.6 tok_per_s_median=38.0 kernel_ms_per_step=7.572 matmul_kernel_ms_per_step=4.944 matmul_kernel_weight_gbs=3211
+segment=1 batch=4 window_s=30.0 steps=723 step_ms_median=34.448 tok_per_s_wall=96.4 tok_per_s_median=116.1 kernel_ms_per_step=8.231 matmul_kernel_ms_per_step=5.034 matmul_kernel_weight_gbs=3153
+segment=2 batch=16 window_s=30.0 steps=735 step_ms_median=34.389 tok_per_s_wall=391.9 tok_per_s_median=465.3 kernel_ms_per_step=9.761 matmul_kernel_ms_per_step=5.114 matmul_kernel_weight_gbs=3104
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 mps_pct=60 tag=solo_pct60
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: ' shoulder to shoulder with the CPU, the GPU executes matrix multiplication by leveraging its massive parallelism to handle thousands of independent calculations simultaneously. Unlike a CPU, which uses'
+segment=0 batch=1 window_s=30.0 steps=954 step_ms_median=26.959 tok_per_s_wall=31.8 tok_per_s_median=37.1 kernel_ms_per_step=7.684 matmul_kernel_ms_per_step=5.118 matmul_kernel_weight_gbs=3101
+segment=1 batch=4 window_s=30.0 steps=709 step_ms_median=35.321 tok_per_s_wall=94.5 tok_per_s_median=113.2 kernel_ms_per_step=8.472 matmul_kernel_ms_per_step=5.290 matmul_kernel_weight_gbs=3000
+segment=2 batch=16 window_s=30.0 steps=701 step_ms_median=35.366 tok_per_s_wall=373.6 tok_per_s_median=452.4 kernel_ms_per_step=10.221 matmul_kernel_ms_per_step=5.494 matmul_kernel_weight_gbs=2889
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 mps_pct=40 tag=solo_pct40
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+segment=0 batch=1 window_s=30.0 steps=964 step_ms_median=26.798 tok_per_s_wall=32.1 tok_per_s_median=37.3 kernel_ms_per_step=8.241 matmul_kernel_ms_per_step=5.585 matmul_kernel_weight_gbs=2842
+segment=1 batch=4 window_s=30.0 steps=716 step_ms_median=34.844 tok_per_s_wall=95.4 tok_per_s_median=114.8 kernel_ms_per_step=9.008 matmul_kernel_ms_per_step=5.601 matmul_kernel_weight_gbs=2834
+segment=2 batch=16 window_s=30.0 steps=722 step_ms_median=35.007 tok_per_s_wall=384.8 tok_per_s_median=457.1 kernel_ms_per_step=10.985 matmul_kernel_ms_per_step=5.678 matmul_kernel_weight_gbs=2796
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 mps_pct=20 tag=solo_pct20
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+segment=0 batch=1 window_s=30.0 steps=943 step_ms_median=26.960 tok_per_s_wall=31.4 tok_per_s_median=37.1 kernel_ms_per_step=9.645 matmul_kernel_ms_per_step=6.903 matmul_kernel_weight_gbs=2300
+segment=1 batch=4 window_s=30.0 steps=709 step_ms_median=35.194 tok_per_s_wall=94.5 tok_per_s_median=113.7 kernel_ms_per_step=10.750 matmul_kernel_ms_per_step=7.018 matmul_kernel_weight_gbs=2262
+segment=2 batch=16 window_s=30.0 steps=713 step_ms_median=35.329 tok_per_s_wall=379.9 tok_per_s_median=452.9 kernel_ms_per_step=14.203 matmul_kernel_ms_per_step=7.252 matmul_kernel_weight_gbs=2189
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 mps_pct=10 tag=solo_pct10
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: 'A GPU executes matrix multiplication by leveraging its massive parallelism, which is fundamentally different from the sequential processing of a CPU. Instead of calculating the result row-by-row'
+segment=0 batch=1 window_s=30.0 steps=938 step_ms_median=27.380 tok_per_s_wall=31.2 tok_per_s_median=36.5 kernel_ms_per_step=15.744 matmul_kernel_ms_per_step=12.877 matmul_kernel_weight_gbs=1233
+segment=1 batch=4 window_s=30.0 steps=709 step_ms_median=35.601 tok_per_s_wall=94.5 tok_per_s_median=112.4 kernel_ms_per_step=17.495 matmul_kernel_ms_per_step=12.948 matmul_kernel_weight_gbs=1226
+segment=2 batch=16 window_s=30.0 steps=681 step_ms_median=35.792 tok_per_s_wall=363.0 tok_per_s_median=447.0 kernel_ms_per_step=23.820 matmul_kernel_ms_per_step=12.978 matmul_kernel_weight_gbs=1223
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 mps_pct=5 tag=solo_pct5
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: 'A GPU executes matrix multiplication by leveraging its massive parallelism, which is fundamentally different from the sequential processing of a CPU. Instead of calculating the result row-by-row'
+segment=0 batch=1 window_s=30.0 steps=898 step_ms_median=28.556 tok_per_s_wall=29.9 tok_per_s_median=35.0 kernel_ms_per_step=22.108 matmul_kernel_ms_per_step=19.095 matmul_kernel_weight_gbs=831
+segment=1 batch=4 window_s=30.0 steps=680 step_ms_median=36.664 tok_per_s_wall=90.6 tok_per_s_median=109.1 kernel_ms_per_step=24.575 matmul_kernel_ms_per_step=19.252 matmul_kernel_weight_gbs=825
+segment=2 batch=16 window_s=30.0 steps=656 step_ms_median=36.908 tok_per_s_wall=349.5 tok_per_s_median=433.5 kernel_ms_per_step=33.372 matmul_kernel_ms_per_step=18.957 matmul_kernel_weight_gbs=837

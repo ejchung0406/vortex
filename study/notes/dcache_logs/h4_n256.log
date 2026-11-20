@@ -1,0 +1,31 @@
+cores=1 warps=64 threads=32 grid=64 steps=256 pattern=coalesced unroll=8 bytes=2097152
+PERF: core0: dcache: reqs=81123, miss_r=78457 (hit=1%), miss_w=1536 (hit=0%), evicts=0, bank_st=20053 (utility=80%)
+PERF: instrs=60288, cycles=98809, IPC=0.610
+PASSED!
+DCDBG coalescer ticks=196740 reqin_empty=55831 tags_full=0 drain=72813 drain_blocked=4717 build=68096 rsp=78731 rsp_blocked=572
+DCDBG window first=1445 last=101231
+DCDBG bank0 ticks=94676 in_core=19834 in_coal=70 in_fill=8256 in_replay=0 no_stall_rsp=2 no_stall_mem=163 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=2997 no_fillblk_held=0 no_hold=0 no_idle=63354 fwd_ok=19520 fwd_blk=980 fillwait=3999 corewait=1798 sum_mshr=16724415 sum_rdy=36498 sum_mrsp=29769 sum_creq=42475 sum_crsp=5692 sum_pipe=141119 max_mshr=292
+DCDBG bank1 ticks=96428 in_core=20918 in_coal=494 in_fill=8257 in_replay=421 no_stall_rsp=12 no_stall_mem=151 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=3062 no_fillblk_held=0 no_hold=0 no_idle=63113 fwd_ok=19477 fwd_blk=1387 fillwait=4004 corewait=2207 sum_mshr=16868320 sum_rdy=132064 sum_mrsp=29876 sum_creq=46373 sum_crsp=7223 sum_pipe=148667 max_mshr=429
+DCDBG bank2 ticks=94606 in_core=19831 in_coal=59 in_fill=8256 in_replay=0 no_stall_rsp=1 no_stall_mem=142 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=3092 no_fillblk_held=0 no_hold=0 no_idle=63225 fwd_ok=19506 fwd_blk=887 fillwait=4025 corewait=1745 sum_mshr=16680383 sum_rdy=36255 sum_mrsp=29660 sum_creq=42348 sum_crsp=5725 sum_pipe=141000 max_mshr=288
+DCDBG bank3 ticks=94556 in_core=19853 in_coal=64 in_fill=8256 in_replay=0 no_stall_rsp=1 no_stall_mem=169 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=3086 no_fillblk_held=0 no_hold=0 no_idle=63127 fwd_ok=19533 fwd_blk=902 fillwait=4034 corewait=1740 sum_mshr=16704394 sum_rdy=36445 sum_mrsp=29877 sum_creq=42420 sum_crsp=5509 sum_pipe=141224 max_mshr=286
+DCDBG arb ticks=78086 ports_ne=179267 followers=71845 holds=1028
+DCDBG arb bank0 want=20499 grant=19904 full=595 wants_sum=24792
+DCDBG arb bank1 want=22474 grant=21412 full=1062 wants_sum=32704
+DCDBG arb bank2 want=20436 grant=19890 full=546 wants_sum=24450
+DCDBG arb bank3 want=20489 grant=19917 full=572 wants_sum=24703
+DCDBG arb port0 ne=24476 grant=17024 same_bank_as_prev=9082 rsp_send=16832 rsp_fail=710
+DCDBG arb port1 ne=23642 grant=12259 same_bank_as_prev=5161 rsp_send=16832 rsp_fail=1457
+DCDBG arb port2 ne=21868 grant=17024 same_bank_as_prev=9096 rsp_send=16832 rsp_fail=998
+DCDBG arb port3 ne=21894 grant=256 same_bank_as_prev=68 rsp_send=16832 rsp_fail=997
+DCDBG arb port4 ne=21922 grant=17024 same_bank_as_prev=9128 rsp_send=16832 rsp_fail=1128
+DCDBG arb port5 ne=21945 grant=256 same_bank_as_prev=69 rsp_send=16832 rsp_fail=1124
+DCDBG arb port6 ne=21750 grant=17024 same_bank_as_prev=9143 rsp_send=16832 rsp_fail=1197
+DCDBG arb port7 ne=21770 grant=256 same_bank_as_prev=68 rsp_send=16832 rsp_fail=1200
+DCDBG arb nwant_hist(distinct banks wanted per tick): 17098 41146 16906 2804 132 0 0 0 0
+DCDBG arb ngrant_hist(grants per tick): 18585 40669 16154 2566 112 0 0 0 0
+DCDBG mcast ticks=65263 b0:ne=23259,pop=19520 b1:ne=24761,pop=21028 b2:ne=23279,pop=19506 b3:ne=23150,pop=19533
+DCDBG mcast2 sum_ne=94449 sum_groups=82372 sum_pop=79587 sum_q=102186
+DCDBG mcast2 lanes1 groups1=41556
+DCDBG mcast2 lanes2 groups1=6766 groups2=12096
+DCDBG mcast2 lanes3 groups1=688 groups2=2682 groups3=841
+DCDBG mcast2 lanes4 groups1=179 groups2=275 groups3=166 groups4=14

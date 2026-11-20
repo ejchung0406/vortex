@@ -1,0 +1,8 @@
+name=dxw_bw_d2_w4
+src_rev=475250ec2356a279776ae608135eaf5a9beea4da
+src_dirty=2
+host=atl1-1-02-010-10-2.pace.gatech.edu
+xconf=-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_DXA_CORES=4
+blackbox=--driver=simx --app=bwstream_dxa --perf=16 --cores=2 --args=-e64 -n8 -r2 -d2
+rc=0
+wall_s=160

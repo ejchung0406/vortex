@@ -1,0 +1,8 @@
+name=fn_tma_k1_n8
+src_rev=
+src_dirty=0
+host=atl1-1-02-005-24-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=simx --app=bwstream_dxa --perf=16 --profile=h200s --cores=1 --args=-e4096 -n8 -g16 -d4 -c0
+rc=0
+wall_s=217

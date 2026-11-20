@@ -1,0 +1,8 @@
+name=tlb_h100_k32_big
+src_rev=214405599feeabdf08776a4b6d26cb3a69aaba3d
+src_dirty=1
+host=atl1-1-02-007-30-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_DCACHE_MSHR_SIZE=64 -DVX_CFG_LSU_PENDING_LIMIT=64 -DVX_CFG_DTLB_SIZE=256 -DVX_CFG_L2_TLB_MEGA_SIZE=64
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h100 --cores=32 --args=-n256 -r1 -p0 -u4
+rc=0
+wall_s=567

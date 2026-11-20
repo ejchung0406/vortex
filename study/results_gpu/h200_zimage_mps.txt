@@ -1,0 +1,24 @@
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=100 tag=solo_pct100
+model=/tmp/echung67/models/zimage size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+segment=0 window_s=30.1 forwards=194 fwd_ms_median=154.93 fwd_per_s_wall=6.456 fwd_per_s_median=6.455 kernel_ms_per_fwd=150.21 matmul_kernel_ms_per_fwd=68.28
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=80 tag=solo_pct80
+model=/tmp/echung67/models/zimage size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+segment=0 window_s=30.1 forwards=197 fwd_ms_median=152.92 fwd_per_s_wall=6.538 fwd_per_s_median=6.539 kernel_ms_per_fwd=148.81 matmul_kernel_ms_per_fwd=65.43
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=70 tag=solo_pct70
+model=/tmp/echung67/models/zimage size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+segment=0 window_s=30.0 forwards=174 fwd_ms_median=172.51 fwd_per_s_wall=5.798 fwd_per_s_median=5.797 kernel_ms_per_fwd=167.78 matmul_kernel_ms_per_fwd=77.86
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=60 tag=solo_pct60
+model=/tmp/echung67/models/zimage size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+segment=0 window_s=30.1 forwards=158 fwd_ms_median=190.60 fwd_per_s_wall=5.244 fwd_per_s_median=5.247 kernel_ms_per_fwd=187.87 matmul_kernel_ms_per_fwd=87.15
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=40 tag=solo_pct40
+model=/tmp/echung67/models/zimage size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+segment=0 window_s=30.2 forwards=111 fwd_ms_median=271.83 fwd_per_s_wall=3.677 fwd_per_s_median=3.679 kernel_ms_per_fwd=270.37 matmul_kernel_ms_per_fwd=129.01
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=20 tag=solo_pct20
+model=/tmp/echung67/models/zimage size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+segment=0 window_s=30.5 forwards=59 fwd_ms_median=517.03 fwd_per_s_wall=1.935 fwd_per_s_median=1.934 kernel_ms_per_fwd=519.16 matmul_kernel_ms_per_fwd=256.00
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=10 tag=solo_pct10
+model=/tmp/echung67/models/zimage size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+segment=0 window_s=30.3 forwards=28 fwd_ms_median=1083.03 fwd_per_s_wall=0.923 fwd_per_s_median=0.923 kernel_ms_per_fwd=1092.37 matmul_kernel_ms_per_fwd=553.15
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=5 tag=solo_pct5
+model=/tmp/echung67/models/zimage size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+segment=0 window_s=31.0 forwards=19 fwd_ms_median=1631.48 fwd_per_s_wall=0.613 fwd_per_s_median=0.613 kernel_ms_per_fwd=1646.10 matmul_kernel_ms_per_fwd=848.27

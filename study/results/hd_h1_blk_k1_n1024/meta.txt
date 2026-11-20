@@ -1,0 +1,8 @@
+name=hd_h1_blk_k1_n1024
+src_rev=
+src_dirty=0
+host=atl1-1-03-004-17-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_DCACHE_FWD_HOLD=1
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200s --cores=1 --args=-n1024 -r1 -p0 -u4 -b32
+rc=0
+wall_s=222

@@ -1,0 +1,8 @@
+name=par3_simx_plain_old
+src_rev=
+src_dirty=0
+host=atl1-1-02-009-19-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000
+blackbox=--driver=simx --app=bwstream --perf=7 --cores=1 --args=-n64 -r1 -p0 -u4
+rc=0
+wall_s=150

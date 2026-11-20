@@ -1,0 +1,8 @@
+name=ut_u8_c7
+src_rev=ba00007ab095bcfd4761425bf5e90323a8df6246
+src_dirty=5
+host=atl1-1-02-008-17-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_DXA_CORES=16 -DVX_CFG_DXA_MAX_INFLIGHT=256 -DVX_CFG_UTLB_SIZE=8
+blackbox=--driver=simx --app=bwstream_dxa --perf=7 --profile=h200q --cores=4 --args=-e4096 -n32 -g4 -d4 -c0
+rc=0
+wall_s=217

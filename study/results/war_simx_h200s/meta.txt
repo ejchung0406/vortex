@@ -1,0 +1,6 @@
+name=war_simx_h200s
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-10-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=simx --app=war_order --perf=4 --profile=h200s_nowg --cores=1 --args=-l1 -S1 -D0 -s8 -d3

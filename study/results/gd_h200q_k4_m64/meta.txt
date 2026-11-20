@@ -1,0 +1,8 @@
+name=gd_h200q_k4_m64
+src_rev=475250ec2356a279776ae608135eaf5a9beea4da
+src_dirty=2
+host=atl1-1-02-018-20-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DMTILES=4
+blackbox=--driver=simx --app=gemm_decode --perf=7 --profile=h200q --cores=4 --args=-m64 -n4096 -k4096
+rc=0
+wall_s=886

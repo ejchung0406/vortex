@@ -1,0 +1,19 @@
+--- a/tests/regression/bwstream/kernel.cpp
++++ b/tests/regression/bwstream/kernel.cpp
+@@ -19,8 +19,15 @@
+   for (int u = 0; u < U; ++u)
+     s[u] = 0.0f;
+   for (uint32_t i = 0; i < steps; i += U) {
++    float v[U];
+     for (int u = 0; u < U; ++u)
+-      s[u] += p[(uint64_t)(i + u) * stride];
++      v[u] = p[(uint64_t)(i + u) * stride];
++    // All U loaded values are live in registers here, so the U loads issue
++    // before the first add waits on one of them.
++    if constexpr (U == 8)
++      asm volatile("" : "+f"(v[0]), "+f"(v[1]), "+f"(v[2]), "+f"(v[3]), "+f"(v[4]), "+f"(v[5]), "+f"(v[6]), "+f"(v[7]));
++    for (int u = 0; u < U; ++u)
++      s[u] += v[u];
+   }
+   float r = 0.0f;
+   for (int u = 0; u < U; ++u)

@@ -1,0 +1,103 @@
+--- a/VX_config.toml
++++ b/VX_config.toml
+@@ -319,6 +319,10 @@
+ VX_CFG_DCACHE_MRSQ_SIZE = 4
+ VX_CFG_DCACHE_MREQ_SIZE = 0
+ VX_CFG_DCACHE_CRSQ_SIZE = 0
++# SimX only: a fill-forward head that finds the bank's core-response queue full
++# waits for it, as the RTL's does (VX_cache_bank fwd_head), and fills wait with
++# it; 0 keeps the model's replay of that head through the bank pipeline.
++VX_CFG_DCACHE_FWD_HOLD = 0
+ 
+ VX_CFG_NUM_ICACHES = "expr: up($VX_CFG_SOCKET_SIZE / 4) if $VX_CFG_ICACHE_ENABLE else 0"
+ VX_CFG_NUM_DCACHES = "expr: up($VX_CFG_SOCKET_SIZE / 4) if $VX_CFG_DCACHE_ENABLE else 0"
+--- a/sim/simx/mem/cache.cpp
++++ b/sim/simx/mem/cache.cpp
+@@ -942,6 +942,7 @@
+     // directly (one per tick), leaving the input slot free for new requests.
+     // On response backpressure the head falls back to the replay path.
+     bool fwd_consumed = false;
++    fwd_held_ = false;
+     if (fwd_active_ && !pipe_stall) {
+         fwd_consumed = this->processForward();
+     }
+@@ -1007,7 +1008,7 @@
+     // 1) replay: one chain entry leaves per tick — when the fill-forward
+     // drain completed the head this tick, this slot goes to new core
+     // requests instead
+-    if (mshr_.has_ready_reqs() && !fwd_consumed) {
++    if (mshr_.has_ready_reqs() && !fwd_consumed && !fwd_held_) {
+       // A chain whose sector is partial cannot serve a load or AMO: park at
+       // that head and refetch the sector; the rest of the chain waits.
+       if (chain_partial_) {
+@@ -1514,9 +1515,15 @@
+       fwd_data_.reset();
+       return false;
+     }
+-    if (crsp_sent_ || this->core_rsp_out.full()) {
++    if (crsp_sent_) {
+       return false; // the head falls back to the replay path this tick
+     }
++    if (this->core_rsp_out.full()) {
++      // with the hold, the head waits for the response queue, out of the
++      // arbiter's sight, and fills wait with it; without, it replays
++      fwd_held_ = config_.fwd_hold;
++      return false;
++    }
+     bank_req_t req;
+     mshr_.dequeue(&req);
+     MemRsp rsp{req.req_tag, req.hart_id, req.uuid};
+@@ -2306,6 +2313,7 @@
+   uint32_t fwd_sector_;
+   std::shared_ptr<mem_block_t> fwd_data_;
+   bool     crsp_sent_;  // core-response port used this tick (pipeline priority)
++  bool     fwd_held_ = false; // the forward head waits on a full response queue this tick
+ 
+   // Partial state of the chain the last fill woke (lazy fetch).
+   bool     chain_partial_;
+@@ -2933,9 +2941,9 @@
+ 
+   CacheRspMcast(const SimContext& ctx, const char* name, uint32_t num_banks,
+                 uint32_t num_outputs, uint32_t merge_group, bool merge_line,
+-                uint32_t out_delay)
++                uint32_t out_delay, uint32_t rsp_queue_size)
+     : SimObject<CacheRspMcast>(ctx, name)
+-    , RspIn(num_banks, this)
++    , RspIn(num_banks, SimChannel<MemRsp>(this, rsp_queue_size))
+     , RspOut(num_outputs, this)
+     , lg2_outputs_(log2ceil(num_outputs))
+     , merge_group_(merge_group)
+@@ -3231,9 +3239,10 @@
+     if (config_.nc_enable) {
+       ++core_rsp_delay_;
+     }
++    __assert(config_.crsq_size == 0 || port_arb_->merge_bits() != 0, "a deeper core-response queue is modeled under read merging only");
+     if (port_arb_->merge_bits() != 0) {
+       rsp_mcast_ = CacheRspMcast::Create(sname, num_banks, config_.num_inputs, port_arb_->merge_bits(), merge_line,
+-                                         core_rsp_delay_);
++                                         core_rsp_delay_, 1u << log2ceil(2 + config_.crsq_size));
+       for (uint32_t i = 0; i < config_.num_inputs; ++i) {
+         rsp_mcast_->RspOut.at(i).bind(&simobject->core_rsp_out.at(i));
+       }
+--- a/sim/simx/mem/cache.h
++++ b/sim/simx/mem/cache.h
+@@ -56,6 +56,8 @@
+ 		bool    merge_line = false;    // read merging takes any read of the same line, each merged port keeping its own tag and word
+ 		bool    core_req_skid = false; // banks behind a combinational request crossbar take requests through a skid register
+ 		bool    set_hash = false;      // hashed set index
++		uint16_t crsq_size = 0;        // extra slots in a bank's core-response queue, over the registered skid's two
++		bool    fwd_hold = false;      // a forwardable chain head waits on a full response queue instead of replaying
+ 	};
+ 
+ 	struct PerfStats {
+--- a/sim/simx/socket.cpp
++++ b/sim/simx/socket.cpp
+@@ -119,6 +119,8 @@
+       false,                         // line merging
+       false,                         // core-request skid
+       VX_CFG_DCACHE_SET_HASH != 0,   // set_hash
++      VX_CFG_DCACHE_CRSQ_SIZE,       // crsq_size
++      VX_CFG_DCACHE_FWD_HOLD != 0,   // fwd_hold
+     });
+ 
+ #ifdef VX_CFG_EXT_TEX_ENABLE

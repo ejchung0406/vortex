@@ -1,0 +1,8 @@
+name=gb_dxa_c64d1_k11
+src_rev=
+src_dirty=0
+host=atl1-1-02-018-23-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_DXA_MAX_INFLIGHT=256 -DVX_CFG_NUM_DXA_CORES=16 -DMTILES=1 -DPROFILE_ENABLE -DEXP_GRAN=10 -DEXP_VISIT=5 -DEXP_JOINT -DEXP_LBG=3 -DEXP_CCDL=8
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=11 --args=-m16 -n11264 -k4096 -s1 -c64 -d1
+rc=0
+wall_s=1203

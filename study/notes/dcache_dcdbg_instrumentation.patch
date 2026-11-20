@@ -1,0 +1,400 @@
+--- a/sim/simx/mem/cache.cpp
++++ b/sim/simx/mem/cache.cpp
+@@ -62,6 +62,77 @@
+ 
+ }
+ 
++// DCDBG-BEGIN
++#ifdef DCDBG
++struct DcDbg {
++  enum { TICKS, IN_CORE, IN_COAL, IN_FILL, IN_REPLAY, NO_STALL_RSP, NO_STALL_MEM, NO_STALL_OTHER, NO_PIPEFULL,
++         NO_MSHRFULL, NO_COREHELD, NO_FILLBLK_FWD, NO_FILLBLK_HELD, NO_HOLD, NO_IDLE, FWD_OK, FWD_BLK, FILLWAIT, COREWAIT,
++         SUM_MSHR, SUM_RDY, SUM_MRSP, SUM_CREQ, SUM_CRSP, SUM_PIPE, MAX_MSHR, N };
++  uint64_t b[32][N] = {};
++  // port arb
++  uint64_t pa_ticks = 0, pa_ports_ne = 0, pa_followers = 0, pa_holds = 0, pa_reqs_wait = 0;
++  uint64_t pa_want[32] = {}, pa_grant[32] = {}, pa_full[32] = {}, pa_wants_sum[32] = {};
++  uint64_t pa_port_grant[64] = {}, pa_port_same[64] = {}, pa_port_ne[64] = {};
++  uint32_t pa_last_bank[64];
++  uint64_t pa_nwant_hist[9] = {}, pa_ngrant_hist[33] = {};
++  // rsp mcast
++  uint64_t mc_ticks = 0, mc_ne[32] = {}, mc_pop[32] = {}, mc_port_send[64] = {}, mc_port_fail[64] = {};
++  uint64_t mc_sum_ne = 0, mc_sum_groups = 0, mc_sum_pop = 0, mc_sum_q = 0, mc_ne_groups[9][9] = {};
++  uint64_t first_cycle = 0, last_cycle = 0;
++  uint64_t fills_total = 0, mshr_acc = 0;
++  std::vector<uint64_t> series, series_mshr;
++  DcDbg() { for (auto& x : pa_last_bank) x = ~0u; }
++  ~DcDbg() {
++    static const char* names[N] = { "ticks", "in_core", "in_coal", "in_fill", "in_replay", "no_stall_rsp", "no_stall_mem", "no_stall_other", "no_pipefull",
++      "no_mshrfull", "no_coreheld", "no_fillblk_fwd", "no_fillblk_held", "no_hold", "no_idle", "fwd_ok", "fwd_blk", "fillwait", "corewait",
++      "sum_mshr", "sum_rdy", "sum_mrsp", "sum_creq", "sum_crsp", "sum_pipe", "max_mshr" };
++    fprintf(stderr, "DCDBG window first=%llu last=%llu\n", (unsigned long long)first_cycle, (unsigned long long)last_cycle);
++    fprintf(stderr, "DCDBG series4096 fills:");
++    for (auto v : series) fprintf(stderr, " %llu", (unsigned long long)v);
++    fprintf(stderr, "\nDCDBG series4096 mshr_sum:");
++    for (auto v : series_mshr) fprintf(stderr, " %llu", (unsigned long long)v);
++    fprintf(stderr, "\n");
++    for (int k = 0; k < 32; ++k) {
++      if (b[k][TICKS] == 0) continue;
++      fprintf(stderr, "DCDBG bank%d", k);
++      for (int i = 0; i < N; ++i) fprintf(stderr, " %s=%llu", names[i], (unsigned long long)b[k][i]);
++      fprintf(stderr, "\n");
++    }
++    fprintf(stderr, "DCDBG arb ticks=%llu ports_ne=%llu followers=%llu holds=%llu\n", (unsigned long long)pa_ticks,
++            (unsigned long long)pa_ports_ne, (unsigned long long)pa_followers, (unsigned long long)pa_holds);
++    for (int k = 0; k < 32; ++k) {
++      if (pa_want[k] == 0) continue;
++      fprintf(stderr, "DCDBG arb bank%d want=%llu grant=%llu full=%llu wants_sum=%llu\n", k, (unsigned long long)pa_want[k],
++              (unsigned long long)pa_grant[k], (unsigned long long)pa_full[k], (unsigned long long)pa_wants_sum[k]);
++    }
++    for (int k = 0; k < 64; ++k) {
++      if (pa_port_grant[k] == 0 && pa_port_ne[k] == 0) continue;
++      fprintf(stderr, "DCDBG arb port%d ne=%llu grant=%llu same_bank_as_prev=%llu rsp_send=%llu rsp_fail=%llu\n", k, (unsigned long long)pa_port_ne[k],
++              (unsigned long long)pa_port_grant[k], (unsigned long long)pa_port_same[k], (unsigned long long)mc_port_send[k], (unsigned long long)mc_port_fail[k]);
++    }
++    fprintf(stderr, "DCDBG arb nwant_hist(distinct banks wanted per tick):");
++    for (int k = 0; k < 9; ++k) fprintf(stderr, " %llu", (unsigned long long)pa_nwant_hist[k]);
++    fprintf(stderr, "\nDCDBG arb ngrant_hist(grants per tick):");
++    for (int k = 0; k < 9; ++k) fprintf(stderr, " %llu", (unsigned long long)pa_ngrant_hist[k]);
++    fprintf(stderr, "\nDCDBG mcast ticks=%llu", (unsigned long long)mc_ticks);
++    for (int k = 0; k < 32; ++k) if (mc_ne[k]) fprintf(stderr, " b%d:ne=%llu,pop=%llu", k, (unsigned long long)mc_ne[k], (unsigned long long)mc_pop[k]);
++    fprintf(stderr, "\n");
++    fprintf(stderr, "DCDBG mcast2 sum_ne=%llu sum_groups=%llu sum_pop=%llu sum_q=%llu\n", (unsigned long long)mc_sum_ne,
++            (unsigned long long)mc_sum_groups, (unsigned long long)mc_sum_pop, (unsigned long long)mc_sum_q);
++    for (int n = 1; n < 9; ++n) {
++      bool any = false;
++      for (int g = 0; g < 9; ++g) any |= (mc_ne_groups[n][g] != 0);
++      if (!any) continue;
++      fprintf(stderr, "DCDBG mcast2 lanes%d", n);
++      for (int g = 1; g <= n; ++g) fprintf(stderr, " groups%d=%llu", g, (unsigned long long)mc_ne_groups[n][g]);
++      fprintf(stderr, "\n");
++    }
++  }
++};
++static DcDbg g_dcdbg;
++#endif
++// DCDBG-END
++
+ struct params_t {
+   uint32_t sets_per_bank;
+   uint32_t lines_per_set;
+@@ -576,6 +647,9 @@
+   bool has_ready_reqs() const {
+     return (ready_reqs_ != 0);
+   }
++// DCDBG-BEGIN
++  uint32_t dbg_ready() const { return ready_reqs_; }
++// DCDBG-END
+ 
+   const mshr_entry_t &peek(uint32_t id) const {
+     return entries_.at(id);
+@@ -932,11 +1006,29 @@
+     // retire stalls the whole pipeline, its input stage included: a bubble
+     // behind the head stays a bubble, and nothing enters or forwards.
+     bool pipe_stall = false;
++// DCDBG-BEGIN
++#ifdef DCDBG
++    const bool d_on = (this->name().find("dcache") != std::string::npos);
++    int d_stall_kind = 0;
++    if (d_on && !pipe_req_->empty()) {
++      d_stall_kind = this->core_rsp_out.full() ? 1 : (this->mem_req_out.full() ? 2 : 3);
++    }
++    const uint32_t d_ready0 = mshr_.dbg_ready();
++#endif
++// DCDBG-END
+     if (!pipe_req_->empty()) {
+         uint32_t pipe_size = pipe_req_->size();
+         this->processRequests();
+         pipe_stall = (pipe_req_->size() == pipe_size);
+     }
++// DCDBG-BEGIN
++#ifdef DCDBG
++    const uint32_t d_pipe1 = pipe_req_->size(), d_core0 = this->core_req_in.size(), d_rsp0 = this->mem_rsp_in.size();
++    const bool d_core_ne = !this->core_req_in.empty(), d_fill_ne = !this->mem_rsp_in.empty();
++    const bool d_fwd0 = fwd_active_, d_hold0 = refetch_hold_, d_pipefull = pipe_req_->full();
++    const uint32_t d_crsp = this->core_rsp_out.size();
++#endif
++// DCDBG-END
+ 
+     // Fill-forward drain: complete the read-prefix of a fill's pending chain
+     // directly (one per tick), leaving the input slot free for new requests.
+@@ -952,6 +1044,56 @@
+         this->processInputs(fwd_consumed);
+     }
+ 
++// DCDBG-BEGIN
++#ifdef DCDBG
++    if (d_on) {
++      auto& c = g_dcdbg.b[bank_id_ & 31];
++      uint64_t now = SimPlatform::instance().cycles();
++      if (g_dcdbg.first_cycle == 0) g_dcdbg.first_cycle = now;
++      g_dcdbg.last_cycle = now;
++      ++c[DcDbg::TICKS];
++      const bool core_taken = (this->core_req_in.size() < d_core0);
++      const bool fill_taken = (this->mem_rsp_in.size() < d_rsp0);
++      const bool pipe_grew  = (pipe_req_->size() > d_pipe1);
++      if (core_taken) {
++        ++c[pipe_grew ? DcDbg::IN_CORE : DcDbg::IN_COAL];
++      } else if (fill_taken) {
++        ++c[DcDbg::IN_FILL];
++      } else if (pipe_grew) {
++        ++c[DcDbg::IN_REPLAY];
++      } else if (pipe_stall) {
++        ++c[(d_stall_kind == 1) ? DcDbg::NO_STALL_RSP : (d_stall_kind == 2) ? DcDbg::NO_STALL_MEM : DcDbg::NO_STALL_OTHER];
++      } else if (d_pipefull) {
++        ++c[DcDbg::NO_PIPEFULL];
++      } else if (d_hold0) {
++        ++c[DcDbg::NO_HOLD];
++      } else if (d_core_ne) {
++        ++c[(mshr_occupancy_ >= mshr_.capacity()) ? DcDbg::NO_MSHRFULL : DcDbg::NO_COREHELD];
++      } else if (d_fill_ne) {
++        ++c[d_fwd0 ? DcDbg::NO_FILLBLK_FWD : DcDbg::NO_FILLBLK_HELD];
++      } else {
++        ++c[DcDbg::NO_IDLE];
++      }
++      if (fwd_consumed) ++c[DcDbg::FWD_OK];
++      else if (d_fwd0 && d_ready0 != 0) ++c[DcDbg::FWD_BLK];
++      if (d_fill_ne && !fill_taken) ++c[DcDbg::FILLWAIT];
++      if (d_core_ne && !core_taken) ++c[DcDbg::COREWAIT];
++      c[DcDbg::SUM_MSHR] += mshr_.size();
++      c[DcDbg::SUM_RDY]  += mshr_.dbg_ready();
++      c[DcDbg::SUM_MRSP] += d_rsp0;
++      c[DcDbg::SUM_CREQ] += d_core0;
++      c[DcDbg::SUM_CRSP] += d_crsp;
++      c[DcDbg::SUM_PIPE] += d_pipe1;
++      if (mshr_.size() > c[DcDbg::MAX_MSHR]) c[DcDbg::MAX_MSHR] = mshr_.size();
++      g_dcdbg.fills_total += fill_taken;
++      g_dcdbg.mshr_acc += mshr_.size();
++      size_t bucket = now / 4096;
++      if (g_dcdbg.series.size() <= bucket) { g_dcdbg.series.resize(bucket + 1, 0); g_dcdbg.series_mshr.resize(bucket + 1, 0); }
++      g_dcdbg.series[bucket] = g_dcdbg.fills_total;
++      g_dcdbg.series_mshr[bucket] = g_dcdbg.mshr_acc;
++    }
++#endif
++// DCDBG-END
+     // flush walk: emit writebacks for dirty lines.
+     if (flushing_) {
+       this->processFlush();
+@@ -2590,6 +2732,19 @@
+     uint32_t n = ReqIn.size();
+     const bool hold = this->any_token();
+     this->update_realign();
++// DCDBG-BEGIN
++#ifdef DCDBG
++    const bool d_on = (this->name().find("dcache") != std::string::npos);
++    uint32_t d_ngrant = 0;
++    if (d_on) {
++      ++g_dcdbg.pa_ticks;
++      for (uint32_t i = 0; i < n; ++i) {
++        if (!ReqIn.at(i).empty()) { ++g_dcdbg.pa_ports_ne; ++g_dcdbg.pa_port_ne[i & 63]; }
++        if (this->realign_hold(i)) ++g_dcdbg.pa_holds;
++      }
++    }
++#endif
++// DCDBG-END
+     // merged ports riding each leader's bank access, by offset in its group
+     auto& followers = followers_;
+     auto& merged = merged_;
+@@ -2648,6 +2803,22 @@
+         ++wants.at(b);
+       }
+     }
++// DCDBG-BEGIN
++#ifdef DCDBG
++    if (d_on) {
++      uint32_t nw = 0;
++      for (uint32_t i = 0; i < n; ++i) g_dcdbg.pa_followers += followers.at(i);
++      for (uint32_t b = 0; b < nb; ++b) {
++        if (wants.at(b) == 0) continue;
++        ++nw;
++        ++g_dcdbg.pa_want[b & 31];
++        g_dcdbg.pa_wants_sum[b & 31] += wants.at(b);
++        if (ReqOut.at(b).full()) ++g_dcdbg.pa_full[b & 31];
++      }
++      ++g_dcdbg.pa_nwant_hist[std::min<uint32_t>(nw, 8)];
++    }
++#endif
++// DCDBG-END
+     // each bank's arbiter, or each slice of its tree, grants one port per cycle
+     for (uint32_t b = 0; b < nb; ++b) {
+       if (wants.at(b) == 0) {
+@@ -2674,6 +2845,18 @@
+           continue;
+         }
+         this->grant(sl * slice_ports + j, out, merged);
++// DCDBG-BEGIN
++#ifdef DCDBG
++        if (d_on) {
++          uint32_t pi = (sl * slice_ports + j) & 63;
++          ++g_dcdbg.pa_grant[b & 31];
++          ++g_dcdbg.pa_port_grant[pi];
++          if (g_dcdbg.pa_last_bank[pi] == b) ++g_dcdbg.pa_port_same[pi];
++          g_dcdbg.pa_last_bank[pi] = b;
++          ++d_ngrant;
++        }
++#endif
++// DCDBG-END
+         rr = (j + 1) % size;
+         granted = true;
+       }
+@@ -2681,6 +2864,11 @@
+         collisions_ += wants.at(b) - 1;
+       }
+     }
++// DCDBG-BEGIN
++#ifdef DCDBG
++    if (d_on) ++g_dcdbg.pa_ngrant_hist[std::min<uint32_t>(d_ngrant, 32)];
++#endif
++// DCDBG-END
+   }
+ 
+   // Offer port i's request, with the ports merged into it, to bank b; the
+@@ -3031,6 +3219,13 @@
+             __assert(rsp.merged_tags, "a line-merged response lost its merged tags");
+             rsp.tag = rsp.merged_tags->at(o % merge_group_);
+           }
++// DCDBG-BEGIN
++#ifdef DCDBG
++          if (this->name().find("dcache") != std::string::npos) {
++            if (out.full()) ++g_dcdbg.mc_port_fail[o & 63]; else ++g_dcdbg.mc_port_send[o & 63];
++          }
++#endif
++// DCDBG-END
+           if (out.try_send(rsp, (slices_ > 1) ? 1 : out_delay_)) {
+             DT(4, this->name() << " rsp" << b << "_" << o << ": " << rsp);
+             if (slices_ == 1) {
+@@ -3043,6 +3238,28 @@
+         }
+       }
+     }
++// DCDBG-BEGIN
++#ifdef DCDBG
++    if (this->name().find("dcache") != std::string::npos) {
++      ++g_dcdbg.mc_ticks;
++      uint32_t d_ne = 0, d_pop = 0;
++      uint64_t d_groups = 0;
++      for (uint32_t b = 0; b < nb; ++b) {
++        g_dcdbg.mc_sum_q += RspIn.at(b).size();
++        if (pending.at(b) != 0) ++g_dcdbg.mc_ne[b & 31];
++        if (pending.at(b) != 0 && (pending.at(b) & ~sent_.at(b)) == 0) { ++g_dcdbg.mc_pop[b & 31]; ++d_pop; }
++        if (!RspIn.at(b).empty()) {
++          ++d_ne;
++          uint32_t port = RspIn.at(b).peek().tag & ((1u << lg2_outputs_) - 1);
++          d_groups |= 1ull << (port / merge_group_);
++        }
++      }
++      uint32_t d_ng = __builtin_popcountll(d_groups);
++      g_dcdbg.mc_sum_ne += d_ne; g_dcdbg.mc_sum_groups += d_ng; g_dcdbg.mc_sum_pop += d_pop;
++      ++g_dcdbg.mc_ne_groups[std::min<uint32_t>(d_ne, 8)][std::min<uint32_t>(d_ng, 8)];
++    }
++#endif
++// DCDBG-END
+     for (uint32_t b = 0; b < nb; ++b) {
+       if (pending.at(b) != 0 && (pending.at(b) & ~sent_.at(b)) == 0) {
+         RspIn.at(b).pop();
+--- a/sim/simx/mem/mem_coalescer.cpp
++++ b/sim/simx/mem/mem_coalescer.cpp
+@@ -46,6 +46,21 @@
+   }
+ }
+ 
++// DCDBG-BEGIN
++#ifdef DCDBG
++namespace {
++struct CoDbg {
++  uint64_t ticks = 0, empty = 0, tags_full = 0, drain = 0, drain_blk = 0, build = 0, rsp = 0, rsp_blk = 0;
++  ~CoDbg() {
++    fprintf(stderr, "DCDBG coalescer ticks=%llu reqin_empty=%llu tags_full=%llu drain=%llu drain_blocked=%llu build=%llu rsp=%llu rsp_blocked=%llu\n",
++      (unsigned long long)ticks, (unsigned long long)empty, (unsigned long long)tags_full, (unsigned long long)drain,
++      (unsigned long long)drain_blk, (unsigned long long)build, (unsigned long long)rsp, (unsigned long long)rsp_blk);
++  }
++};
++CoDbg g_codbg;
++}
++#endif
++// DCDBG-END
+ void MemCoalescer::on_reset() {
+   sent_mask_.reset();
+   out_round_.valid = false;
+@@ -57,6 +72,11 @@
+   // The tag table's full flag is registered: a tag a response frees this
+   // cycle takes a new request from the next one.
+   const bool tags_full = pending_rd_reqs_.full();
++// DCDBG-BEGIN
++#ifdef DCDBG
++  ++g_codbg.ticks;
++#endif
++// DCDBG-END
+ 
+   // process outgoing responses: merge same-tag fragments arriving across
+   // channels this tick into one uncoalesced response.
+@@ -65,6 +85,11 @@
+       continue;
+     }
+     if (RspOut.full()) {
++// DCDBG-BEGIN
++#ifdef DCDBG
++      ++g_codbg.rsp_blk;
++#endif
++// DCDBG-END
+       break;
+     }
+     auto rsp0 = RspIn.at(o).peek();
+@@ -132,17 +157,33 @@
+         RspIn.at(j).pop();
+       }
+     }
++// DCDBG-BEGIN
++#ifdef DCDBG
++    ++g_codbg.rsp;
++#endif
++// DCDBG-END
+     break; // one merged response per tick
+   }
+ 
+   // drain a pending coalesced round before building a new one
+   if (out_round_.valid) {
+     this->flush_out_round();
++// DCDBG-BEGIN
++#ifdef DCDBG
++    ++g_codbg.drain;
++    if (out_round_.valid) ++g_codbg.drain_blk;
++#endif
++// DCDBG-END
+     return;
+   }
+ 
+   // process incoming requests
+   if (ReqIn.empty()) {
++// DCDBG-BEGIN
++#ifdef DCDBG
++    ++g_codbg.empty;
++#endif
++// DCDBG-END
+     // sleep when idle: no queued or in-flight input on either direction and
+     // no partial round to drain (out_round_ was handled above). Outstanding
+     // fills in pending_rd_reqs_ re-arm the tick when their response is
+@@ -163,6 +204,11 @@
+ 
+   // ensure we can allocate a response tag
+   if (tags_full) {
++// DCDBG-BEGIN
++#ifdef DCDBG
++    ++g_codbg.tags_full;
++#endif
++// DCDBG-END
+     DT(4, this->name() << " queue-full: " << in_req);
+     return;
+   }
+@@ -252,6 +298,11 @@
+   }
+ 
+   assert(!out_mask.none());
++// DCDBG-BEGIN
++#ifdef DCDBG
++  ++g_codbg.build;
++#endif
++// DCDBG-END
+ 
+   uint32_t tag = 0;
+   if (!in_req.is_write() || in_is_amo) {

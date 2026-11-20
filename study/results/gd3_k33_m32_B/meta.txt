@@ -1,0 +1,8 @@
+name=gd3_k33_m32_B
+src_rev=ba00007ab095bcfd4761425bf5e90323a8df6246
+src_dirty=5
+host=atl1-1-02-018-7-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DMTILES=2 -DVX_CFG_DTLB_SIZE=256 -DVX_CFG_L2_TLB_MEGA_SIZE=256
+blackbox=--driver=simx --app=gemm_decode --perf=7 --profile=h200q --cores=33 --args=-m32 -n33792 -k4096
+rc=0
+wall_s=4796

@@ -1,0 +1,37 @@
+cores=1 warps=64 threads=32 grid=64 steps=256 pattern=coalesced unroll=4 bytes=2097152
+PERF: scheduler: idle=44%, occupancy=63.7 (100%), simt_util=32.0 (100%)
+PERF: stalls: fetch=16%, ibuf=38%, scrb=98%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: inst_mix: alu=46%, lsu=27%, sfu=1%, fpu=27%, tcu=0%
+PERF: branches: total=9600, divergent=0 (rate=0%)
+PERF: memory: ifetch_lat=11.95, load_lat=638.61, loads=538624, stores=6144
+PERF: instrs=64064, cycles=69221, IPC=0.925
+PASSED!
+DCDBG coalescer ticks=218564 reqin_empty=30028 tags_full=0 drain=120440 drain_blocked=52344 build=68096 rsp=76085 rsp_blocked=4168
+DCDBG window first=1490 last=71688
+DCDBG series4096 fills: 1 519 2382 4120 6125 8390 10333 12118 14381 16450 18362 20701 23171 25573 27914 30321 32605 33025
+DCDBG series4096 mshr_sum: 212506 1191403 3593353 5818794 8453446 11390691 13895767 16217115 19078687 21815082 24192322 27420666 30775957 33891164 37070857 40313106 43227414 43406067
+DCDBG bank0 ticks=65063 in_core=18189 in_coal=345 in_fill=8256 in_replay=1962 no_stall_rsp=2425 no_stall_mem=295 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=6033 no_fillblk_held=0 no_hold=0 no_idle=27558 fwd_ok=16188 fwd_blk=3690 fillwait=12774 corewait=5183 sum_mshr=10807512 sum_rdy=33050 sum_mrsp=80909 sum_creq=46387 sum_crsp=530807 sum_pipe=154823 max_mshr=295
+DCDBG bank1 ticks=66815 in_core=19388 in_coal=717 in_fill=8257 in_replay=2391 no_stall_rsp=2461 no_stall_mem=288 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=5958 no_fillblk_held=0 no_hold=0 no_idle=27355 fwd_ok=16199 fwd_blk=4123 fillwait=12677 corewait=5405 sum_mshr=10991458 sum_rdy=124746 sum_mrsp=77743 sum_creq=50018 sum_crsp=526783 sum_pipe=162898 max_mshr=428
+DCDBG bank2 ticks=64999 in_core=18205 in_coal=412 in_fill=8256 in_replay=2144 no_stall_rsp=2476 no_stall_mem=282 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=5654 no_fillblk_held=0 no_hold=0 no_idle=27570 fwd_ok=16089 fwd_blk=3883 fillwait=12763 corewait=5835 sum_mshr=10805992 sum_rdy=33351 sum_mrsp=74992 sum_creq=47919 sum_crsp=535930 sum_pipe=156376 max_mshr=287
+DCDBG bank3 ticks=64951 in_core=18234 in_coal=374 in_fill=8256 in_replay=2032 no_stall_rsp=2277 no_stall_mem=313 no_stall_other=0 no_pipefull=0 no_mshrfull=0 no_coreheld=0 no_fillblk_fwd=5826 no_fillblk_held=0 no_hold=0 no_idle=27639 fwd_ok=16192 fwd_blk=3662 fillwait=12603 corewait=5147 sum_mshr=10801105 sum_rdy=33278 sum_mrsp=74068 sum_creq=46559 sum_crsp=532319 sum_pipe=154579 max_mshr=288
+DCDBG arb ticks=52788 ports_ne=268260 followers=120309 holds=963
+DCDBG arb bank0 want=21979 grant=18534 full=3445 wants_sum=34469
+DCDBG arb bank1 want=23838 grant=20105 full=3733 wants_sum=41572
+DCDBG arb bank2 want=22510 grant=18617 full=3893 wants_sum=36411
+DCDBG arb bank3 want=22031 grant=18608 full=3423 wants_sum=34579
+DCDBG arb port0 ne=35248 grant=17024 same_bank_as_prev=10502 rsp_send=16832 rsp_fail=3200
+DCDBG arb port1 ne=34548 grant=7000 same_bank_as_prev=3131 rsp_send=16832 rsp_fail=7839
+DCDBG arb port2 ne=33426 grant=17024 same_bank_as_prev=10551 rsp_send=16832 rsp_fail=4389
+DCDBG arb port3 ne=33435 grant=256 same_bank_as_prev=70 rsp_send=16832 rsp_fail=4388
+DCDBG arb port4 ne=32980 grant=17024 same_bank_as_prev=10592 rsp_send=16832 rsp_fail=4216
+DCDBG arb port5 ne=32996 grant=256 same_bank_as_prev=69 rsp_send=16832 rsp_fail=4213
+DCDBG arb port6 ne=32813 grant=17024 same_bank_as_prev=10589 rsp_send=16832 rsp_fail=4317
+DCDBG arb port7 ne=32814 grant=256 same_bank_as_prev=69 rsp_send=16832 rsp_fail=4315
+DCDBG arb nwant_hist(distinct banks wanted per tick): 4135 18162 20320 9128 1043 0 0 0 0
+DCDBG arb ngrant_hist(grants per tick): 10893 16771 17085 7233 806 0 0 0 0
+DCDBG mcast ticks=49548 b0:ne=38540,pop=18150 b1:ne=39733,pop=19721 b2:ne=38371,pop=18233 b3:ne=38362,pop=18224
+DCDBG mcast2 sum_ne=155006 sum_groups=92159 sum_pop=74328 sum_q=2190507
+DCDBG mcast2 lanes1 groups1=8429
+DCDBG mcast2 lanes2 groups1=2280 groups2=3402
+DCDBG mcast2 lanes3 groups1=1684 groups2=3700 groups3=1151
+DCDBG mcast2 lanes4 groups1=5043 groups2=15105 groups3=8160 groups4=594

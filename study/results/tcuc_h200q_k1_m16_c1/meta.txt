@@ -1,0 +1,8 @@
+name=tcuc_h200q_k1_m16_c1
+src_rev=475250ec2356a279776ae608135eaf5a9beea4da
+src_dirty=2
+host=atl1-1-02-010-24-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000
+blackbox=--driver=simx --app=sgemm_tcu --perf=1 --profile=h200q --cores=1 --args=-m16 -n1024 -k2048
+rc=0
+wall_s=228

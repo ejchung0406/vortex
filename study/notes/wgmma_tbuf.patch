@@ -1,0 +1,588 @@
+--- a/VX_config.toml
++++ b/VX_config.toml
+@@ -432,6 +432,13 @@
+ VX_CFG_TCU_DSM_ENABLE = false
+ VX_CFG_TCU_WGMMA_ENABLE = false
+ VX_CFG_TCU_FEDP2K = false
++# Local-memory bank rows the WGMMA tile buffers can read per cycle. 1 is the
++# single shared port; more are further read ports of the local memory.
++VX_CFG_TCU_TBUF_PORTS = 1
++# Bank rows per slot of a block's own B buffer, which has two slots and
++# prefetches the next rows into the idle one. 0 keeps the one-row B buffer
++# all blocks share, and with it the CTA lockstep.
++VX_CFG_TCU_BBUF_ROWS = 0
+ 
+ [dxa]
+ # Cluster-level DXA engine count, decoupled from cores/socket size.
+--- a/sim/simx/core.cpp
++++ b/sim/simx/core.cpp
+@@ -212,7 +212,8 @@
+       VX_CFG_NUM_LSU_BLOCKS,
+       LSU_CHANNELS,
+       log2ceil(VX_CFG_LMEM_NUM_BANKS),
+-      VX_CFG_EXT_DXA_ENABLED + VX_CFG_TCU_WGMMA_ENABLED
++      VX_CFG_EXT_DXA_ENABLED + VX_CFG_TCU_WGMMA_ENABLED,
++      VX_CFG_TCU_WGMMA_ENABLED ? VX_CFG_TCU_TBUF_PORTS : 1
+     });
+ 
+     // create lmem switch
+--- a/sim/simx/mem/local_mem.h
++++ b/sim/simx/mem/local_mem.h
+@@ -39,6 +39,7 @@
+     uint32_t num_lanes;   // lanes of a warp request
+     uint32_t B;           // log2 number of banks
+     uint32_t dma_clients; // row-wide DMA masters, served round-robin
++    uint32_t dma_rows = 1; // row accesses per cycle; those after the first are reads
+   };
+ 
+   struct PerfStats {
+--- a/sim/simx/mem/local_mem.cpp
++++ b/sim/simx/mem/local_mem.cpp
+@@ -248,23 +248,25 @@
+   }
+ 
+   // Serve one DMA client's row access. Clients are served round-robin,
+-  // starting after the last one served.
+-  void dma_fire() {
++  // starting after the last one served. The further read ports take reads only.
++  void dma_fire(bool reads_only = false) {
+     for (uint32_t i = 0; i < config_.dma_clients; ++i) {
+       uint32_t c = (dma_last_grant_ + 1 + i) % config_.dma_clients;
+       bool pending = false;
+       bool rsp_ready = true;
++      bool has_write = false;
+       for (uint32_t p = 0; p < DMA_PORTS; ++p) {
+         auto& in = simobject_->DmaInputs.at(c * DMA_PORTS + p);
+         if (in.empty()) {
+           continue;
+         }
+         pending = true;
++        has_write |= in.peek().is_write();
+         if (!in.peek().is_write() && simobject_->DmaOutputs.at(c * DMA_PORTS + p).full()) {
+           rsp_ready = false;
+         }
+       }
+-      if (!pending) {
++      if (!pending || (reads_only && has_write)) {
+         continue;
+       }
+       if (!rsp_ready) {
+@@ -537,6 +539,9 @@
+       bool dma_valid = this->dma_pending();
+       if (dma_slot_) {
+         this->dma_fire();
++        for (uint32_t r = 1; r < config_.dma_rows; ++r) {
++          this->dma_fire(true);
++        }
+       }
+       dma_slot_ = dma_valid;
+       if (!dma_valid) {
+@@ -602,8 +607,8 @@
+   : SimObject<LocalMem>(ctx, name)
+   , ReqIn(config.num_blocks, this)
+   , RspOut(config.num_blocks, this)
+-  , DmaInputs(config.dma_clients * DMA_PORTS, this)
+-  , DmaOutputs(config.dma_clients * DMA_PORTS, this)
++  , DmaInputs(config.dma_clients * DMA_PORTS, SimChannel<MemReq>(this, 2 * config.dma_rows))
++  , DmaOutputs(config.dma_clients * DMA_PORTS, SimChannel<MemRsp>(this, 2 * config.dma_rows))
+   , impl_(new Impl(this, config))
+ {}
+ 
+--- a/sim/simx/tcu/tcu_tbuf.h
++++ b/sim/simx/tcu/tcu_tbuf.h
+@@ -23,14 +23,17 @@
+ // Holds the WGMMA operand storage and fetches it from LMEM:
+ //
+ //   abuf × Q   per-block A k-stripe
+-//   bbuf × 1   B bank row, shared by all Q blocks
++//   bbuf × 1   B bank row, shared by all Q blocks; with
++//              VX_CFG_TCU_BBUF_ROWS, two slots of that many rows per block
+ //
+ // The consumer (TcuUnit) owns the refill keys: it decides when a buffer
+ // refills and hands over the refill as a list of LMEM reads. Each read is
+ // one bank-row request on the hardware port and covers one or more
+ // mem_block lines here, sent together on parallel ports. A buffer keeps one
+ // read in flight; buffers share the port at fixed priority, abuf[0] first
+-// and bbuf last.
++// and bbuf last. With VX_CFG_TCU_TBUF_PORTS above one, that many reads are
++// issued per cycle, to the buffers in the same priority order, and a buffer
++// may issue several of its reads at once.
+ //
+ // Sparse metadata is preloaded into the TcuUnit's per-warp `sparse_meta_`
+ // SRAM via TCU_LD ahead of the MMA dispatch; it does not flow through here.
+@@ -42,6 +45,12 @@
+   // adjacent LMEM DMA channels.
+   static constexpr uint32_t LMEM_PORTS = LocalMem::DMA_PORTS;
+ 
++  // Bank-row reads issued per cycle.
++  static constexpr uint32_t ROW_PORTS = VX_CFG_TCU_TBUF_PORTS;
++  // B buffer slots: the shared one, or two per block.
++  static constexpr uint32_t B_SLOTS =
++      (VX_CFG_TCU_BBUF_ROWS != 0) ? (2 * VX_CFG_NUM_TCU_BLOCKS) : 1;
++
+   // Lines of one bank-row read.
+   using LmemRead = std::vector<uint64_t>;
+ 
+@@ -52,19 +61,19 @@
+   virtual ~TcuTbuf();
+ 
+   // Drop the buffer's contents and fetch `reads` in order. `b` indexes the
+-  // per-block A buffer.
++  // per-block A buffer, `slot` the B buffer slot.
+   void fill_a(uint32_t b, std::vector<LmemRead> reads);
+-  void fill_b(std::vector<LmemRead> reads);
++  void fill_b(std::vector<LmemRead> reads, uint32_t slot = 0);
+ 
+   bool filling_a(uint32_t b) const;
+-  bool filling_b() const;
++  bool filling_b(uint32_t slot = 0) const;
+ 
+   std::shared_ptr<mem_block_t> read_a(uint32_t b, uint64_t line_addr) const;
+-  std::shared_ptr<mem_block_t> read_b(uint64_t line_addr) const;
++  std::shared_ptr<mem_block_t> read_b(uint64_t line_addr, uint32_t slot = 0) const;
+ 
+   // Drop the buffer's contents and abandon a fill in progress.
+   void invalidate_a(uint32_t b);
+-  void invalidate_b();
++  void invalidate_b(uint32_t slot = 0);
+ 
+   // Bank-row reads issued since the last reset (perf counter).
+   uint64_t reads() const;
+--- a/sim/simx/tcu/tcu_tbuf.cpp
++++ b/sim/simx/tcu/tcu_tbuf.cpp
+@@ -24,10 +24,10 @@
+ 
+ constexpr uint64_t kLineMask = ~uint64_t(VX_CFG_MEM_BLOCK_SIZE - 1);
+ 
+-// Q+1 buffers share one LMEM port. Buffer IDs, in priority order:
++// The buffers share the LMEM port. Buffer IDs, in priority order:
+ //   0 .. VX_CFG_NUM_TCU_BLOCKS-1   → abuf[b]
+-//   VX_CFG_NUM_TCU_BLOCKS          → bbuf
+-constexpr uint32_t kNumBuffers = VX_CFG_NUM_TCU_BLOCKS + 1;
++//   VX_CFG_NUM_TCU_BLOCKS ..       → bbuf slots
++constexpr uint32_t kNumBuffers = VX_CFG_NUM_TCU_BLOCKS + TcuTbuf::B_SLOTS;
+ constexpr uint32_t kAOffset    = 0;
+ constexpr uint32_t kBOffset    = VX_CFG_NUM_TCU_BLOCKS;
+ 
+@@ -120,23 +120,39 @@
+       if (rsp.empty()) {
+         continue;
+       }
+-      auto& r = rsp.peek();
+-      uint32_t source = unpack_source(r.tag);
+-      if (source < kNumBuffers) {
+-        auto& b = bufs_.at(source);
+-        auto it = b.inflight_.find(unpack_sub_tag(r.tag));
+-        if (it != b.inflight_.end()) {
+-          if (r.data) {
+-            b.lines_[it->second] = r.data;
+-          }
+-          b.inflight_.erase(it);
+-          b.rsp_seen_ = true;
+-          if (!b.filling()) {
+-            DT(3, simobject_->name() << " " << this->buf_name(source) << ": READY");
++      // one response per read port
++      for (uint32_t n = 0; n < ROW_PORTS && !rsp.empty(); ++n) {
++        auto& r = rsp.peek();
++        uint32_t source = unpack_source(r.tag);
++        if (source < kNumBuffers) {
++          auto& b = bufs_.at(source);
++          auto it = b.inflight_.find(unpack_sub_tag(r.tag));
++          if (it != b.inflight_.end()) {
++            if (r.data) {
++              b.lines_[it->second] = r.data;
++            }
++            b.inflight_.erase(it);
++            b.rsp_seen_ = true;
++            if (!b.filling()) {
++              DT(3, simobject_->name() << " " << this->buf_name(source) << ": READY");
++            }
+           }
+         }
++        rsp.pop();
+       }
+-      rsp.pop();
++    }
++
++    // With several read ports, each takes the next read of the
++    // highest-priority buffer that has one, whatever that buffer has in flight.
++    if (ROW_PORTS > 1) {
++      uint32_t ports = ROW_PORTS;
++      for (uint32_t s = 0; s < kNumBuffers && ports != 0; ++s) {
++        auto& b = bufs_.at(s);
++        while (ports != 0 && !b.pending_.empty() && this->issue(s, b)) {
++          --ports;
++        }
++      }
++      return;
+     }
+ 
+     // The port arbiter presents one read at a time, and picks it as the
+@@ -154,7 +170,7 @@
+       if (b.pending_.empty() || !b.inflight_.empty()) {
+         continue;
+       }
+-      if (s == kBOffset && b.rsp_seen_) {
++      if (s >= kBOffset && b.rsp_seen_) {
+         continue;
+       }
+       this->issue(s, b);
+@@ -163,12 +179,12 @@
+   }
+ 
+ private:
+-  void issue(uint32_t source, Buffer& b) {
++  bool issue(uint32_t source, Buffer& b) {
+     auto& lines = b.pending_.front();
+     uint32_t n = std::min<uint32_t>(lines.size(), LMEM_PORTS);
+     for (uint32_t p = 0; p < n; ++p) {
+       if (simobject_->lmem_req_out.at(p).full()) {
+-        return;
++        return false;
+       }
+     }
+     for (uint32_t p = 0; p < n; ++p) {
+@@ -192,11 +208,14 @@
+       b.pending_.pop_front();
+     }
+     ++b.reads_;
++    return true;
+   }
+ 
+   std::string buf_name(uint32_t source) const {
+-    return (source == kBOffset) ? std::string("bbuf")
+-                                : ("abuf" + std::to_string(source - kAOffset));
++    if (source < kBOffset) {
++      return "abuf" + std::to_string(source - kAOffset);
++    }
++    return (B_SLOTS == 1) ? std::string("bbuf") : ("bbuf" + std::to_string(source - kBOffset));
+   }
+ 
+   TcuTbuf* simobject_;
+@@ -205,8 +224,8 @@
+ 
+ TcuTbuf::TcuTbuf(const SimContext& ctx, const char* name)
+   : SimObject<TcuTbuf>(ctx, name)
+-  , lmem_req_out(LMEM_PORTS, this)
+-  , lmem_rsp_in(LMEM_PORTS, this)
++  , lmem_req_out(LMEM_PORTS, SimChannel<MemReq>(this, 2 * ROW_PORTS))
++  , lmem_rsp_in(LMEM_PORTS, SimChannel<MemRsp>(this, 2 * ROW_PORTS))
+   , impl_(new Impl(this))
+ {}
+ 
+@@ -218,21 +237,21 @@
+ void TcuTbuf::fill_a(uint32_t b, std::vector<LmemRead> reads) {
+   impl_->buf(kAOffset + b).fill(std::move(reads));
+ }
+-void TcuTbuf::fill_b(std::vector<LmemRead> reads) {
+-  impl_->buf(kBOffset).fill(std::move(reads));
++void TcuTbuf::fill_b(std::vector<LmemRead> reads, uint32_t slot) {
++  impl_->buf(kBOffset + slot).fill(std::move(reads));
+ }
+ 
+ bool TcuTbuf::filling_a(uint32_t b) const { return impl_->buf(kAOffset + b).filling(); }
+-bool TcuTbuf::filling_b() const           { return impl_->buf(kBOffset).filling(); }
++bool TcuTbuf::filling_b(uint32_t slot) const { return impl_->buf(kBOffset + slot).filling(); }
+ 
+ std::shared_ptr<mem_block_t> TcuTbuf::read_a(uint32_t b, uint64_t line_addr) const {
+   return impl_->buf(kAOffset + b).read(line_addr);
+ }
+-std::shared_ptr<mem_block_t> TcuTbuf::read_b(uint64_t line_addr) const {
+-  return impl_->buf(kBOffset).read(line_addr);
++std::shared_ptr<mem_block_t> TcuTbuf::read_b(uint64_t line_addr, uint32_t slot) const {
++  return impl_->buf(kBOffset + slot).read(line_addr);
+ }
+ 
+ void TcuTbuf::invalidate_a(uint32_t b) { impl_->buf(kAOffset + b).invalidate(); }
+-void TcuTbuf::invalidate_b()           { impl_->buf(kBOffset).invalidate(); }
++void TcuTbuf::invalidate_b(uint32_t slot) { impl_->buf(kBOffset + slot).invalidate(); }
+ 
+ uint64_t TcuTbuf::reads() const { return impl_->reads(); }
+--- a/sim/simx/tcu/tcu_unit.cpp
++++ b/sim/simx/tcu/tcu_unit.cpp
+@@ -69,6 +69,12 @@
+ // One bank row holds kBSubBlocks consecutive dense B blocks.
+ static constexpr uint32_t kBSubBlocks =
+     (VX_CFG_NUM_THREADS > kBBlockWords) ? (VX_CFG_NUM_THREADS / kBBlockWords) : 1;
++// Each block owns a B buffer of two slots of kBSlotRows bank rows, in place
++// of the one row all blocks share.
++static constexpr bool kPrivateB = (VX_CFG_TCU_BBUF_ROWS != 0);
++static constexpr uint32_t kBSlotRows = kPrivateB ? VX_CFG_TCU_BBUF_ROWS : 1;
++// Dense B blocks a B buffer slot holds.
++static constexpr uint32_t kBSlotBlocks = kBSubBlocks * kBSlotRows;
+ // A sparse B block spanning two 32-bit bank rows takes two reads.
+ static constexpr bool kBSparseTwoFetch =
+     (kBBlockWordsSp == 2 * kLmemBanks) && (VX_CFG_XLEN == 32);
+@@ -381,6 +387,8 @@
+   #ifdef VX_CFG_TCU_WGMMA_ENABLE
+     abuf_.fill(abuf_slot_t{});
+     bbuf_ = bbuf_slot_t{};
++    bslots_.fill(bbuf_slot_t{});
++    bcur_.fill(0);
+   #endif
+     cur_block_ = 0;
+   #ifdef TCU_META_ENABLE
+@@ -580,6 +588,7 @@
+   #ifdef VX_CFG_TCU_WGMMA_ENABLE
+     uint32_t wgmma_ready = this->tbuf_step();
+     uint32_t setup_fired = 0;
++    uint32_t last_fired = 0;
+   #endif
+ 
+     uint64_t now = SimPlatform::instance().cycles();
+@@ -668,7 +677,7 @@
+           int32_t this_cta = (int32_t)core_->scheduler().warp(wid).cta_csrs.cta_id;
+           // CTA lockstep invariant: no block may execute a WGMMA uop for a
+           // different cta_id while another block is mid-WGMMA.
+-          if (!tpuArgs.is_setup_uop) {
++          if (!tpuArgs.is_setup_uop && !kPrivateB) {
+             for (uint32_t k = 0; k < VX_CFG_NUM_TCU_BLOCKS; ++k) {
+               if (k == b) continue;
+               if (in_wgmma_.at(k) && cta_owner_a_.at(k) != this_cta) {
+@@ -726,6 +735,11 @@
+         exec_done_.at(b) = false;
+         slices_.at(b) = 0;
+         DT(3, simobject_->name() << " execute: op=" << tcu_type << ", " << *trace);
++      #ifdef VX_CFG_TCU_WGMMA_ENABLE
++        if (tcu_is_wgmma(tcu_type) && !tpuArgs.is_setup_uop && tpuArgs.is_last_uop) {
++          last_fired |= (1u << b);
++        }
++      #endif
+         input.pop();
+       }
+     }
+@@ -746,8 +760,24 @@
+           tbuf->invalidate_a(b);
+         }
+       }
+-      bbuf_ = bbuf_slot_t{};
+-      tbuf->invalidate_b();
++      if (!kPrivateB) {
++        bbuf_ = bbuf_slot_t{};
++        tbuf->invalidate_b();
++      }
++    }
++    // A block's own B buffer holds rows of one WGMMA only: it empties as the
++    // last uop leaves, and on a setup uop, so that the next WGMMA refetches a
++    // slab rewritten in place.
++    if (kPrivateB && (setup_fired | last_fired) != 0) {
++      auto& tbuf = simobject_->tbuf();
++      for (uint32_t b = 0; b < VX_CFG_NUM_TCU_BLOCKS; ++b) {
++        if (((setup_fired | last_fired) >> b) & 1u) {
++          for (uint32_t s = 0; s < 2; ++s) {
++            bslots_.at(bslot(b, s)) = bbuf_slot_t{};
++            tbuf->invalidate_b(bslot(b, s));
++          }
++        }
++      }
+     }
+   #endif
+   }
+@@ -844,7 +874,8 @@
+           break;
+         }
+       }
+-      if (cta_conflict) {
++      // Blocks with their own B buffer serve any CTA.
++      if (cta_conflict && !kPrivateB) {
+         continue;
+       }
+ 
+@@ -877,9 +908,54 @@
+       }
+     }
+ 
++    // A block's own B buffer: the slot in use serves its uop, the other
++    // prefetches the rows the WGMMA needs next.
++    std::array<bool, VX_CFG_NUM_TCU_BLOCKS> own_b_ready;
++    own_b_ready.fill(true);
++    for (uint32_t b = 0; kPrivateB && b < VX_CFG_NUM_TCU_BLOCKS; ++b) {
++      auto& r = reqs.at(b);
++      if (!r.valid) {
++        continue;
++      }
++      bbuf_slot_t key = this->bbuf_key(r);
++      uint32_t ci = bslot(b, bcur_.at(b));
++      uint32_t oi = bslot(b, 1 - bcur_.at(b));
++      auto holds = [&](uint32_t i) {
++        auto& s = bslots_.at(i);
++        return (s.valid || s.fetching) && s.same_row(key);
++      };
++      if (!holds(ci) && holds(oi)) {
++        bcur_.at(b) ^= 1;
++        std::swap(ci, oi);
++      }
++      auto& cur = bslots_.at(ci);
++      if (cur.valid && cur.same_row(key)) {
++        ++perf_stats_.tbuf_cache_hits;
++      } else {
++        own_b_ready.at(b) = false;
++        ++perf_stats_.tbuf_stalls;
++        if (!cur.fetching) {
++          cur = key;
++          cur.fetching = true;
++          tbuf->fill_b(this->b_refill(r), ci);
++        }
++      }
++      auto& next = bslots_.at(oi);
++      tbuf_req_t nr = r;
++      if (!key.kmajor && !r.is_sparse && cur.same_row(key) && !next.fetching
++       && this->next_b_slot(nr, key)) {
++        bbuf_slot_t nkey = this->bbuf_key(nr);
++        if (!(next.valid && next.same_row(nkey))) {
++          next = nkey;
++          next.fetching = true;
++          tbuf->fill_b(this->b_refill(nr), oi);
++        }
++      }
++    }
++
+     // Shared B buffer, keyed by the lowest block with a uop.
+     bool bbuf_ready = true;
+-    if (rep >= 0) {
++    if (rep >= 0 && !kPrivateB) {
+       auto& r = reqs.at(rep);
+       bbuf_slot_t key = this->bbuf_key(r);
+       bool resident = bbuf_.valid && bbuf_.same_row(key)
+@@ -938,13 +1014,23 @@
+                     && r.step_k == p.step_k
+                     && r.step_n == p.step_n
+                     && r.cd_nregs == p.cd_nregs;
+-      if (abuf_ready.at(b) && bbuf_ready && key_match) {
++      if (kPrivateB ? (abuf_ready.at(b) && own_b_ready.at(b))
++                    : (abuf_ready.at(b) && bbuf_ready && key_match)) {
+         ready_mask |= (1u << b);
+       }
+     }
+ 
+     // Buffer state for the next cycle.
+-    if (bbuf_.fetching && !tbuf->filling_b()) {
++    for (uint32_t i = 0; kPrivateB && i < bslots_.size(); ++i) {
++      auto& s = bslots_.at(i);
++      if (s.fetching && !tbuf->filling_b(i)) {
++        s.fetching = false;
++        s.valid = true;
++      }
++    }
++    if (kPrivateB) {
++      // the shared buffer is unused
++    } else if (bbuf_.fetching && !tbuf->filling_b()) {
+       bbuf_.fetching = false;
+       bbuf_.valid = true;
+       if (rep >= 0 && reqs.at(rep).is_first_uop) {
+@@ -987,6 +1073,26 @@
+     return (nrc * VX_CFG_NUM_THREADS) / wg_cfg::xtileM;
+   }
+ 
++  // Slot `s` of block `b`'s own B buffer.
++  static uint32_t bslot(uint32_t b, uint32_t s) {
++    return s * VX_CFG_NUM_TCU_BLOCKS + b;
++  }
++
++  // Advance `nr` to the WGMMA's first block past the rows of `key`; false
++  // when `key` holds its last.
++  bool next_b_slot(tbuf_req_t& nr, const bbuf_slot_t& key) {
++    uint32_t n_steps = xtile_n_of(nr.cd_nregs) / cfg::tcN;
++    do {
++      if (++nr.step_n == n_steps) {
++        nr.step_n = 0;
++        if (++nr.step_k == wg_cfg::k_steps) {
++          return false;
++        }
++      }
++    } while (this->bbuf_key(nr).row == key.row);
++    return true;
++  }
++
+   // Refill key of the B row serving `req`. Block-major B is keyed by the
+   // bank row holding the (step_k, step_n) block; K-major B by the block.
+   bbuf_slot_t bbuf_key(const tbuf_req_t& req) {
+@@ -1002,7 +1108,7 @@
+       uint32_t n_steps = xtile_n_of(req.cd_nregs) / cfg::tcN;
+       uint32_t blk = req.step_k * n_steps + req.step_n;
+       uint32_t blk_bytes = req.is_sparse ? (kBBlockWordsSp * 4) : (kBBlockWords * 4);
+-      uint32_t blks_per_row = req.is_sparse ? 1 : kBSubBlocks;
++      uint32_t blks_per_row = req.is_sparse ? 1 : kBSlotBlocks;
+       key.row = sd_b.base + uint64_t(blk / blks_per_row) * blks_per_row * blk_bytes;
+     }
+     return key;
+@@ -1022,8 +1128,12 @@
+ 
+     // (step_k, step_n) blocks this refill brings in.
+     uint32_t blk = req.step_k * n_steps + req.step_n;
+-    uint32_t blks = (kmajor || req.is_sparse) ? 1 : kBSubBlocks;
++    uint32_t blks = (kmajor || req.is_sparse) ? 1 : kBSlotBlocks;
+     uint32_t first_blk = blk - (blk % blks);
++    // the tile's last slot may be short
++    if (kBSlotRows > 1 && !kmajor && !req.is_sparse) {
++      blks = std::min<uint32_t>(blks, n_steps * wg_cfg::k_steps - first_blk);
++    }
+ 
+     std::vector<uint64_t> lines;
+     for (uint32_t bi = first_blk; bi < first_blk + blks; ++bi) {
+@@ -1044,7 +1154,8 @@
+     }
+ 
+     uint32_t num_reads = kmajor ? cfg::tcN
+-                       : (req.is_sparse && kBSparseTwoFetch) ? 2 : 1;
++                       : (req.is_sparse && kBSparseTwoFetch) ? 2
++                       : req.is_sparse ? 1 : ((blks + kBSubBlocks - 1) / kBSubBlocks);
+     return split_reads(std::move(lines), num_reads);
+   }
+ 
+@@ -1571,7 +1682,8 @@
+       return gather_word([&](uint64_t addr) { return tbuf->read_a(b, addr); },
+                          desc, row, col, fmt_s, pack_along_row, false, cur_is_sparse_);
+     }
+-    return gather_word([&](uint64_t addr) { return tbuf->read_b(addr); },
++    uint32_t slot = kPrivateB ? bslot(cur_block_, bcur_.at(cur_block_)) : 0;
++    return gather_word([&](uint64_t addr) { return tbuf->read_b(addr, slot); },
+                        desc, row, col, fmt_s, pack_along_row, sparse_b, false);
+   }
+ 
+@@ -1650,6 +1762,9 @@
+ #ifdef VX_CFG_TCU_WGMMA_ENABLE
+   std::array<abuf_slot_t, VX_CFG_NUM_TCU_BLOCKS> abuf_;
+   bbuf_slot_t bbuf_;
++  // Each block's own B buffer slots (VX_CFG_TCU_BBUF_ROWS) and the one in use.
++  std::array<bbuf_slot_t, TcuTbuf::B_SLOTS> bslots_;
++  std::array<uint32_t, VX_CFG_NUM_TCU_BLOCKS> bcur_{};
+ #endif
+ };
+ 
+--- a/tests/regression/tcu_roof/common.h
++++ b/tests/regression/tcu_roof/common.h
+@@ -15,6 +15,11 @@
+ #define OTYPE fp32
+ #endif
+ 
++// accumulator registers of a wgmma: 8, 16 or 32 (tile N = 16, 32 or 64 at 32 threads)
++#ifndef ROOF_NRC
++#define ROOF_NRC 8
++#endif
++
+ // accumulator tiles a warp can cycle through; each one is stored to C
+ #define MAX_ACC 4
+ 
+--- a/tests/regression/tcu_roof/kernel.cpp
++++ b/tests/regression/tcu_roof/kernel.cpp
+@@ -14,7 +14,7 @@
+ namespace vt = vortex::tensor;
+ using wm = vt::wmma_context<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, false, 8, 0, vt::ldst_matrix_enabled>;
+ #ifdef VX_CFG_TCU_WGMMA_ENABLE
+-using wg = vt::wgmma_context<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, false, 8, vt::ldst_matrix_enabled>;
++using wg = vt::wgmma_context<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, false, ROOF_NRC, vt::ldst_matrix_enabled>;
+ #endif
+ 
+ template <uint32_t NACC, typename F>
+--- a/tests/regression/tcu_roof/main.cpp
++++ b/tests/regression/tcu_roof/main.cpp
+@@ -30,7 +30,7 @@
+ static_assert(std::is_same<vt::OTYPE, vt::fp32>::value, "tcu_roof accumulates in fp32");
+ 
+ using wm_cfg = vt::wmma_config_t<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE>;
+-using wg_cfg = vt::wgmma_config_t<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE>;
++using wg_cfg = vt::wgmma_config_t<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, ROOF_NRC>;
+ 
+ using itype_t = vt::ITYPE::dtype;
+ using otype_t = vt::OTYPE::dtype;

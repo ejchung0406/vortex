@@ -1,0 +1,8 @@
+name=fn_m64_s1_k22
+src_rev=
+src_dirty=0
+host=atl1-1-02-010-17-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DMTILES=4 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_block --perf=1 --profile=h200s --cores=22 --args=-m64 -n22528 -k4096 -s1
+rc=0
+wall_s=8235

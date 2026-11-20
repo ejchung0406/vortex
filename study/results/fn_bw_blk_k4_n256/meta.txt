@@ -1,0 +1,8 @@
+name=fn_bw_blk_k4_n256
+src_rev=
+src_dirty=0
+host=atl1-1-02-011-2-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200s --cores=4 --args=-n256 -r1 -p0 -u4 -b32
+rc=0
+wall_s=230

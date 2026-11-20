@@ -1,0 +1,8 @@
+name=l2p1_bw_k2_s0
+src_rev=
+src_dirty=0
+host=atl1-1-02-008-2-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_L2_REPL_POLICY=1 -DMTILES=4 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=2 --args=-m64 -n8192 -k1024 -b1 -t1 -s0 -o1
+rc=0
+wall_s=394

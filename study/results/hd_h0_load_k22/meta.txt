@@ -1,0 +1,8 @@
+name=hd_h0_load_k22
+src_rev=
+src_dirty=0
+host=atl1-1-02-007-4-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000  -DMTILES=1 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=22 --args=-m16 -n22528 -k4096 -s0
+rc=0
+wall_s=3001

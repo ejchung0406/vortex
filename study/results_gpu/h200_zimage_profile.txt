@@ -1,0 +1,30 @@
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=none tag=
+model=/tmp/echung67/models/zimage size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+profile of 9 DiT forwards: self CUDA time total 1331.37 ms = 147.930 ms per unit
+  class linear/matmul/addmm                                 603.57 ms  45.3%
+  class elementwise mul/add/silu/sigmoid...                 341.19 ms  25.6%
+  class attention (sdpa)                                    162.14 ms  12.2%
+  class norm (pow/mean/rsqrt of RMSNorm, layer_norm)        112.23 ms   8.4%
+  class copy/cast/cat/index                                 112.13 ms   8.4%
+  class other                                                 0.12 ms   0.0%
+  top operators:
+    aten::mm                                                        601.25 ms  45.2% calls=2142 [linear/matmul/addmm]
+    aten::mul                                                       308.76 ms  23.2% calls=5796 [elementwise mul/add/silu/sigmoid...]
+    aten::_cudnn_attention_forward                                  162.14 ms  12.2% calls=306 [attention (sdpa)]
+    aten::copy_                                                     110.66 ms   8.3% calls=5067 [copy/cast/cat/index]
+    aten::pow                                                        55.64 ms   4.2% calls=1845 [norm (pow/mean/rsqrt of RMSNorm, layer_norm)]
+    aten::mean                                                       53.92 ms   4.0% calls=1845 [norm (pow/mean/rsqrt of RMSNorm, layer_norm)]
+    aten::add                                                        16.66 ms   1.3% calls=3060 [elementwise mul/add/silu/sigmoid...]
+    aten::silu                                                       14.71 ms   1.1% calls=324 [elementwise mul/add/silu/sigmoid...]
+    aten::rsqrt                                                       2.39 ms   0.2% calls=1845 [norm (pow/mean/rsqrt of RMSNorm, layer_norm)]
+    aten::addmm                                                       2.32 ms   0.2% calls=342 [linear/matmul/addmm]
+    aten::tanh                                                        1.04 ms   0.1% calls=576 [elementwise mul/add/silu/sigmoid...]
+    aten::cat                                                         0.52 ms   0.0% calls=189 [copy/cast/cat/index]
+    aten::where                                                       0.48 ms   0.0% calls=18 [copy/cast/cat/index]
+    aten::native_layer_norm                                           0.28 ms   0.0% calls=9 [norm (pow/mean/rsqrt of RMSNorm, layer_norm)]
+    aten::fill_                                                       0.25 ms   0.0% calls=63 [copy/cast/cat/index]
+    aten::index                                                       0.22 ms   0.0% calls=54 [copy/cast/cat/index]
+    aten::arange                                                      0.07 ms   0.0% calls=216 [other]
+    aten::zero_                                                       0.02 ms   0.0% calls=18 [other]
+    aten::cos                                                         0.02 ms   0.0% calls=9 [other]
+    aten::sin                                                         0.01 ms   0.0% calls=9 [other]

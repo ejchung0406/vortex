@@ -1,0 +1,8 @@
+name=finB_gemm_k22
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-8-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DEXP_GRAN=10 -DEXP_VISIT=5 -DEXP_JOINT -DEXP_LBG=3 -DEXP_CCDL=8 -DMTILES=1 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_decode --perf=7 --profile=h200s --cores=22 --args=-m16 -n22528 -k4096
+rc=0
+wall_s=3499

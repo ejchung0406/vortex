@@ -1,0 +1,8 @@
+name=msw_m64_s0
+src_rev=3d21214d2134ae5f7bbef0504d3df5c5df23a095
+src_dirty=2
+host=atl1-1-03-003-1-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DPROFILE_ENABLE -DMTILES=4
+blackbox=--driver=simx --app=gemm_block --perf=1 --profile=h200s --cores=1 --args=-m64 -n1024 -k4096 -s0
+rc=0
+wall_s=401

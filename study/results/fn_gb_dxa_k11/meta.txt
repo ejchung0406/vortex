@@ -1,0 +1,8 @@
+name=fn_gb_dxa_k11
+src_rev=
+src_dirty=0
+host=atl1-1-02-008-29-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DMTILES=1 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=11 --args=-m16 -n11264 -k4096 -s1 -d2
+rc=0
+wall_s=1249

@@ -1,0 +1,8 @@
+name=dsp_rtl_base
+src_rev=a7b9d8a9d83bae12245178cdcc1f31a5db34807c
+src_dirty=15
+host=atl1-1-02-002-9-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_DXA_CORES=4 -DVX_CFG_DXA_MAX_INFLIGHT=64
+blackbox=--driver=rtlsim --app=bwstream_dxa --perf=16 --profile=h200s --cores=1 --args=-e4096 -n8 -g4 -d4 -c0
+rc=2
+wall_s=2943

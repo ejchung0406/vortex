@@ -1,0 +1,6 @@
+name=par2_rtlsim_w16
+src_rev=e113ec0dfd6317c29439f502fd4eb955a9d70f6b
+src_dirty=1
+host=atl1-1-03-002-11-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_DXA_MAX_INFLIGHT=64 -DVX_CFG_NUM_DXA_CORES=16
+blackbox=--driver=rtlsim --app=bwstream_dxa --perf=16 --profile=h200q --cores=1 --args=-e4096 -n4 -g16 -d4 -c0

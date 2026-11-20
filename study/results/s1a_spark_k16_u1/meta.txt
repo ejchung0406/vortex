@@ -1,0 +1,8 @@
+name=s1a_spark_k16_u1
+src_rev=01d0ac75059c50b191c646379df65ce14cf53636
+src_dirty=4
+host=atl1-1-03-004-18-2.pace.gatech.edu
+xconf=-DVX_CFG_LSU_PENDING_LIMIT=32 -DVX_DBG_STALL_TIMEOUT=20000000
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=rtxspark --cores=16 --args=-n256 -r1 -p0 -u1
+rc=0
+wall_s=569

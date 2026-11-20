@@ -1,0 +1,8 @@
+name=par_simx_w4
+src_rev=87f598f1620ea3d9ff62f85114f642dd1ea22c37
+src_dirty=1
+host=atl1-1-02-011-3-1.pace.gatech.edu
+xconf=-DVX_CFG_NUM_DXA_CORES=4
+blackbox=--driver=simx --app=bwstream_dxa --perf=16 --args=-e1024 -n8 -g8 -d4 -c0
+rc=0
+wall_s=165

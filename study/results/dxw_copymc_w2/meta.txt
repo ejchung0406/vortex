@@ -1,0 +1,8 @@
+name=dxw_copymc_w2
+src_rev=475250ec2356a279776ae608135eaf5a9beea4da
+src_dirty=1
+host=atl1-1-02-010-17-2.pace.gatech.edu
+xconf=-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_DXA_CORES=2
+blackbox=--driver=simx --app=dxa_copy_mcast --perf=16 --cores=2
+rc=0
+wall_s=166

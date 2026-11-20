@@ -1,0 +1,8 @@
+name=cr_rtlsim_base
+src_rev=a7b9d8a9d83bae12245178cdcc1f31a5db34807c
+src_dirty=15
+host=atl1-1-02-002-12-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=32 -DVX_CFG_NUM_THREADS=4 
+blackbox=--driver=rtlsim --app=corun --perf=1 --cores=1 --args=-b0 -i1024 -g32
+rc=0
+wall_s=176

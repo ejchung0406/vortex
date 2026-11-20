@@ -1,0 +1,5 @@
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=none tag=
+model=Tongyi-MAI/Z-Image-Turbo size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+fwd_ms_median=153.61 fwd_ms_min=148.07 fwd_ms_max=163.21 n=45 weight_gb=12.310 weight_gbs=80.1
+image_s_median=1.481 (text encoder + 8 forwards + VAE decode) image_latent_s_median=1.408 (no VAE decode) n=5
+peak_mem_gb=23.3

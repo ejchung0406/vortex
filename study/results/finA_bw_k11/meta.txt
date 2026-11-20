@@ -1,0 +1,8 @@
+name=finA_bw_k11
+src_rev=
+src_dirty=0
+host=atl1-1-02-003-28-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DEXP_GRAN=10 -DEXP_VISIT=5 -DEXP_JOINT -DEXP_LBG=3
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200s --cores=11 --args=-n256 -r1 -p0 -u8
+rc=0
+wall_s=327

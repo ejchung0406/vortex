@@ -1,0 +1,8 @@
+name=cal_h100_k4_u4_m128_p128
+src_rev=214405599feeabdf08776a4b6d26cb3a69aaba3d
+src_dirty=1
+host=atl1-1-03-003-10-2.pace.gatech.edu
+xconf=-DVX_CFG_DCACHE_MSHR_SIZE=128 -DVX_CFG_LSU_PENDING_LIMIT=128 -DVX_DBG_STALL_TIMEOUT=20000000
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h100 --cores=4 --args=-n256 -r1 -p0 -u4
+rc=0
+wall_s=232

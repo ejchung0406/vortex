@@ -1,0 +1,8 @@
+name=crF_simx_new
+src_rev=a7b9d8a9d83bae12245178cdcc1f31a5db34807c
+src_dirty=15
+host=atl1-1-02-008-4-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=simx --app=corun --perf=1 --profile=h200s --cores=1 --args=-b0 -i1024 -g64
+rc=0
+wall_s=211

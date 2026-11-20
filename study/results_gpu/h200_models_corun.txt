@@ -1,0 +1,33 @@
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 mps_pct=20 tag=corun_img80_llm20
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=80 tag=corun_img80_llm20
+model=/tmp/echung67/models/zimage size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+sample: '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+segment=0 window_s=30.1 forwards=185 fwd_ms_median=163.63 fwd_per_s_wall=6.147 fwd_per_s_median=6.111 kernel_ms_per_fwd=155.25 matmul_kernel_ms_per_fwd=67.99
+segment=0 batch=1 window_s=30.0 steps=939 step_ms_median=27.952 tok_per_s_wall=31.3 tok_per_s_median=35.8 kernel_ms_per_step=12.534 matmul_kernel_ms_per_step=9.118 matmul_kernel_weight_gbs=1741
+segment=1 window_s=30.0 forwards=187 fwd_ms_median=161.48 fwd_per_s_wall=6.226 fwd_per_s_median=6.193 kernel_ms_per_fwd=155.32 matmul_kernel_ms_per_fwd=68.05
+segment=1 batch=4 window_s=30.0 steps=721 step_ms_median=36.211 tok_per_s_wall=96.1 tok_per_s_median=110.5 kernel_ms_per_step=14.031 matmul_kernel_ms_per_step=9.352 matmul_kernel_weight_gbs=1697
+segment=2 window_s=30.1 forwards=186 fwd_ms_median=162.61 fwd_per_s_wall=6.187 fwd_per_s_median=6.150 kernel_ms_per_fwd=156.42 matmul_kernel_ms_per_fwd=68.42
+segment=2 batch=16 window_s=30.0 steps=709 step_ms_median=36.338 tok_per_s_wall=378.0 tok_per_s_median=440.3 kernel_ms_per_step=17.853 matmul_kernel_ms_per_step=9.718 matmul_kernel_weight_gbs=1633
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 mps_pct=40 tag=corun_img60_llm40
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=60 tag=corun_img60_llm40
+model=/tmp/echung67/models/zimage size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+sample: '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+segment=0 window_s=30.2 forwards=151 fwd_ms_median=200.61 fwd_per_s_wall=5.002 fwd_per_s_median=4.985 kernel_ms_per_fwd=193.29 matmul_kernel_ms_per_fwd=88.20
+segment=0 batch=1 window_s=30.0 steps=969 step_ms_median=27.509 tok_per_s_wall=32.3 tok_per_s_median=36.4 kernel_ms_per_step=11.543 matmul_kernel_ms_per_step=7.894 matmul_kernel_weight_gbs=2011
+segment=1 window_s=30.1 forwards=152 fwd_ms_median=198.63 fwd_per_s_wall=5.056 fwd_per_s_median=5.034 kernel_ms_per_fwd=193.38 matmul_kernel_ms_per_fwd=88.45
+segment=1 batch=4 window_s=30.0 steps=726 step_ms_median=35.673 tok_per_s_wall=96.7 tok_per_s_median=112.1 kernel_ms_per_step=11.319 matmul_kernel_ms_per_step=7.147 matmul_kernel_weight_gbs=2221
+segment=2 window_s=30.0 forwards=151 fwd_ms_median=199.77 fwd_per_s_wall=5.029 fwd_per_s_median=5.006 kernel_ms_per_fwd=194.26 matmul_kernel_ms_per_fwd=88.74
+segment=2 batch=16 window_s=30.0 steps=724 step_ms_median=35.797 tok_per_s_wall=386.0 tok_per_s_median=447.0 kernel_ms_per_step=13.357 matmul_kernel_ms_per_step=7.130 matmul_kernel_weight_gbs=2226
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 mps_pct=60 tag=corun_img40_llm60
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+gpu=NVIDIA H200 torch=2.15.0+cu132 diffusers=0.44.0.dev0 mps_pct=40 tag=corun_img40_llm60
+model=/tmp/echung67/models/zimage size=1024 forwards_per_image=9 forward_input_shapes=[[(16, 1, 128, 128)], (1,), [(28, 2560)]] transformer_params=6154908736 transformer_weight_bytes=12309817472 dtype=torch.bfloat16
+sample: ' shoulder to shoulder with the CPU, the GPU executes matrix multiplication by leveraging its massive parallelism to handle thousands of independent calculations simultaneously. Unlike a CPU, which uses'
+segment=0 window_s=30.2 forwards=104 fwd_ms_median=292.47 fwd_per_s_wall=3.441 fwd_per_s_median=3.419 kernel_ms_per_fwd=282.57 matmul_kernel_ms_per_fwd=135.44
+segment=0 batch=1 window_s=30.0 steps=971 step_ms_median=27.528 tok_per_s_wall=32.4 tok_per_s_median=36.3 kernel_ms_per_step=10.174 matmul_kernel_ms_per_step=6.619 matmul_kernel_weight_gbs=2398
+segment=1 window_s=30.2 forwards=105 fwd_ms_median=288.93 fwd_per_s_wall=3.481 fwd_per_s_median=3.461 kernel_ms_per_fwd=282.73 matmul_kernel_ms_per_fwd=135.15
+segment=1 batch=4 window_s=30.0 steps=731 step_ms_median=36.103 tok_per_s_wall=97.4 tok_per_s_median=110.8 kernel_ms_per_step=10.693 matmul_kernel_ms_per_step=6.482 matmul_kernel_weight_gbs=2449
+segment=2 window_s=30.3 forwards=105 fwd_ms_median=290.71 fwd_per_s_wall=3.467 fwd_per_s_median=3.440 kernel_ms_per_fwd=283.92 matmul_kernel_ms_per_fwd=135.28
+segment=2 batch=16 window_s=30.0 steps=721 step_ms_median=36.024 tok_per_s_wall=384.3 tok_per_s_median=444.2 kernel_ms_per_step=12.936 matmul_kernel_ms_per_step=6.844 matmul_kernel_weight_gbs=2319

@@ -1,0 +1,8 @@
+name=dx6_w16_g32_d1
+src_rev=ba00007ab095bcfd4761425bf5e90323a8df6246
+src_dirty=5
+host=atl1-1-03-003-10-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_DXA_MAX_INFLIGHT=256 -DVX_CFG_NUM_DXA_CORES=16
+blackbox=--driver=simx --app=bwstream_dxa --perf=16 --profile=h200q --cores=4 --args=-e4096 -n16 -g32 -d1 -c0
+rc=0
+wall_s=225

@@ -1,0 +1,8 @@
+name=tma_g1k_k11_n32
+src_rev=
+src_dirty=0
+host=atl1-1-02-009-20-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_DXA_MAX_INFLIGHT=256 -DVX_CFG_NUM_DXA_CORES=16 -DEXP_GRAN=10 -DEXP_VISIT=5 -DEXP_JOINT -DEXP_LBG=3 -DEXP_CCDL=8
+blackbox=--driver=simx --app=bwstream_dxa --perf=16 --profile=h200s --cores=11 --args=-e4096 -n32 -g176 -d4 -c0
+rc=0
+wall_s=473

@@ -1,0 +1,623 @@
+--- a/sim/simx/mem/cache.cpp
++++ b/sim/simx/mem/cache.cpp
+@@ -456,11 +456,10 @@
+   // emit another response — only run sector_merge.
+   bool skip_core_rsp;
+ 
+-  // A write-through store admitted while its word still had an undrained
+-  // entry in its line's MSHR chain: its line merge must follow that entry's
+-  // replay, which may have left the chain for the pipe by the time the store
+-  // reaches the pipe exit.
+-  bool chain_ordered;
++  // The first pass of a write-through store whose line merge joined its
++  // line's MSHR chain at admission: at the pipe exit it only emits the memory
++  // write and the response.
++  bool merge_queued;
+ 
+   // Fill flavors under lazy fetch: a data-less allocation for a write-miss
+   // root, or a refetch of a resident partial sector (merges under its dirty
+@@ -509,7 +508,7 @@
+     write = false;
+     op = MemOp::LD;
+     skip_core_rsp = false;
+-    chain_ordered = false;
++    merge_queued = false;
+     nodata = false;
+     refetch = false;
+     refetch_retry = false;
+@@ -658,6 +657,24 @@
+     return false;
+   }
+ 
++  // True if an undrained write of the (set,tag,sector) chain touches the word
++  // of `addr` (2^word_log2 bytes).
++  bool has_word_write(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id,
++                      uint64_t addr, uint32_t word_log2) const {
++    for (const auto &entry : entries_) {
++      if (entry.bank_req.type == bank_req_t::None || !entry.bank_req.write) {
++        continue;
++      }
++      if (entry.set_id != set_id || entry.addr_tag != addr_tag || entry.sector_id != sector_id) {
++        continue;
++      }
++      if ((entry.bank_req.addr >> word_log2) == (addr >> word_log2)) {
++        return true;
++      }
++    }
++    return false;
++  }
++
+   // Enqueue a new core request and return the allocated entry id.
+   int enqueue(const bank_req_t &bank_req, uint32_t set_id, uint64_t addr_tag, uint32_t sector_id,
+               bool refetch = false) {
+@@ -1278,10 +1295,24 @@
+       // Write-through stores are exempt: their downstream write must be
+       // emitted at the commit stage so same-line stores reach memory in
+       // pipeline order (an at-admission emission could overtake an older
+-      // store still riding the pipe). The pipe-exit paths order them
+-      // correctly and defer only the line merge when a chain is pending, or
+-      // was pending on their word here (chain_ordered, below).
++      // store still riding the pipe). A same-word hazard (below) still puts
++      // their line merge in the chain here.
+       const bool is_wt_store = (core_req.op == MemOp::ST) && !config_.write_back;
++      // Same-word order hazard, the RTL bank's creq_hit_order_hazard_st0: an
++      // undrained same-word write of the chain, or for a store any undrained
++      // same-word entry. The request joins the chain here, in admission order,
++      // where every younger request's admission probe sees it; deciding at the
++      // pipe exit is too late, as the entries it must follow may have left the
++      // chain for the pipe behind it by then.
++      bool word_hazard = false;
++      if (!is_amo_passthru && mshr_.size() != 0) {
++        uint32_t hz_set_id   = params_.addr_set_id(core_req.addr);
++        uint64_t hz_addr_tag = params_.addr_tag(core_req.addr);
++        uint32_t hz_sector   = params_.addr_sector_id(core_req.addr);
++        word_hazard = (core_req.op == MemOp::ST)
++                    ? mshr_.has_word_reqs(hz_set_id, hz_addr_tag, hz_sector, core_req.addr, config_.W)
++                    : mshr_.has_word_write(hz_set_id, hz_addr_tag, hz_sector, core_req.addr, config_.W);
++      }
+       if (!is_amo_passthru && !is_wt_store && mshr_.size() != 0) {
+         uint32_t adm_set_id   = params_.addr_set_id(core_req.addr);
+         uint64_t adm_addr_tag = params_.addr_tag(core_req.addr);
+@@ -1291,7 +1322,7 @@
+           bool fill_pending = mshr_.has_pending_fill(adm_set_id, adm_addr_tag, adm_sector, -1);
+           bool must_order   = !fill_pending
+                            && mshr_.has_ordered_reqs(adm_set_id, adm_addr_tag, adm_sector);
+-          if (fill_pending || must_order) {
++          if (fill_pending || must_order || word_hazard) {
+             bank_req_t coalesced;
+             coalesced.reset();
+             coalesced.adm_seq = adm_seq_ctr_++;
+@@ -1348,17 +1379,27 @@
+       bank_req.op      = core_req.op;
+       bank_req.data    = core_req.data;
+       bank_req.byteen  = core_req.byteen;
+-      // A write-through store skips the admission join above, but its line
+-      // merge keeps the order it has here behind any undrained same-word
+-      // chain entry (the RTL bank demotes such a hit to a chained miss at S0).
+-      if (is_wt_store && mshr_.size() != 0) {
+-        bank_req.chain_ordered = mshr_.has_word_reqs(params_.addr_set_id(core_req.addr),
+-                                                     params_.addr_tag(core_req.addr),
+-                                                     params_.addr_sector_id(core_req.addr),
+-                                                     core_req.addr, config_.W);
+-      }
+       bank_req.amo_cmp = core_req.amo_cmp;
+       bank_req.flags   = core_req.flags;
++      // A write-through store with a same-word hazard keeps its memory write
++      // and response at the pipe exit, in pipeline order with the other
++      // stores, and its line merge joins the chain now, as the RTL bank's
++      // demoted store does at S0. It counts as a write miss there too.
++      if (is_wt_store && word_hazard) {
++        uint32_t set_id    = params_.addr_set_id(core_req.addr);
++        uint64_t addr_tag  = params_.addr_tag(core_req.addr);
++        uint32_t sector_id = params_.addr_sector_id(core_req.addr);
++        bank_req_t merge_req = bank_req;
++        merge_req.skip_core_rsp = true;
++        assert(!mshr_.full());
++        int id = mshr_.enqueue(merge_req, set_id, addr_tag, sector_id);
++        if (!mshr_.has_pending_fill(set_id, addr_tag, sector_id, id)) {
++          mshr_.defer_to_replay(id);
++        }
++        DT(3, this->name() << " mshr-coalesce@admission (wt-merge): " << merge_req);
++        bank_req.merge_queued = true;
++        ++perf_stats_.write_misses;
++      }
+       pipe_req_->push(bank_req);
+       DT(3, this->name() << " core-req: " << core_req);
+       // pending_mshr_size_ tracks Core-typed in-flight requests so the
+@@ -1978,6 +2019,20 @@
+       uint32_t sector_id = params_.addr_sector_id(bank_req.addr);
+       auto &set          = sets_.at(set_id);
+ 
++      if (bank_req.merge_queued) {
++        // its line merge is in the chain since admission
++        if (!this->emitWritethrough(set_id, addr_tag, sector_id,
++                                    bank_req.addr, bank_req.hart_id, bank_req.uuid,
++                                    bank_req.data, bank_req.byteen,
++                                    need_core_rsp(bank_req), bank_req.req_tag)) {
++          return;
++        }
++        --pending_mshr_size_;
++        this->pipeLineErase(set_id, addr_tag);
++        pipe_req_->pop();
++        return;
++      }
++
+       int32_t free_id = -1, repl_id = 0;
+       // Pure tag match — no LRU mutation here. update_lru() commits below,
+       // after all stall checks pass, otherwise PLRU drifts on retry.
+@@ -1992,17 +2047,18 @@
+ 
+       if (hit_id != -1) {
+         // Hit while a same-(set,tag,sector) chain still carries a write or
+-        // atomic: proceeding would overtake accesses a younger request must
+-        // stay ordered behind. Defer into the replay stream and let seq
+-        // order decide. A pure-load chain imposes no such ordering — the
+-        // line is resident, so the hit completes ahead of the drain.
+-        // Write-through stores keep their immediate memory write +
+-        // response and defer only the line merge.
++        // atomic (for a load), or an entry of the same word (for a store):
++        // proceeding would overtake accesses a younger request must stay
++        // ordered behind. Defer into the replay stream and let seq order
++        // decide. A pure-load chain imposes no such ordering on a load, nor
++        // a chain of other words on a store — the line is resident, so the
++        // hit completes ahead of the drain. Write-through stores keep their
++        // immediate memory write + response and defer only the line merge.
+         uint32_t chain_root = 0;
+-        if ((mshr_.lookup(set_id, addr_tag, sector_id, &chain_root)
+-          && (mshr_.has_ordered_reqs(set_id, addr_tag, sector_id)
+-           || bank_req.write || memop_is_atomic(bank_req.op)))
+-         || (bank_req.chain_ordered && bank_req.write && !config_.write_back)) {
++        if (mshr_.lookup(set_id, addr_tag, sector_id, &chain_root)
++         && ((!bank_req.write && mshr_.has_ordered_reqs(set_id, addr_tag, sector_id))
++          || (bank_req.write && mshr_.has_word_reqs(set_id, addr_tag, sector_id, bank_req.addr, config_.W))
++          || memop_is_atomic(bank_req.op))) {
+           if (bank_req.write && !config_.write_back) {
+             if (!this->emitWritethrough(set_id, addr_tag, sector_id,
+                                         bank_req.addr, bank_req.hart_id, bank_req.uuid,
+@@ -2027,6 +2083,9 @@
+             }
+             DT(3, this->name() << " mshr-defer: " << bank_req);
+           }
++          // a hit demoted to a chained miss counts as a miss, as in the RTL bank
++          if (bank_req.write) ++perf_stats_.write_misses;
++          else                ++perf_stats_.read_misses;
+           --pending_mshr_size_;
+           this->pipeLineErase(set_id, addr_tag);
+           pipe_req_->pop();
+--- a/sw/runtime/rtlsim/vortex.cpp
++++ b/sw/runtime/rtlsim/vortex.cpp
+@@ -34,8 +34,10 @@
+ #include <stdint.h>
+ #include <stdio.h>
+ #include <stdlib.h>
++#include <cassert>
+ #include <cstring>
+ #include <future>
++#include <iostream>
+ #include <map>
+ #include <mutex>
+ #include <chrono>
+@@ -85,28 +87,37 @@
+ 
+   // ----- CP-visible host memory (command ring + DMA staging) -----
+   // Unified memory: a plain process allocation. cp_addr is the pointer
+-  // value itself; the CP model's dram hooks route by registered region.
++  // tagged with kHostTag, a bit no device address has, so the CP model's
++  // dram hooks tell a host region from device memory by the address alone:
++  // an untagged pointer value can equal a device address.
++  static constexpr uint64_t kHostTag = uint64_t(1) << 62;
++  static_assert(VX_CFG_MEM_ADDR_WIDTH < 62, "device addresses must leave the host tag bit clear");
++
+   int host_mem_alloc(uint64_t size, void** host_ptr, uint64_t* cp_addr) {
+     uint64_t asize = aligned_size(size, CACHE_BLOCK_SIZE);
+     void* ptr = aligned_alloc(CACHE_BLOCK_SIZE, asize);
+     if (ptr == nullptr)
+       return -1;
++    assert((reinterpret_cast<uint64_t>(ptr) & kHostTag) == 0);
+     std::lock_guard<std::mutex> g(host_mu_);
+     host_regions_[reinterpret_cast<uint64_t>(ptr)] = asize;
+     *host_ptr = ptr;
+-    *cp_addr  = reinterpret_cast<uint64_t>(ptr);
++    *cp_addr  = reinterpret_cast<uint64_t>(ptr) | kHostTag;
+     return 0;
+   }
+ 
+   int host_mem_free(uint64_t cp_addr) {
++    if ((cp_addr & kHostTag) == 0)
++      return -1;
++    uint64_t ptr = cp_addr & ~kHostTag;
+     {
+       std::lock_guard<std::mutex> g(host_mu_);
+-      auto it = host_regions_.find(cp_addr);
++      auto it = host_regions_.find(ptr);
+       if (it == host_regions_.end())
+         return -1;
+       host_regions_.erase(it);
+     }
+-    free(reinterpret_cast<void*>(cp_addr));
++    free(reinterpret_cast<void*>(ptr));
+     return 0;
+   }
+ 
+@@ -121,25 +132,32 @@
+ 
+ 
+ private:
+-  // If `addr` falls in a registered host region, return it as a host
+-  // pointer (cp_addr == the pointer); otherwise nullptr → device memory.
+-  void* host_region_ptr(uint64_t addr) {
+-    std::lock_guard<std::mutex> g(host_mu_);
+-    if (host_regions_.empty())
+-      return nullptr;
+-    auto it = host_regions_.upper_bound(addr);
+-    if (it == host_regions_.begin())
++  // If `addr` is a tagged host address, return its host pointer, checking
++  // that `bytes` from it lie in one registered region; otherwise nullptr →
++  // device memory.
++  void* host_region_ptr(uint64_t addr, std::size_t bytes) {
++    if ((addr & kHostTag) == 0)
+       return nullptr;
++    uint64_t ptr = addr & ~kHostTag;
++    std::lock_guard<std::mutex> g(host_mu_);
++    auto it = host_regions_.upper_bound(ptr);
++    if (it == host_regions_.begin()) {
++      std::cerr << "*** CP access to an unregistered host address 0x" << std::hex << ptr << std::dec << std::endl;
++      std::abort();
++    }
+     --it;
+-    if (addr >= it->first && addr < it->first + it->second)
+-      return reinterpret_cast<void*>(addr);
+-    return nullptr;
++    if (ptr < it->first || ptr + bytes > it->first + it->second) {
++      std::cerr << "*** CP access [0x" << std::hex << ptr << ", +0x" << bytes
++                << ") outside host region [0x" << it->first << ", +0x" << it->second << ")" << std::dec << std::endl;
++      std::abort();
++    }
++    return reinterpret_cast<void*>(ptr);
+   }
+ 
+   vortex::CommandProcessor::Hooks make_cp_hooks() {
+     vortex::CommandProcessor::Hooks h;
+     h.dram_read = [this](uint64_t addr, void* dst, std::size_t bytes) {
+-      if (void* hp = host_region_ptr(addr)) {
++      if (void* hp = host_region_ptr(addr, bytes)) {
+         std::memcpy(dst, hp, bytes);
+         return;
+       }
+@@ -153,7 +171,7 @@
+       ram_.read(static_cast<uint8_t*>(dst), addr, bytes);
+     };
+     h.dram_write = [this](uint64_t addr, const void* src, std::size_t bytes) {
+-      if (void* hp = host_region_ptr(addr)) {
++      if (void* hp = host_region_ptr(addr, bytes)) {
+         std::memcpy(hp, src, bytes);
+         return;
+       }
+@@ -170,7 +188,7 @@
+       // The CP DMA is a client of the last-level cache: transfers stay
+       // coherent with it, and those of at least half its size write around it.
+       h.dma_write = [this](uint64_t addr, const void* src, std::size_t bytes, bool no_alloc) {
+-        if (void* hp = host_region_ptr(addr)) {
++        if (void* hp = host_region_ptr(addr, bytes)) {
+           std::memcpy(hp, src, bytes);
+           return;
+         }
+--- a/tests/regression/Makefile
++++ b/tests/regression/Makefile
+@@ -16,7 +16,7 @@
+     dxa_copy dxa_copy_mcast dxa_kmajor_check                          \
+     async_barrier async_gbarrier gbar_phase bar_slot_phase packld wgather wsync quad_lod \
+     occupancy multikernel reopen module_reload single_cta            \
+-    flush_coherence lazy_fetch sector_merge raw_order cache_ways chase \
++    flush_coherence lazy_fetch sector_merge raw_order war_order cache_ways chase \
+     vm_test vm_fault vm_stress
+ 
+ # --- common exclude list ---------------------------------------------
+--- /dev/null
++++ b/tests/regression/war_order/common.h
+@@ -0,0 +1,32 @@
++#ifndef _COMMON_H_
++#define _COMMON_H_
++
++#include <stdint.h>
++
++// the three values each thread stores to its word, in program order
++#define WAR_MARK1 0x40000000u
++#define WAR_MARK2 0x80000000u
++#define WAR_MARK3 0xC0000000u
++
++// error bits a thread records for its word
++#define WAR_ERR_L0 0x1u // first load did not return the initial value
++#define WAR_ERR_L1 0x2u // load right after the first store did not return it
++#define WAR_ERR_L2 0x4u // load right after the store pair did not return the second
++#define WAR_ERR_L3 0x8u // delayed load did not return the second of the pair
++#define WAR_ERR_L0B 0x10u // second load of the initial value did not return it
++
++typedef struct {
++  uint32_t num_words;   // words in the data buffer
++  uint32_t num_threads; // threads launched
++  uint32_t num_warps;   // warps launched
++  uint32_t warp_size;   // threads per warp
++  uint32_t delay_sweep; // the delayed load waits ((iteration + warp) % delay_sweep) * delay_step steps
++  uint32_t delay_step;
++  uint32_t store_sweep; // the first store waits ((3 * iteration + warp) % store_sweep) * store_step steps
++  uint32_t store_step;
++  uint32_t layout;      // 0: a line's words belong to different warps; 1: a warp's words are contiguous
++  uint64_t data_addr;   // in: initial words; out: each word's last store
++  uint64_t err_addr;    // out: per word, the WAR_ERR_* bits its thread saw
++} kernel_arg_t;
++
++#endif
+--- /dev/null
++++ b/tests/regression/war_order/kernel.cpp
+@@ -0,0 +1,70 @@
++#include <vx_spawn2.h>
++#include "common.h"
++
++// Every thread owns one word per iteration and, in program order, issues to it
++//
++//   load, load - the line is cold: they head or join the line's chain
++//   delay - swept per warp and iteration, so the store below lands at varying
++//           points of the chain's fill and drain
++//   store - younger than those loads (write after read)
++//   load  - must see the store (read after write)
++//   store, store - a pair (write after write)
++//   load  - must see the second store of the pair
++//   delay - swept per warp and iteration
++//   load  - must still see it
++//
++// With layout 0 the words of an iteration are laid out lane-major, so the
++// threads that share a cache line, and its words, belong to different warps:
++// their chains, the fill's forward drain and the replays interleave with the
++// stores of the other warps. With layout 1 a warp's words are contiguous, so
++// its few requests per line follow each other closely through the bank. The
++// sequence is inline assembly, so the compiler cannot reorder it.
++__kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
++  auto data = reinterpret_cast<uint32_t*>(arg->data_addr);
++  auto errs = reinterpret_cast<uint32_t*>(arg->err_addr);
++  const uint32_t T    = arg->num_threads;
++  const uint32_t W    = arg->warp_size;
++  const uint32_t tid  = blockIdx.x * blockDim.x + threadIdx.x;
++  const uint32_t lane = tid % W;
++  const uint32_t warp = tid / W;
++  const uint32_t slot = arg->layout ? tid : (lane * arg->num_warps + warp);
++  uint32_t k = 0;
++  for (uint32_t base = 0; base + T <= arg->num_words; base += T, ++k) {
++    uint32_t i = base + slot;
++    uint32_t* p = data + i;
++    uint32_t m1 = WAR_MARK1 + i, m2 = WAR_MARK2 + i, m3 = WAR_MARK3 + i;
++    uint32_t delay = ((k + warp) % arg->delay_sweep) * arg->delay_step;
++    uint32_t sdelay = ((3 * k + warp) % arg->store_sweep) * arg->store_step;
++    uint32_t a, b, v1, v2, v3;
++    __asm__ volatile(
++      "lw   %[a], 0(%[p])\n\t"
++      "lw   %[b], 0(%[p])\n\t"
++      "beqz %[sn], 4f\n\t"
++      "3:\n\t"
++      "addi %[sn], %[sn], -1\n\t"
++      "bnez %[sn], 3b\n\t"
++      "4:\n\t"
++      "sw   %[m1], 0(%[p])\n\t"
++      "lw   %[v1], 0(%[p])\n\t"
++      "sw   %[m2], 0(%[p])\n\t"
++      "sw   %[m3], 0(%[p])\n\t"
++      "lw   %[v2], 0(%[p])\n\t"
++      "beqz %[n], 2f\n\t"
++      "1:\n\t"
++      "addi %[n], %[n], -1\n\t"
++      "bnez %[n], 1b\n\t"
++      "2:\n\t"
++      "lw   %[v3], 0(%[p])\n\t"
++      : [a] "=&r"(a), [b] "=&r"(b), [v1] "=&r"(v1), [v2] "=&r"(v2), [v3] "=&r"(v3),
++        [n] "+r"(delay), [sn] "+r"(sdelay)
++      : [p] "r"(p), [m1] "r"(m1), [m2] "r"(m2), [m3] "r"(m3)
++      : "memory");
++    uint32_t e = 0;
++    e |= (a  != i * 7 + 1) ? WAR_ERR_L0 : 0;
++    e |= (b  != i * 7 + 1) ? WAR_ERR_L0B : 0;
++    e |= (v1 != m1) ? WAR_ERR_L1 : 0;
++    e |= (v2 != m3) ? WAR_ERR_L2 : 0;
++    e |= (v3 != m3) ? WAR_ERR_L3 : 0;
++    errs[i] = e;
++  }
++}
+--- /dev/null
++++ b/tests/regression/war_order/main.cpp
+@@ -0,0 +1,178 @@
++// war_order — a thread's accesses to its own word complete in program order
++// (write after read, read after write, write after write) while the word's
++// line fills, forwards and replays the chains of other warps.
++
++#include <vortex2.h>
++#include "common.h"
++
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <iostream>
++#include <unistd.h>
++#include <vector>
++
++#define CHECK(expr) do { \
++    vx_result_t _r = (expr); \
++    if (_r != VX_SUCCESS) { \
++        std::fprintf(stderr, "FAIL %s:%d: '%s' returned %s\n", \
++                     __FILE__, __LINE__, #expr, vx_result_string(_r)); \
++        std::exit(1); \
++    } \
++} while (0)
++
++namespace {
++const char* kernel_file = "kernel.vxbin";
++uint32_t    num_words   = 65536;
++uint32_t    delay_sweep = 8;
++uint32_t    delay_step  = 3;
++uint32_t    store_sweep = 1;
++uint32_t    store_step  = 0;
++int         layout      = -1; // -1: both, one launch each
++
++void parse_args(int argc, char** argv) {
++    int c;
++    while ((c = getopt(argc, argv, "n:s:d:S:D:l:k:h")) != -1) {
++        switch (c) {
++            case 'n': num_words   = std::atoi(optarg); break;
++            case 's': delay_sweep = std::atoi(optarg); break;
++            case 'd': delay_step  = std::atoi(optarg); break;
++            case 'S': store_sweep = std::atoi(optarg); break;
++            case 'D': store_step  = std::atoi(optarg); break;
++            case 'l': layout      = std::atoi(optarg); break;
++            case 'k': kernel_file = optarg;            break;
++            default:
++                std::cout << "Usage: [-n words] [-s load delay sweep] [-d load delay step] [-S store delay sweep] [-D store delay step] [-l layout 0|1, default both] [-k kernel] [-h]" << std::endl;
++                std::exit(c == 'h' ? 0 : -1);
++        }
++    }
++}
++
++uint32_t init_word(uint32_t i) { return i * 7 + 1; }
++} // namespace
++
++int main(int argc, char** argv) {
++    parse_args(argc, argv);
++    if (delay_sweep == 0) delay_sweep = 1;
++    if (store_sweep == 0) store_sweep = 1;
++
++    vx_device_h dev = nullptr;
++    CHECK(vx_device_open(0, &dev));
++
++    // Fill every warp of every core.
++    uint64_t nt = 0, nw = 0, nc = 0;
++    CHECK(vx_device_query(dev, VX_CAPS_NUM_THREADS, &nt));
++    CHECK(vx_device_query(dev, VX_CAPS_NUM_WARPS,   &nw));
++    CHECK(vx_device_query(dev, VX_CAPS_NUM_CORES,   &nc));
++    const uint32_t num_threads = static_cast<uint32_t>(nt * nw * nc);
++    std::cout << "war_order: words=" << num_words << " threads=" << num_threads
++              << " delay=" << delay_sweep << "x" << delay_step
++              << " store_delay=" << store_sweep << "x" << store_step << std::endl;
++    if (num_words < num_threads) {
++        std::cout << "words (" << num_words << ") must cover one per thread (" << num_threads << ")" << std::endl;
++        return 1;
++    }
++
++    vx_queue_info_t qi = { sizeof(qi), nullptr, VX_QUEUE_PRIORITY_NORMAL, 0 };
++    vx_queue_h q = nullptr;
++    CHECK(vx_queue_create(dev, &qi, &q));
++
++    const uint64_t data_size = uint64_t(num_words) * sizeof(uint32_t);
++
++    vx_module_h mod = nullptr;
++    vx_kernel_h kern = nullptr;
++    CHECK(vx_module_load_file(dev, kernel_file, &mod));
++    CHECK(vx_module_get_kernel(mod, "main", &kern));
++
++    // buffers of their own per launch, all live at once, so every launch
++    // starts on cold lines
++    vx_buffer_h data_bufs[2] = {}, err_bufs[2] = {};
++    for (int lay = 0; lay < 2; ++lay) {
++        CHECK(vx_buffer_create(dev, data_size, VX_MEM_READ_WRITE, &data_bufs[lay]));
++        CHECK(vx_buffer_create(dev, data_size, VX_MEM_READ_WRITE, &err_bufs[lay]));
++    }
++
++    int errors = 0;
++    uint32_t bits = 0;
++    for (int lay = 0; lay < 2; ++lay) {
++        if (layout >= 0 && lay != layout) continue;
++        std::cout << "layout " << lay << (lay ? ": a warp's words contiguous" : ": a line's words in different warps") << std::endl;
++        vx_buffer_h data_buf = data_bufs[lay], err_buf = err_bufs[lay];
++        kernel_arg_t kernel_arg{};
++        kernel_arg.num_words   = num_words;
++        kernel_arg.num_threads = num_threads;
++        kernel_arg.num_warps   = num_threads / static_cast<uint32_t>(nt);
++        kernel_arg.warp_size   = static_cast<uint32_t>(nt);
++        kernel_arg.delay_sweep = delay_sweep;
++        kernel_arg.delay_step  = delay_step;
++        kernel_arg.store_sweep = store_sweep;
++        kernel_arg.store_step  = store_step;
++        kernel_arg.layout      = lay;
++        CHECK(vx_buffer_address(data_buf, &kernel_arg.data_addr));
++        CHECK(vx_buffer_address(err_buf,  &kernel_arg.err_addr));
++
++        // words past the last whole iteration are not touched: their error word
++        // stays at this marker
++        const uint32_t untouched = 0xffffffffu;
++        std::vector<uint32_t> h_data(num_words), h_err(num_words, untouched);
++        for (uint32_t i = 0; i < num_words; ++i) h_data[i] = init_word(i);
++        CHECK(vx_enqueue_write(q, data_buf, 0, h_data.data(), data_size, 0, nullptr, nullptr));
++        CHECK(vx_enqueue_write(q, err_buf, 0, h_err.data(), data_size, 0, nullptr, nullptr));
++
++        uint32_t grid[1], block[1];
++        CHECK(vx_device_max_occupancy_grid(dev, 1, &num_threads, grid, block));
++        if (grid[0] * block[0] != num_threads) {
++            std::cout << "launch of " << grid[0] << "x" << block[0] << " does not cover "
++                      << num_threads << " threads" << std::endl;
++            return 1;
++        }
++
++        vx_launch_info_t li{};
++        li.struct_size = sizeof(li);
++        li.kernel      = kern;
++        li.args_host   = &kernel_arg;
++        li.args_size   = sizeof(kernel_arg);
++        li.ndim        = 1;
++        li.grid_dim[0] = grid[0];
++        li.block_dim[0]= block[0];
++
++        vx_event_h launch_ev = nullptr, read_ev = nullptr;
++        CHECK(vx_enqueue_launch(q, &li, 0, nullptr, &launch_ev));
++        CHECK(vx_enqueue_read(q, h_err.data(), err_buf, 0, data_size, 1, &launch_ev, nullptr));
++        CHECK(vx_enqueue_read(q, h_data.data(), data_buf, 0, data_size, 1, &launch_ev, &read_ev));
++        CHECK(vx_event_wait_value(read_ev, 1, VX_TIMEOUT_INFINITE));
++
++        const uint32_t touched = (num_words / num_threads) * num_threads;
++        for (uint32_t i = 0; i < num_words; ++i) {
++            bool used = (i < touched);
++            uint32_t want_data = used ? (WAR_MARK3 + i) : init_word(i);
++            uint32_t want_err  = used ? 0 : untouched;
++            if (h_data[i] != want_data || h_err[i] != want_err) {
++                if (errors < 16)
++                    std::printf("*** word %u: data=0x%x (expected 0x%x) err=0x%x\n", i, h_data[i], want_data, h_err[i]);
++                if (used && h_err[i] != untouched) bits |= h_err[i];
++                ++errors;
++            }
++        }
++
++        vx_event_release(read_ev);
++        vx_event_release(launch_ev);
++    }
++    for (int lay = 0; lay < 2; ++lay) {
++        vx_buffer_release(err_bufs[lay]);
++        vx_buffer_release(data_bufs[lay]);
++    }
++
++    vx_kernel_release(kern);
++    vx_module_release(mod);
++    vx_queue_release(q);
++    vx_device_dump_perf(dev, stdout);
++    vx_device_release(dev);
++
++    if (errors) {
++        std::printf("Found %d errors (error bits 0x%x)!\nFAILED!\n", errors, bits);
++        return 1;
++    }
++    std::cout << "PASSED!" << std::endl;
++    return 0;
++}
+--- /dev/null
++++ b/tests/regression/war_order/Makefile
+@@ -0,0 +1,16 @@
++ROOT_DIR := $(realpath ../../..)
++include $(ROOT_DIR)/config.mk
++
++PROJECT := war_order
++
++SRC_DIR := $(VORTEX_HOME)/tests/regression/$(PROJECT)
++
++SRCS := $(SRC_DIR)/main.cpp
++
++VX_SRCS := $(SRC_DIR)/kernel.cpp
++
++OPTS ?= -n65536
++
++KERNEL_LIB := vortex2
++
++include ../common.mk

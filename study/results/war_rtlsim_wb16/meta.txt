@@ -1,0 +1,6 @@
+name=war_rtlsim_wb16
+src_rev=
+src_dirty=0
+host=atl1-1-03-003-11-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16
+blackbox=--driver=rtlsim --app=war_order --perf=4 --cores=1

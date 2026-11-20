@@ -1,0 +1,8 @@
+name=mt_bw_b32_k22
+src_rev=a7b9d8a9d83bae12245178cdcc1f31a5db34807c
+src_dirty=15
+host=atl1-1-02-018-24-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200s --cores=22 --args=-n256 -r1 -p0 -u4 -b32
+rc=0
+wall_s=401

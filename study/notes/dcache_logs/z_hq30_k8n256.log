@@ -1,0 +1,4 @@
+cores=1 warps=64 threads=32 grid=64 steps=256 pattern=coalesced unroll=8 bytes=2097152
+PERF: core0: dcache: reqs=78409, miss_r=75742 (hit=1%), miss_w=1536 (hit=0%), evicts=0, bank_st=27827 (utility=74%)
+PERF: instrs=111296, cycles=63548, IPC=1.751
+PASSED!

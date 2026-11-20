@@ -1,0 +1,8 @@
+name=cal3_p512_k33
+src_rev=ba00007ab095bcfd4761425bf5e90323a8df6246
+src_dirty=4
+host=atl1-1-02-005-1-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=64 -DVX_CFG_L2_NUM_BANKS=64 -DVX_CFG_DCACHE_MSHR_SIZE=512 -DVX_CFG_LSU_PENDING_LIMIT=512 -DVX_CFG_LSU_PENDING_SIZE=512
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200q --cores=33 --args=-n256 -r1 -p0 -u8
+rc=0
+wall_s=817

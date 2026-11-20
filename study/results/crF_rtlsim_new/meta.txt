@@ -1,0 +1,8 @@
+name=crF_rtlsim_new
+src_rev=
+src_dirty=0
+host=atl1-1-03-002-7-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=rtlsim --app=corun --perf=1 --profile=h200s --cores=1 --args=-b0 -i1024 -g64
+rc=0
+wall_s=23656

@@ -1,0 +1,8 @@
+name=gr_g10v4_gemm_k1
+src_rev=
+src_dirty=0
+host=atl1-1-03-003-9-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DEXP_GRAN=10 -DEXP_VISIT=4 -DMTILES=1 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_decode --perf=7 --profile=h200s --cores=1 --args=-m16 -n1024 -k4096
+rc=0
+wall_s=250
