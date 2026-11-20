@@ -20,14 +20,15 @@ reviewed, both simulators).
 | 6 | Core limits that hold the compute roof | config | profile values; rtlsim 118,350 -> 35,006 (SimX 118,418 -> 33,419) | defaults vs profile-only |
 | 7 | Smaller findings | notes | see below | |
 | 8 | **DXA workers per SM scale with the number of SMs simulated** | **bug** (config + stale doc) | found; profile works around it | report; pick the per-SM count |
-| 9 | **SimX dcache returns a younger store's data to an older load** | **bug** (wrong results) | fixed on fork dab77b7f2 + 51a4cce00, test `war_order`, reviewed twice | run `war_order` on rtlsim; CI case |
+| 9 | **SimX dcache returns a younger store's data to an older load** | **bug** (wrong results) | fixed on fork dab77b7f2 + 51a4cce00, test `war_order`, reviewed twice; rtlsim passes `war_order` (write-back 16x16: 1,296,287 cycles, SimX 1,295,606) | h200s-size rtlsim run (running); CI case |
 | 10 | **SimX replays a forwarded fill on a full response queue; RTL holds** | **bug** (SimX/RTL divergence, timing) | fixed on fork cbc696a98 behind a knob; rtlsim 20,570 vs SimX 20,266 / 25,824 | make it the default |
 | 11 | **Runtime: device address can alias a CP host region** | **bug** (crash or silent corruption) | fixed on fork b974a9e98 (simx), 51a4cce00 (rtlsim) | foldsim, firesim |
 | 12 | **DXA memory tag too narrow for more in-flight slots** | **bug** (RTL does not elaborate) | fixed on fork 348263623, rtlsim builds and passes | review |
 | 13 | **rtlsim stops at time 0 on H100-shaped profiles with WGMMA** (`VX_tcu_bbuf.sv` wants LMEM banks 32, profiles set 16) | **bug** (RTL/profile mismatch) | found; rtlsim runs disable WGMMA | fix comes with 14 |
 | 14 | wgmma throughput: one shared B buffer puts the four tensor blocks in lockstep | performance | SimX patch `wgmma_tbuf.patch` (340 -> 1,326..2,989 FLOPs/cycle); not on fork | port count decision; RTL |
-| 15 | FIFO L2 makes disjoint SMs slow each other | calibration | measured; pseudo-LRU removes it | decision |
+| 15 | FIFO L2 makes disjoint SMs slow each other | calibration | pseudo-LRU set in `h200s` (9c27e289a) | propose as a default? |
 | 16 | L1 dcache and shared memory both at full size (484 KB vs the part's 256 KB pool) | profile accuracy | found, in every profile from Volta on | decide the split |
+| 17 | Tensor memory (`upstream/feature/tmem-dataflow`) as the way to the part's FLOPs | to evaluate | not on `master`, not on the fork | merge into a copy and measure with `tcu_roof` |
 
 Issue texts in English for 9, 10, 11: `upstream-issue-drafts.md`. Upstream `master` checked at ccf811e11 (2026-11-20): the affected files are unchanged there.
 
@@ -36,173 +37,119 @@ Issue texts in English for 9, 10, 11: `upstream-issue-drafts.md`. Upstream `mast
 ## 1. DRAM model
 
 **Problem.** With the stock model the memory delivers far less than its nominal
-bandwidth once many SMs read at once, and a GEMM slows down per SM as SMs are
-added. On the quarter-H200 shape 33 SMs streaming reached 16-22% of the peak;
-it only reached the peak after the channel count was raised eightfold, which is
-not the part. A decode GEMM took +33% kernel time at 11 SMs and +113% at 22.
+bandwidth once many SMs read at once (33 SMs streaming on a quarter H200:
+16-22% of the peak), and a decode GEMM slows down per SM as SMs are added
+(+33% at 11 SMs, +113% at 22).
 
 **Causes found, each measured on `h200s`.**
 
 | Cause | Stock | Changed to | Evidence |
 |---|---|---|---|
 | Channel shape | one 128-bit channel per pair of HBM3 channels, 9375 MT/s | 64-bit channel, two 32-bit pseudo-channels, 32 B burst = BL8, 6250 MT/s (new type `HBM3E`) | JESD238B.01: 64 DQ per channel, 256-bit prefetch per PC, BL8 |
-| Scheduler window | Ramulator's `ReqBuffer::max_size = 32` per channel, with an unbounded FIFO in front | 256 | 22-SM stream: 382 GB/s at 32, 588 at 128, 621 at 256, 636 at 512. At 32, 74% of enqueue attempts were refused and a row activation served 77 B. Little's law at 45 GB/s per channel and ~72 ns residency gives ~100 entries. Accel-Sim uses 64 (QV100/A100) and 128 (H100/H200) |
-| Banks | 16 per pseudo-channel, 4 groups | 32 per pseudo-channel, 8 groups of 4 | JESD238B.01 Table 4/5: 16 x (stack-ID count) banks per PC; a 24 Gb x 8-high stack (12 Gb per channel) has 32. 22-SM stream at window 32: 382 -> 522 GB/s; 64 banks no further gain |
-| Same-group read spacing | 4 model clocks (1.28 ns) | tCCDL = max(4 nCK, 2.5 ns) = 2.56 ns | JESD238B.01 Table 93. Effect measured: under 2% |
-| Channel interleave | one 64 B line per channel, in order; 128 B per bank visit | 1 KB per channel, channel and bank chosen together by a hash of the address bits above them | see below |
+| Scheduler window | Ramulator's `ReqBuffer::max_size = 32` per channel (a constant) | 256 | 22-SM stream: 382 GB/s at 32, 588 at 128, 621 at 256, 636 at 512. At 32, 74% of enqueue attempts were refused. Little's law gives ~100 entries |
+| Banks | 16 per pseudo-channel, 4 groups | 32 per pseudo-channel, 8 groups of 4 | JESD238B.01 Table 4/5: 16 x (stack-ID count) banks per PC; a 24 Gb x 8-high stack has 32. At window 32: 382 -> 522 GB/s; 64 banks no further gain |
+| Same-group read spacing | 4 model clocks (1.28 ns) | tCCDL = max(4 nCK, 2.5 ns) | JESD238B.01 Table 93. Under 2% |
+| Channel interleave | one 64 B line per channel, in order | 1 KB per channel, channel and bank chosen together by a hash of the upper address bits | below |
 
-**Interleave.** A 1 KB unit puts a contiguous 1 KB in one row of one bank.
-Without mixing all streams land on one channel at a time (11-SM stream 425 ->
-200 GB/s). Mixing channel and bank separately used half the banks. A joint mix
-(`(chunk ^ hash(chunk >> bits)) & mask`, a bijection per block of
-channels x banks KB) uses all banks; figure `mapping_distribution.png`. The
-1 KB unit itself comes from someone's reading of the GPU's driver, not from a
-document; Accel-Sim uses 256 B (`dramid@8`) with a hashed channel index. Call
-it a calibrated value in a PR.
+**Interleave.** A 1 KB unit keeps a contiguous 1 KB in one row of one bank.
+Without mixing, all streams land on one channel at a time (11-SM stream
+425 -> 200 GB/s); mixing channel and bank separately used half the banks; a
+joint mix (`(unit ^ hash(upper bits)) & mask`, a bijection per block) uses all
+of them. The 1 KB unit comes from someone's reading of the GPU's driver, not
+from a document (Accel-Sim uses 256 B): call it a calibrated value.
 
-**Results with window 256, 32 banks, tCCDL per spec (`h200s`).**
+**22-SM stream, window 256, 32 banks, GB/s (peak 800; a real H200 reaches 90%).**
 
-Streaming, 22 SMs, GB/s (peak 800; a real H200 reaches 90% with every SM):
-
-| Interleave | warp reads its own contiguous stream | CUDA-shaped (item 2) |
+| Interleave | warp reads its own stream | CUDA block shape (item 2) |
 |---|---|---|
 | 64 B (stock mapping) | 660 | 493 |
 | 256 B + joint mix | 643 | 706 |
 | 1 KB + joint mix | 408 | 708 |
 
-Decode GEMM kernel time against 1 SM (`gemm_decode -m16 -k4096`, 1024 columns per SM):
+Final profile: stream 714-734 GB/s and DXA copy 728 GB/s at 22 SMs.
 
-| Interleave | 11 SMs | 22 SMs |
-|---|---|---|
-| stock mapping, stock window and banks | +33% | +113% |
-| stock mapping, window 256, 32 banks | +24..26% | pending |
-| 256 B + joint mix | +5.8% | pending |
-| 1 KB + joint mix | +2.4% | pending (16 banks, window 512: +24%) |
+**Not settled.** Row timings (tRCD, tRP, tRAS, tRC, tRRD, tFAW) are vendor
+values, blank in the standard; the model uses 14/14/33/47/4/15 ns and the
+sensitivity is not measured. Ramulator issues one command per clock per
+channel while the standard has separate row and column buses; not measured.
 
-**Not settled.**
-- 22-SM GEMM with the final values.
-- Row timings (tRCD, tRP, tRAS, tRC, tRRD, tFAW) are vendor data-sheet values,
-  blank in the standard. The model uses 14/14/33/47/4/15 ns. Accel-Sim's H200
-  uses about 6/6/14.5/16/1.9 ns; macsim_turbo 42 ns per row switch and tFAW 8.
-  Sensitivity not measured yet.
-- Ramulator issues one command per clock on a channel; the standard has
-  separate row and column command buses. With the model clock at twice CK the
-  slot count matches, so the effect should be small. Not measured (the in-house
-  bank model has the split but also a different scheduler: 300-428 GB/s on the
-  same runs, so it does not isolate this).
-- An SM streams at most ~45 GB/s (a real one 107): its outstanding-miss limits
-  (128 lines) bound it. Separate from the DRAM model but shows in the same plots.
-
-**What a PR needs.**
-- A controller with a configurable window in `third_party/ramulator_ext` (the
-  submodule's `ReqBuffer` size is a constant), plus `VX_CFG_PLATFORM_MEMORY_*`
-  knobs for the window, banks per PC and the interleave unit.
-- The interleave inside `sim/common/dram_sim` so SimX and rtlsim share it; today
-  the experiment patches `sim/simx/mem/memory.cpp` only.
-- Existing profiles keep their behaviour unless they opt in; `h100`/`h200` then
-  need their own before/after numbers.
-- Unit tests in `tests/unittest/dram_sim` for the mapping (bijection, balance)
-  and the window.
-- Likely three PRs: (a) `HBM3E` channel type and bank count, (b) scheduler
-  window, (c) interleave unit and mixing.
-
-**Where things are.** Type `HBM3E` and profile `h200s`: uncommitted in the
-working tree. Window, banks, tCCDL, interleave: `vortex-exp/src_rq` behind
-`EXP_GRAN`, `EXP_VISIT`, `EXP_JOINT`, `EXP_LBG`, `EXP_CCDL` and the `EXP_RQ`
-environment variable. Results: `vortex-exp/results/{s1,gr,bk,rq,fin,blk}_*`.
-The standard's PDF is licensed to the user and must not be committed.
+**As PRs.** (a) `HBM3E` type and bank groups, (b) scheduler window (a
+"Windowed" copy of the controller built by `third_party/Makefile`), (c)
+interleave unit and mixing (`DramSim::Config::locate()`, shared by SimX and
+rtlsim). Existing profiles keep their behaviour unless they opt in (checked
+cycle-identical). The standard's PDF is licensed and must not be committed.
 
 ---
 
 ## 2. Streaming test with a CUDA-shaped access pattern
 
-**Problem.** `bwstream` gave each warp its own contiguous stream. A CUDA kernel
-with a 1024-thread block has neighbouring warps read neighbouring 128 B pieces
-at the same moment, and a warp's successive loads 4 KB apart. The two orders
-rank address mappings oppositely (table in item 1), so a mapping judged with the
-first order is judged wrongly.
+**Problem.** `bwstream` gave each warp its own contiguous stream. In a CUDA
+kernel the warps of a 1024-thread block read neighbouring 128 B pieces at the
+same moment and a warp's next load is 4 KB on. The two orders rank address
+mappings oppositely (table in item 1).
 
-**Change.** `-b W`: W consecutive one-warp CTAs share a slice as the warps of a
-W x 32 thread block would. `-b 1` is the old behaviour. Files:
-`tests/regression/bwstream/{common.h,kernel.cpp,main.cpp}`.
+**Change.** `-b W`: W one-warp CTAs share a slice as the warps of a W x 32
+thread block would; `-b 1` is the old behaviour.
 
-**Verified.** Passes on `h200s` at 2, 11, 22 SMs with `-b 32 -u 4` and `-u 8`.
-With the 1 KB mapping a row activation serves 1023 B at 2 SMs, 589 B at 11,
-177 B at 22.
-
-**Note.** `bwstream`, `bwstream_dxa`, `corun`, `gemm_decode` are all the fork's
-own tests; a PR would introduce the test itself, not only the option.
+**Lesson.** In the own-stream shape, differencing two run lengths is invalid
+(the stream spacing changes with the length): that produced the wrong
+"87 / 105 / 109 GB/s" figures. In the block shape whole-run and differenced
+values agree.
 
 ---
 
-## 3. Decode GEMM test: cooperative load and TMA staging
+## 3. Decode GEMM test `gemm_block`
 
-**What exists upstream.** `sgemm2_tcu` (CTA of several warps copies each tile
-into shared memory), `sgemm_tcu_wg` (wgmma), `sgemm_tcu_wg_dxa` (wgmma + DXA)
-and others. They are general GEMMs: the CTA's warps are laid along M and one
-tensor-core tile is staged per K step. At the decode shape they do not fit:
-`sgemm2_tcu -m16` and `sgemm_tcu_wg_dxa -m16` refuse M ("must be a multiple of
-cta_M" = 32 / 64), and `sgemm_tcu_wg -m16 -n1024 -k4096` passes but takes 20.0 M
-cycles on one SM against 0.66 M for the tests below.
+**What exists upstream.** `sgemm2_tcu`, `sgemm_tcu_wg`, `sgemm_tcu_wg_dxa` are
+general GEMMs; at the decode shape (M = 16) they refuse M or take 30x longer
+(20.0 M cycles on one SM against 0.66 M).
 
-**Change.** `tests/regression/gemm_block` (uncommitted): the CTA's warps are
-laid along N, the weights are staged a K chunk at a time, `-s 0` with coalesced
-loads by the CTA's warps, `-s 1` with the DXA engine and `-d` chunks
-outstanding; `-w` warps per CTA, `-c` K elements per chunk. Same reference
-check and in-kernel timing as `gemm_decode` (the fork's one-warp-per-CTA test).
+**Change.** The CTA's warps are laid along N and the weights staged a K chunk
+at a time: `-s 0` by coalesced loads, `-s 1` by the DXA engine with `-d`
+chunks outstanding. Later additions: two roles split by SM (`-b`), `-r`
+rounds, `-o` one role alone, `-R` weight reuse for the compute role, and
+per-role rates over the window in which both roles run (and over the steady
+window after the first generation of CTAs).
 
-**Verified.** PASSED in both modes on `h200s` at 1 SM (`-m16 -n1024 -k4096`)
-and at 2 SMs (small size). 1 SM, target memory configuration, FP16:
+**Baseline on `h200s`, GB/s per SM.**
 
-| Kernel | Kernel cycles | GB/s per SM | Real H200 |
-|---|---|---|---|
-| `gemm_decode` | 657,166 | 25.3 | |
-| `gemm_block -s0`, 4 KB / 8 KB chunks | 1,037,833 / 972,423 | 16.0 / 17.1 | FP16 cuBLAS 16-20 |
-| `gemm_block -s1`, 4 KB x depth 2 | 665,059 | 25.0 | FP8 TMA+wgmma 29-35 |
+| | 1 SM | 11 | 22 | Real H200 |
+|---|---|---|---|---|
+| loads | 15.9 | 15.0 | 14.2 | FP16 cuBLAS 16-20 |
+| DXA depth 1 | 26.3 | 25.6 | 18.6 | |
+| DXA depth 4 | 27.9 | 29.0 | 22.7 | FP8 TMA 29-35 (half the SMs), 19-21 (all) |
 
-The load mode executes 2.7x the instructions of `gemm_decode` (the copy).
-These DXA numbers used 16 engines per SM; see item 8.
-
-**Open.** 11 and 22 SMs (running). Whether to offer it upstream as a decode
-variant of the existing tests rather than a new test, and whether it should use
-wgmma as `sgemm_tcu_wg_dxa` does.
+**Note.** A multiply of more than two tiles spills 24 loads and 24 stores per
+K step: `mma_sync` pins 24 of the 32 FP registers.
 
 ---
 
 ## 4. DXA dispatch prefers an idle worker
 
-**Problem.** A DXA worker reports ready when its setup stage is idle whether or
-not a transfer runs on it (`hw/rtl/dxa/VX_dxa_setup.sv:84`), and the dispatch
-takes the lowest-numbered ready worker, so a request waits behind a running
-transfer while other workers idle. 16 workers, 64 transfers outstanding: 5.3
-workers running on average, delivery 60-67 GB/s per SM.
+**Problem.** A worker reports ready whenever its setup stage is free, whether
+or not a transfer runs on it, and the dispatch takes the lowest-numbered ready
+worker: a request waits behind worker 0's transfer while others idle.
 
-**Change.** SimX commit `db8fde8f5`: idle workers take requests first. Delivery
-90 GB/s per SM (H200 measured ~101).
+**Change.** Idle workers first, in SimX and in the RTL (`VX_dxa_dispatch.sv`,
+`VX_dxa_core.sv`, `VX_dxa_worker.sv`).
 
-**Before a PR.** The same rule in `VX_dxa_dispatch` (needs each worker's
-transfer-active out of `VX_dxa_worker`), and an engine-bound rtlsim point that
-moves from the old SimX value to the new one. Baseline rtlsim runs
-(`par2_rtlsim_w4`, `_w16`) are still running; SimX gives 49,105 and 41,140
-cycles on the old profile. Until then SimX and RTL differ for more than one
-worker.
+**Verified.** h200s, one SM, 8 workers, `bwstream_dxa -n8`: rtlsim 66,067 ->
+60,307 cycles (-8.7%); SimX 61,767 -> 57,629 (-6.7%).
 
 ---
 
 ## 5. DXA engine on several memory ports
 
-**Problem.** `dxa_gmem_bus_if[1]`: the engine has one of the socket's four ports
-to the L2. Four workers deliver 62 GB/s per SM with one port and 90 with four.
-
-**Change.** SimX commit `89fd86725`, `VX_CFG_DXA_GMEM_PORTS` (default 1).
-
-**Before a PR.** RTL counterpart; area.
+The engine has one of the socket's four L2 ports. One SM, GB/s: 3 workers 65;
+4 workers with 1 / 2 / 4 ports 84 / 90 / 94.5; 8 workers with 1 port 101; 16
+workers 111. A real H200 SM delivers about 101. Chosen: **8 workers, 1 port,
+256 lines in flight**; more ports are not pursued.
 
 ---
 
 ## 6. Core limits that hold the compute roof
 
-Register-only multiply-add kernel, 64 warps, issue width 4 (`corun -b0 -i4096 -g128`):
+Register-only multiply-add kernel, 64 warps, issue width 4:
 
 | Limit | Derived value on the H100 shapes | Set to | IPC |
 |---|---|---|---|
@@ -211,33 +158,27 @@ Register-only multiply-add kernel, 64 warps, issue width 4 (`corun -b0 -i4096 -g
 | Operations between issue and a unit, `VX_CFG_DISPATCH_QUEUE_SIZE` | 4 | 8 | 2.96 |
 | Register-file banks, `VX_CFG_NUM_GPR_BANKS` | 4 | 8 | 3.30 |
 
-The fork sets these in `h200q`/`h200s` only (commits `e113ec0df`, `a7b9d8a9d`).
-For upstream the question is whether the derivation of `FPU_QUEUE_SIZE`
-(`2 * SIMD_WIDTH / NUM_FPU_LANES`) should account for the FMA latency, and
-whether `h100`/`h200` should carry the values. RTL cost of the three not
-measured. Ruled out by measurement: operand collectors, instruction buffer,
-icache banks, integer lanes.
+**rtlsim.** Stock 118,350 cycles (SimX 118,418); all three raised 35,006
+(SimX 33,419): 3.4x in the RTL too.
+
+For upstream: should the derivation of `FPU_QUEUE_SIZE` account for the FMA
+latency, and should `h100`/`h200` carry the values.
 
 ---
 
 ## 7. Smaller findings (notes in `vortex-design-inefficiencies.md`)
 
 - FP operations of one warp are serialized by the FCSR rule
-  (`sim/simx/scoreboard.cpp:63`): writers of the sticky flags wait for each
-  other. One warp 93,864 -> 83,623 cycles without the write-write part; no
-  effect at 64 warps. Low priority.
+  (`sim/simx/scoreboard.cpp`); no effect at 64 warps. Low priority.
 - The `memory: lat=` perf counter wraps on large runs.
 - TLB reach: a decode GEMM over 128 MiB of weights needs `DTLB_SIZE` and
-  `L2_TLB_MEGA_SIZE` of 256 with 2 MB pages (34% hit rate with 64), and the
-  runs need `VORTEX_VM_MEGAPAGE_HEAP=1`.
-- The debug build of SimX does not compile (`__assert` clash in
-  `sim/common/dram_sim.cpp`).
+  `L2_TLB_MEGA_SIZE` of 256 with 2 MB pages, and `VORTEX_VM_MEGAPAGE_HEAP=1`
+  (without it the run measures page walks).
+- The debug build of SimX does not compile (`__assert` clash).
 
 ---
 
-## 8. DXA engines per SM scale with the number of SMs simulated (bug report)
-
-**What.** `VX_config.toml`:
+## 8. DXA workers per SM scale with the number of SMs simulated (bug)
 
 ```
 [dxa]
@@ -245,42 +186,29 @@ icache banks, integer lanes.
 VX_CFG_NUM_DXA_CORES = "expr: max(1, up($VX_CFG_NUM_CORES / 8))"
 ```
 
-The formula entered with the DXA (commit `70ff16385`, 2026-02-21) when the
-engines were a cluster-level pool: one engine per eight cores. Commit
-`7d6950de5` (2026-07-11, "relocate TEX/RTU/DXA into the socket") moved the DXA
-core into every socket (`hw/rtl/VX_socket.sv`, `sim/simx/socket.cpp:211`) and
-did not touch `VX_config.toml`. `VX_CFG_NUM_DXA_CORES` is now the number of
-workers inside each socket's DXA core, still derived from the total core count.
-
-**Effect.** No profile sets the value (`h100` only enables the extension), so
-with one core per socket an SM has 1 worker in a 1- to 8-SM run, 2 in a 22-SM
-run (seen in a run's resolved configuration) and 16 at the H100's 132 SMs. An
-SM's TMA capacity therefore depends on how many SMs the run has, which breaks
-any SM-count scaling experiment, and the comment describes a structure that no
-longer exists. `VX_CFG_DXA_MAX_INFLIGHT` defaults to 8 alongside it.
+The formula dates from when the engines were a cluster-level pool (2026-02).
+Commit `7d6950de5` (2026-07-11) moved the DXA core into every socket and did
+not touch the formula, so the value is now the number of workers inside each
+SM's DXA core, still derived from the total core count: 1 worker at 1-8 SMs,
+2 at 22, 16 at 132. An SM's TMA capacity depends on how many SMs the run has,
+which breaks any SM-count scaling experiment; the comment and
+`docs/designs/dxa_async_copy_multicast.md` describe a structure that no longer
+exists. `VX_CFG_DXA_MAX_INFLIGHT` defaults to 8 beside it (8 -> 6.7 GB/s,
+256 -> 90 GB/s).
 
 **Proposed.** A per-socket count independent of `NUM_CORES`, and a corrected
-comment. For the value: a real H200 SM delivers about 29 GB/s with one 16 KB
-transfer outstanding, 56 with two, 101 with four, and no more with eight (4 KB
-tiles: 27 at four, 29 at eight), which is what four engines that each hold one
-transfer for a memory round trip would give (16 KB / (256 + 660 cycles) =
-35 GB/s each). Being measured on `h200s`: 3, 4 and 8 workers with 1, 2 and 4
-memory ports (`eng_*`).
+comment.
 
-**History of the misreading.** Two days earlier this fork's notes called the
-DXA "a cluster-level shared pool, Virgo-style" from this comment and formula
-without checking where the core is instantiated. That was wrong; the baseline
-"one TMA block per SM, not shared" is what the code has had since July.
-
+**History of the misreading.** This fork's notes first called the DXA "a
+cluster-level shared pool, Virgo-style" from the comment and formula alone.
+Wrong: it has been per SM since July. Check the instantiation, not the comment.
 
 ---
-
-# Added 2026-11-20 (items 9-16)
 
 ## 9. SimX dcache: a younger store overtakes an older load of the same word (bug, wrong results)
 - **Symptom**: `gemm_block` with 16 tiles (M=256), DXA staging: 1-30 of 262,144 outputs off by 1-3%, different ones as the code layout changes. Errors under the host check's 1% tolerance pass silently.
 - **Cause** (`sim/simx/mem/cache.cpp`): a store that hits skips the MSHR chain at admission and is ordered only by an MSHR lookup at the pipe exit. An older same-word load that has left the chain for replay is invisible there, so the store merges first and the replayed load returns its data. Write-back caches have the same hole.
-- **RTL**: orders at S0 (`creq_hit_order_hazard_st0`, `VX_cache_bank.sv:716-738`; `VX_cache_mshr.sv:524-538`). Read, not run.
+- **RTL**: orders at S0 (`creq_hit_order_hazard_st0`, `VX_cache_bank.sv:716-738`; `VX_cache_mshr.sv:524-538`). rtlsim passes `war_order` on the 16x16 write-back configuration (1,296,287 cycles; fixed SimX 1,295,606, 0.05% apart); the h200s-size rtlsim runs are still running.
 - **How it was found**: a shadow checker in the LSU that replays every stack store in program order and compares each load: 8 bad lanes in 49.7 M checks before, 0 after. Cycle-level trace of one event in the agent report (bank 1, line 0x1fefc2b40, cycles 4147016-4147241).
 - **Fix**: decide at admission like the RTL. First attempt (dab77b7f2) deferred at the exit and opened a new hole (a younger load could miss the deferred store's bytes) — caught by independent review and confirmed by a directed test; reworked in 51a4cce00.
 - **Test** `tests/regression/war_order`: 30-point sweep, failures before / first fix / final: h200s 7 / 3 / 0; 16x16 write-back config 3 / 3 / 0. Does not fail on the default 4x4 config.
@@ -316,9 +244,16 @@ without checking where the core is instantiated. That was wrong; the baseline
 ## 15. FIFO L2 and co-running SMs (calibration)
 - All caches default to FIFO replacement. A streaming SM pushes another SM's hot lines out of the shared L2 once per L2 fill.
 - Co-run / solo, compute role: FIFO 0.83-0.98, pseudo-LRU 1.00-1.07 (real H200: 1.00). Solo workloads move at most 1.6% (stream at 11 SMs +2.7%).
+- Set in `h200s` as a calibrated value (the part's policy is not published).
 
 ## 16. L1 dcache + shared memory (profile accuracy)
 - Separate structures, each at full size: 256 KB + 228 KB = 484 KB per SM against the part's 256 KB configurable pool; same pattern in v100, a100, rtx5080 profiles. L1 at 32 KB: load-mode GEMM +1%, DXA-mode +9-18%.
+
+## 17. Tensor memory (`upstream/feature/tmem-dataflow`, to evaluate)
+- Three commits by another contributor (2026-11-15/16), not on `master`: a per-core tensor memory in the style of Blackwell's `tcgen05` (`docs/designs/tensor_memory.md` on that branch). Accumulators live in tensor memory instead of FP registers, one thread issues asynchronous multiplies (`tc.mma`), completion goes to a barrier; `VX_CFG_TCU_TMEM_ENABLE` (default false), `VX_CFG_TCU_TMEM_COLS`.
+- Why it matters here: item 14's limit is that accumulators sit in 32 FP registers, so a tile stops at N = 64 and needs 1.6-4x the operand bytes per FLOP of Hopper's N = 256 tile. With the accumulators in tensor memory the tile width is bounded by the column count (512 in that branch's results), and the B prefetch and the wider N step are part of the branch.
+- Its own results (16 warps, FEDP2K): area +10.6% LUT; GEMM 128x128x512 in 183,529 cycles on rtlsim (SimX 185,767). No FLOPs-per-clock figure for the unit alone.
+- Caveats: a TMEM build has no wgmma; the branch predates this fork's changes. Not merged or measured here.
 
 ## How these were found (for the talk)
 - Rule that produced most of them: match a real H200, never provision above it, and when a number looks wrong test several hypotheses instead of tuning.
