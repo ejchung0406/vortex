@@ -13,7 +13,10 @@
 
 `include "VX_define.vh"
 
-// DXA dispatch: route request+descriptor to first idle worker.
+// DXA dispatch: route request+descriptor to the first ready worker, taking
+// one of the preferred ones (no transfer running) while any is ready. A worker
+// is ready whenever its setup stage is free, so without the preference a
+// request is staged behind worker 0's running transfer while others idle.
 
 module VX_dxa_dispatch import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
     parameter NUM_INPUTS  = 1,
@@ -23,6 +26,7 @@ module VX_dxa_dispatch import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
     input wire clk,
     input wire reset,
     VX_dxa_worker_req_if.slave  req_in  [NUM_INPUTS],
+    input wire [NUM_OUTPUTS-1:0] prefer,
     VX_dxa_worker_req_if.master req_out [NUM_OUTPUTS]
 );
 
@@ -34,6 +38,7 @@ module VX_dxa_dispatch import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
     wire [NUM_OUTPUTS-1:0]             valid_out;
     wire [NUM_OUTPUTS-1:0][DATAW-1:0]  data_out;
     wire [NUM_OUTPUTS-1:0]             ready_out;
+    wire [NUM_OUTPUTS-1:0]             ready_raw;
 
     for (genvar i = 0; i < NUM_INPUTS; ++i) begin : g_inputs
         assign valid_in[i]     = req_in[i].valid;
@@ -44,8 +49,11 @@ module VX_dxa_dispatch import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
     for (genvar i = 0; i < NUM_OUTPUTS; ++i) begin : g_outputs
         assign req_out[i].valid = valid_out[i];
         assign {req_out[i].req_data, req_out[i].desc_data} = data_out[i];
-        assign ready_out[i] = req_out[i].ready;
+        assign ready_raw[i] = req_out[i].ready;
     end
+
+    wire [NUM_OUTPUTS-1:0] ready_pref = ready_raw & prefer;
+    assign ready_out = (|ready_pref) ? ready_pref : ready_raw;
 
     VX_stream_dispatch #(
         .NUM_INPUTS  (NUM_INPUTS),

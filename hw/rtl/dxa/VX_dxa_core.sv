@@ -127,6 +127,7 @@ module VX_dxa_core import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
     assign dispatch_in_if[0].desc_data = desc_read_data;
 
     VX_dxa_worker_req_if worker_req_if[`VX_CFG_NUM_DXA_CORES]();
+    wire [`VX_CFG_NUM_DXA_CORES-1:0] worker_xfer_idle;
 
     VX_dxa_dispatch #(
         .NUM_INPUTS  (1),
@@ -135,6 +136,7 @@ module VX_dxa_core import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
         .clk       (clk),
         .reset     (reset),
         .req_in    (dispatch_in_if),
+        .prefer    (worker_xfer_idle),
         .req_out   (worker_req_if)
     );
 
@@ -172,6 +174,7 @@ module VX_dxa_core import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
             .dxa_perf       (worker_dxa_perf[i]),
         `endif
             .req_if         (worker_req_if[i]),
+            .xfer_idle      (worker_xfer_idle[i]),
             .gmem_bus_if    (worker_gmem_bus_if[i]),
             .smem_bus_if    (worker_smem_bus_if[i])
         );

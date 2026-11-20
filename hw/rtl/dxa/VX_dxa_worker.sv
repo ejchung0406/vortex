@@ -28,6 +28,9 @@ module VX_dxa_worker import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
     output dxa_perf_t dxa_perf,
 `endif
     VX_dxa_worker_req_if.slave req_if,
+    // no transfer is running: a request accepted now starts at once instead
+    // of waiting staged behind the running one
+    output wire xfer_idle,
     VX_mem_bus_if.master gmem_bus_if,
     VX_mem_bus_if.master smem_bus_if
 );
@@ -54,6 +57,7 @@ module VX_dxa_worker import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
 
     // setup → downstream
     wire                        transfer_active;
+    assign xfer_idle = ~transfer_active;
     wire                        pipeline_start;
     dxa_setup_params_t          setup_params;
     wire [NC_WIDTH-1:0]         active_core_id;
