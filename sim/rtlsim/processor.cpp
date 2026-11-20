@@ -145,7 +145,7 @@ public:
 #ifdef AXI_BUS
   Impl() {
 #else
-  Impl() : dram_sim_(DramSim::platform_config()) {
+  Impl() : dram_config_(DramSim::platform_config()), dram_sim_(dram_config_) {
 #endif
     // restart sim time so a re-created model registers at time zero
     timestamp = 0;
@@ -441,9 +441,14 @@ private:
     dram_sim_.tick();
 
     for (int b = 0; b < VX_CFG_PLATFORM_MEMORY_NUM_BANKS; ++b) {
-      if (!dram_queue_[b].empty() && dram_sim_.can_accept(b)) {
+      if (dram_queue_[b].empty())
+        continue;
+      // The DRAM channel the model serves the block from: the port's own with
+      // the plain interleave, the mixed one otherwise (DramSim::Config).
+      auto loc = dram_config_.locate(dram_queue_[b].front()->addr);
+      if (dram_sim_.can_accept(loc.channel)) {
         auto mem_req = dram_queue_[b].front();
-        dram_sim_.send_request(b, mem_req->bank_addr, mem_req->write, [](void* arg)->bool {
+        dram_sim_.send_request(loc.channel, loc.addr, mem_req->write, [](void* arg)->bool {
           // mark completed request as ready
           auto orig_req = reinterpret_cast<mem_req_t*>(arg);
           orig_req->ready = true;
@@ -895,6 +900,7 @@ private:
 
   std::array<bool, VX_CFG_PLATFORM_MEMORY_NUM_BANKS> mem_rd_rsp_ready_;
 
+  DramSim::Config dram_config_;
   DramSim dram_sim_;
 #endif
 

@@ -61,9 +61,8 @@ public:
 		char sname[100];
 		snprintf(sname, 100, "%s-xbar", simobject->name().c_str());
 		mem_xbar_ = MemCrossBar::Create(sname, ArbiterType::RoundRobin, config.num_ports, config.dram.num_channels,
-			[lg2_block_size = log2ceil(config.dram.block_size), num_banks = config.dram.num_channels](const MemCrossBar::ReqType& req) {
-    	// Custom logic to calculate the output index using bank interleaving
-			return (uint32_t)((req.addr >> lg2_block_size) & (num_banks-1));
+			[dram = config.dram](const MemCrossBar::ReqType& req) {
+			return dram.locate(req.addr).channel;
 		});
 		for (uint32_t i = 0; i < config.num_ports; ++i) {
 			simobject->mem_req_in.at(i).bind(&mem_xbar_->ReqIn.at(i));
@@ -86,7 +85,6 @@ public:
 		dram_sim_.tick();
 
 		uint32_t num_banks = config_.dram.num_channels;
-		uint32_t lg2_block_size = log2ceil(config_.dram.block_size);
 		for (uint32_t i = 0; i < num_banks; ++i) {
 			if (mem_xbar_->ReqOut.at(i).empty() || !dram_sim_.can_accept(i))
 				continue;
@@ -128,7 +126,7 @@ public:
 
 			// enqueue the request to the memory system
 			auto req_args = new DramCallbackArgs{this, mem_req, i, rsp_data};
-			uint64_t bank_addr = ((mem_req.addr >> lg2_block_size) / num_banks) << lg2_block_size;
+			uint64_t bank_addr = config_.dram.locate(mem_req.addr).addr;
 			dram_sim_.send_request(
 				i,
 				bank_addr,

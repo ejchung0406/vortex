@@ -32,12 +32,14 @@ namespace dram_timing {
 enum class Standard {
   HBM2,   // HBM2/HBM2E: 128-bit channels of two 64-bit pseudo-channels, 32 B bursts
   HBM3,   // HBM3, a 128-bit channel per pair of 64-bit channels, 32 B bursts
+  HBM3E,  // HBM3/HBM3E per channel: 64 bits, two 32-bit pseudo-channels, 32 B bursts
   GDDR6,  // GDDR6 x16 channels, 32 B bursts, 2 KB pages
 };
 
 inline Standard parse_standard(const std::string& name) {
   if (name == "HBM2") return Standard::HBM2;
   if (name == "HBM3") return Standard::HBM3;
+  if (name == "HBM3E") return Standard::HBM3E;
   if (name == "GDDR6") return Standard::GDDR6;
   throw std::invalid_argument("unknown DRAM standard " + name);
 }
@@ -60,6 +62,19 @@ struct ns_timing_t {
 inline constexpr clock_timing_t hbm_bus_timing[] = {
   {"nBL", 2}, {"nCCDS", 2}, {"nCCDL", 4}, {"nRTW", 3},
 };
+
+// On a 32-bit pseudo-channel the same 32 B burst is BL8: four of these clocks
+// (two of the part's CK, which runs at a quarter of the data rate), which is
+// then also the spacing between column commands to another bank group. Within
+// a bank group JESD238 gives tCCDL = max(4 nCK, 2.5 ns): eight clocks here, or
+// hbm3e_ccdl() where the 2.5 ns is longer.
+inline constexpr clock_timing_t hbm3e_bus_timing[] = {
+  {"nBL", 4}, {"nCCDS", 4}, {"nCCDL", 8}, {"nRTW", 3},
+};
+
+inline const clock_timing_t (&hbm_bus(Standard standard))[4] {
+  return (standard == Standard::HBM3E) ? hbm3e_bus_timing : hbm_bus_timing;
+}
 
 // JEDEC HBM2 array timing as GPGPU-Sim's SM7_QV100 configuration lists it (its
 // JEDEC line, at 1 GHz: RCD=RP=CL=14, RAS=33, RC=47, WR=12, RRD=4, RTPL=4);
@@ -109,11 +124,24 @@ struct geometry_t {
 // GDDR6 x16: 4 x 4 banks, 2 KB rows (64 bursts). Either way a row visit is four
 // bursts (minimalist open page, 128 B). Read-to-write is Ramulator's: HBM's
 // assumes a one-clock write preamble, GDDR6's adds the bus turnaround.
-inline geometry_t geometry(Standard standard) {
-  if (standard == Standard::GDDR6) {
-    return geometry_t{0, 2, 2, 6, 2, false, 4};
+// `bank_groups` (HBM only) is the bank groups per pseudo-channel, four banks
+// each: JESD238 parts have 4, 8, 12 or 16 with the stack height. `visit_bytes`
+// is the run of consecutive bytes kept in one bank before the next.
+inline geometry_t geometry(Standard standard, uint32_t bank_groups = 4, uint32_t visit_bytes = 128) {
+  auto log2u = [](uint32_t v) { uint32_t n = 0; while ((1u << n) < v) ++n; return n; };
+  geometry_t g = (standard == Standard::GDDR6) ? geometry_t{0, 2, 2, 6, 2, false, 4}
+                                               : geometry_t{1, 2, 2, 5, 2, true, 2};
+  if (standard != Standard::GDDR6) {
+    if (bank_groups == 0 || (bank_groups & (bank_groups - 1)) != 0) {
+      throw std::invalid_argument("dram_timing: bank groups must be a power of two");
+    }
+    g.log2_bgs = log2u(bank_groups);
   }
-  return geometry_t{1, 2, 2, 5, 2, true, 2};
+  if (visit_bytes < 32 || (visit_bytes & (visit_bytes - 1)) != 0 || log2u(visit_bytes / 32) > g.log2_row_bursts) {
+    throw std::invalid_argument("dram_timing: a row visit must be a power of two between a burst and a row");
+  }
+  g.log2_visit = log2u(visit_bytes / 32);
+  return g;
 }
 
 // Every device here holds 8 Gb per channel; addresses above alias.
@@ -179,6 +207,12 @@ inline uint32_t get(const clock_timing_t (&bus)[B], const ns_timing_t (&array)[A
 
 } // namespace detail
 
+// HBM3E's column spacing within a bank group, in clocks.
+inline uint32_t hbm3e_ccdl(uint32_t data_rate) {
+  uint32_t floor = jedec_clocks(2.5f, tck_ps(data_rate));
+  return (floor > 8) ? floor : 8;
+}
+
 // The standard's timings at a data rate. A read may precharge its bank tRTP
 // after its column command: HBM's bank-level read-to-precharge is the larger of
 // its short and long forms.
@@ -198,9 +232,10 @@ inline clocks_t clocks(Standard standard, uint32_t data_rate) {
     c.WTRS = g(nullptr, "tWTRS"); c.WTRL = g(nullptr, "tWTRL");
   } else {
     auto g = [&](const char* n, const char* t) {
-      return detail::get(hbm_bus_timing, hbm_array_timing, tck, n, t);
+      return detail::get(hbm_bus(standard), hbm_array_timing, tck, n, t);
     };
     c.BL = g("nBL", nullptr); c.CCDS = g("nCCDS", nullptr); c.CCDL = g("nCCDL", nullptr);
+    if (standard == Standard::HBM3E) c.CCDL = hbm3e_ccdl(data_rate);
     c.CL = g(nullptr, "tCL"); c.CWL = g(nullptr, "tCWL");
     c.RCDRD = g(nullptr, "tRCDRD"); c.RCDWR = g(nullptr, "tRCDWR");
     c.RP = g(nullptr, "tRP"); c.RAS = g(nullptr, "tRAS"); c.RC = g(nullptr, "tRC");

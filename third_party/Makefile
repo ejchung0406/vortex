@@ -27,8 +27,26 @@ $(RAMULATOR_EXT_DIR)/gddr6.o: ramulator/src/dram/impl/GDDR6.cpp | ramulator/libr
 	mkdir -p $(RAMULATOR_EXT_DIR)
 	$(CXX) $(RAMULATOR_EXT_CXXFLAGS) -c $< -o $@
 
-$(RAMULATOR_EXT_DIR)/libramulator-vortex.so: $(RAMULATOR_EXT_DIR)/gddr6.o ramulator/libramulator.so
-	$(CXX) -shared $(filter %.o,$^) -Lramulator -lramulator -o $@
+# Ramulator's generic controller with its read and write buffer sizes as
+# parameters (they are constants there): the same source under another name,
+# registered as "Windowed". The build stops if the source no longer has the
+# lines this rewrites.
+$(RAMULATOR_EXT_DIR)/windowed_controller.cpp: ramulator/src/dram_controller/impl/generic_dram_controller.cpp
+	mkdir -p $(RAMULATOR_EXT_DIR)
+	sed -e 's/GenericDRAMController/WindowedDRAMController/g' \
+	    -e 's/"Generic", "A generic DRAM controller."/"Windowed", "The generic DRAM controller with sized request buffers."/' \
+	    -e '/m_wr_high_watermark = param/a\      m_read_buffer.max_size = param<int>("read_buffer_size").desc("Read requests the scheduler chooses among.").default_val(32);\n      m_write_buffer.max_size = param<int>("write_buffer_size").desc("Write requests the scheduler chooses among.").default_val(32);' \
+	    $< > $@
+	grep -q '"Windowed"' $@ && grep -q 'read_buffer_size' $@ && grep -q 'write_buffer_size' $@
+
+$(RAMULATOR_EXT_DIR)/windowed_controller.o: $(RAMULATOR_EXT_DIR)/windowed_controller.cpp | ramulator/libramulator.so
+	$(CXX) $(RAMULATOR_EXT_CXXFLAGS) -c $< -o $@
+
+# Written beside and renamed, so a simulator that has the library loaded keeps
+# the one it started with.
+$(RAMULATOR_EXT_DIR)/libramulator-vortex.so: $(RAMULATOR_EXT_DIR)/gddr6.o $(RAMULATOR_EXT_DIR)/windowed_controller.o ramulator/libramulator.so
+	$(CXX) -shared $(filter %.o,$^) -Lramulator -lramulator -o $@.tmp
+	mv $@.tmp $@
 
 ramulator: ramulator/libramulator.so $(RAMULATOR_EXT_DIR)/libramulator-vortex.so
 
@@ -40,7 +58,7 @@ clean:
 	$(MAKE) -C $(SOFTFLOAT_DIR) clean
 	rm -f softfloat.opts
 	rm -rf ramulator/build ramulator/libramulator.so
-	rm -f $(RAMULATOR_EXT_DIR)/*.o $(RAMULATOR_EXT_DIR)/*.so
+	rm -f $(RAMULATOR_EXT_DIR)/*.o $(RAMULATOR_EXT_DIR)/*.so $(RAMULATOR_EXT_DIR)/*.cpp
 	$(MAKE) -C cocogfx clean
 
 .PHONY: all cvfpu softfloat ramulator cocogfx

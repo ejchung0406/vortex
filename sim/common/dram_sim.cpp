@@ -71,7 +71,7 @@ class BankDram : public DramSim::Impl {
 public:
   explicit BankDram(const DramSim::Config& c)
     : sim_(DramBankSim::Config{c.type, c.num_channels, c.block_size, c.core_clock, c.data_rate,
-                               c.latency, c.queue_size, refresh_mode()}) {}
+                               c.latency, c.queue_size, refresh_mode(), c.bank_groups, c.visit_bytes()}) {}
   void reset() override { sim_.reset(); }
   void tick() override { sim_.tick(); }
   bool can_accept(uint32_t channel) const override { return sim_.can_accept(channel); }
@@ -148,12 +148,22 @@ private:
     // Ramulator's 8 Gb organization: 2 pseudo-channels x 4 bank groups x 4
     // banks, 1 KB rows; a 128-bit channel width with the 2n prefetch makes a
     // transaction one 32 B pseudo-channel burst.
-    dram["impl"] = (config.type == Type::HBM3) ? "HBM3" : "HBM2";
-    dram["org"]["preset"] = (config.type == Type::HBM3) ? "HBM3_8Gb" : "HBM2_8Gb";
+    // HBM3E keeps that width as the address granularity only: its 32 B burst
+    // is four clocks (dram_timing::hbm3e_bus_timing), a 64-bit channel's rate.
+    dram["impl"] = (config.type == Type::HBM2) ? "HBM2" : "HBM3";
+    dram["org"]["preset"] = (config.type == Type::HBM2) ? "HBM2_8Gb" : "HBM3_8Gb";
     dram["org"]["density"] = 8192;
     dram["org"]["channel"] = 1;
     dram["org"]["channel_width"] = 128;
-    set_timing(dram["timing"], config.data_rate, dram_timing::hbm_bus_timing, dram_timing::hbm_array_timing);
+    if (config.bank_groups != 4) {
+      // More bank groups at the channel's size: the rows per bank shrink.
+      dram["org"]["bankgroup"] = config.bank_groups;
+      dram["org"]["row"] = (1 << 17) / config.bank_groups;
+    }
+    set_timing(dram["timing"], config.data_rate, dram_timing::hbm_bus(config.type), dram_timing::hbm_array_timing);
+    if (config.type == Type::HBM3E) {
+      dram["timing"]["nCCDL"] = dram_timing::hbm3e_ccdl(config.data_rate);
+    }
   }
 
   static void set_gddr6_device(YAML::Node dram, const Config& config) {
@@ -184,7 +194,16 @@ private:
       set_hbm_device(memory_system["DRAM"], config_);
     }
     auto controller = memory_system["Controller"];
-    controller["impl"] = "Generic";
+    // Ramulator's controller chooses among 32 read and 32 write bursts; the
+    // windowed build of the same controller (third_party/Makefile) takes the
+    // count, which a part fed by thousands of streams needs larger.
+    if (config_.sched_window == 32) {
+      controller["impl"] = "Generic";
+    } else {
+      controller["impl"] = "Windowed";
+      controller["read_buffer_size"] = config_.sched_window;
+      controller["write_buffer_size"] = config_.sched_window;
+    }
     controller["Scheduler"]["impl"] = "FRFCFS";
     // No refresh is modelled: Ramulator's refresh manager refreshes per rank
     // and these devices have no rank level. GPU controllers hide refresh with
@@ -274,7 +293,7 @@ public:
   RamulatorDram(const Config& config)
     : config_(config)
     , channels_(config.num_channels) {
-    auto geometry = dram_timing::geometry(config.type);
+    auto geometry = dram_timing::geometry(config.type, config.bank_groups, config.visit_bytes());
     row_visit_bits_ = geometry.log2_visit;
     bank_bits_ = geometry.bank_bits();
     column_bits_ = geometry.log2_row_bursts;
@@ -366,7 +385,36 @@ DramSim::Config DramSim::platform_config() {
   config.data_rate    = VX_CFG_PLATFORM_MEMORY_DATA_RATE;
   config.latency      = VX_CFG_PLATFORM_MEMORY_LATENCY;
   config.queue_size   = VX_CFG_PLATFORM_MEMORY_QUEUE_SIZE;
+  config.bank_groups  = VX_CFG_PLATFORM_MEMORY_BANK_GROUPS;
+  config.sched_window = VX_CFG_PLATFORM_MEMORY_SCHED_WINDOW;
+  config.interleave   = VX_CFG_PLATFORM_MEMORY_INTERLEAVE_SIZE;
   return config;
+}
+
+DramSim::Config::Location DramSim::Config::locate(uint64_t addr) const {
+  const uint32_t lg_block = log2ceil(block_size);
+  if (!this->mixed()) {
+    uint64_t block = addr >> lg_block;
+    return {uint32_t(block % num_channels), (block / num_channels) << lg_block};
+  }
+  if (!ispow2(interleave) || !ispow2(num_channels)) {
+    throw std::invalid_argument("dram_sim: a mixed interleave needs a power-of-two unit and channel count");
+  }
+  const uint32_t lg_unit = log2ceil(interleave);
+  const uint32_t lg_ch = log2ceil(num_channels);
+  const uint32_t bank_bits = dram_timing::geometry(type, bank_groups, this->visit_bytes()).bank_bits();
+  const uint32_t bits = lg_ch + bank_bits;
+  const uint64_t unit = addr >> lg_unit;
+  const uint64_t up = unit >> bits;
+  const uint64_t cb = (unit ^ ((up * 0x9E3779B97F4A7C15ull) >> (64 - bits))) & ((uint64_t(1) << bits) - 1);
+  // The channel folds its rows onto the bank (dram_addr); folding the block
+  // index here first leaves the hashed bank in place when a unit is a row.
+  uint64_t bank = cb >> lg_ch;
+  for (uint64_t x = up; x != 0; x >>= bank_bits) {
+    bank ^= x & ((uint64_t(1) << bank_bits) - 1);
+  }
+  uint64_t offset = addr & (uint64_t(interleave) - 1) & ~(uint64_t(block_size) - 1);
+  return {uint32_t(cb & (num_channels - 1)), (((up << bank_bits) | bank) << lg_unit) | offset};
 }
 
 static DramSim::Impl* make_backend(const DramSim::Config& config) {

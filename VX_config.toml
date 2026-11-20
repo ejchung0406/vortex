@@ -106,6 +106,17 @@ VX_CFG_PLATFORM_MEMORY_TYPE = "HBM2"
 VX_CFG_PLATFORM_MEMORY_DATA_RATE = "expr: 2 * $VX_CFG_PLATFORM_CLOCK_RATE"
 VX_CFG_PLATFORM_MEMORY_LATENCY = 0
 VX_CFG_PLATFORM_MEMORY_QUEUE_SIZE = 0
+# The DRAM controller and organization the simulators model, simulation-only
+# as the lines above. BANK_GROUPS: bank groups per pseudo-channel of an HBM
+# part, four banks each (4, 8 or 16; JESD238 parts have one set of 16 banks per
+# stack ID). SCHED_WINDOW: the read, and write, bursts a channel's scheduler
+# chooses among (Ramulator's 32). INTERLEAVE_SIZE: bytes of consecutive
+# addresses kept on one channel; one block is the plain interleave, a larger
+# power of two (up to a 1 KB row) is kept whole in one bank's row with the
+# channel and bank mixed by a hash of the address bits above them.
+VX_CFG_PLATFORM_MEMORY_BANK_GROUPS = 4
+VX_CFG_PLATFORM_MEMORY_SCHED_WINDOW = 32
+VX_CFG_PLATFORM_MEMORY_INTERLEAVE_SIZE = "expr: $VX_CFG_PLATFORM_MEMORY_DATA_SIZE"
 # Little's law: the bytes the chip keeps in flight to sustain its peak memory
 # bandwidth (MB/s over MHz is bytes per clock) across the memory latency. The
 # miss-tracking depths derive from it and stay at their floors when the
@@ -580,7 +591,7 @@ VX_CFG_XLEN = [32, 64]
 VX_CFG_FLEN = [32, 64]
 VX_CFG_FPU_TYPE = ["DPI", "DSP", "FPNEW", "STD"]
 VX_CFG_TCU_TYPE = ["DPI", "DSP", "BHF", "TFR", "FPNEW"]
-VX_CFG_PLATFORM_MEMORY_TYPE = ["HBM2", "HBM3", "GDDR6"]
+VX_CFG_PLATFORM_MEMORY_TYPE = ["HBM2", "HBM3", "HBM3E", "GDDR6"]
 
 [[param]]
 VX_CFG_DCACHE_NUM_REQS = "int"

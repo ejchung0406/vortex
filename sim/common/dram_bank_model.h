@@ -81,9 +81,9 @@ public:
     uint32_t bursts      = 2;    // 32 B bursts per request
 
     static Config make(dram_timing::Standard standard, uint32_t data_rate, uint32_t block_size,
-                       Refresh refresh = Refresh::Off) {
+                       Refresh refresh = Refresh::Off, uint32_t bank_groups = 4, uint32_t visit_bytes = 128) {
       Config c;
-      c.geom = dram_timing::geometry(standard);
+      c.geom = dram_timing::geometry(standard, bank_groups, visit_bytes);
       c.t = dram_timing::clocks(standard, data_rate);
       c.bursts = (block_size > dram_timing::kBurstSize) ? block_size / dram_timing::kBurstSize : 1;
       if (c.bursts > (1u << c.geom.log2_visit)) {
@@ -556,6 +556,8 @@ public:
     uint32_t latency;      // core cycles added after a read's data departs
     uint32_t queue_size;   // requests in flight per channel; 0 = unbounded
     DramBankModel::Refresh refresh = DramBankModel::Refresh::Off;
+    uint32_t bank_groups = 4;    // per pseudo-channel (HBM)
+    uint32_t visit_bytes = 128;  // consecutive bytes in one bank
   };
 
   explicit DramBankSim(const Config& cfg) : DramBankSim(cfg, DramBankModel::Config()) {}
@@ -563,7 +565,8 @@ public:
   // `policy` gives the controller's queues, horizon and write policy.
   DramBankSim(const Config& cfg, const DramBankModel::Config& policy)
     : cfg_(cfg)
-    , model_cfg_(DramBankModel::Config::make(cfg.type, cfg.data_rate, cfg.block_size, cfg.refresh)) {
+    , model_cfg_(DramBankModel::Config::make(cfg.type, cfg.data_rate, cfg.block_size, cfg.refresh,
+                                             cfg.bank_groups, cfg.visit_bytes)) {
     model_cfg_.read_queue  = policy.read_queue;
     model_cfg_.write_queue = policy.write_queue;
     model_cfg_.wr_high     = policy.wr_high;
