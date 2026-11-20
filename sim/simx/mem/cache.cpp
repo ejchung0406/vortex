@@ -456,11 +456,10 @@ struct bank_req_t {
   // emit another response — only run sector_merge.
   bool skip_core_rsp;
 
-  // A write-through store admitted while its word still had an undrained
-  // entry in its line's MSHR chain: its line merge must follow that entry's
-  // replay, which may have left the chain for the pipe by the time the store
-  // reaches the pipe exit.
-  bool chain_ordered;
+  // The first pass of a write-through store whose line merge joined its
+  // line's MSHR chain at admission: at the pipe exit it only emits the memory
+  // write and the response.
+  bool merge_queued;
 
   // Fill flavors under lazy fetch: a data-less allocation for a write-miss
   // root, or a refetch of a resident partial sector (merges under its dirty
@@ -509,7 +508,7 @@ struct bank_req_t {
     write = false;
     op = MemOp::LD;
     skip_core_rsp = false;
-    chain_ordered = false;
+    merge_queued = false;
     nodata = false;
     refetch = false;
     refetch_retry = false;
@@ -646,6 +645,24 @@ public:
                      uint64_t addr, uint32_t word_log2) const {
     for (const auto &entry : entries_) {
       if (entry.bank_req.type == bank_req_t::None) {
+        continue;
+      }
+      if (entry.set_id != set_id || entry.addr_tag != addr_tag || entry.sector_id != sector_id) {
+        continue;
+      }
+      if ((entry.bank_req.addr >> word_log2) == (addr >> word_log2)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // True if an undrained write of the (set,tag,sector) chain touches the word
+  // of `addr` (2^word_log2 bytes).
+  bool has_word_write(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id,
+                      uint64_t addr, uint32_t word_log2) const {
+    for (const auto &entry : entries_) {
+      if (entry.bank_req.type == bank_req_t::None || !entry.bank_req.write) {
         continue;
       }
       if (entry.set_id != set_id || entry.addr_tag != addr_tag || entry.sector_id != sector_id) {
@@ -1278,10 +1295,24 @@ private:
       // Write-through stores are exempt: their downstream write must be
       // emitted at the commit stage so same-line stores reach memory in
       // pipeline order (an at-admission emission could overtake an older
-      // store still riding the pipe). The pipe-exit paths order them
-      // correctly and defer only the line merge when a chain is pending, or
-      // was pending on their word here (chain_ordered, below).
+      // store still riding the pipe). A same-word hazard (below) still puts
+      // their line merge in the chain here.
       const bool is_wt_store = (core_req.op == MemOp::ST) && !config_.write_back;
+      // Same-word order hazard, the RTL bank's creq_hit_order_hazard_st0: an
+      // undrained same-word write of the chain, or for a store any undrained
+      // same-word entry. The request joins the chain here, in admission order,
+      // where every younger request's admission probe sees it; deciding at the
+      // pipe exit is too late, as the entries it must follow may have left the
+      // chain for the pipe behind it by then.
+      bool word_hazard = false;
+      if (!is_amo_passthru && mshr_.size() != 0) {
+        uint32_t hz_set_id   = params_.addr_set_id(core_req.addr);
+        uint64_t hz_addr_tag = params_.addr_tag(core_req.addr);
+        uint32_t hz_sector   = params_.addr_sector_id(core_req.addr);
+        word_hazard = (core_req.op == MemOp::ST)
+                    ? mshr_.has_word_reqs(hz_set_id, hz_addr_tag, hz_sector, core_req.addr, config_.W)
+                    : mshr_.has_word_write(hz_set_id, hz_addr_tag, hz_sector, core_req.addr, config_.W);
+      }
       if (!is_amo_passthru && !is_wt_store && mshr_.size() != 0) {
         uint32_t adm_set_id   = params_.addr_set_id(core_req.addr);
         uint64_t adm_addr_tag = params_.addr_tag(core_req.addr);
@@ -1291,7 +1322,7 @@ private:
           bool fill_pending = mshr_.has_pending_fill(adm_set_id, adm_addr_tag, adm_sector, -1);
           bool must_order   = !fill_pending
                            && mshr_.has_ordered_reqs(adm_set_id, adm_addr_tag, adm_sector);
-          if (fill_pending || must_order) {
+          if (fill_pending || must_order || word_hazard) {
             bank_req_t coalesced;
             coalesced.reset();
             coalesced.adm_seq = adm_seq_ctr_++;
@@ -1348,17 +1379,27 @@ private:
       bank_req.op      = core_req.op;
       bank_req.data    = core_req.data;
       bank_req.byteen  = core_req.byteen;
-      // A write-through store skips the admission join above, but its line
-      // merge keeps the order it has here behind any undrained same-word
-      // chain entry (the RTL bank demotes such a hit to a chained miss at S0).
-      if (is_wt_store && mshr_.size() != 0) {
-        bank_req.chain_ordered = mshr_.has_word_reqs(params_.addr_set_id(core_req.addr),
-                                                     params_.addr_tag(core_req.addr),
-                                                     params_.addr_sector_id(core_req.addr),
-                                                     core_req.addr, config_.W);
-      }
       bank_req.amo_cmp = core_req.amo_cmp;
       bank_req.flags   = core_req.flags;
+      // A write-through store with a same-word hazard keeps its memory write
+      // and response at the pipe exit, in pipeline order with the other
+      // stores, and its line merge joins the chain now, as the RTL bank's
+      // demoted store does at S0. It counts as a write miss there too.
+      if (is_wt_store && word_hazard) {
+        uint32_t set_id    = params_.addr_set_id(core_req.addr);
+        uint64_t addr_tag  = params_.addr_tag(core_req.addr);
+        uint32_t sector_id = params_.addr_sector_id(core_req.addr);
+        bank_req_t merge_req = bank_req;
+        merge_req.skip_core_rsp = true;
+        assert(!mshr_.full());
+        int id = mshr_.enqueue(merge_req, set_id, addr_tag, sector_id);
+        if (!mshr_.has_pending_fill(set_id, addr_tag, sector_id, id)) {
+          mshr_.defer_to_replay(id);
+        }
+        DT(3, this->name() << " mshr-coalesce@admission (wt-merge): " << merge_req);
+        bank_req.merge_queued = true;
+        ++perf_stats_.write_misses;
+      }
       pipe_req_->push(bank_req);
       DT(3, this->name() << " core-req: " << core_req);
       // pending_mshr_size_ tracks Core-typed in-flight requests so the
@@ -1978,6 +2019,20 @@ private:
       uint32_t sector_id = params_.addr_sector_id(bank_req.addr);
       auto &set          = sets_.at(set_id);
 
+      if (bank_req.merge_queued) {
+        // its line merge is in the chain since admission
+        if (!this->emitWritethrough(set_id, addr_tag, sector_id,
+                                    bank_req.addr, bank_req.hart_id, bank_req.uuid,
+                                    bank_req.data, bank_req.byteen,
+                                    need_core_rsp(bank_req), bank_req.req_tag)) {
+          return;
+        }
+        --pending_mshr_size_;
+        this->pipeLineErase(set_id, addr_tag);
+        pipe_req_->pop();
+        return;
+      }
+
       int32_t free_id = -1, repl_id = 0;
       // Pure tag match — no LRU mutation here. update_lru() commits below,
       // after all stall checks pass, otherwise PLRU drifts on retry.
@@ -1992,17 +2047,18 @@ private:
 
       if (hit_id != -1) {
         // Hit while a same-(set,tag,sector) chain still carries a write or
-        // atomic: proceeding would overtake accesses a younger request must
-        // stay ordered behind. Defer into the replay stream and let seq
-        // order decide. A pure-load chain imposes no such ordering — the
-        // line is resident, so the hit completes ahead of the drain.
-        // Write-through stores keep their immediate memory write +
-        // response and defer only the line merge.
+        // atomic (for a load), or an entry of the same word (for a store):
+        // proceeding would overtake accesses a younger request must stay
+        // ordered behind. Defer into the replay stream and let seq order
+        // decide. A pure-load chain imposes no such ordering on a load, nor
+        // a chain of other words on a store — the line is resident, so the
+        // hit completes ahead of the drain. Write-through stores keep their
+        // immediate memory write + response and defer only the line merge.
         uint32_t chain_root = 0;
-        if ((mshr_.lookup(set_id, addr_tag, sector_id, &chain_root)
-          && (mshr_.has_ordered_reqs(set_id, addr_tag, sector_id)
-           || bank_req.write || memop_is_atomic(bank_req.op)))
-         || (bank_req.chain_ordered && bank_req.write && !config_.write_back)) {
+        if (mshr_.lookup(set_id, addr_tag, sector_id, &chain_root)
+         && ((!bank_req.write && mshr_.has_ordered_reqs(set_id, addr_tag, sector_id))
+          || (bank_req.write && mshr_.has_word_reqs(set_id, addr_tag, sector_id, bank_req.addr, config_.W))
+          || memop_is_atomic(bank_req.op))) {
           if (bank_req.write && !config_.write_back) {
             if (!this->emitWritethrough(set_id, addr_tag, sector_id,
                                         bank_req.addr, bank_req.hart_id, bank_req.uuid,
@@ -2027,6 +2083,9 @@ private:
             }
             DT(3, this->name() << " mshr-defer: " << bank_req);
           }
+          // a hit demoted to a chained miss counts as a miss, as in the RTL bank
+          if (bank_req.write) ++perf_stats_.write_misses;
+          else                ++perf_stats_.read_misses;
           --pending_mshr_size_;
           this->pipeLineErase(set_id, addr_tag);
           pipe_req_->pop();
