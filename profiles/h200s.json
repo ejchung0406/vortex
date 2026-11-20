@@ -1,0 +1,43 @@
+{
+  "name": "h200s",
+  "extends": "h200",
+  "description": "A sixth of the H200 (h200): 22 of its SMs on one of its six HBM3e stacks, modelled channel by channel (16 64-bit channels at 6.25 Gb/s per pin, 800 GB/s), and a sixth of its L2, so every per-SM ratio is the part's. The study shape for memory-bandwidth experiments.",
+  "core": {
+    "VX_CFG_DCACHE_MSHR_SIZE": 128,
+    "VX_CFG_LSU_PENDING_LIMIT": 128,
+    "VX_CFG_DTLB_SIZE": 256,
+    "VX_CFG_FPU_QUEUE_SIZE": 16,
+    "VX_CFG_DISPATCH_QUEUE_SIZE": 8,
+    "VX_CFG_NUM_GPR_BANKS": 8
+  },
+  "chip": {
+    "VX_CFG_NUM_CORES": 22,
+    "VX_CFG_L2_SIZE": 8650752,
+    "VX_CFG_L2_NUM_WAYS": 33,
+    "VX_CFG_L2_NUM_BANKS": 16,
+    "VX_CFG_L2_TLB_MEGA_SIZE": 256
+  },
+  "platform": {
+    "VX_CFG_PLATFORM_MEMORY_TYPE": "HBM3E",
+    "VX_CFG_PLATFORM_MEMORY_NUM_BANKS": 16,
+    "VX_CFG_PLATFORM_MEMORY_DATA_RATE": 6250,
+    "VX_CFG_PLATFORM_MEMORY_PEAK_BW": 800000,
+    "VX_CFG_PLATFORM_MEMORY_BANK_GROUPS": 8,
+    "VX_CFG_PLATFORM_MEMORY_SCHED_WINDOW": 256,
+    "VX_CFG_PLATFORM_MEMORY_INTERLEAVE_SIZE": 1024
+  },
+  "reference": {
+    "fp32_lanes": 2816,
+    "dram_bandwidth_gbs": 800
+  },
+  "sources": {
+    "NUM_CORES": "132 SMs / 6 = 22",
+    "PLATFORM_MEMORY_TYPE, PLATFORM_MEMORY_NUM_BANKS, PLATFORM_MEMORY_DATA_RATE, PLATFORM_MEMORY_PEAK_BW": "One HBM3e stack as it is: 16 channels of 64 bits (two 32-bit pseudo-channels each). The H200's 4.8 TB/s over 6 stacks x 1024 pins is 6.25 Gb/s per pin, so a channel is 8 B x 6.25 GT/s = 50 GB/s and the stack 800 GB/s. h200 models the same memory as 32 128-bit channel pairs at 9375 MT/s for a power-of-two interleave, a third of the part's channels and banks; a sixth of the part needs no such merge because one stack has a power-of-two channel count",
+    "L2_SIZE, L2_NUM_WAYS, L2_NUM_BANKS": "50 MB / 6 = 8.74 MB as 16 banks x 128 sets x 33 ways x 128 B = 8.65 MB",
+    "DCACHE_MSHR_SIZE, LSU_PENDING_LIMIT, DTLB_SIZE, L2_TLB_MEGA_SIZE, FPU_QUEUE_SIZE, DISPATCH_QUEUE_SIZE, NUM_GPR_BANKS": "Per-SM values, as measured for h200q (see its sources)",
+    "reference": "fp32_lanes is 22 SMs x 128; dram_bandwidth_gbs is a sixth of the H200's",
+    "PLATFORM_MEMORY_BANK_GROUPS": "8 groups of 4 banks per pseudo-channel: JESD238B.01 Tables 4 and 5 give 16 banks per stack ID and pseudo-channel, and the 12 Gb channel of a 24 Gb x 8-high stack has two stack IDs. Which stack the H200 carries is not confirmed (16 Gb x 12-high would have 12 groups). Measured, 22 SMs streaming with the scheduler window at 32: 382 GB/s with 4 groups, 522 with 8, 523 with 16",
+    "PLATFORM_MEMORY_SCHED_WINDOW": "256 bursts per channel. With Ramulator's 32 the window of a channel fed by 1408 streams held one burst of each: 74% of the enqueue attempts were refused, a row activation served 77 B and 22 SMs streaming stopped at 382 GB/s of 800; 588 at 128, 621 at 256, 636 at 512. Little's law at 45 GB/s per channel (1.4 bursts/ns) over the ~72 ns a burst stays gives about 100. Accel-Sim's H100/H200 configurations use 128 per narrower channel",
+    "PLATFORM_MEMORY_INTERLEAVE_SIZE": "1 KB, one row of a pseudo-channel, with channel and bank mixed. A calibrated value: the unit is reported from the GPU's driver, not from a document (Accel-Sim uses 256 B with a hashed channel index). Measured with the window at 256 and 8 bank groups, 22 SMs: a CUDA-shaped stream (bwstream -b32) reaches 708 GB/s with 1 KB, 706 with 256 B and 493 with the plain 64 B interleave (a real H200 reaches 90% of its peak with every SM); a decode GEMM's kernel time at 11 SMs is +2% over 1 SM with 1 KB, +6% with 256 B and +25% with the plain interleave. The DXA copy delivers 111 GB/s from one SM (H200 measured about 101) and 662 GB/s from 11"
+  }
+}
