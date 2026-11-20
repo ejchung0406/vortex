@@ -31,6 +31,7 @@ uint32_t rounds  = 1;
 uint32_t grid    = 0;
 uint32_t pattern = BWSTREAM_COALESCED;
 uint32_t unroll  = 1;
+uint32_t block_warps = 1;
 
 vx_device_h device = nullptr;
 vx_buffer_h src_buffer = nullptr;
@@ -43,18 +44,19 @@ kernel_arg_t kernel_arg = {};
 static void show_usage() {
   std::cout << "Vortex streaming-read bandwidth probe." << std::endl;
   std::cout << "Usage: [-n steps] [-r rounds] [-g grid] [-p 0:coalesced|1:rows] "
-               "[-u unroll] [-k kernel] [-h]" << std::endl;
+               "[-u unroll] [-b block warps] [-k kernel] [-h]" << std::endl;
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "n:r:g:p:u:k:h")) != -1) {
+  while ((c = getopt(argc, argv, "n:r:g:p:u:b:k:h")) != -1) {
     switch (c) {
     case 'n': steps   = atoi(optarg); break;
     case 'r': rounds  = atoi(optarg); break;
     case 'g': grid    = atoi(optarg); break;
     case 'p': pattern = atoi(optarg); break;
     case 'u': unroll  = atoi(optarg); break;
+    case 'b': block_warps = atoi(optarg); break;
     case 'k': kernel_file = optarg; break;
     case 'h': show_usage(); exit(0);
     default:  show_usage(); exit(-1);
@@ -109,6 +111,11 @@ int main(int argc, char *argv[]) {
   kernel_arg.steps   = steps;
   kernel_arg.pattern = pattern;
   kernel_arg.unroll  = unroll;
+  if (block_warps == 0 || grid % block_warps != 0) {
+    std::cout << "Error: the grid (" << grid << ") must be a multiple of -b " << block_warps << std::endl;
+    return -1;
+  }
+  kernel_arg.block_warps = block_warps;
 
   // Unwritten device memory reads as one fill value; fetch it to predict the sums.
   float fill = 0.0f;

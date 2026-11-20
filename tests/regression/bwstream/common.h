@@ -12,6 +12,7 @@ typedef struct {
   uint32_t steps;    // loads per thread
   uint32_t pattern;
   uint32_t unroll;   // 1, 2, 4 or 8
+  uint32_t block_warps; // coalesced: warps (CTAs) sharing one slice, 1 = each its own
 } kernel_arg_t;
 
 #endif

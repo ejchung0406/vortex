@@ -5,6 +5,11 @@
 // steps * blockDim.x floats.
 //   coalesced: at step i thread t reads element i * T + t, so a warp reads T
 //              adjacent floats per load.
+//              With block_warps = W, W consecutive CTAs share one slice as
+//              the warps of a W * T thread block would: at step i warp w
+//              reads elements i * W * T + w * T + t, so the W warps read
+//              adjacent pieces of one stripe and a warp's successive loads
+//              are W * T floats apart.
 //   rows:      thread t walks its own contiguous steps floats, one stream per
 //              thread.
 // U independent accumulators let U loads be outstanding before one is used.
@@ -39,12 +44,13 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   uint32_t T = blockDim.x;
   uint32_t t = threadIdx.x;
   uint32_t gid = blockIdx.x * T + t;
-  const float* base = src + (uint64_t)blockIdx.x * steps * T;
+  uint32_t W = (arg->pattern == BWSTREAM_ROWS || arg->block_warps == 0) ? 1 : arg->block_warps;
+  const float* base = src + (uint64_t)(blockIdx.x / W) * W * steps * T + (uint64_t)(blockIdx.x % W) * T;
 
   float s;
   if (arg->pattern == BWSTREAM_ROWS)
     s = sum_unrolled(base + (uint64_t)t * steps, steps, 1, arg->unroll);
   else
-    s = sum_unrolled(base + t, steps, T, arg->unroll);
+    s = sum_unrolled(base + t, steps, W * T, arg->unroll);
   out[gid] = s + (float)(gid + 1);
 }
