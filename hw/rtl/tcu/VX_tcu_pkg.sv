@@ -472,6 +472,14 @@ package VX_tcu_pkg;
     // fragments; a WGMMA at most 16 N steps.
     localparam TCU_TBUF_N_W = `VX_CFG_TCU_TMEM_ENABLED ? 8 : 4;
 
+    // N blocks of dense K-major B a tensor op fetches ahead of the one in use.
+`ifdef VX_CFG_TCU_TMEM_ENABLE
+    localparam TCU_TMEM_B_AHEAD = `VX_CFG_TCU_TMEM_B_AHEAD;
+`else
+    localparam TCU_TMEM_B_AHEAD = 1;
+`endif
+    localparam TCU_TBUF_PF_W = $clog2(TCU_TMEM_B_AHEAD + 1);
+
     // tcu_tbuf_req_t — per-block uop request packed for VX_tcu_tbuf.
     // `valid` is pre-gated to WGMMA and masked by `cta_conflict`.
     typedef struct packed {
@@ -491,7 +499,8 @@ package VX_tcu_pkg;
         logic                       is_first_uop;
         logic                       is_last_uop;
         logic                       setup_fire;
-        logic                       pf_ok;  // the next N block shares this K-tile and descriptor
+        logic [TCU_TBUF_PF_W-1:0]   pf_n;   // N blocks after this one that share its K-tile and
+                                            // descriptor, up to TCU_TMEM_B_AHEAD
 `ifdef VX_CFG_TCU_SPARSE_ENABLE
         logic                       is_sparse;
 `endif

@@ -55,7 +55,7 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     input  wire                     req_valid,
     input  wire                     req_setup,
     input  wire                     req_is_first_uop,
-    input  wire                     req_pf_ok,
+    input  wire [TCU_TBUF_PF_W-1:0] req_pf_n,
     input  wire                     req_is_sparse,
     input  wire [3:0]               req_step_m,
     input  wire [3:0]               req_step_k,
@@ -308,14 +308,22 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     wire bank_row_resident = req_wants_kmajor
         ? (bank_row_resident_kmajor || bank_row_resident_w1)
         : (req_is_sparse ? bank_row_resident_sparse : bank_row_resident_dense);
-    wire need_fetch        = req_valid && !bank_row_resident;
+    // With TCU_TMEM_B_AHEAD above 1 a tensor op's dense K-major B is served
+    // by the ahead fetcher below, and this FSM by every other request.
+    localparam PF_D        = TCU_TMEM_B_AHEAD;
+    localparam bit PF_EN   = TMEM_EN && (PF_D > 1);
+    wire pf_req            = PF_EN && req_valid && req_dense_km;
+    wire pf_rsp;           // the LMEM response belongs to the ahead fetcher
+    wire pf_resident;
+    wire lg_rsp_valid      = tcu_lmem_if.rsp_valid && !pf_rsp;
+    wire need_fetch        = req_valid && !pf_req && !bank_row_resident;
     wire alloc_en          = need_fetch && !slot_fetching_r;
-    wire pf_en = TMEM_EN && req_valid && req_dense_km && req_pf_ok && bank_row_resident_kmajor
+    wire pf_en = TMEM_EN && !PF_EN && req_valid && req_dense_km && (req_pf_n != '0) && bank_row_resident_kmajor
               && !slot_fetching_r && !req_setup && (req_step_n != '1);
     wire [TCU_TBUF_N_W-1:0] fetch_step_n = pf_en ? (req_step_n + TCU_TBUF_N_W'(1)) : req_step_n;
     wire rd_w1 = bank_row_resident_w1 && !bank_row_resident_kmajor;
 
-    assign bbuf_ready = !req_valid || bank_row_resident;
+    assign bbuf_ready = !req_valid || (pf_req ? pf_resident : bank_row_resident);
     wire fire = req_valid && bbuf_ready;
 
     // -----------------------------------------------------------------------
@@ -456,9 +464,9 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
 `endif
     wire can_issue  = in_fetch && (!req_inflight_r || km_pipelined) && km_more_to_request;
     wire km_final_rsp = slot_row_major_r
-                     && tcu_lmem_if.rsp_valid
+                     && lg_rsp_valid
                      && km_row_in_rsp[TCU_TC_N - 1];
-    wire bm_final_rsp = !slot_row_major_r && tcu_lmem_if.rsp_valid;
+    wire bm_final_rsp = !slot_row_major_r && lg_rsp_valid;
     wire last_rsp  = in_fetch && (km_final_rsp || bm_final_rsp);
 
     // Issue address: K-major path uses km_lmem_addr (re-derived per
@@ -467,9 +475,11 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
         slot_row_major_r ? km_lmem_addr
                          : (in_fetch_b ? slot_b_addr_r : slot_a_addr_r);
 
-    assign tcu_lmem_if.req_valid       = can_issue;
+    wire                       pf_rq_valid;
+    wire [BANK_ADDR_WIDTH-1:0] pf_rq_addr;
+    assign tcu_lmem_if.req_valid       = can_issue || pf_rq_valid;
     assign tcu_lmem_if.req_data.rw     = 1'b0;
-    assign tcu_lmem_if.req_data.addr   = active_lmem_addr;
+    assign tcu_lmem_if.req_data.addr   = pf_rq_valid ? pf_rq_addr : active_lmem_addr;
     assign tcu_lmem_if.req_data.data   = '0;
     assign tcu_lmem_if.req_data.byteen = '0;
     assign tcu_lmem_if.req_data.attr   = '0;
@@ -540,9 +550,9 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
                 km_rsp_ctr_r    <= '0;
                 refetched_for_first_uop_r <= 1'b0;
             end else begin
-                if (tcu_lmem_if.rsp_valid)
+                if (lg_rsp_valid)
                     req_inflight_r <= 1'b0;
-                if (tcu_lmem_if.req_valid && tcu_lmem_if.req_ready)
+                if (can_issue && tcu_lmem_if.req_ready)
                     req_inflight_r <= 1'b1;
 
                 if (last_rsp && req_is_first_uop)
@@ -552,11 +562,11 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
 
                 // K-major req/rsp counters advance independently of FSM state
                 // (one outstanding via req_inflight_r unless km_pipelined).
-                if (slot_row_major_r && tcu_lmem_if.req_valid && tcu_lmem_if.req_ready) begin
+                if (slot_row_major_r && can_issue && tcu_lmem_if.req_ready) begin
                     km_req_ctr_r      <= km_req_ctr_next;
                     km_word_off_req_r <= km_word_off_req_next;
                 end
-                if (slot_row_major_r && tcu_lmem_if.rsp_valid && !km_final_rsp) begin
+                if (slot_row_major_r && lg_rsp_valid && !km_final_rsp) begin
                     km_rsp_ctr_r      <= km_rsp_ctr_next;
                     km_word_off_rsp_r <= km_word_off_rsp_next;
                 end
@@ -688,7 +698,7 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
             storage_b_wren  = '1;
             storage_b_wdata = storage_a_rdata;
         end
-        if (tcu_lmem_if.rsp_valid) begin
+        if (lg_rsp_valid) begin
             if (slot_row_major_r && slot_is_sparse_r) begin
                 // K-major sparse: row jj's K dimension is z-major with the two
                 // candidates adjacent, word (z*2 + cand) from its lane. Flat
@@ -756,7 +766,7 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
         .clk   (clk),
         .reset (reset),
         .read  (1'b1),
-        .write (in_fetch_a && tcu_lmem_if.rsp_valid),
+        .write (in_fetch_a && lg_rsp_valid),
         .wren  (storage_a_wren),
         .waddr (1'b0),
         .wdata (storage_a_wdata),
@@ -776,8 +786,8 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
         .reset (reset),
         .read  (1'b1),
         .write (pf_en
-             || (in_fetch_b && tcu_lmem_if.rsp_valid)
-             || (in_fetch_a && tcu_lmem_if.rsp_valid && slot_is_sparse_r
+             || (in_fetch_b && lg_rsp_valid)
+             || (in_fetch_a && lg_rsp_valid && slot_is_sparse_r
                  && (slot_row_major_r || sparse_b_from_a))),
         .wren  (storage_b_wren),
         .waddr (1'b0),
@@ -825,7 +835,255 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
             end
         end
     end
-    assign bbuf_rs2_data = rs2_mux;
+    wire [B_BUF_WORDS-1:0][31:0] pf_rdata;
+    for (genvar lane = 0; lane < TCU_WG_RS2_WIDTH; ++lane) begin : g_rs2_out
+        if (PF_EN && lane < B_BUF_WORDS) begin : g_pf
+            assign bbuf_rs2_data[lane] = pf_req ? `VX_CFG_XLEN'(pf_rdata[lane]) : rs2_mux[lane];
+        end else begin : g_lg
+            assign bbuf_rs2_data[lane] = rs2_mux[lane];
+        end
+    end
+
+    // -----------------------------------------------------------------------
+    // Ahead fetcher (TCU_TMEM_B_AHEAD > 1): a tensor op's dense K-major B.
+    // Block n is requested once the walk is within PF_D blocks of it and goes
+    // to slot n % PF_SLOTS, which the block PF_SLOTS before it has left.
+    // Requests run ahead of the responses, which return in order: each side
+    // keeps its own block, row counter and row offsets.
+    // -----------------------------------------------------------------------
+
+    if (PF_EN) begin : g_pf
+        localparam PF_SLOTS = PF_D + 1;
+        localparam PF_SW    = $clog2(PF_SLOTS);
+        localparam PF_IW    = $clog2(PF_SLOTS * TCU_TC_N + 1);
+
+        logic                       pf_live_r;       // slots belong to the op being walked
+        logic                       pf_first_done_r; // its first step has been taken up
+        logic [BANK_ADDR_WIDTH-1:0] pf_row_base_r;
+        logic [LDM_W-1:0]           pf_ldm_r;
+        logic [KM_OFF_W-1:0]        pf_rq_row0_r, pf_rs_row0_r;
+        logic [KM_OFF_W-1:0]        pf_rq_off_r,  pf_rs_off_r;
+        logic [KM_CTR_W-1:0]        pf_rq_ctr_r,  pf_rs_ctr_r;
+        logic [TCU_TBUF_N_W:0]      pf_rq_n_r;
+        logic [TCU_TBUF_N_W-1:0]    pf_rs_n_r;
+        logic [PF_SW-1:0]           pf_rq_slot_r, pf_rs_slot_r;
+        logic [PF_SLOTS-1:0]        pf_valid_r;
+        logic [PF_SLOTS-1:0][TCU_TBUF_N_W-1:0] pf_tag_r;
+        logic [PF_IW-1:0]           pf_inflight_r;
+
+        // An op's first step flushes the slots: it reloads a stage at the
+        // same address as the op before it.
+        wire pf_start = pf_req && req_is_first_uop && !pf_first_done_r;
+
+        wire [KM_OFF_W-1:0] pf_stride = KM_OFF_W'(TCU_TC_N) * KM_OFF_W'(pf_ldm_r);
+
+        // Row jj of a block is at its row-0 offset plus jj strides; one read
+        // serves the remaining rows that share its bank row.
+        wire  [KM_OFF_W-1:0] pf_rq_row_off [TCU_TC_N];
+        wire  [KM_OFF_W-1:0] pf_rs_row_off [TCU_TC_N];
+        logic [TCU_TC_N-1:0] pf_rq_in, pf_rs_in;
+        logic [KM_CTR_W-1:0] pf_rq_ctr_next, pf_rs_ctr_next;
+        logic [KM_OFF_W-1:0] pf_rq_off_next, pf_rs_off_next;
+        for (genvar jj = 0; jj < TCU_TC_N; ++jj) begin : g_rows
+            assign pf_rq_row_off[jj] = pf_rq_row0_r + KM_OFF_W'(jj) * KM_OFF_W'(pf_ldm_r);
+            assign pf_rs_row_off[jj] = pf_rs_row0_r + KM_OFF_W'(jj) * KM_OFF_W'(pf_ldm_r);
+            assign pf_rq_in[jj] = (KM_CTR_W'(jj) >= pf_rq_ctr_r)
+                               && ((pf_rq_row_off[jj] >> BANK_ROW_WORDS_LOG2) == (pf_rq_off_r >> BANK_ROW_WORDS_LOG2));
+            assign pf_rs_in[jj] = (KM_CTR_W'(jj) >= pf_rs_ctr_r)
+                               && ((pf_rs_row_off[jj] >> BANK_ROW_WORDS_LOG2) == (pf_rs_off_r >> BANK_ROW_WORDS_LOG2));
+        end
+        always_comb begin
+            pf_rq_ctr_next = pf_rq_ctr_r;
+            pf_rs_ctr_next = pf_rs_ctr_r;
+            for (int jj = 0; jj < TCU_TC_N; ++jj) begin
+                if (pf_rq_in[jj]) pf_rq_ctr_next = pf_rq_ctr_next + KM_CTR_W'(1);
+                if (pf_rs_in[jj]) pf_rs_ctr_next = pf_rs_ctr_next + KM_CTR_W'(1);
+            end
+            pf_rq_off_next = pf_rq_off_r;
+            pf_rs_off_next = pf_rs_off_r;
+            for (int jj = 0; jj < TCU_TC_N; ++jj) begin
+                if (KM_CTR_W'(jj) == pf_rq_ctr_next) pf_rq_off_next = pf_rq_row_off[jj];
+                if (KM_CTR_W'(jj) == pf_rs_ctr_next) pf_rs_off_next = pf_rs_row_off[jj];
+            end
+        end
+        wire pf_rq_blk_last = (pf_rq_ctr_next == KM_CTR_W'(TCU_TC_N));
+        wire pf_rs_blk_last = (pf_rs_ctr_next == KM_CTR_W'(TCU_TC_N));
+
+        // Blocks up to req_pf_n past the one the walk is at may be requested.
+        wire [TCU_TBUF_N_W:0] pf_rq_limit = (TCU_TBUF_N_W+1)'(req_step_n) + (TCU_TBUF_N_W+1)'(req_pf_n);
+        assign pf_rq_valid = pf_req && pf_live_r && !pf_start && (pf_rq_n_r <= pf_rq_limit);
+        assign pf_rq_addr  = pf_row_base_r + BANK_ADDR_WIDTH'(pf_rq_off_r >> BANK_ROW_WORDS_LOG2);
+        wire pf_rq_fire    = pf_rq_valid && tcu_lmem_if.req_ready;
+        assign pf_rsp      = tcu_lmem_if.rsp_valid && (pf_inflight_r != '0);
+
+        wire [PF_SW-1:0] pf_rq_slot_next = (pf_rq_slot_r == PF_SW'(PF_SLOTS - 1)) ? '0 : (pf_rq_slot_r + PF_SW'(1));
+        wire [PF_SW-1:0] pf_rs_slot_next = (pf_rs_slot_r == PF_SW'(PF_SLOTS - 1)) ? '0 : (pf_rs_slot_r + PF_SW'(1));
+
+        always_ff @(posedge clk) begin
+            if (reset || req_setup) begin
+                pf_live_r       <= 1'b0;
+                pf_first_done_r <= 1'b0;
+                pf_valid_r      <= '0;
+                pf_inflight_r   <= '0;
+                pf_rq_n_r       <= '0;
+                pf_rs_n_r       <= '0;
+                pf_rq_ctr_r     <= '0;
+                pf_rs_ctr_r     <= '0;
+                pf_rq_slot_r    <= '0;
+                pf_rs_slot_r    <= '0;
+            end else begin
+                if (pf_start) begin
+                    pf_first_done_r <= 1'b1;
+                end else if (fire && !req_is_first_uop) begin
+                    pf_first_done_r <= 1'b0;
+                end
+                if (pf_start) begin
+                    pf_live_r    <= 1'b1;
+                    pf_valid_r   <= '0;
+                    pf_rq_n_r    <= '0;
+                    pf_rs_n_r    <= '0;
+                    pf_rq_ctr_r  <= '0;
+                    pf_rs_ctr_r  <= '0;
+                    pf_rq_slot_r <= '0;
+                    pf_rs_slot_r <= '0;
+                end else begin
+                    if (pf_rq_fire) begin
+                        if (pf_rq_ctr_r == '0) begin
+                            pf_valid_r[pf_rq_slot_r] <= 1'b0;
+                            pf_tag_r[pf_rq_slot_r]   <= pf_rq_n_r[TCU_TBUF_N_W-1:0];
+                        end
+                        if (pf_rq_blk_last) begin
+                            pf_rq_n_r    <= pf_rq_n_r + (TCU_TBUF_N_W+1)'(1);
+                            pf_rq_ctr_r  <= '0;
+                            pf_rq_slot_r <= pf_rq_slot_next;
+                        end else begin
+                            pf_rq_ctr_r  <= pf_rq_ctr_next;
+                        end
+                    end
+                    if (pf_rsp) begin
+                        if (pf_rs_blk_last) begin
+                            pf_valid_r[pf_rs_slot_r] <= 1'b1;
+                            pf_rs_n_r    <= pf_rs_n_r + TCU_TBUF_N_W'(1);
+                            pf_rs_ctr_r  <= '0;
+                            pf_rs_slot_r <= pf_rs_slot_next;
+                        end else begin
+                            pf_rs_ctr_r  <= pf_rs_ctr_next;
+                        end
+                    end
+                end
+                pf_inflight_r <= pf_inflight_r + PF_IW'(pf_rq_fire) - PF_IW'(pf_rsp);
+            end
+        end
+
+        // Descriptor and row offsets (no reset: read only while live).
+        always_ff @(posedge clk) begin
+            if (pf_start) begin
+                pf_row_base_r <= desc_b_row_base;
+                pf_ldm_r      <= desc_b_ldm_words;
+                pf_rq_row0_r  <= KM_OFF_W'(desc_b_inrow);
+                pf_rq_off_r   <= KM_OFF_W'(desc_b_inrow);
+                pf_rs_row0_r  <= KM_OFF_W'(desc_b_inrow);
+                pf_rs_off_r   <= KM_OFF_W'(desc_b_inrow);
+            end else begin
+                if (pf_rq_fire) begin
+                    if (pf_rq_blk_last) begin
+                        pf_rq_row0_r <= pf_rq_row0_r + pf_stride;
+                        pf_rq_off_r  <= pf_rq_row0_r + pf_stride;
+                    end else begin
+                        pf_rq_off_r  <= pf_rq_off_next;
+                    end
+                end
+                if (pf_rsp) begin
+                    if (pf_rs_blk_last) begin
+                        pf_rs_row0_r <= pf_rs_row0_r + pf_stride;
+                        pf_rs_off_r  <= pf_rs_row0_r + pf_stride;
+                    end else begin
+                        pf_rs_off_r  <= pf_rs_off_next;
+                    end
+                end
+            end
+        end
+
+        // A response's rows: row jj's fedpK words from its lane, to
+        // b_off + jj*fedpK + k of the block's slot.
+        logic [TCU_TC_N-1:0][TCU_WG_FEDP_K-1:0][31:0] pf_rot;
+        logic [TCU_TC_N-1:0][TCU_WG_FEDP_K-1:0]       pf_rot_ok;
+        wire [TCU_TC_N-1:0][BANK_ROW_WORDS_LOG2:0] pf_lane;
+        for (genvar jj = 0; jj < TCU_TC_N; ++jj) begin : g_lane
+            assign pf_lane[jj] = (BANK_ROW_WORDS_LOG2+1)'(pf_rs_row_off[jj] & KM_OFF_W'(BANK_ROW_WORDS - 1));
+        end
+        always_comb begin
+            for (int jj = 0; jj < TCU_TC_N; ++jj) begin
+                for (int x = 0; x < TCU_WG_FEDP_K; ++x) begin
+                    pf_rot_ok[jj][x] = (int'(pf_lane[jj]) + x < BANK_ROW_WORDS);
+                    pf_rot[jj][x]    = '0;
+                    for (int i = x; i < BANK_ROW_WORDS; ++i) begin
+                        if (int'(pf_lane[jj]) == i - x)
+                            pf_rot[jj][x] = tcu_lmem_if.rsp_data.data[i * 32 +: 32];
+                    end
+                end
+            end
+        end
+        wire [BUF_OFF_W:0] pf_b_off;
+        if (LG_B_SUB_BLOCKS > 0) begin : g_b_off
+            assign pf_b_off = (BUF_OFF_W+1)'(pf_rs_n_r[LG_B_SUB_BLOCKS-1:0]) << LG_B_BLOCK_WORDS;
+        end else begin : g_b_off_zero
+            assign pf_b_off = '0;
+        end
+        logic [B_BUF_WORDS*32-1:0] pf_wdata;
+        logic [B_BUF_WORDS-1:0]    pf_wren;
+        always_comb begin
+            for (int w = 0; w < B_BUF_WORDS; ++w) begin
+                automatic int sb = w / B_BLOCK_WORDS;
+                automatic int jj = (w % B_BLOCK_WORDS) / TCU_WG_FEDP_K;
+                automatic int k  = w % TCU_WG_FEDP_K;
+                pf_wren[w] = pf_rot_ok[jj][k] && (int'(pf_b_off) == sb * B_BLOCK_WORDS) && pf_rs_in[jj];
+                pf_wdata[w * 32 +: 32] = pf_rot[jj][k];
+            end
+        end
+
+        wire [PF_SLOTS-1:0][B_BUF_WORDS-1:0][31:0] pf_slot_rdata;
+        logic [PF_SLOTS-1:0] pf_hit;
+        for (genvar sl = 0; sl < PF_SLOTS; ++sl) begin : g_slots
+            VX_dp_ram #(
+                .DATAW   (B_BUF_WORDS * 32),
+                .SIZE    (1),
+                .WRENW   (B_BUF_WORDS),
+                .LUTRAM  (1),
+                .OUT_REG (0),
+                .RDW_MODE("W")
+            ) slot_ram (
+                .clk   (clk),
+                .reset (reset),
+                .read  (1'b1),
+                .write (pf_rsp && (pf_rs_slot_r == PF_SW'(sl))),
+                .wren  (pf_wren),
+                .waddr (1'b0),
+                .wdata (pf_wdata),
+                .raddr (1'b0),
+                .rdata (pf_slot_rdata[sl])
+            );
+            assign pf_hit[sl] = pf_valid_r[sl] && (pf_tag_r[sl] == req_step_n);
+        end
+        assign pf_resident = pf_live_r && !pf_start && (|pf_hit);
+        logic [B_BUF_WORDS-1:0][31:0] pf_rdata_mux;
+        always_comb begin
+            pf_rdata_mux = '0;
+            for (int sl = 0; sl < PF_SLOTS; ++sl) begin
+                if (pf_hit[sl]) pf_rdata_mux |= pf_slot_rdata[sl];
+            end
+        end
+        assign pf_rdata = pf_rdata_mux;
+
+        `RUNTIME_ASSERT (~(pf_rsp && in_fetch), ("%s B responses of both fetchers in flight", INSTANCE_ID))
+    end else begin : g_pf_off
+        assign pf_rsp      = 1'b0;
+        assign pf_resident = 1'b0;
+        assign pf_rq_valid = 1'b0;
+        assign pf_rq_addr  = '0;
+        assign pf_rdata    = '0;
+        `UNUSED_VAR (pf_rdata)
+    end
 
     `STATIC_ASSERT (B_KMAJ_SPLIT_SP <= B_BUF_WORDS,
                     ("K-major sparse candidate lanes exceed the two B storage slots"))
@@ -838,7 +1096,7 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     always_comb begin
         km_sp_row_spill = 1'b0;
         for (int jj = 0; jj < TCU_TC_N; ++jj) begin
-            if (tcu_lmem_if.rsp_valid && in_fetch_a && slot_row_major_r && slot_is_sparse_r
+            if (lg_rsp_valid && in_fetch_a && slot_row_major_r && slot_is_sparse_r
              && km_row_in_rsp[jj]
              && (int'(32'(km_row_off[jj] & KM_OFF_W'(BANK_ROW_WORDS - 1))) + 2 * TCU_WG_SP_K_WORDS
                  > (NUM_BANKS * XLEN_RATIO)))
@@ -869,7 +1127,7 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
             // Hit: a request is pending and the resident bank-row already serves
             // it (no LMEM refill triggered). Counts cycles of bbuf reuse — a
             // direct measure of CTA-internal B-tile sharing across warps.
-            if (req_valid && bank_row_resident)
+            if (req_valid && (pf_req ? pf_resident : bank_row_resident))
                 hits_ctr_r <= hits_ctr_r + PERF_CTR_BITS'(1);
             if (tcu_lmem_if.req_valid && tcu_lmem_if.req_ready)
                 reads_ctr_r <= reads_ctr_r + PERF_CTR_BITS'(1);
@@ -894,7 +1152,7 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
             if (tcu_lmem_if.req_valid && tcu_lmem_if.req_ready)
                 `TRACE(3, ("%t: %s bbuf: rd_req addr=0x%0h\n",
                     $time, INSTANCE_ID, tcu_lmem_if.req_data.addr))
-            if (tcu_lmem_if.rsp_valid)
+            if (lg_rsp_valid)
                 `TRACE(3, ("%t: %s bbuf: rd_rsp\n", $time, INSTANCE_ID))
             if (last_rsp)
                 `TRACE(3, ("%t: %s bbuf: bank-row READY\n", $time, INSTANCE_ID))

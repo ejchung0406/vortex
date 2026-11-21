@@ -641,7 +641,7 @@ module VX_tcu_tmem import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     logic             e_m_r;
     logic [7:0]       e_sn_r;
     logic             e_first_r;
-    logic             e_pf_ok_r;
+    logic [TCU_TBUF_PF_W-1:0] e_pf_n_r;
     logic             e_zero_r;
     logic [GW-1:0]    e_g_r;
     logic [UUID_WIDTH-1:0] e_uuid_r;
@@ -694,6 +694,7 @@ module VX_tcu_tmem import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
 
     wire load_m_last = (run_m_r == 1'(M_STEPS - 1));
     wire load_last   = load_m_last && (run_n_r == r_n_last);
+    wire [7:0] n_left = r_n_last - run_n_r;
     assign run_open  = is_mma_run && ~load_last;
     // the op's commits go out with its last step
     wire cmq_room2   = (cmq_count_r + (CMQW+1)'(rj.ncommit)) <= CMQ;
@@ -941,7 +942,7 @@ module VX_tcu_tmem import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
             tr.is_sparse    = e_sparse_r;
         `endif
             tr.is_first_uop = e_first_r;
-            tr.pf_ok        = e_pf_ok_r;
+            tr.pf_n         = e_pf_n_r;
         end
         assign job_data[b] = jd;
         assign tbuf_req[b] = tr;
@@ -1176,7 +1177,8 @@ module VX_tcu_tmem import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
                 end
                 e_b_off_r      <= r_b_off;
                 e_first_r      <= (run_m_r == 1'b0) && (run_n_r == 8'd0);
-                e_pf_ok_r      <= (run_n_r != r_n_last);
+                e_pf_n_r       <= (n_left > 8'(TCU_TMEM_B_AHEAD)) ? TCU_TBUF_PF_W'(TCU_TMEM_B_AHEAD)
+                                                                    : TCU_TBUF_PF_W'(n_left);
                 e_zero_r       <= r_acc_init;
             end else if (job_fire) begin
                 e_valid_r <= 1'b0;
