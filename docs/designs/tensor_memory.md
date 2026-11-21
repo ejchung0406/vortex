@@ -236,4 +236,8 @@ buffer's TMEM-gated code maps slightly differently.
 ## 9. Not covered
 
 - WGMMA and TMEM in one build.
+- The RTL of `VX_CFG_TCU_TMEM_B_AHEAD` above 1 (B fetched more than one N
+  block ahead of the one in use) and of `VX_CFG_TCU_TMEM_A_BANKROW` (row-major
+  A read a bank row at a time). Both are modelled in SimX only; at their
+  defaults SimX and the RTL fetch one block ahead and one A row per read.
 - `.ws`, `cta_group::2`, `shift`, multicast commit.

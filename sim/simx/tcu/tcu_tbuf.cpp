@@ -45,6 +45,7 @@ struct Buffer {
   uint32_t next_tag_ = 0;
   uint64_t reads_ = 0;
   uint32_t max_inflight_ = 1;
+  uint64_t done_ = 0;           // lines returned since the last fill
 
   bool filling() const {
     return !pending_.empty() || !inflight_.empty();
@@ -76,6 +77,7 @@ struct Buffer {
     pending_.clear();
     inflight_.clear();
     lines_.clear();
+    done_ = 0;
   }
 
   void reset() {
@@ -144,6 +146,7 @@ public:
             b.lines_[it->second] = r.data;
           }
           b.inflight_.erase(it);
+          ++b.done_;
           b.rsp_seen_ = true;
           if (!b.filling()) {
             DT(3, simobject_->name() << " " << this->buf_name(source) << ": READY");
@@ -208,6 +211,8 @@ private:
     ++b.reads_;
   }
 
+
+
   std::string buf_name(uint32_t source) const {
     if (source == kBOffset) {
       return "bbuf";
@@ -250,6 +255,7 @@ void TcuTbuf::prefetch_b(std::vector<LmemRead> reads, uint32_t max_inflight) {
 
 bool TcuTbuf::filling_a(uint32_t b) const { return impl_->buf(kAOffset + b).filling(); }
 bool TcuTbuf::filling_b() const           { return impl_->buf(kBOffset).filling(); }
+uint64_t TcuTbuf::done_b() const          { return impl_->buf(kBOffset).done_; }
 
 std::shared_ptr<mem_block_t> TcuTbuf::read_a(uint32_t b, uint64_t line_addr) const {
   return impl_->buf(kAOffset + b).read(line_addr);

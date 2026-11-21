@@ -1328,9 +1328,32 @@ public:
       }
     }
 
+  #ifdef VX_CFG_TCU_TMEM_ENABLE
+    if (VX_CFG_TCU_TMEM_A_BANKROW != 0 && sd_a.ldm != 0 && req.wid >= kJobKeyBase) {
+      return bank_row_reads(std::move(lines));
+    }
+  #endif
     uint32_t num_reads = (sd_a.ldm != 0) ? (wg_cfg::m_steps * cfg::tcM)
                        : sparse_a ? kAStripeReadsSp : kAStripeReads;
     return split_reads(std::move(lines), num_reads);
+  }
+
+  // One read per LMEM bank row the lines touch.
+  static std::vector<TcuTbuf::LmemRead> bank_row_reads(std::vector<uint64_t> lines) {
+    constexpr uint64_t kBankRowBytes = uint64_t(kLmemBanks) * (VX_CFG_XLEN / 8);
+    std::sort(lines.begin(), lines.end());
+    lines.erase(std::unique(lines.begin(), lines.end()), lines.end());
+    std::vector<TcuTbuf::LmemRead> reads;
+    uint64_t prev_row = ~uint64_t(0);
+    for (uint64_t line : lines) {
+      uint64_t row = line / kBankRowBytes;
+      if (row != prev_row) {
+        reads.emplace_back();
+        prev_row = row;
+      }
+      reads.back().push_back(line);
+    }
+    return reads;
   }
 
   // Spread a refill's distinct lines over the hardware's read count.
@@ -1382,6 +1405,8 @@ public:
   static_assert(kTmemCols % kFragCols == 0, "TMEM columns are whole fragment groups");
   static_assert(kFedpWords % kFragCols == 0, "a K step of A from TMEM is whole fragment groups");
   static constexpr uint32_t kTmemReadLatency = 1;
+  static constexpr uint32_t kBAhead = VX_CFG_TCU_TMEM_B_AHEAD;
+  static_assert(kBAhead >= 1, "a tensor op fetches at least one B block ahead");
   static constexpr uint32_t kOpQueue     = 4;    // tc.mma / tc.cp / tc.commit
   static constexpr uint32_t kOpCommits   = 2;    // commits an op carries
   static constexpr uint32_t kCommitQueue = 4;    // commits waiting for their steps
@@ -1459,6 +1484,11 @@ public:
     uint32_t   b_n = 0;
     bool       b1_valid = false;   // the block in use while the next one fills
     uint32_t   b1_n = 0;
+    // B_AHEAD > 1: blocks [0, b_req) are requested and [0, b_avail) resident;
+    // b_cum[k] is the lines requested up to block k.
+    uint32_t   b_req = 0;
+    uint32_t   b_avail = 0;
+    std::vector<uint64_t> b_cum;
     bool       copying = false;
   };
 
@@ -1675,6 +1705,11 @@ public:
   // the op.
   static bool job_b_prefetch(const tj_t& job) {
     return !job.sparse && job.ldb != 0 && job.n + 1 < job.n_frag;
+  }
+
+  // The B layout the step engine prefetches: dense K-major.
+  static bool job_b_prefetch_kind(const tj_t& job) {
+    return !job.sparse && job.ldb != 0;
   }
 
   // A dense K-major block's row reads stay in flight together.
@@ -1957,7 +1992,30 @@ public:
     // Dense K-major B: once the block in use is resident, it moves to a second
     // slot while the next N block fills.
     bool b_was_valid = job.b_valid;
-    if (job.b_fetching) {
+    bool b_deep = (kBAhead > 1) && this->job_b_prefetch_kind(job);
+    if (b_deep) {
+      // Blocks up to kBAhead past the one in use are requested as the walk
+      // frees their slots; a block is resident once all its lines returned.
+      uint32_t before = job.b_avail;
+      while (job.b_avail < job.b_req && tbuf->done_b() >= job.b_cum.at(job.b_avail)) {
+        ++job.b_avail;
+      }
+      landed |= (before <= job.n && job.n < job.b_avail);
+      while (job.b_req < job.n_frag && job.b_req <= job.n + kBAhead) {
+        auto reads = this->b_refill(this->job_req(job, 0, job.b_req));
+        uint64_t lines = job.b_cum.empty() ? 0 : job.b_cum.back();
+        for (auto& r : reads) {
+          lines += r.size();
+        }
+        job.b_cum.push_back(lines);
+        if (job.b_req == 0) {
+          tbuf->fill_b(std::move(reads), kBAhead * this->job_b_inflight(job));
+        } else {
+          tbuf->prefetch_b(std::move(reads), kBAhead * this->job_b_inflight(job));
+        }
+        ++job.b_req;
+      }
+    } else if (job.b_fetching) {
       if (!tbuf->filling_b()) {
         job.b_fetching = false;
         job.b_valid = true;
@@ -1970,7 +2028,7 @@ public:
       job.b_n = job.n;
       job.b1_valid = false;
     }
-    if (b_was_valid && job.b_valid && job.b_n == job.n && this->job_b_prefetch(job)) {
+    if (!b_deep && b_was_valid && job.b_valid && job.b_n == job.n && this->job_b_prefetch(job)) {
       job.b1_valid = true;
       job.b1_n = job.n;
       tbuf->prefetch_b(this->b_refill(this->job_req(job, 0, job.n + 1)), this->job_b_inflight(job));
@@ -1978,7 +2036,8 @@ public:
       job.b_valid = false;
       job.b_n = job.n + 1;
     }
-    bool b_ready = (job.b_valid && job.b_n == job.n) || (job.b1_valid && job.b1_n == job.n);
+    bool b_ready = b_deep ? (job.b_avail > job.n)
+                 : ((job.b_valid && job.b_n == job.n) || (job.b1_valid && job.b1_n == job.n));
 
     // A step presents the cycle after its operands land.
     if (!job.a_valid || !b_ready || landed) {

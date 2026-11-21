@@ -63,6 +63,8 @@ public:
 
   bool filling_a(uint32_t b) const;
   bool filling_b() const;
+  // Lines of the B buffer's reads that have returned since its last fill.
+  uint64_t done_b() const;
 
 #ifdef VX_CFG_TCU_TMEM_ENABLE
   void fill_c(std::vector<LmemRead> reads);

@@ -446,6 +446,13 @@ VX_CFG_TCU_SPARSE_FULLK_ENABLE = "expr: $VX_CFG_TCU_SPARSE_ENABLE and $VX_CFG_TC
 # TMEM_COLS 32-bit columns, written by the TCU's single-thread MMA engine.
 VX_CFG_TCU_TMEM_ENABLE = false
 VX_CFG_TCU_TMEM_COLS = 128
+# N blocks of dense K-major B a tensor op fetches ahead of the one in use; the
+# B buffer holds one more block than that. SimX only above 1: the RTL
+# fetches one ahead.
+VX_CFG_TCU_TMEM_B_AHEAD = 1
+# 1: a tensor op reads row-major A from shared memory a bank row at a time
+# instead of a read per A row. SimX only: the RTL reads per row.
+VX_CFG_TCU_TMEM_A_BANKROW = 0
 
 [dxa]
 # Cluster-level DXA engine count, decoupled from cores/socket size.
