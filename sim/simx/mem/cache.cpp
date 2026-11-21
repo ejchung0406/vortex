@@ -557,10 +557,22 @@ struct mshr_entry_t {
   }
 };
 
+// The MSHR keeps its entries in a fixed table, as the hardware does, and
+// indexes them for the simulator's queries: every query of the bank is about
+// one (set,tag,sector) chain or about the oldest ready replay, so the
+// entries of each chain are listed by index under the chain's key, the free
+// slots are a bit set searched lowest-first, and the ready replays are a heap
+// ordered by (seq, index). Each query returns what a scan of the table in
+// index order returns.
 class MSHR {
 public:
   MSHR(uint32_t size)
-      : entries_(size), ready_reqs_(0), size_(0) {}
+      : entries_(size), free_((size + 63) / 64, 0), heap_pos_(size, -1),
+        ready_reqs_(0), size_(0) {
+    heap_.reserve(size);
+    chain_map_.reserve(2 * size);
+    this->reset_index();
+  }
 
   uint32_t capacity() const {
     return entries_.size();
@@ -590,17 +602,16 @@ public:
   // Returns true if there is an active pending request for the given
   // set/tag/sector. Coalescing is per-sector: a fill installs one sector, so
   // only same-sector misses share it (different-sector misses to the same line
-  // each get their own fill). If true, optionally returns the root entry id.
+  // each get their own fill). If true, optionally returns the root entry id
+  // (the chain's lowest entry index).
   bool lookup(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id, uint32_t *root_id = nullptr) const {
-    for (uint32_t i = 0, n = entries_.size(); i < n; ++i) {
-      const auto &entry = entries_.at(i);
-      if (entry.bank_req.type != bank_req_t::None && entry.set_id == set_id && entry.addr_tag == addr_tag && entry.sector_id == sector_id) {
-        if (root_id)
-          *root_id = i;
-        return true;
-      }
+    const chain_t *chain = this->find_chain(set_id, addr_tag, sector_id);
+    if (chain == nullptr) {
+      return false;
     }
-    return false;
+    if (root_id)
+      *root_id = chain->ids.front();
+    return true;
   }
 
   // True if any matching entry OTHER than exclude_id is still Core-typed,
@@ -608,16 +619,19 @@ public:
   // fill-pending chain (a plain enqueue will be marked by the fill) from a
   // draining chain (a new entry must be marked ready via defer_to_replay).
   bool has_pending_fill(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id, int exclude_id) const {
-    for (int i = 0, n = (int)entries_.size(); i < n; ++i) {
-      if (i == exclude_id) {
-        continue;
-      }
-      const auto &entry = entries_.at(i);
-      if (entry.bank_req.type == bank_req_t::Core && entry.set_id == set_id && entry.addr_tag == addr_tag && entry.sector_id == sector_id) {
-        return true;
+    const chain_t *chain = this->find_chain(set_id, addr_tag, sector_id);
+    if (chain == nullptr) {
+      return false;
+    }
+    uint32_t num_core = chain->num_core;
+    if (exclude_id >= 0 && exclude_id < (int)entries_.size()) {
+      const auto &entry = entries_.at(exclude_id);
+      if (entry.bank_req.type == bank_req_t::Core && entry.set_id == set_id
+       && entry.addr_tag == addr_tag && entry.sector_id == sector_id) {
+        --num_core;
       }
     }
-    return false;
+    return num_core != 0;
   }
 
   // True if any matching entry carries ordering weight for a later plain
@@ -625,32 +639,20 @@ public:
   // an atomic needs its whole round-trip ordered. Pure-load chains carry no
   // such constraint — a younger access may complete ahead of their drain.
   bool has_ordered_reqs(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id) const {
-    for (const auto &entry : entries_) {
-      if (entry.bank_req.type == bank_req_t::None) {
-        continue;
-      }
-      if (entry.set_id != set_id || entry.addr_tag != addr_tag || entry.sector_id != sector_id) {
-        continue;
-      }
-      if (entry.bank_req.write || memop_is_atomic(entry.bank_req.op)) {
-        return true;
-      }
-    }
-    return false;
+    const chain_t *chain = this->find_chain(set_id, addr_tag, sector_id);
+    return (chain != nullptr) && (chain->num_ordered != 0);
   }
 
   // True if an undrained entry of the (set,tag,sector) chain touches the
   // word of `addr` (2^word_log2 bytes).
   bool has_word_reqs(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id,
                      uint64_t addr, uint32_t word_log2) const {
-    for (const auto &entry : entries_) {
-      if (entry.bank_req.type == bank_req_t::None) {
-        continue;
-      }
-      if (entry.set_id != set_id || entry.addr_tag != addr_tag || entry.sector_id != sector_id) {
-        continue;
-      }
-      if ((entry.bank_req.addr >> word_log2) == (addr >> word_log2)) {
+    const chain_t *chain = this->find_chain(set_id, addr_tag, sector_id);
+    if (chain == nullptr) {
+      return false;
+    }
+    for (uint32_t id : chain->ids) {
+      if ((entries_[id].bank_req.addr >> word_log2) == (addr >> word_log2)) {
         return true;
       }
     }
@@ -661,41 +663,50 @@ public:
   // of `addr` (2^word_log2 bytes).
   bool has_word_write(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id,
                       uint64_t addr, uint32_t word_log2) const {
-    for (const auto &entry : entries_) {
-      if (entry.bank_req.type == bank_req_t::None || !entry.bank_req.write) {
-        continue;
-      }
-      if (entry.set_id != set_id || entry.addr_tag != addr_tag || entry.sector_id != sector_id) {
-        continue;
-      }
-      if ((entry.bank_req.addr >> word_log2) == (addr >> word_log2)) {
+    const chain_t *chain = this->find_chain(set_id, addr_tag, sector_id);
+    if (chain == nullptr || chain->num_write == 0) {
+      return false;
+    }
+    for (uint32_t id : chain->ids) {
+      const auto &req = entries_[id].bank_req;
+      if (req.write && (req.addr >> word_log2) == (addr >> word_log2)) {
         return true;
       }
     }
     return false;
   }
 
-  // Enqueue a new core request and return the allocated entry id.
+  // Enqueue a new core request into the lowest free slot and return its id.
   int enqueue(const bank_req_t &bank_req, uint32_t set_id, uint64_t addr_tag, uint32_t sector_id,
               bool refetch = false) {
     assert(bank_req.type == bank_req_t::Core);
-    for (uint32_t i = 0, n = entries_.size(); i < n; ++i) {
-      auto &entry = entries_.at(i);
-      if (entry.bank_req.type == bank_req_t::None) {
-        entry.bank_req = bank_req;
-        entry.set_id = set_id;
-        entry.addr_tag = addr_tag;
-        entry.sector_id = sector_id;
-        entry.line_id = 0; // victim is selected at Fill time
-        entry.seq = bank_req.adm_seq;
-        entry.refetch = refetch;
-        entry.refetch_retry = false;
-        ++size_;
-        return i;
+    uint32_t i = 0;
+    for (uint32_t w = 0, n = free_.size(); ; ++w) {
+      if (w == n) {
+        std::abort(); // no free slot found!
+      }
+      if (free_[w] != 0) {
+        i = w * 64 + __builtin_ctzll(free_[w]);
+        free_[w] &= free_[w] - 1;
+        break;
       }
     }
-    std::abort(); // no free slot found!
-    return -1;
+    auto &entry = entries_.at(i);
+    entry.bank_req = bank_req;
+    entry.set_id = set_id;
+    entry.addr_tag = addr_tag;
+    entry.sector_id = sector_id;
+    entry.line_id = 0; // victim is selected at Fill time
+    entry.seq = bank_req.adm_seq;
+    entry.refetch = refetch;
+    entry.refetch_retry = false;
+    ++size_;
+    auto &chain = this->get_chain(set_id, addr_tag, sector_id);
+    chain.ids.insert(std::lower_bound(chain.ids.begin(), chain.ids.end(), i), i);
+    ++chain.num_core;
+    chain.num_ordered += is_ordered(entry);
+    chain.num_write += entry.bank_req.write;
+    return i;
   }
 
   // Mark all pending requests matching the entry's (set,tag,sector) for replay.
@@ -710,10 +721,14 @@ public:
     // accumulated ready_reqs_ stays correct and dequeue drains oldest-first, so
     // each line's waiters still replay in program order. Double-replaying the
     // same fill is caught by the Core-type assert above.
-    for (auto &entry : entries_) {
-      if (entry.bank_req.type == bank_req_t::Core && entry.set_id == root_entry.set_id && entry.addr_tag == root_entry.addr_tag && entry.sector_id == root_entry.sector_id) {
+    auto &chain = *this->find_chain(root_entry.set_id, root_entry.addr_tag, root_entry.sector_id);
+    for (uint32_t i : chain.ids) {
+      auto &entry = entries_[i];
+      if (entry.bank_req.type == bank_req_t::Core) {
         entry.bank_req.type = bank_req_t::Replay;
         ++ready_reqs_;
+        --chain.num_core;
+        this->heap_push(i);
       }
     }
     return root_entry;
@@ -728,29 +743,25 @@ public:
     assert(entry.bank_req.type == bank_req_t::Core);
     entry.bank_req.type = bank_req_t::Replay;
     ++ready_reqs_;
+    --this->find_chain(entry.set_id, entry.addr_tag, entry.sector_id)->num_core;
+    this->heap_push(id);
   }
 
   // Park the chain at its head: the oldest ready replay and the rest of its
   // (set,tag,sector) chain return to waiting for a fill, which the head now
   // roots as a refetch. Returns the head's id.
   uint32_t park_next_replay(bool retry) {
-    int head = -1;
-    for (int i = 0, n = (int)entries_.size(); i < n; ++i) {
-      const auto &entry = entries_.at(i);
-      if (entry.bank_req.type != bank_req_t::Replay) {
-        continue;
-      }
-      if (head == -1 || entry.seq < entries_.at(head).seq) {
-        head = i;
-      }
-    }
-    assert(head != -1);
+    assert(!heap_.empty());
+    uint32_t head = heap_.front();
     auto &root = entries_.at(head);
-    for (auto &entry : entries_) {
-      if (entry.bank_req.type == bank_req_t::Replay && entry.set_id == root.set_id
-       && entry.addr_tag == root.addr_tag && entry.sector_id == root.sector_id) {
+    auto &chain = *this->find_chain(root.set_id, root.addr_tag, root.sector_id);
+    for (uint32_t i : chain.ids) {
+      auto &entry = entries_[i];
+      if (entry.bank_req.type == bank_req_t::Replay) {
         entry.bank_req.type = bank_req_t::Core;
         --ready_reqs_;
+        ++chain.num_core;
+        this->heap_erase(i);
       }
     }
     root.refetch = true;
@@ -762,14 +773,7 @@ public:
   // nullptr. Lets the fill-forward drain inspect the chain head without
   // consuming it.
   const mshr_entry_t* peek_next_replay() const {
-    const mshr_entry_t *picked = nullptr;
-    for (auto &entry : entries_) {
-      if (entry.bank_req.type != bank_req_t::Replay)
-        continue;
-      if (picked == nullptr || entry.seq < picked->seq)
-        picked = &entry;
-    }
-    return picked;
+    return heap_.empty() ? nullptr : &entries_[heap_.front()];
   }
 
   // Dequeue the next ready replay request in program order (oldest enqueue
@@ -782,17 +786,25 @@ public:
   // what installs the new value.
   void dequeue(bank_req_t *out) {
     assert(ready_reqs_ > 0);
-    mshr_entry_t *picked = nullptr;
-    for (auto &entry : entries_) {
-      if (entry.bank_req.type != bank_req_t::Replay)
-        continue;
-      if (picked == nullptr || entry.seq < picked->seq)
-        picked = &entry;
-    }
-    *out = picked->bank_req;
-    picked->bank_req.type = bank_req_t::None;
+    uint32_t id = heap_.front();
+    this->heap_erase(id);
+    auto &picked = entries_[id];
+    // the slot is dead once dequeued: its payload moves out
+    *out = std::move(picked.bank_req);
+    picked.bank_req.type = bank_req_t::None;
     --ready_reqs_;
     --size_;
+    free_[id / 64] |= 1ull << (id % 64);
+    auto it = chain_map_.find(key_t{picked.addr_tag, picked.set_id, picked.sector_id});
+    auto &chain = chains_[it->second];
+    chain.ids.erase(std::lower_bound(chain.ids.begin(), chain.ids.end(), id));
+    chain.num_ordered -= is_ordered(*out);
+    chain.num_write -= out->write;
+    if (chain.ids.empty()) {
+      assert(chain.num_core == 0 && chain.num_ordered == 0 && chain.num_write == 0);
+      free_chains_.push_back(it->second);
+      chain_map_.erase(it);
+    }
   }
 
   void reset() {
@@ -801,10 +813,158 @@ public:
     }
     ready_reqs_ = 0;
     size_ = 0;
+    this->reset_index();
   }
 
 private:
+  struct key_t {
+    uint64_t addr_tag;
+    uint32_t set_id;
+    uint32_t sector_id;
+    bool operator==(const key_t &other) const {
+      return addr_tag == other.addr_tag && set_id == other.set_id && sector_id == other.sector_id;
+    }
+  };
+
+  struct key_hash_t {
+    size_t operator()(const key_t &key) const {
+      uint64_t h = key.addr_tag * 0x9e3779b97f4a7c15ull;
+      h ^= (uint64_t(key.set_id) << 32 | key.sector_id) + 0x632be59bd9b4e019ull + (h << 6) + (h >> 2);
+      return size_t(h ^ (h >> 29));
+    }
+  };
+
+  // One (set,tag,sector) chain: its entries by index, how many still wait
+  // for the fill (Core), and how many are writes or atomics.
+  struct chain_t {
+    std::vector<uint32_t> ids;
+    uint32_t num_core = 0;
+    uint32_t num_ordered = 0;
+    uint32_t num_write = 0;
+  };
+
+  static uint32_t is_ordered(const mshr_entry_t &entry) {
+    return is_ordered(entry.bank_req);
+  }
+
+  static uint32_t is_ordered(const bank_req_t &req) {
+    return (req.write || memop_is_atomic(req.op)) ? 1 : 0;
+  }
+
+  const chain_t *find_chain(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id) const {
+    if (size_ == 0) {
+      return nullptr;
+    }
+    auto it = chain_map_.find(key_t{addr_tag, set_id, sector_id});
+    return (it == chain_map_.end()) ? nullptr : &chains_[it->second];
+  }
+
+  chain_t *find_chain(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id) {
+    return const_cast<chain_t *>(static_cast<const MSHR *>(this)->find_chain(set_id, addr_tag, sector_id));
+  }
+
+  chain_t &get_chain(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id) {
+    auto it = chain_map_.find(key_t{addr_tag, set_id, sector_id});
+    if (it != chain_map_.end()) {
+      return chains_[it->second];
+    }
+    uint32_t idx;
+    if (!free_chains_.empty()) {
+      idx = free_chains_.back();
+      free_chains_.pop_back();
+    } else {
+      idx = chains_.size();
+      chains_.emplace_back();
+    }
+    chain_map_.emplace(key_t{addr_tag, set_id, sector_id}, idx);
+    return chains_[idx];
+  }
+
+  void reset_index() {
+    for (uint32_t w = 0, n = free_.size(); w < n; ++w) {
+      uint32_t bits = std::min<uint32_t>(64, entries_.size() - w * 64);
+      free_[w] = (bits == 64) ? ~0ull : ((1ull << bits) - 1);
+    }
+    chain_map_.clear();
+    chains_.clear();
+    free_chains_.clear();
+    heap_.clear();
+    std::fill(heap_pos_.begin(), heap_pos_.end(), -1);
+  }
+
+  // Ready-replay heap: a min-heap of entry ids by (seq, id), with each
+  // entry's heap position, so a parked chain leaves it in place.
+  bool heap_less(uint32_t a, uint32_t b) const {
+    uint64_t sa = entries_[a].seq, sb = entries_[b].seq;
+    return (sa < sb) || (sa == sb && a < b);
+  }
+
+  void heap_set(uint32_t pos, uint32_t id) {
+    heap_[pos] = id;
+    heap_pos_[id] = (int32_t)pos;
+  }
+
+  void heap_up(uint32_t pos) {
+    uint32_t id = heap_[pos];
+    while (pos != 0) {
+      uint32_t parent = (pos - 1) / 2;
+      if (!this->heap_less(id, heap_[parent])) {
+        break;
+      }
+      this->heap_set(pos, heap_[parent]);
+      pos = parent;
+    }
+    this->heap_set(pos, id);
+  }
+
+  void heap_down(uint32_t pos) {
+    uint32_t n = heap_.size();
+    uint32_t id = heap_[pos];
+    for (;;) {
+      uint32_t child = 2 * pos + 1;
+      if (child >= n) {
+        break;
+      }
+      if (child + 1 < n && this->heap_less(heap_[child + 1], heap_[child])) {
+        ++child;
+      }
+      if (!this->heap_less(heap_[child], id)) {
+        break;
+      }
+      this->heap_set(pos, heap_[child]);
+      pos = child;
+    }
+    this->heap_set(pos, id);
+  }
+
+  void heap_push(uint32_t id) {
+    assert(heap_pos_[id] == -1);
+    heap_.push_back(id);
+    this->heap_up(heap_.size() - 1);
+  }
+
+  void heap_erase(uint32_t id) {
+    int32_t pos = heap_pos_[id];
+    assert(pos != -1);
+    heap_pos_[id] = -1;
+    uint32_t last = heap_.back();
+    heap_.pop_back();
+    if ((uint32_t)pos == heap_.size()) {
+      return;
+    }
+    heap_[pos] = last;
+    heap_pos_[last] = pos;
+    this->heap_up(pos);
+    this->heap_down(heap_pos_[last]);
+  }
+
   std::vector<mshr_entry_t> entries_;
+  std::vector<uint64_t> free_;        // free slots, one bit per entry
+  std::vector<int32_t> heap_pos_;     // [entry] position in heap_, -1 if not ready
+  std::vector<uint32_t> heap_;        // ready replays
+  std::unordered_map<key_t, uint32_t, key_hash_t> chain_map_;
+  std::vector<chain_t> chains_;
+  std::vector<uint32_t> free_chains_;
   uint32_t ready_reqs_;
   uint32_t size_;
 };
