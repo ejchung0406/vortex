@@ -1281,6 +1281,10 @@ public:
     return std::static_pointer_cast<LsuUnit>(func_units_.at((int)FUType::LSU))->drained();
   }
 
+  bool lsu_sent() const {
+    return std::static_pointer_cast<LsuUnit>(func_units_.at((int)FUType::LSU))->sent();
+  }
+
   int dcr_read(uint32_t addr, uint32_t tag, uint32_t* value) {
     // tag arrives as (mpm_class << 6) | mpm_tag_idx after socket strips core_id
     switch (addr) {
@@ -1563,6 +1567,10 @@ bool Core::has_pending_instrs(uint32_t wid) const {
 
 bool Core::lsu_drained() const {
   return impl_->lsu_drained();
+}
+
+bool Core::lsu_sent() const {
+  return impl_->lsu_sent();
 }
 
 void Core::resume(uint32_t wid) {

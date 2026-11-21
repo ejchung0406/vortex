@@ -41,6 +41,7 @@ module VX_lsu_block import VX_gpu_pkg::*; #(
 `endif
 
     output wire             sched_empty,
+    output wire             sched_sent,
     output wire             store_empty,
     output wire             busy,
 
@@ -453,6 +454,7 @@ module VX_lsu_block import VX_gpu_pkg::*; #(
         .tcu_mem_if       (tcu_mem_if),
     `endif
         .sched_empty      (sched_empty),
+        .sched_sent       (sched_sent),
         .store_empty      (store_empty),
         .busy             (busy),
     `ifdef VX_CFG_LMEM_ENABLE

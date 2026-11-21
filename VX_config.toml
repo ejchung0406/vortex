@@ -59,6 +59,15 @@ VX_CFG_VLEN = "expr: $VX_CFG_XLEN * 4"
 VX_CFG_NUM_WARPS = 4
 VX_CFG_NUM_THREADS = 4
 VX_CFG_NUM_BARRIERS = 8
+
+# What a barrier waits for in the LSU before its arrival counts. 0: every
+# request of the core, queued or a read awaiting its response, whatever warp
+# made it. 1: for a barrier that stalls its warp (vx_barrier, vx_barrier_wait),
+# the warp's own instructions committed, its loads answered, and no LSU block
+# holding a request not yet sent, so the warp's stores have left; the reads
+# other warps and CTAs have outstanding no longer hold it. An arrive
+# (vx_barrier_arrive, expect_tx), after which its warp runs on, waits as 0.
+VX_CFG_BAR_DRAIN_SCOPE = 0
 VX_CFG_MAX_BAR_EVENTS = 32
 
 VX_CFG_IBUF_SIZE = 4

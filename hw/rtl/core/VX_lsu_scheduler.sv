@@ -39,6 +39,8 @@ module VX_lsu_scheduler import VX_gpu_pkg::*; #(
     VX_lsu_sched_if.slave  client_if [NUM_CLIENTS],
 
     output wire             empty,
+    // empty but for reads awaiting their response
+    output wire             sent,
 
     VX_lsu_mem_if.master    lsu_mem_if
 );
@@ -218,6 +220,7 @@ module VX_lsu_scheduler import VX_gpu_pkg::*; #(
     wire                                       lsu_mem_rsp_ready;
 
     wire                                       sched_req_queue_empty;
+    wire                                       sched_req_queue_sent;
 
     VX_mem_scheduler #(
         .INSTANCE_ID (`SFORMATF(("%s-memsched", INSTANCE_ID))),
@@ -252,6 +255,7 @@ module VX_lsu_scheduler import VX_gpu_pkg::*; #(
         .core_req_ready_rd (sched_req_ready_rd),
         .core_req_ready_wr (sched_req_ready_wr),
         .req_queue_empty(sched_req_queue_empty),
+        .req_queue_sent (sched_req_queue_sent),
         `UNUSED_PIN (req_queue_rw_notify),
 
         .core_rsp_valid (sched_rsp_valid),
@@ -299,5 +303,6 @@ module VX_lsu_scheduler import VX_gpu_pkg::*; #(
     assign lsu_mem_if.rsp_ready       = lsu_mem_rsp_ready;
 
     assign empty = sched_req_queue_empty;
+    assign sent  = sched_req_queue_sent;
 
 endmodule

@@ -44,6 +44,7 @@ module VX_frontend_xbar import VX_gpu_pkg::*; (
     input wire [PERF_CTR_BITS-1:0] instret,
     input wire [`VX_CFG_NUM_WARPS-1:0] active_warps,
     input wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] lsu_sched_empty,
+    input wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] lsu_sched_sent,
     input wire              mmu_empty,
 `ifdef VX_CFG_VM_ENABLE
     input wire [`VX_CFG_NUM_SFU_BLOCKS-1:0][`VX_CFG_XLEN-1:0] satp,
@@ -198,6 +199,7 @@ module VX_frontend_xbar import VX_gpu_pkg::*; (
             assign warp_ctl_if[b].warp_pending_alm_empty[k] = pending_alm_empty[k * BS + b];
         end
         assign warp_ctl_if[b].lsu_sched_empty = lsu_sched_empty;
+        assign warp_ctl_if[b].lsu_sched_sent  = lsu_sched_sent;
         assign warp_ctl_if[b].mmu_empty       = mmu_empty;
 
         assign sched_csr_if[b].cycles       = cycles;

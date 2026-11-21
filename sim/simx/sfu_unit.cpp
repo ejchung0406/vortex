@@ -79,6 +79,18 @@ SfuUnit::SfuUnit(const SimContext& ctx, const char* name, Core* core)
 	}
 }
 
+// What a barrier waits for in the LSU (VX_CFG_BAR_DRAIN_SCOPE): the whole
+// core's requests, or for a barrier that stalls its warp the warp's own
+// instructions committed and every block's requests sent.
+bool SfuUnit::bar_lsu_drained(const instr_trace_t* trace) const {
+	if constexpr (VX_CFG_BAR_DRAIN_SCOPE != 0) {
+		if (!std::get<IntrWctlArgs>(trace->instr_ptr->get_args()).is_bar_arrive) {
+			return !core_->has_pending_instrs(trace->wid) && core_->lsu_sent();
+		}
+	}
+	return core_->lsu_drained();
+}
+
 // Cycles from processing to the output: the result buffer and the PE
 // switch's response stage.
 uint32_t SfuUnit::latency_of(const instr_trace_t* /*trace*/) const {
@@ -522,14 +534,15 @@ void SfuUnit::on_tick() {
 
 		// WSYNC has a structural gate: cannot complete until prior insts retire.
 		// BAR (vx_barrier and vx_barrier_arrive) drains LSU before continuing —
-		// implements CUDA __syncthreads / OpenCL barrier(CLK_LOCAL_MEM_FENCE) semantic.
+		// implements CUDA __syncthreads / OpenCL barrier(CLK_LOCAL_MEM_FENCE)
+		// semantic; bar_lsu_drained() says how much of it.
 		if (auto wctl_p = std::get_if<WctlType>(&trace->op_type)) {
 			if (trace->eop) {
 				if (*wctl_p == WctlType::WSYNC) {
 					if (core_->has_pending_instrs(trace->wid))
 						continue; // wait for the warp's prior instrs to retire
 				} else if (*wctl_p == WctlType::BAR && !bar_arrive) {
-					if (!core_->lsu_drained())
+					if (!this->bar_lsu_drained(trace))
 						continue; // drain LSU before the barrier
 				}
 			}
@@ -633,7 +646,7 @@ SfuUnit::SharedRes SfuUnit::shared_res(uint32_t block) {
 		if (!bar_arrive && Outputs.at(block).full()) {
 			return RES_NONE;
 		}
-		if (*wctl_p == WctlType::BAR && trace->eop && !core_->lsu_drained()) {
+		if (*wctl_p == WctlType::BAR && trace->eop && !this->bar_lsu_drained(trace)) {
 			return RES_NONE;
 		}
 		if (wctl_unit_->is_shared(trace)) {

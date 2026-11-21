@@ -262,6 +262,7 @@ module VX_tensor_top import VX_gpu_pkg::*, VX_tcu_pkg::*, VX_dxa_pkg::*; #(
                 .tcu_mem_if    (lsu_tcu_mem_if[block_idx]),
             `endif
                 .sched_empty   (block_sched_empty[block_idx]),
+                `UNUSED_PIN (sched_sent),
                 .store_empty   (block_store_empty[block_idx]),
                 `UNUSED_PIN    (busy),
                 .lmem_if       (lsu_lmem_if[block_idx]),
