@@ -996,6 +996,26 @@ protected:
     this->queue_push(pkt);
   }
 
+  // Delivery of an event's own packet: the event dies right after firing, so
+  // the endpoint queue takes the packet over instead of copying it.
+  void receive_packet(Pkt&& pkt) {
+    if (tx_cb_) {
+      tx_cb_(pkt, SimPlatform::instance().cycles());
+    }
+    if (sink_) {
+      if (convert_fn_) {
+        convert_fn_(pkt);
+      } else {
+        auto* sink = static_cast<SimChannel<Pkt>*>(sink_);
+        sink->receive_packet(std::move(pkt));
+      }
+      return;
+    }
+    __assert(pending_count_ > 0, "pending count underflow");
+    --pending_count_;
+    storage_.push(std::move(pkt));
+  }
+
 private:
   bool forwarded() const { return sink_ != nullptr; }
 
@@ -1524,7 +1544,7 @@ inline void SimPlatform::fire_immediate_events(Domain& dom) {
 
 template <typename Pkt>
 void SimChannelEvent<Pkt>::fire() {
-  channel_->receive_packet(pkt_);
+  channel_->receive_packet(std::move(pkt_));
 }
 
 inline SimObjectBase::SimObjectBase(const SimContext&, const std::string& name)
