@@ -3252,7 +3252,8 @@ protected:
     for (auto& stage : tree_stage_) {
       idle &= (stage.size() == 0);
     }
-    std::vector<uint64_t> pending(nb, 0);
+    auto& pending = pending_;
+    pending.assign(nb, 0);
     for (uint32_t b = 0; b < nb; ++b) {
       if (RspIn.at(b).empty()) {
         continue;
@@ -3316,6 +3317,7 @@ private:
   std::vector<uint32_t> last_grant_; // [port][slice] round-robin pointer
   std::vector<uint32_t> join_rr_;    // [port]
   std::vector<SimChannel<MemRsp>> tree_stage_; // [port][slice]
+  std::vector<uint64_t> pending_;    // per-tick scratch: [bank] ports still owed the lane's response
 
   friend class SimObject<CacheRspMcast>;
 };
