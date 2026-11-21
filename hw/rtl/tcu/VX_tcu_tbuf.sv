@@ -23,7 +23,8 @@
 //   - 1        × VX_tcu_bbuf   (TB-shared B buffer, 2-slot for sparse)
 //   - 1        × VX_mem_bus_arb    (LMEM masters → 1 LMEM port)
 //
-// LMEM master count: BLOCK_SIZE (abufs) + 1 (bbuf).
+// LMEM master count: BLOCK_SIZE (abufs) + 1 (bbuf), + 1 (tensor-job copy,
+// lowest priority) in TMEM builds.
 //
 // Sparse-metadata note: WGMMA sparse — both RS and SS — preloads metadata
 // into VX_tcu_sp_meta SRAM via TCU_LD ahead of the MMA dispatch; no buffer
@@ -56,6 +57,13 @@ module VX_tcu_tbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     // Per-block uop observation (sized BLOCK_SIZE; req.valid pre-gated to WGMMA)
     input  tcu_tbuf_req_t [BLOCK_SIZE-1:0]                              req,
 
+`ifdef VX_CFG_TCU_TMEM_ENABLE
+    input  wire                                                         a_fill_valid,
+    input  wire [3:0]                                                   a_fill_idx,
+    input  wire [BLOCK_SIZE-1:0][TCU_WG_TILE_M-1:0][TCU_TC_N-1:0][31:0] a_fill_data,
+    VX_mem_bus_if.slave                                                 tcu_cp_lmem_if,
+`endif
+
     // Single LMEM master out (post-arb)
     VX_mem_bus_if.master                                                tcu_lmem_if,
 
@@ -67,7 +75,8 @@ module VX_tcu_tbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     `UNUSED_SPARAM (INSTANCE_ID)
 
     localparam BBUF_IDX         = BLOCK_SIZE;
-    localparam NUM_LMEM_MASTERS = BLOCK_SIZE + 1;
+    localparam CBUF_IDX         = BLOCK_SIZE + 1;
+    localparam NUM_LMEM_MASTERS = BLOCK_SIZE + 1 + `VX_CFG_TCU_TMEM_ENABLED;
 
     // -----------------------------------------------------------------------
     // LMEM master fan-in interface array (BLOCK_SIZE abufs + 1 bbuf)
@@ -113,11 +122,16 @@ module VX_tcu_tbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
             .req_desc_a     (req[b].desc_a),
             .req_a_is_smem  (req[b].a_is_smem),
         `ifdef VX_CFG_TCU_SPARSE_ENABLE
-            .req_is_sparse  (req[b].is_sparse),
+            .req_is_sparse_in (req[b].is_sparse),
         `else
-            .req_is_sparse  (1'b0),
+            .req_is_sparse_in (1'b0),
         `endif
             .req_uuid       (req[b].uuid),
+        `ifdef VX_CFG_TCU_TMEM_ENABLE
+            .a_fill_valid   (a_fill_valid),
+            .a_fill_idx       (a_fill_idx),
+            .a_fill_data    (a_fill_data[b]),
+        `endif
             .tcu_lmem_if    (lmem_masters[b]),
             .abuf_ready     (abuf_ready_w[b]),
             .abuf_rs1_data  (abuf_rs1_data_w[b])
@@ -144,10 +158,11 @@ module VX_tcu_tbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     wire                          bbuf_req_valid;
     wire                          bbuf_req_setup;
     wire                          bbuf_req_is_first_uop;
+    wire [TCU_TBUF_PF_W-1:0]      bbuf_req_pf_n;
     wire                          bbuf_req_is_sparse;
     wire [3:0]                    bbuf_req_step_m;
     wire [3:0]                    bbuf_req_step_k;
-    wire [3:0]                    bbuf_req_step_n;
+    wire [TCU_TBUF_N_W-1:0]       bbuf_req_step_n;
     wire [1:0]                    bbuf_req_cd_nregs;
     wire [NCTA_WIDTH-1:0]         bbuf_req_cta_id;
     wire [`VX_CFG_XLEN-1:0]       bbuf_req_desc_b;
@@ -158,6 +173,7 @@ module VX_tcu_tbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
         assign bbuf_req_valid        = req[0].valid;
         assign bbuf_req_setup        = req[0].setup_fire;
         assign bbuf_req_is_first_uop = req[0].is_first_uop;
+        assign bbuf_req_pf_n         = req[0].pf_n;
     `ifdef VX_CFG_TCU_SPARSE_ENABLE
         assign bbuf_req_is_sparse    = req[0].is_sparse;
     `else
@@ -191,16 +207,18 @@ module VX_tcu_tbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
         // OR-mux: under lock-step all active inputs match, so OR-ing the
         // masked values is equivalent to selecting via the one-hot index.
         logic              sel_is_first_uop;
+        logic [TCU_TBUF_PF_W-1:0] sel_pf_n;
         logic              sel_is_sparse;
         logic [3:0]        sel_step_m;
         logic [3:0]        sel_step_k;
-        logic [3:0]        sel_step_n;
+        logic [TCU_TBUF_N_W-1:0] sel_step_n;
         logic [1:0]        sel_cd_nregs;
         logic [NCTA_WIDTH-1:0] sel_cta_id;
         logic [`VX_CFG_XLEN-1:0]  sel_desc_b;
         logic [UUID_WIDTH-1:0]    sel_uuid;
         always_comb begin
             sel_is_first_uop = 1'b0;
+            sel_pf_n         = '0;
             sel_is_sparse    = 1'b0;
             sel_step_m       = '0;
             sel_step_k       = '0;
@@ -212,6 +230,7 @@ module VX_tcu_tbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
             for (int b = 0; b < BLOCK_SIZE; ++b) begin
                 if (bbuf_sel_oh[b]) begin
                     sel_is_first_uop = req[b].is_first_uop;
+                    sel_pf_n         = req[b].pf_n;
                 `ifdef VX_CFG_TCU_SPARSE_ENABLE
                     sel_is_sparse = req[b].is_sparse;
                 `endif
@@ -230,6 +249,7 @@ module VX_tcu_tbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
         assign bbuf_req_valid        = bbuf_sel_valid;
         assign bbuf_req_setup        = |req_setup_v;
         assign bbuf_req_is_first_uop = sel_is_first_uop;
+        assign bbuf_req_pf_n         = sel_pf_n;
         assign bbuf_req_is_sparse    = sel_is_sparse;
         assign bbuf_req_step_m       = sel_step_m;
         assign bbuf_req_step_k       = sel_step_k;
@@ -254,6 +274,7 @@ module VX_tcu_tbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
         .req_valid        (bbuf_req_valid),
         .req_setup        (bbuf_req_setup),
         .req_is_first_uop (bbuf_req_is_first_uop),
+        .req_pf_n         (bbuf_req_pf_n),
         .req_is_sparse    (bbuf_req_is_sparse),
         .req_step_m       (bbuf_req_step_m),
         .req_step_k       (bbuf_req_step_k),
@@ -266,6 +287,12 @@ module VX_tcu_tbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
         .bbuf_ready       (bbuf_ready_w),
         .bbuf_rs2_data    (bbuf_rs2_data_w)
     );
+
+`ifdef VX_CFG_TCU_TMEM_ENABLE
+    `ASSIGN_VX_MEM_BUS_IF (lmem_masters[CBUF_IDX], tcu_cp_lmem_if);
+`else
+    `UNUSED_PARAM (CBUF_IDX)
+`endif
 
     // -----------------------------------------------------------------------
     // LMEM port arbitration (NUM_LMEM_MASTERS → 1)

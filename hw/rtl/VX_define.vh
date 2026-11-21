@@ -180,6 +180,24 @@
     `define TCU_META_ENABLE
 `endif
 
+// Warps issue WGMMA (the per-warp expansion and its front-end logic) unless
+// tensor memory owns the tile buffers: a TMEM build has no warp WGMMA.
+`ifdef VX_CFG_TCU_WGMMA_ENABLE
+`ifndef VX_CFG_TCU_TMEM_ENABLE
+    `define TCU_WARP_WGMMA
+`endif
+`endif
+
+// Tensor jobs drive the WGMMA tile buffers.
+`ifdef VX_CFG_TCU_TMEM_ENABLE
+    `ifndef VX_CFG_TCU_WGMMA_ENABLE
+        `error "VX_CFG_TCU_TMEM_ENABLE requires VX_CFG_TCU_WGMMA_ENABLE"
+    `endif
+    `ifndef VX_CFG_EXT_DXA_ENABLE
+        `error "VX_CFG_TCU_TMEM_ENABLE requires VX_CFG_EXT_DXA_ENABLE"
+    `endif
+`endif
+
 // Integer mul/div via DPI: simulation only (not synthesis) with DPI enabled.
 // Internal derived macros — not VX_CFG_* knobs.
 `ifndef SYNTHESIS
