@@ -305,7 +305,8 @@ module VX_tensor_top import VX_gpu_pkg::*, VX_tcu_pkg::*, VX_dxa_pkg::*; #(
             .dcr_flush_if    (dcr_flush_dcache_if),
             .flush_op        (FENCE_OP_FULL),
             .dcache_bus_if   (dcache_bus_if),
-            `UNUSED_PIN      (busy)
+            `UNUSED_PIN      (busy),
+            `UNUSED_PIN      (lmem_store_empty)
         );
 
         for (genvar i = 0; i < DCACHE_NUM_REQS; ++i) begin : g_dcache_passthru

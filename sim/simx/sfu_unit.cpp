@@ -81,11 +81,12 @@ SfuUnit::SfuUnit(const SimContext& ctx, const char* name, Core* core)
 
 // What a barrier waits for in the LSU (VX_CFG_BAR_DRAIN_SCOPE): the whole
 // core's requests, or for a barrier that stalls its warp the warp's own
-// instructions committed and every block's requests sent.
+// instructions committed, every block's requests sent and no store in flight
+// to the data cache or local memory.
 bool SfuUnit::bar_lsu_drained(const instr_trace_t* trace) const {
 	if constexpr (VX_CFG_BAR_DRAIN_SCOPE != 0) {
 		if (!std::get<IntrWctlArgs>(trace->instr_ptr->get_args()).is_bar_arrive) {
-			return !core_->has_pending_instrs(trace->wid) && core_->lsu_sent();
+			return !core_->has_pending_instrs(trace->wid) && core_->lsu_sent() && core_->lsu_stores_landed();
 		}
 	}
 	return core_->lsu_drained();

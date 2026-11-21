@@ -44,7 +44,9 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
     VX_mem_bus_if.master    dcache_bus_if [DCACHE_NUM_REQS],
 
     // a flush lane holds a request at the D-cache port
-    output wire             busy
+    output wire             busy,
+    // no store to local memory in flight past the LSU blocks
+    output wire             lmem_store_empty
 );
 `ifndef VX_CFG_LMEM_ENABLE
     `UNUSED_SPARAM (INSTANCE_ID)
@@ -189,7 +191,8 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
         .lmem_perf     (lmem_perf),
     `endif
         .lsu_mem_if    (lmem_if),
-        .dma_bus_if    (lmem_dma_if)
+        .dma_bus_if    (lmem_dma_if),
+        .store_empty   (lmem_store_empty)
     );
 
 `else
@@ -197,6 +200,7 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
 `ifdef PERF_ENABLE
     assign lmem_perf = '0;
 `endif
+    assign lmem_store_empty = 1'b1;
 
 `endif
 

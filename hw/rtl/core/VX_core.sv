@@ -151,6 +151,9 @@ import VX_tcu_pkg::*;
     // the in-core global-store path is empty
     wire mem_unit_empty = (& lsu_store_empty);
     wire mem_unit_busy;
+    // no store in flight past the LSU schedulers, to the data cache or local memory
+    wire lmem_store_empty;
+    wire lsu_store_landed = mem_unit_empty && lmem_store_empty;
 
 `ifdef VX_CFG_VM_ENABLE
 `ifdef PERF_ENABLE
@@ -458,6 +461,7 @@ import VX_tcu_pkg::*;
                 .active_warps         (sched_active_warps),
                 .all_lsu_sched_empty  (lsu_sched_empty),
                 .all_lsu_sched_sent   (lsu_sched_sent),
+                .lsu_store_landed     (lsu_store_landed),
                 .mmu_empty            (mmu_empty),
                 .cta_bcast            (cta_bcast),
             `ifdef VX_CFG_VM_ENABLE
@@ -557,6 +561,7 @@ import VX_tcu_pkg::*;
             .active_warps         (sched_active_warps),
             .lsu_sched_empty      (lsu_sched_empty),
             .lsu_sched_sent       (lsu_sched_sent),
+            .lsu_store_landed     (lsu_store_landed),
             .mmu_empty            (mmu_empty),
         `ifdef VX_CFG_VM_ENABLE
             .satp                 (sched_satp),
@@ -854,7 +859,8 @@ import VX_tcu_pkg::*;
         .dcr_flush_if    (dcr_flush_dcache_if),
         .flush_op        (dcr_flush_op),
         .dcache_bus_if   (dcache_bus_if),
-        .busy            (mem_unit_busy)
+        .busy            (mem_unit_busy),
+        .lmem_store_empty(lmem_store_empty)
     );
 
     // Fragment work drains at the producer (VX_raster_core.busy), not here.

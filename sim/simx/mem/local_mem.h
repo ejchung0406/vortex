@@ -66,6 +66,9 @@ public:
 
   const PerfStats& perf_stats() const;
 
+  // a store or atomic waits at an input or sits in the first engine
+  bool holds_store() const;
+
 protected:
 
   void on_reset();

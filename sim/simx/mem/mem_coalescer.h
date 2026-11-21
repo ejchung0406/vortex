@@ -52,6 +52,10 @@ public:
 
   const PerfStats& perf_stats() const;
 
+  // no request waits at the input or in the output round, nor is on its way
+  // out: the reads may still await their responses
+  bool req_idle() const;
+
 protected:
   void on_reset();
   void on_tick();

@@ -37,6 +37,9 @@ interface VX_warp_ctl_if import VX_gpu_pkg::*; ();
     wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] lsu_sched_empty;
     // the same, but for reads awaiting their response: every request sent
     wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] lsu_sched_sent;
+    // no store in flight past the schedulers: the global-store paths and local
+    // memory hold none
+    wire lsu_store_landed;
     wire mmu_empty;
 
     // IPDOM stack address and mscratch of the warp at dvstack_wid
@@ -56,6 +59,7 @@ interface VX_warp_ctl_if import VX_gpu_pkg::*; ();
         input  warp_pending_alm_empty,
         input  lsu_sched_empty,
         input  lsu_sched_sent,
+        input  lsu_store_landed,
         input  mmu_empty,
         output dvstack_wid,
         input  dvstack_ptr,
@@ -74,6 +78,7 @@ interface VX_warp_ctl_if import VX_gpu_pkg::*; ();
         output warp_pending_alm_empty,
         output lsu_sched_empty,
         output lsu_sched_sent,
+        output lsu_store_landed,
         output mmu_empty,
         input  dvstack_wid,
         output dvstack_ptr,

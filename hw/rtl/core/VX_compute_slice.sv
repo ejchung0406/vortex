@@ -51,6 +51,7 @@ import VX_tcu_pkg::*;
     input wire [`VX_CFG_NUM_WARPS-1:0] active_warps,
     input wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] all_lsu_sched_empty,
     input wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] all_lsu_sched_sent,
+    input wire              lsu_store_landed,
     input wire              mmu_empty,
     input cta_bcast_t       cta_bcast,
 `ifdef VX_CFG_VM_ENABLE
@@ -244,6 +245,7 @@ import VX_tcu_pkg::*;
     assign warp_ctl_if.warp_pending_alm_empty = pending_alm_empty;
     assign warp_ctl_if.lsu_sched_empty        = all_lsu_sched_empty;
     assign warp_ctl_if.lsu_sched_sent         = all_lsu_sched_sent;
+    assign warp_ctl_if.lsu_store_landed       = lsu_store_landed;
     assign warp_ctl_if.mmu_empty              = mmu_empty;
 
     assign csr_rd_wid[0]        = sched_csr_if.csr_rd_wid;

@@ -149,7 +149,8 @@ module VX_lmem_unit_top import VX_gpu_pkg::*; #(
         `UNUSED_PIN (lmem_perf),
     `endif
         .lsu_mem_if (lsu_mem_if),
-        .dma_bus_if (dma_bus_if)
+        .dma_bus_if (dma_bus_if),
+        `UNUSED_PIN (store_empty)
     );
 
 endmodule
