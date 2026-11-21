@@ -1,21 +1,308 @@
+diff -ruN '--exclude=.git' src_tmem/sim/simx/dxa/dxa_core.cpp src_tmemk/sim/simx/dxa/dxa_core.cpp
+--- src_tmem/sim/simx/dxa/dxa_core.cpp	2026-11-20 14:56:04.000000000 -0500
++++ src_tmemk/sim/simx/dxa/dxa_core.cpp	2026-11-21 05:59:05.741915517 -0500
+@@ -17,7 +17,10 @@
+ #include <array>
+ #include <cstring>
+ #include <deque>
++#include <unordered_map>
+ #include <vector>
++#include <iostream>
++#include <cstdlib>
+ #include "core.h"
+ #include "socket.h"
+ #include "socket.h"
+@@ -36,6 +39,9 @@
+ // GMEM ports: port i joins the arb of the socket's L1 memory port i as a peer,
+ // and the workers are split evenly over the ports.
+ constexpr uint32_t kDxaMemPorts = VX_CFG_DXA_GMEM_PORTS;
++// Lines a worker requests, captures and writes per cycle (one arbiter input
++// per lane; lane l goes to port l % ports).
++constexpr uint32_t kWorkerLanes = VX_CFG_DXA_WORKER_LINES;
+ static_assert(kDxaMemPorts >= 1 && kDxaMemPorts <= VX_CFG_NUM_DXA_CORES
+            && kDxaMemPorts <= VX_CFG_L1_MEM_PORTS,
+               "DXA_GMEM_PORTS: at most one per worker and per socket memory port");
+@@ -153,11 +159,16 @@
+   {
+     for (uint32_t i = 0; i < VX_CFG_NUM_DXA_CORES; ++i)
+       workers_[i].worker_id = i;
++  #ifdef DXA_PATH_STATS
++    this->dps_register();
++  #endif
+   }
+ 
+   void reset() {
+     cycle_ = 0;
+     queue_.clear();
++    queue_ready_.clear();
++    issue_next_.clear();
+     // perf_stats_ survives: the MPM counters run from device reset.
+     for (auto& w : workers_) {
+       w.state = WState::IDLE;
+@@ -238,9 +249,11 @@
+       if (w.state == WState::RUNNING) {
+         tick_worker_smem_wr(w);
+       }
+-      capture_line(w, gmem_arb_->RspOut.at(worker_id));
+-      if (w.state == WState::RUNNING) {
+-        tick_worker_gmem_req(w);
++      for (uint32_t lane = 0; lane < kWorkerLanes; ++lane) {
++        capture_line(w, gmem_arb_->RspOut.at(arb_input(worker_id, lane)));
++      }
++      for (uint32_t lane = 0; lane < kWorkerLanes && w.state == WState::RUNNING; ++lane) {
++        tick_worker_gmem_req(w, lane);
+       }
+     }
+ 
+@@ -255,10 +268,18 @@
+           start_worker(w, w.staged_req);
+         } else if (!w.staged && !queue_.empty() && w.started_cycle != cycle_
+                 && (pass == 1 || w.state == WState::IDLE)) {
+-          w.staged_req   = queue_.front();
++          // VX_CFG_DXA_ISSUE_INTERVAL: the oldest request whose issuer's
++          // interval has passed; requests of other warps go ahead of it.
++          size_t q = 0;
++          if (VX_CFG_DXA_ISSUE_INTERVAL != 0) {
++            while (q < queue_.size() && queue_ready_.at(q) > cycle_) ++q;
++            if (q == queue_.size()) continue;
++          }
++          w.staged_req   = queue_.at(q);
+           w.staged_ready = cycle_ + this->setup_latency(w.staged_req);
+           w.staged       = true;
+-          queue_.pop_front();
++          queue_.erase(queue_.begin() + q);
++          if (VX_CFG_DXA_ISSUE_INTERVAL != 0) queue_ready_.erase(queue_ready_.begin() + q);
+         }
+       }
+     }
+@@ -270,6 +291,16 @@
+   const DxaCore::PerfStats& perf_stats() const { return perf_stats_; }
+ 
+ private:
++  // The arbiter gives each port a contiguous group of its inputs; with
++  // several ports, consecutive workers (which the dispatch fills first) go to
++  // different ports.
++  static uint32_t arb_input(uint32_t worker, uint32_t lane = 0) {
++    constexpr uint32_t W = VX_CFG_NUM_DXA_CORES;
++    if (kWorkerLanes > 1) return lane * W + worker;
++    if (kDxaMemPorts == 1 || W % kDxaMemPorts != 0) return worker;
++    return (worker % kDxaMemPorts) * (W / kDxaMemPorts) + worker / kDxaMemPorts;
++  }
++
+   // ── Descriptor helpers ───────────────────────────────────────────────
+   static uint32_t desc_rank(uint32_t meta) {
+     uint32_t r = (meta >> DXA_DESC_META_DIM_LSB)
+@@ -360,6 +391,13 @@
+       if (ch.empty()) continue;
+       if (queue_.size() >= VX_CFG_DXA_QUEUE_SIZE) break;
+       queue_.push_back(ch.peek());
++      if (VX_CFG_DXA_ISSUE_INTERVAL != 0) {
++        // One warp's transfers start at least the interval apart.
++        auto& next = issue_next_[uint64_t(ch.peek().core->id()) << 32 | ch.peek().wid];
++        uint64_t ready = std::max(cycle_, next);
++        next = ready + VX_CFG_DXA_ISSUE_INTERVAL;
++        queue_ready_.push_back(ready);
++      }
+       ch.pop();
+       rr_req_ = (cid + 1) % chs.size();
+       break;
+@@ -571,13 +609,13 @@
+   // while others are outstanding. A response it cannot take stays on the
+   // memory response path and holds the responses queued behind it.
+   void capture_line(Worker& w, SimChannel<MemRsp>& ch) {
+-    bool pend_busy  = false;
++    uint32_t pend_lines = 0;
+     bool defer_busy = false;
+     uint32_t oob_slot = UINT32_MAX;
+     for (uint32_t i = 0; i < w.inflight.size(); ++i) {
+       const auto& s = w.inflight[i];
+       if (s.rsp_arrived && i != w.drain_slot) {
+-        (s.deferred ? defer_busy : pend_busy) = true;
++        if (s.deferred) defer_busy = true; else ++pend_lines;
+       }
+       if (s.oob_pending && oob_slot == UINT32_MAX) {
+         oob_slot = i;
+@@ -598,7 +636,10 @@
+ 
+     auto& s = w.inflight[slot];
+     bool defer = s.work.last && (w.issued_order.size() > 1);
+-    if (defer ? defer_busy : pend_busy) {
++    if (defer ? defer_busy : (pend_lines >= kWorkerLanes)) {
++    #ifdef DXA_PATH_STATS
++      if (!ch.empty()) ++dps_.capture_full;
++    #endif
+       return;
+     }
+     if (!ch.empty()) {
+@@ -612,7 +653,7 @@
+   }
+ 
+   // ── gmem_req: issue MemReqs with available inflight slots ────────────
+-  void tick_worker_gmem_req(Worker& w) {
++  void tick_worker_gmem_req(Worker& w, uint32_t lane) {
+     // One AGU step per cycle: advance ag_idx by at most one, issuing at most
+     // one GMEM read to this worker's ReqIn port (or one OOB skip). A while-loop
+     // here would issue many reads to a single port in one cycle.
+@@ -662,8 +703,16 @@
+     mreq.hart_id   = w.req.core->id();
+     mreq.uuid  = w.req.uuid;
+ 
+-    auto& ch = gmem_arb_->ReqIn.at(w.worker_id);
+-    if (!ch.try_send(mreq)) return; // arb backpressure
++    auto& ch = gmem_arb_->ReqIn.at(arb_input(w.worker_id, lane));
++    if (!ch.try_send(mreq)) {
++    #ifdef DXA_PATH_STATS
++      ++dps_.backpressure[lane];
++    #endif
++      return; // arb backpressure
++    }
++  #ifdef DXA_PATH_STATS
++    ++dps_.issued[lane];
++  #endif
+ 
+     w.inflight[slot].allocated   = true;
+     w.inflight[slot].rsp_arrived = false;
+@@ -688,24 +737,39 @@
+     // the same slot because the multicast/scatter cursors are worker-local.
+     // The last work item carries notify_done and must remain deferred until
+     // it is the only outstanding slot.
+-    uint32_t slot = w.drain_slot;
+-    if (slot == UINT32_MAX) {
++    auto pick_slot = [&]() {
++      uint32_t pick = UINT32_MAX;
+       for (uint32_t i = 0; i < w.inflight.size(); ++i) {
+         const auto& candidate = w.inflight[i];
+         if (candidate.allocated && candidate.rsp_arrived && !candidate.work.last
+          && cycle_ >= candidate.ready_cycle) {
+-          slot = i;
++          pick = i;
+           break;
+         }
+       }
+ 
+-      if (slot == UINT32_MAX && w.issued_order.size() == 1) {
++      if (pick == UINT32_MAX && w.issued_order.size() == 1) {
+         uint32_t last_slot = w.issued_order.front();
+         const auto& candidate = w.inflight[last_slot];
+         if (candidate.allocated && candidate.rsp_arrived && cycle_ >= candidate.ready_cycle)
+-          slot = last_slot;
++          pick = last_slot;
+       }
+-
++      return pick;
++    };
++    // Several lanes: a further line of the beat, to a bank half not yet written.
++    auto pick_other_half = [&](uint32_t used) {
++      for (uint32_t i = 0; i < w.inflight.size(); ++i) {
++        const auto& c = w.inflight[i];
++        if (c.allocated && c.rsp_arrived && !c.work.last && !c.work.scatter && cycle_ >= c.ready_cycle
++         && !((used >> ((c.work.smem_word_addr / kLmemWordSize) & (DxaCore::LMEM_PORTS_PER_CORE - 1))) & 1)) {
++          return i;
++        }
++      }
++      return UINT32_MAX;
++    };
++    uint32_t slot = w.drain_slot;
++    if (slot == UINT32_MAX) {
++      slot = pick_slot();
+       if (slot == UINT32_MAX) return;
+       w.drain_slot = slot;
+     }
+@@ -731,11 +795,17 @@
+ 
+     constexpr uint64_t kRowMask = ~uint64_t(DxaCore::LMEM_ROW_SIZE - 1);
+     uint64_t beat_row = UINT64_MAX;
++    uint32_t used_halves = 0;
+ 
+     for (uint32_t emitted = 0; emitted < DxaCore::LMEM_PORTS_PER_CORE; ++emitted) {
+       slot = w.drain_slot;
+       if (slot == UINT32_MAX) {
+-        break; // slot released mid-beat
++        // VX_CFG_DXA_ROW_BEAT: another arrived line may fill the rest of the row.
++        if ((VX_CFG_DXA_ROW_BEAT == 0 && kWorkerLanes == 1)
++         || (slot = (kWorkerLanes > 1) ? pick_other_half(used_halves) : pick_slot()) == UINT32_MAX) {
++          break; // slot released mid-beat
++        }
++        w.drain_slot = slot;
+       }
+       auto& s = w.inflight[slot];
+ 
+@@ -784,7 +854,7 @@
+       uint64_t row = base_byte0 & kRowMask;
+       if (beat_row == UINT64_MAX) {
+         beat_row = row;
+-      } else if (row != beat_row) {
++      } else if (row != beat_row && kWorkerLanes == 1) {
+         break; // next block lands in a different row — next cycle's beat
+       }
+ 
+@@ -792,6 +862,10 @@
+       uint32_t half = (DxaCore::LMEM_PORTS_PER_CORE > 1)
+           ? uint32_t((dword / kLmemWordSize) & (DxaCore::LMEM_PORTS_PER_CORE - 1))
+           : 0u;
++      if ((VX_CFG_DXA_ROW_BEAT != 0 || kWorkerLanes > 1) && ((used_halves >> half) & 1)) {
++        break; // this half was written this beat
++      }
++      used_halves |= 1u << half;
+       auto& lmem_ch = simobject_->lmem_req_out.at(
+           socket_local_cid * DxaCore::LMEM_PORTS_PER_CORE + half);
+       if (lmem_ch.full()) {
+@@ -917,7 +991,25 @@
+   DxaCore*    simobject_;
+   MemArbiter* gmem_arb_;
+   std::array<Descriptor, VX_DCR_DXA_DESC_COUNT> descriptors_;
++#ifdef DXA_PATH_STATS
++  // Measurement only: per lane, reads issued and cycles the arbiter refused one;
++  // responses a worker could not capture.
++  struct { uint64_t issued[4] = {}, backpressure[4] = {}, capture_full = 0; } dps_;
++  void dps_print() const {
++    std::cout << "DXA_PATH: issued=" << dps_.issued[0] << "," << dps_.issued[1]
++              << " backpressure=" << dps_.backpressure[0] << "," << dps_.backpressure[1]
++              << " capture_full=" << dps_.capture_full << std::endl;
++  }
++  void dps_register() {
++    static std::vector<const Impl*> reg;
++    static bool hooked = (std::atexit([] { for (auto* i : reg) i->dps_print(); }), true);
++    (void)hooked;
++    reg.push_back(this);
++  }
++#endif
+   std::deque<DxaReq>     queue_;
++  std::deque<uint64_t>   queue_ready_;   // VX_CFG_DXA_ISSUE_INTERVAL: a request's first start cycle
++  std::unordered_map<uint64_t, uint64_t> issue_next_;
+   std::vector<Worker>    workers_;
+   uint32_t               rr_req_ = 0;
+   uint64_t               cycle_;
+@@ -943,7 +1035,7 @@
+   // responses back to the right input.
+   char sname[100];
+   snprintf(sname, 100, "%s-gmem-arb", name);
+-  gmem_arb_ = MemArbiter::Create(sname, ArbiterType::RoundRobin, VX_CFG_NUM_DXA_CORES, kDxaMemPorts);
++  gmem_arb_ = MemArbiter::Create(sname, ArbiterType::RoundRobin, VX_CFG_NUM_DXA_CORES * kWorkerLanes, kDxaMemPorts);
+   for (uint32_t i = 0; i < kDxaMemPorts; ++i) {
+   #ifdef SIMX_SOCKET_UNIT_MMU
+     // The unit MMU's lookup starts from a registered request: the DXA owns it.
 diff -ruN '--exclude=.git' src_tmem/sim/simx/mem/local_mem.cpp src_tmemk/sim/simx/mem/local_mem.cpp
 --- src_tmem/sim/simx/mem/local_mem.cpp	2026-11-20 14:56:04.000000000 -0500
-+++ src_tmemk/sim/simx/mem/local_mem.cpp	2026-11-21 03:12:05.171677472 -0500
++++ src_tmemk/sim/simx/mem/local_mem.cpp	2026-11-21 04:58:10.299240429 -0500
 @@ -18,6 +18,11 @@
  #include <vector>
  #include <deque>
  #include <cstring>
-+#ifdef LMEM_DMA_STATS
 +#include <algorithm>
++#ifdef LMEM_DMA_STATS
 +#include <cstdlib>
 +#include <iostream>
 +#endif
  #if VX_CFG_EXT_A_ENABLED
  #include "amo_ops.h"
  #include "amo_unit.h"
-@@ -112,6 +117,24 @@
+@@ -111,7 +116,27 @@
+   bool      write_waiting_r_;
    bool      dma_slot_;
    uint32_t  dma_last_grant_;
++  uint32_t  dma_tokens_ = 0;
++  uint32_t  dma_last_chan_ = 0;
    mutable PerfStats perf_stats_;
 +#ifdef LMEM_DMA_STATS
 +  struct DmaStat { uint64_t grants = 0, waits = 0, reads = 0, writes = 0; };
@@ -38,14 +325,14 @@ diff -ruN '--exclude=.git' src_tmem/sim/simx/mem/local_mem.cpp src_tmemk/sim/sim
  
    uint64_t to_local_addr(uint64_t addr) const {
      return bit_getw(addr, 0, addr_bits_ - 1);
-@@ -250,6 +273,29 @@
+@@ -250,6 +275,33 @@
    // Serve one DMA client's row access. Clients are served round-robin,
    // starting after the last one served.
    void dma_fire() {
++    [[maybe_unused]] uint32_t granted = 0;  // bit per client served
 +  #ifdef LMEM_DMA_STATS
 +    // Measurement only: a client that has a request in a cycle another is
 +    // served (or none, for a full response queue) waits.
-+    uint32_t granted = ~0u;
 +    struct Done {
 +      Impl* impl; uint32_t* granted;
 +      ~Done() {
@@ -56,7 +343,7 @@ diff -ruN '--exclude=.git' src_tmem/sim/simx/mem/local_mem.cpp src_tmemk/sim/sim
 +          for (uint32_t p = 0; p < DMA_PORTS; ++p) {
 +            pend |= !impl->simobject_->DmaInputs.at(c * DMA_PORTS + p).empty();
 +          }
-+          if (c == *granted) {
++          if ((*granted >> c) & 1) {
 +            ++st.at(c).grants;
 +          } else if (pend) {
 +            ++st.at(c).waits;
@@ -65,27 +352,116 @@ diff -ruN '--exclude=.git' src_tmem/sim/simx/mem/local_mem.cpp src_tmemk/sim/sim
 +      }
 +    } done{this, &granted};
 +  #endif
++    if (VX_CFG_LMEM_DMA_BUDGET != 0) {
++      this->dma_fire_budget(granted);
++      return;
++    }
      for (uint32_t i = 0; i < config_.dma_clients; ++i) {
        uint32_t c = (dma_last_grant_ + 1 + i) % config_.dma_clients;
        bool pending = false;
-@@ -297,9 +343,16 @@
-           simobject_->DmaOutputs.at(c * DMA_PORTS + p).send(rsp, 0);
+@@ -271,39 +323,75 @@
+         return;
+       }
+       for (uint32_t p = 0; p < DMA_PORTS; ++p) {
+-        auto& in = simobject_->DmaInputs.at(c * DMA_PORTS + p);
+-        if (in.empty()) {
+-          continue;
++        if (!simobject_->DmaInputs.at(c * DMA_PORTS + p).empty()) {
++          this->dma_serve(c * DMA_PORTS + p);
          }
-         DT(4, simobject_->name() << "-dma" << c << " req : " << req);
-+      #ifdef LMEM_DMA_STATS
-+        dma_st_.resize(config_.dma_clients);
-+        ++(req.is_write() ? dma_st_.at(c).writes : dma_st_.at(c).reads);
-+      #endif
-         in.pop();
+-        auto& req = in.peek();
+-        uint64_t line_addr = to_local_addr(req.addr) & ~uint64_t(VX_CFG_MEM_BLOCK_SIZE - 1);
+-        if (req.is_write()) {
+-          for (uint32_t b = 0; req.data && b < VX_CFG_MEM_BLOCK_SIZE; ++b) {
+-            if (req.byteen & (1ull << b)) {
+-              uint8_t value = (*req.data)[b];
+-              ram_.write(&value, line_addr + b, 1);
+-            }
+-          }
+-#if VX_CFG_EXT_A_ENABLED
+-          amo_unit_.invalidate(to_local_addr(req.addr), req.hart_id);
+-#endif
+-        } else {
+-          MemRsp rsp{req.tag, req.hart_id, req.uuid};
+-          auto rsp_data = make_mem_block();
+-          ram_.read(rsp_data->data(), line_addr, VX_CFG_MEM_BLOCK_SIZE);
+-          rsp.data = rsp_data;
+-          // The request arrived over a registered channel; the read data
+-          // returns the cycle after it was issued.
+-          simobject_->DmaOutputs.at(c * DMA_PORTS + p).send(rsp, 0);
+-        }
+-        DT(4, simobject_->name() << "-dma" << c << " req : " << req);
+-        in.pop();
        }
        dma_last_grant_ = c;
 +    #ifdef LMEM_DMA_STATS
-+      granted = c;
++      granted |= 1u << c;
 +    #endif
        return;
      }
    }
-@@ -445,9 +498,18 @@
+ 
++  // VX_CFG_LMEM_DMA_BUDGET: the cycle's bank bytes go to the channels' head
++  // blocks in round-robin order, each channel at most one block per cycle.
++  void dma_fire_budget(uint32_t& granted) {
++    const uint32_t channels = config_.dma_clients * DMA_PORTS;
++    dma_tokens_ = std::min<uint32_t>(dma_tokens_, DMA_PORTS * VX_CFG_MEM_BLOCK_SIZE) + VX_CFG_LMEM_DMA_BUDGET;
++    uint32_t first = dma_last_chan_;
++    for (uint32_t i = 0; i < channels; ++i) {
++      uint32_t ch = (first + 1 + i) % channels;
++      auto& in = simobject_->DmaInputs.at(ch);
++      if (in.empty()) {
++        continue;
++      }
++      if (!in.peek().is_write() && simobject_->DmaOutputs.at(ch).full()) {
++        continue;
++      }
++      if (dma_tokens_ < VX_CFG_MEM_BLOCK_SIZE) {
++        break;
++      }
++      dma_tokens_ -= VX_CFG_MEM_BLOCK_SIZE;
++      this->dma_serve(ch);
++      dma_last_chan_ = ch;
++      granted |= 1u << (ch / DMA_PORTS);
++    }
++  }
++
++  // Write or read the head block of DMA channel `ch`.
++  void dma_serve(uint32_t ch) {
++    auto& in = simobject_->DmaInputs.at(ch);
++    auto& req = in.peek();
++    uint64_t line_addr = to_local_addr(req.addr) & ~uint64_t(VX_CFG_MEM_BLOCK_SIZE - 1);
++    if (req.is_write()) {
++      for (uint32_t b = 0; req.data && b < VX_CFG_MEM_BLOCK_SIZE; ++b) {
++        if (req.byteen & (1ull << b)) {
++          uint8_t value = (*req.data)[b];
++          ram_.write(&value, line_addr + b, 1);
++        }
++      }
++#if VX_CFG_EXT_A_ENABLED
++      amo_unit_.invalidate(to_local_addr(req.addr), req.hart_id);
++#endif
++    } else {
++      MemRsp rsp{req.tag, req.hart_id, req.uuid};
++      auto rsp_data = make_mem_block();
++      ram_.read(rsp_data->data(), line_addr, VX_CFG_MEM_BLOCK_SIZE);
++      rsp.data = rsp_data;
++      // The request arrived over a registered channel; the read data
++      // returns the cycle after it was issued.
++      simobject_->DmaOutputs.at(ch).send(rsp, 0);
++    }
++    DT(4, simobject_->name() << "-dma" << (ch / DMA_PORTS) << " req : " << req);
++  #ifdef LMEM_DMA_STATS
++    dma_st_.resize(config_.dma_clients);
++    ++(req.is_write() ? dma_st_.at(ch / DMA_PORTS).writes : dma_st_.at(ch / DMA_PORTS).reads);
++  #endif
++    in.pop();
++  }
++
+   // Issue an engine's next pass. Returns true when it was the request's last,
+   // which frees S1 for a new request in the same cycle. The response queue
+   // occupancy is the one from the start of the cycle.
+@@ -445,9 +533,18 @@
      for (auto& e : engines_) {
        e.pending = BitVector<>(config.num_lanes);
      }
@@ -105,6 +481,15 @@ diff -ruN '--exclude=.git' src_tmem/sim/simx/mem/local_mem.cpp src_tmemk/sim/sim
  
    void reset() {
      // perf_stats_ survives: the MPM counters run from device reset.
+@@ -470,6 +567,8 @@
+     write_waiting_r_ = false;
+     dma_slot_ = false;
+     dma_last_grant_ = config_.dma_clients ? (config_.dma_clients - 1) : 0;
++    dma_tokens_ = 0;
++    dma_last_chan_ = 0;
+   }
+ 
+   void tick() {
 diff -ruN '--exclude=.git' src_tmem/sim/simx/tcu/tcu_unit.cpp src_tmemk/sim/simx/tcu/tcu_unit.cpp
 --- src_tmem/sim/simx/tcu/tcu_unit.cpp	2026-11-21 01:53:17.944087965 -0500
 +++ src_tmemk/sim/simx/tcu/tcu_unit.cpp	2026-11-21 02:30:27.066120595 -0500
@@ -930,8 +1315,8 @@ diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem_decode/common.h s
 +#endif
 diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem_decode/kernel.cpp src_tmemk/tests/regression/gemm_tmem_decode/kernel.cpp
 --- src_tmem/tests/regression/gemm_tmem_decode/kernel.cpp	1969-12-31 19:00:00.000000000 -0500
-+++ src_tmemk/tests/regression/gemm_tmem_decode/kernel.cpp	2026-11-21 03:29:08.289597549 -0500
-@@ -0,0 +1,233 @@
++++ src_tmemk/tests/regression/gemm_tmem_decode/kernel.cpp	2026-11-21 05:06:01.399629819 -0500
+@@ -0,0 +1,238 @@
 +#include "common.h"
 +#include <vx_spawn2.h>
 +#include <vx_tensor.h>
@@ -956,7 +1341,7 @@ diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem_decode/kernel.cpp
 +using ctx = vt::wgmma_context<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, false, GEMM_NRC>;
 +using wg_cfg = vt::wgmma_config_t<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, GEMM_NRC>;
 +
-+constexpr uint32_t kDescA = 0;
++[[maybe_unused]] constexpr uint32_t kDescA = 0;
 +constexpr uint32_t kDescW = 1;
 +
 +constexpr uint32_t kBlocks   = VX_CFG_NUM_TCU_BLOCKS;
@@ -1030,8 +1415,13 @@ diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem_decode/kernel.cpp
 +        }
 +        uint8_t* buf = stages + s * stage_bytes;
 +        const uint32_t ks0 = i * KSTEPS;
++      #ifdef NO_MMA
++        // Staging alone: the transfers of W only, as a copy of W.
++        vx_barrier_expect_tx(full_bar(s), kXfers);
++      #else
 +        vx_barrier_expect_tx(full_bar(s), 1 + kXfers);
 +        vx_dxa_issue_2d_wg(kDescA, full_bar(s), buf, 0, ks0);
++      #endif
 +        for (uint32_t q = 0; q < kXfers; ++q) {
 +          uint8_t* dst = buf + stage_a + q * XFER;
 +        #if LAYOUT == LAYOUT_PACKED
@@ -1512,3 +1902,35 @@ diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem_decode/Makefile s
 +
 +include ../common.mk
 Binary files src_tmem/third_party/softfloat/build/Linux-x86_64-GCC/softfloat.a and src_tmemk/third_party/softfloat/build/Linux-x86_64-GCC/softfloat.a differ
+diff -ruN '--exclude=.git' src_tmem/VX_config.toml src_tmemk/VX_config.toml
+--- src_tmem/VX_config.toml	2026-11-21 01:36:33.677665338 -0500
++++ src_tmemk/VX_config.toml	2026-11-21 05:33:28.108277511 -0500
+@@ -398,6 +398,11 @@
+ # capacity like 96 KB or 228 KB sets both (LMEM_LOG_SIZE = clog2(LMEM_SIZE)).
+ VX_CFG_LMEM_SIZE = "expr: pow(2, $VX_CFG_LMEM_LOG_SIZE)"
+ 
++# Bytes of bank access per cycle the shared-memory DMA clients (DXA writes,
++# tensor-core reads) share, each client at most one bank row per cycle.
++# 0: one client per cycle, whatever its width. SimX only.
++VX_CFG_LMEM_DMA_BUDGET = 0
++
+ [tcu]
+ # string enum: 'DPI'|'DSP'|'BHF'|'TFR'|'FPNEW'; TFR is the universal default. On
+ # FPGA its FEDP multipliers map onto DSP48 via VX_CFG_TCU_USE_DSP below.
+@@ -463,6 +468,16 @@
+ VX_CFG_DXA_GMEM_PORTS = 1
+ VX_CFG_DXA_QUEUE_SIZE = 16
+ VX_CFG_DXA_MAX_INFLIGHT = 8
++# 1: a worker's shared-memory beat writes two lines of one bank row when both
++# have arrived, instead of one line per beat. SimX only (the RTL drains one
++# line per beat).
++VX_CFG_DXA_ROW_BEAT = 0
++# Minimum cycles between two transfers one warp issues, as a per-issuer
++# transfer cost (descriptor and setup). 0: none. SimX only.
++VX_CFG_DXA_ISSUE_INTERVAL = 0
++# Lines a worker requests, captures and writes to shared memory per cycle;
++# with several GMEM ports, lane l uses port l % ports. SimX only.
++VX_CFG_DXA_WORKER_LINES = 1
+ 
+ [rtu]
+ # RTU (Ray-Tracing Unit)
