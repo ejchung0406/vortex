@@ -447,11 +447,11 @@ VX_CFG_TCU_SPARSE_FULLK_ENABLE = "expr: $VX_CFG_TCU_SPARSE_ENABLE and $VX_CFG_TC
 VX_CFG_TCU_TMEM_ENABLE = false
 VX_CFG_TCU_TMEM_COLS = 128
 # N blocks of dense K-major B a tensor op fetches ahead of the one in use; the
-# B buffer holds one more block than that. SimX only above 1: the RTL
-# fetches one ahead.
+# B buffer holds one more block than that. A block's fetch takes 4 cycles to
+# its 2 steps, so 1 runs the walk at half rate and 2 runs it back to back.
 VX_CFG_TCU_TMEM_B_AHEAD = 1
 # 1: a tensor op reads row-major A from shared memory a bank row at a time
-# instead of a read per A row. SimX only: the RTL reads per row.
+# instead of a read per A row.
 VX_CFG_TCU_TMEM_A_BANKROW = 0
 
 [dxa]

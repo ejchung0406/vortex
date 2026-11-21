@@ -124,6 +124,17 @@ The engine runs the queue head:
 - **`tc.cp`:** waits for the steps in flight to be written back, then reads
   one bank row at a time through the tile buffers' LMEM port.
 
+**Operand fetch knobs.** A dense K-major B block serves 2 steps and its
+fetch takes 4 cycles from request to first use, so with the one-block-ahead
+prefetch above the walk runs 2 steps in every 4 cycles.
+`VX_CFG_TCU_TMEM_B_AHEAD` (default 1) is the number of blocks fetched ahead of
+the one in use: above 1 the B buffer has that many slots plus one (block `n`
+in slot `n mod slots`), requests run ahead of the responses, each side with
+its own block and row counters, and the walk is back to back from 2 on.
+`VX_CFG_TCU_TMEM_A_BANKROW` (default 0) at 1 lets one shared-memory read
+serve every remaining row-major A row in the bank row it reads, instead of a
+read per row. Sparse and block-major B keep the one-block fetch.
+
 An op leaving the engine posts its commits with the count of steps issued
 so far; a commit arrives on its barrier once that many steps have been
 written back, one arrival per cycle through `VX_tcu_bar_if`.
@@ -236,8 +247,4 @@ buffer's TMEM-gated code maps slightly differently.
 ## 9. Not covered
 
 - WGMMA and TMEM in one build.
-- The RTL of `VX_CFG_TCU_TMEM_B_AHEAD` above 1 (B fetched more than one N
-  block ahead of the one in use) and of `VX_CFG_TCU_TMEM_A_BANKROW` (row-major
-  A read a bank row at a time). Both are modelled in SimX only; at their
-  defaults SimX and the RTL fetch one block ahead and one A row per read.
 - `.ws`, `cta_group::2`, `shift`, multicast commit.
