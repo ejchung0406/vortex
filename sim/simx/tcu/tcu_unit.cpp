@@ -83,9 +83,10 @@ static constexpr uint32_t kBBlockWordsSp = cfg::tcK * cfg::tcN * 2;
 // One bank row holds kBSubBlocks consecutive dense B blocks.
 static constexpr uint32_t kBSubBlocks =
     (VX_CFG_NUM_THREADS > kBBlockWords) ? (VX_CFG_NUM_THREADS / kBBlockWords) : 1;
-// A sparse B block spanning two 32-bit bank rows takes two reads.
+// A sparse B block spanning two logical rows (NUM_THREADS words each) takes
+// two reads when a bank row holds one of them.
 static constexpr bool kBSparseTwoFetch =
-    (kBBlockWordsSp == 2 * kLmemBanks) && (VX_CFG_XLEN == 32);
+    (kBBlockWordsSp == 2 * VX_CFG_NUM_THREADS) && (kBankRowWords == VX_CFG_NUM_THREADS);
 // A block-major A stripe is m_steps blocks, each padded to whole bank rows.
 static constexpr uint32_t a_stripe_reads(uint32_t block_words) {
   return (wg_cfg::m_steps * ((block_words + kLmemBanks - 1) / kLmemBanks) * kLmemBanks

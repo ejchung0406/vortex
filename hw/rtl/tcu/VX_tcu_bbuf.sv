@@ -22,8 +22,8 @@
 // the current (step_k, step_n) block. All Q tcu_cores read from the
 // same buffer (structural fan-out, not arbitrated).
 //
-// For canonical configs where TC_K * TC_N < NUM_BANKS, one bank-row holds
-// B_SUB_BLOCKS = NUM_BANKS / (TC_K * TC_N) consecutive (k,n) blocks.
+// Where a dense block is smaller than TCU_BLOCK_CAP words, a logical row holds
+// B_SUB_BLOCKS = TCU_BLOCK_CAP / (FEDP_K * TC_N) consecutive (k,n) blocks.
 // Refill key = {desc_b, bank_row_index} where
 //   bank_row_index = (step_k * N_STEPS + step_n) >> LG_B_SUB_BLOCKS.
 //
@@ -84,24 +84,28 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     // K-major sparse: the two storage slots split at a K-word group boundary,
     // which sparse FULLK moves to fedpK words.
     localparam B_KMAJ_SPLIT_SP    = TCU_WG_SP_K_WORDS * TCU_TC_N;
-    localparam B_BUF_WORDS        = NUM_BANKS;             // storage per slot
-                                                           // (= 1 logical 32-bit bank-row)
+    // A logical row is the B_SUB_BLOCKS dense blocks the shared-memory layout
+    // packs together (TCU_BLOCK_CAP words); a slot stores one.
+    localparam LROW_WORDS         = B_BLOCK_WORDS * TCU_WG_B_SUB_BLOCKS;
+    localparam B_BUF_WORDS        = LROW_WORDS;
     localparam LG_B_SUB_BLOCKS    = $clog2(TCU_WG_B_SUB_BLOCKS);
-    // XLEN ratio: each physical LMEM bank-row carries (XLEN/32) logical
-    // 32-bit bank-rows side-by-side.
+    // A physical LMEM bank row is NUM_BANKS XLEN-wide words and carries
+    // LROWS_PER_ROW logical rows side by side.
     localparam XLEN_RATIO         = `VX_CFG_XLEN / 32;
-    localparam LG_XLEN_RATIO      = (XLEN_RATIO > 1) ? $clog2(XLEN_RATIO) : 0;
+    localparam LROWS_PER_ROW      = (LROW_WORDS != 0) ? ((NUM_BANKS * XLEN_RATIO) / LROW_WORDS) : 1;
+    localparam LG_LROWS_PER_ROW   = (LROWS_PER_ROW > 1) ? $clog2(LROWS_PER_ROW) : 0;
 
-    localparam LOGICAL_ROWS_PER_BLK = TCU_WG_B_BLOCK_SIZE_SP / NUM_BANKS;
+    localparam LOGICAL_ROWS_PER_BLK = (LROW_WORDS != 0) ? (TCU_WG_B_BLOCK_SIZE_SP / LROW_WORDS) : 1;
     `STATIC_ASSERT (LOGICAL_ROWS_PER_BLK == 1 || LOGICAL_ROWS_PER_BLK == 2,
                     ("flat sparse-B supports 1 or 2 logical bank-rows per block"))
     localparam bit SPARSE_TWO_SLOT = (LOGICAL_ROWS_PER_BLK == 2);
-    localparam bit SPARSE_TWO_FETCH = SPARSE_TWO_SLOT && (XLEN_RATIO == 1);
+    localparam bit SPARSE_TWO_FETCH = SPARSE_TWO_SLOT && (LROWS_PER_ROW == 1);
 
-    // Canonical-config invariant: 1 logical (32-bit-equivalent) bank-row
-    // holds B_SUB_BLOCKS blocks (the smem layout is XLEN-independent).
-    `STATIC_ASSERT (B_BLOCK_WORDS * TCU_WG_B_SUB_BLOCKS == NUM_BANKS,
-                    ("VX_tcu_bbuf assumes one bank-row per B_SUB_BLOCKS blocks"))
+    // The shared-memory layout is independent of XLEN and of the bank count:
+    // a physical bank row must hold whole logical rows.
+    `STATIC_ASSERT (LROW_WORDS != 0 && (LROWS_PER_ROW * LROW_WORDS == NUM_BANKS * XLEN_RATIO)
+                    && ((LROWS_PER_ROW & (LROWS_PER_ROW - 1)) == 0),
+                    ("VX_tcu_bbuf needs an LMEM bank row of a power-of-two number of B_SUB_BLOCKS-block rows"))
 
     // K-major (= row-major SMEM where K runs along contiguous bytes; the
     // WGMMA SS-descriptor's canonical layout) fetch path. Engaged
@@ -150,30 +154,30 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     // LMEM bank-row offset.
     //
     //   Dense:  one logical 32-bit bank-row holds B_SUB_BLOCKS dense
-    //           blocks; XLEN_RATIO of them fit in one physical bank-row.
+    //           blocks; LROWS_PER_ROW of them fit in one physical bank-row.
     //           So advance the LMEM addr every
-    //             (B_SUB_BLOCKS * XLEN_RATIO) blocks.
+    //             (B_SUB_BLOCKS * LROWS_PER_ROW) blocks.
     // Sparse blocks use the flat producer layout and can span one or two
     // logical 32-bit bank rows.
-    localparam TOTAL_SHIFT = LG_B_SUB_BLOCKS + LG_XLEN_RATIO;
+    localparam TOTAL_SHIFT = LG_B_SUB_BLOCKS + LG_LROWS_PER_ROW;
     wire [BANK_ADDR_WIDTH-1:0] dense_offset = BANK_ADDR_WIDTH'(block_index >> TOTAL_SHIFT);
 
-    // Dense within-physical-bank-row selector (XLEN>32 only). Picks which
-    // of the XLEN_RATIO logical 32-bit bank-rows to copy into slot A.
-    localparam SUB_HALF_W = (LG_XLEN_RATIO == 0) ? 1 : LG_XLEN_RATIO;
+    // Dense within-physical-bank-row selector. Picks which of the
+    // LROWS_PER_ROW logical rows to copy into slot A.
+    localparam SUB_HALF_W = (LG_LROWS_PER_ROW == 0) ? 1 : LG_LROWS_PER_ROW;
     wire [SUB_HALF_W-1:0] dense_sub_half =
-        (LG_XLEN_RATIO == 0)
+        (LG_LROWS_PER_ROW == 0)
         ? '0
-        : SUB_HALF_W'((32'(block_index) >> LG_B_SUB_BLOCKS) & ((1 << LG_XLEN_RATIO) - 1));
+        : SUB_HALF_W'((32'(block_index) >> LG_B_SUB_BLOCKS) & ((1 << LG_LROWS_PER_ROW) - 1));
 
     localparam SP_LOGROW_W = BI_W + 1;
     wire [SP_LOGROW_W-1:0] sp_logrow_a =
         SP_LOGROW_W'(block_index) * SP_LOGROW_W'(LOGICAL_ROWS_PER_BLK);
     wire [SP_LOGROW_W-1:0] sp_logrow_b = sp_logrow_a + SP_LOGROW_W'(1);
-    wire [SUB_HALF_W-1:0] sp_sub_a = (LG_XLEN_RATIO == 0) ? '0
-                                   : SUB_HALF_W'(sp_logrow_a & SP_LOGROW_W'((1 << LG_XLEN_RATIO) - 1));
-    wire [SUB_HALF_W-1:0] sp_sub_b = (LG_XLEN_RATIO == 0) ? '0
-                                   : SUB_HALF_W'(sp_logrow_b & SP_LOGROW_W'((1 << LG_XLEN_RATIO) - 1));
+    wire [SUB_HALF_W-1:0] sp_sub_a = (LG_LROWS_PER_ROW == 0) ? '0
+                                   : SUB_HALF_W'(sp_logrow_a & SP_LOGROW_W'((1 << LG_LROWS_PER_ROW) - 1));
+    wire [SUB_HALF_W-1:0] sp_sub_b = (LG_LROWS_PER_ROW == 0) ? '0
+                                   : SUB_HALF_W'(sp_logrow_b & SP_LOGROW_W'((1 << LG_LROWS_PER_ROW) - 1));
 
     // -----------------------------------------------------------------------
     // Address compute (block-major)
@@ -207,7 +211,7 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     logic [BANK_ADDR_WIDTH-1:0] slot_desc_b_row_base_r;
     logic [BANK_ROW_WORDS_LOG2-1:0] slot_desc_b_inrow_r;
     logic                       slot_fetching_r;
-    // Dense within-physical-bank-row half (XLEN>32 only).
+    // Dense logical row within the physical bank row.
     logic [SUB_HALF_W-1:0]      slot_a_sub_half_r;
     // Second slot for sparse blocks spanning two logical rows.
     logic                       slot_b_valid_r;
@@ -240,9 +244,9 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     wire [BANK_ADDR_WIDTH-1:0] fetch_addr_dense =
         desc_b_row_base + dense_offset;
     wire [BANK_ADDR_WIDTH-1:0] fetch_addr_a_sparse =
-        desc_b_row_base + BANK_ADDR_WIDTH'(sp_logrow_a >> LG_XLEN_RATIO);
+        desc_b_row_base + BANK_ADDR_WIDTH'(sp_logrow_a >> LG_LROWS_PER_ROW);
     wire [BANK_ADDR_WIDTH-1:0] fetch_addr_b_sparse =
-        desc_b_row_base + BANK_ADDR_WIDTH'(sp_logrow_b >> LG_XLEN_RATIO);
+        desc_b_row_base + BANK_ADDR_WIDTH'(sp_logrow_b >> LG_LROWS_PER_ROW);
 
     wire [BANK_ADDR_WIDTH-1:0] fetch_addr_a =
         req_is_sparse ? fetch_addr_a_sparse : fetch_addr_dense;
@@ -617,13 +621,13 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     end
 
     // -----------------------------------------------------------------------
-    // Storage (LUTRAM): two slots × NUM_BANKS 32-bit words.
+    // Storage (LUTRAM): two slots × LROW_WORDS 32-bit words.
     //   slot A is always written on FETCH_A response (dense + sparse).
     //   slot B is written on FETCH_B response (sparse only).
     //
-    //   Dense write:  copies one logical 32-bit bank-row (NUM_BANKS words)
+    //   Dense write:  copies one logical row (LROW_WORDS words)
     //                 from the physical response — picked by sub_half at
-    //                 XLEN>32, the lower NUM_BANKS otherwise. tcu_core's
+    //                 where the bank row holds several. tcu_core's
     //                 b_off then picks within those words at execute time.
     //
     //   Sparse write: extracts the compressed candidate lanes from one or two
@@ -634,11 +638,11 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     logic [B_BUF_WORDS*32-1:0] storage_a_wdata, storage_b_wdata;
     logic [B_BUF_WORDS-1:0]    storage_a_wren,  storage_b_wren;
 
-    // The logical 32-bit bank row a slot copies: an XLEN_RATIO-way select of
+    // The logical row a slot copies: an LROWS_PER_ROW-way select of
     // the response (a plain wire at XLEN=32).
-    wire [XLEN_RATIO-1:0][NUM_BANKS-1:0][31:0] rsp_halves = tcu_lmem_if.rsp_data.data;
-    wire [NUM_BANKS-1:0][31:0] rsp_half_a, rsp_half_b;
-    if (XLEN_RATIO > 1) begin : g_halves
+    wire [LROWS_PER_ROW-1:0][LROW_WORDS-1:0][31:0] rsp_halves = tcu_lmem_if.rsp_data.data;
+    wire [LROW_WORDS-1:0][31:0] rsp_half_a, rsp_half_b;
+    if (LROWS_PER_ROW > 1) begin : g_halves
         assign rsp_half_a = rsp_halves[slot_a_sub_half_r];
         assign rsp_half_b = rsp_halves[slot_b_sub_half_r];
     end else begin : g_half
@@ -784,7 +788,7 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
 
     // -----------------------------------------------------------------------
     // Output mux.
-    //   Dense:  rs2[0..NUM_BANKS-1] = storage_A (legacy). tcu_core's b_off
+    //   Dense:  rs2[0..LROW_WORDS-1] = storage_A (legacy). tcu_core's b_off
     //           picks within at execute time.
     //   Sparse K-major is written directly in FEDP order. Block-major keeps
     //   the flat producer layout and applies a fixed read permutation.
