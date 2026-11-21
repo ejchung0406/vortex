@@ -35,9 +35,10 @@
 #endif
 
 // Shared memory starts with the CTA's TMEM column, padded to keep the stages
-// aligned: a multiple of the LMEM bank row (128 B with 16 XLEN=64 banks).
+// on an LMEM bank row (128 B with 16 XLEN=64 banks), 64 B at least.
 #ifndef TMEM_SLOT_BYTES
-  #define TMEM_SLOT_BYTES 64
+  #define TMEM_BANK_ROW_BYTES (VX_CFG_LMEM_NUM_BANKS * (VX_CFG_XLEN / 8))
+  #define TMEM_SLOT_BYTES ((TMEM_BANK_ROW_BYTES > 64) ? TMEM_BANK_ROW_BYTES : 64)
 #endif
 
 typedef struct {
