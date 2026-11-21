@@ -2281,8 +2281,6 @@ public:
       std::cout << "Error: sparse FULLK WGMMA requires a K-major B descriptor (ldm != 0)" << std::endl;
       std::abort();
     }
-    // load_lmem_word distinguishes A from B by descriptor base.
-    cur_a_desc_base_ = is_a_smem ? sd_a.base : ~uint64_t(0);
     cur_is_sparse_ = is_sparse;
     cur_xtile_n_ = xtile_n;
 
@@ -2293,7 +2291,7 @@ public:
         if (is_a_smem) {
           uint32_t k_elem = (step_k * k_words + z) * ratio;
           a_tile[i * k_words + z].u32 =
-              load_lmem_word(sd_a, a_row_idx, k_elem, fmt_s, false, false);
+              load_lmem_word(sd_a, a_row_idx, k_elem, fmt_s, false, false, true);
         } else {
           if (z < cfg::tcK) {
             a_tile[i * k_words + z] = rs1_data.at(i * cfg::tcK + z);
@@ -2340,8 +2338,8 @@ public:
             }
             constexpr uint32_t kCompression = 2;
             uint32_t k_elem_b0 = (step_k * k_words + z) * ratio * kCompression;
-            uint32_t bword0 = load_lmem_word(sd_b, k_elem_b0,         b_col_idx, fmt_s, true, true);
-            uint32_t bword1 = load_lmem_word(sd_b, k_elem_b0 + ratio, b_col_idx, fmt_s, true, true);
+            uint32_t bword0 = load_lmem_word(sd_b, k_elem_b0,         b_col_idx, fmt_s, true, true, false);
+            uint32_t bword1 = load_lmem_word(sd_b, k_elem_b0 + ratio, b_col_idx, fmt_s, true, true, false);
             uint32_t gathered = gather_sparse(bword0, bword1, lo, hi, ebits);
             b_tile[(i * cfg::tcN + j) * k_words + z].u32 = gathered;
             // Trace: B-gather (CSV: wid,step_m,step_n,i,lane,bword0,bword1,lo,hi,gathered).
@@ -2362,7 +2360,7 @@ public:
           for (uint32_t z = 0; z < k_words; ++z) {
             uint32_t k_elem = (step_k * k_words + z) * ratio;
             b_tile[(i * cfg::tcN + j) * k_words + z].u32 =
-                load_lmem_word(sd_b, k_elem, b_col_idx, fmt_s, true, false);
+                load_lmem_word(sd_b, k_elem, b_col_idx, fmt_s, true, false, false);
           }
         }
       }
@@ -2641,11 +2639,13 @@ private:
   }
 
   // Routes A reads through the current block's A buffer; B through the shared B buffer.
-  // sparse_b selects the flat candidate-pair B layout.
+  // The operand, not its address, picks the buffer: A and B descriptors may
+  // start at the same shared-memory address. sparse_b selects the flat
+  // candidate-pair B layout.
   uint32_t load_lmem_word(const lmem_desc_t& desc, uint32_t row, uint32_t col,
-                          uint32_t fmt_s, bool pack_along_row, bool sparse_b) const {
+                          uint32_t fmt_s, bool pack_along_row, bool sparse_b, bool is_a) const {
     auto& tbuf = simobject_->tbuf();
-    if (desc.base == cur_a_desc_base_) {
+    if (is_a) {
       uint32_t b = cur_block_;
       return gather_word([&](uint64_t addr) { return tbuf->read_a(b, addr); },
                          desc, row, col, fmt_s, pack_along_row, false,
@@ -2738,8 +2738,6 @@ private:
   // Current block index, set before delegating to wgmma().
   uint32_t cur_block_ = 0;
   // B buffer slot read by the current MMA.
-  // A-descriptor base for the current wgmma(); distinguishes A from B in load_lmem_word.
-  uint64_t cur_a_desc_base_ = ~uint64_t(0);
   bool cur_is_sparse_ = false;
   // xtileN for the active WGMMA (derived from NRC).
   uint32_t cur_xtile_n_ = 8;
