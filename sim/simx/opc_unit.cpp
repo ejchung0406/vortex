@@ -95,6 +95,11 @@ void OpcUnit::on_tick() {
     Input.pop();
     consumed_ = true;
   }
+
+  // nothing held and nothing on its way in: sleep until a uop is sent
+  if (cur_trace_ == nullptr && Input.size() == 0) {
+    this->tick_sleep();
+  }
 }
 
 void OpcUnit::read_src(RegDataVec& out,
