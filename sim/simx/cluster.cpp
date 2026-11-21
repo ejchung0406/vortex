@@ -112,6 +112,9 @@ public:
         true,                          // next_is_poc
         false,                         // line merging
         true,                          // core-request skid
+        false,                         // set_hash
+        VX_CFG_L2_CRSQ_SIZE,           // crsq_size
+        VX_CFG_L2_FWD_HOLD != 0,       // fwd_hold
       });
     }
 

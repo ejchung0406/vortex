@@ -374,6 +374,10 @@ VX_CFG_L2_LINK_LATENCY = 0
 VX_CFG_L2_MRSQ_SIZE = 4
 VX_CFG_L2_MREQ_SIZE = 0
 VX_CFG_L2_CRSQ_SIZE = 0
+# SimX only: as VX_CFG_DCACHE_FWD_HOLD, for the L2's banks (the same
+# VX_cache_bank): a forwarded fill waits on a full core-response queue instead
+# of being replayed. 0 keeps the model's replay.
+VX_CFG_L2_FWD_HOLD = 0
 
 VX_CFG_L2_NUM_BANKS = "expr: pow(2, clog2(min($VX_CFG_L2_NUM_REQS, 16)))"
 # On at every bank count: unlike the dcache, a 2-bank L2 measured neutral
