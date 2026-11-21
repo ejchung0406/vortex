@@ -28,7 +28,7 @@ reviewed, both simulators).
 | 14 | wgmma throughput: one shared B buffer puts the four tensor blocks in lockstep | performance | SimX patch `wgmma_tbuf.patch` (340 -> 1,326..2,989 FLOPs/cycle); not on fork | port count decision; RTL |
 | 15 | FIFO L2 makes disjoint SMs slow each other | calibration | pseudo-LRU set in `h200s` (9c27e289a) | propose as a default? |
 | 16 | L1 dcache and shared memory both at full size (484 KB vs the part's 256 KB pool) | profile accuracy | found, in every profile from Volta on | decide the split |
-| 17 | Tensor memory (`upstream/feature/tmem-dataflow`) as the way to the part's FLOPs | to evaluate | not on `master`, not on the fork | merge into a copy and measure with `tcu_roof` |
+| 17 | Tensor memory engine: B prefetch two blocks ahead and A read by bank rows (on `upstream/feature/tmem-dataflow`) | performance (design change) | SimX patch `tmem_roof.patch`: 1,789 -> 3,684 FLOPs/clock/SM with one 128 B port (part: 3,786); not on the fork yet | merge the branch, RTL counterpart, rtlsim parity |
 
 Issue texts in English for 9, 10, 11: `upstream-issue-drafts.md`. Upstream `master` checked at ccf811e11 (2026-11-20): the affected files are unchanged there.
 
@@ -249,11 +249,22 @@ Wrong: it has been per SM since July. Check the instantiation, not the comment.
 ## 16. L1 dcache + shared memory (profile accuracy)
 - Separate structures, each at full size: 256 KB + 228 KB = 484 KB per SM against the part's 256 KB configurable pool; same pattern in v100, a100, rtx5080 profiles. L1 at 32 KB: load-mode GEMM +1%, DXA-mode +9-18%.
 
-## 17. Tensor memory (`upstream/feature/tmem-dataflow`, to evaluate)
-- Three commits by another contributor (2026-11-15/16), not on `master`: a per-core tensor memory in the style of Blackwell's `tcgen05` (`docs/designs/tensor_memory.md` on that branch). Accumulators live in tensor memory instead of FP registers, one thread issues asynchronous multiplies (`tc.mma`), completion goes to a barrier; `VX_CFG_TCU_TMEM_ENABLE` (default false), `VX_CFG_TCU_TMEM_COLS`.
-- Why it matters here: item 14's limit is that accumulators sit in 32 FP registers, so a tile stops at N = 64 and needs 1.6-4x the operand bytes per FLOP of Hopper's N = 256 tile. With the accumulators in tensor memory the tile width is bounded by the column count (512 in that branch's results), and the B prefetch and the wider N step are part of the branch.
-- Its own results (16 warps, FEDP2K): area +10.6% LUT; GEMM 128x128x512 in 183,529 cycles on rtlsim (SimX 185,767). No FLOPs-per-clock figure for the unit alone.
-- Caveats: a TMEM build has no wgmma; the branch predates this fork's changes. Not merged or measured here.
+## 17. Tensor memory engine: deeper B prefetch, A by bank rows (performance, design change)
+- **Base**: `upstream/feature/tmem-dataflow` (three commits, 2026-11-15/16, not on `master`): a per-core tensor memory in the style of Blackwell's `tcgen05`. Accumulators live in tensor memory, so a tile can be N = 512 wide where FP registers stop at 64; one `tc.mma` uses all four blocks. wmma, the DXA and `gemm_block` run cycle-identical in a TMEM build; wgmma is excluded from it.
+- **As is** (h200s, FEDP2K, one 128 B/cycle tile-buffer port, test `tmem_roof`): 976 / 1,296 / 1,587 / 1,789 FLOPs per clock per SM at N = 64 / 128 / 256 / 512, against a 4,096 roof and the part's 3,786. The port carries 34 B/clock, so it is not the limit.
+- **Cause**: a B block serves 2 compute cycles; the engine fetches one block ahead and a fetch takes 4 cycles, so the walk computes 2 cycles in every 4. A is read one row per request (64 reads per op where 16 bank rows carry the same bytes). Both are in the branch's RTL too (`VX_tcu_bbuf.sv` `pf_en`, `VX_tcu_abuf.sv`), read not run; whether the RTL turnaround is 3 or 4 cycles is not settled.
+- **Change** (SimX only so far, both default to the branch's behaviour and keep its cycle counts): `VX_CFG_TCU_TMEM_B_AHEAD` (2: fetch two blocks ahead; +128 B of buffer, 256 -> 384 B) and `VX_CFG_TCU_TMEM_A_BANKROW`.
+
+| N | as is | A by bank rows | B two ahead | both |
+|---|---|---|---|---|
+| 128 | 1,296 | 1,699 | 1,868 | 1,926 (issuer-bound; 2,849 unrolled) |
+| 256 | 1,587 | 1,857 | 2,567 | 3,355 |
+| 512 | 1,789 | 1,948 | 3,156 | 3,689 (3,684 without counters) |
+
+- Depth 3 equals depth 2. Port traffic at the best point 62-65 B/clock: one port is enough. Remaining 7% at N = 512 is the per-op A fetch (18 of 276 cycles).
+- **Not solved**: the branch's GEMM test stays at 1,292 -> 1,299 (staging by the DXA sets the pace, the engine sits empty 60% of the time). A lone issuing warp gives one `tc.mma` per ~128 cycles (11 cycles per ALU instruction), which binds below N = 256 unless the loop is unrolled.
+- **Kind of change**: hardware design (engine control and one more buffer slot), not a kernel change and not a wider port. No size value of the profile changes.
+- **Before sending**: the branch has to land upstream first; RTL counterpart of both knobs; rtlsim parity.
 
 ## How these were found (for the talk)
 - Rule that produced most of them: match a real H200, never provision above it, and when a number looks wrong test several hypotheses instead of tuning.

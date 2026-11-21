@@ -1,0 +1,431 @@
+--- a/sim/simx/barrier_unit.cpp
++++ b/sim/simx/barrier_unit.cpp
+@@ -13,6 +13,7 @@
+ 
+ #include "barrier_unit.h"
+ #include <cassert>
++#include <cstdio>
+ #include <algorithm>
+ #include "core.h"
+ #include "scheduler.h"
+@@ -37,9 +38,15 @@
+   , core_(core)
+   , scheduler_(scheduler)
+   , barriers_(VX_CFG_NUM_WARPS * VX_CFG_NUM_BARRIERS)
++  , bar_t0_(VX_CFG_NUM_WARPS, 0)
+ {}
+ 
+-BarrierUnit::~BarrierUnit() {}
++BarrierUnit::~BarrierUnit() {
++  for (auto &kv : bar_bins_) {
++    fprintf(stderr, "BARWAIT %s bin=%llu n=%llu sum=%llu\n", this->name().c_str(),
++            (unsigned long long)kv.first, (unsigned long long)kv.second[0], (unsigned long long)kv.second[1]);
++  }
++}
+ 
+ // One request leaves the queue per cycle, so a completion that lands while the
+ // queue is still draining is delivered on the next free cycle rather than
+@@ -52,6 +59,12 @@
+ }
+ 
+ void BarrierUnit::release(uint32_t wid, uint32_t lag) {
++  if (bar_t0_.at(wid) != 0) {
++    uint64_t now = SimPlatform::instance().cycles();
++    auto &b = bar_bins_[bar_t0_.at(wid) >> 19];
++    b[0] += 1; b[1] += now - bar_t0_.at(wid);
++    bar_t0_.at(wid) = 0;
++  }
+   unlock_out.send(wid, lag + 1);
+ }
+ 
+@@ -96,6 +109,7 @@
+   } else {
+     if (is_sync_bar) {
+       barrier.wait_mask.set(wid);
++      bar_t0_.at(wid) = SimPlatform::instance().cycles();
+     }
+     // local barrier handling
+     auto barrier_count_p1 = barrier.count + 1;
+--- a/sim/simx/barrier_unit.h
++++ b/sim/simx/barrier_unit.h
+@@ -12,6 +12,8 @@
+ // limitations under the License.
+ 
+ #pragma once
++#include <map>
++#include <array>
+ 
+ #include <vector>
+ #include "types.h"
+@@ -54,6 +56,9 @@
+   Core*       core_;
+   Scheduler*  scheduler_;
+   std::vector<warp_barrier_t> barriers_;
++  // a local barrier's wait, arrival to release, by arrival cycle >> 19
++  std::vector<uint64_t> bar_t0_;
++  std::map<uint64_t, std::array<uint64_t, 2>> bar_bins_;
+ 
+   friend class SimObject<BarrierUnit>;
+ };
+--- a/sim/simx/instr_trace.h
++++ b/sim/simx/instr_trace.h
+@@ -78,6 +78,8 @@
+ 
+   // Cycle the instruction entered its warp's instruction buffer.
+   uint64_t ibuf_time;
++  uint64_t lsu_t0;   // a load's entry into the LSU request queue
++  uint32_t lsu_cls;  // 1: local memory, 2: global
+ 
+   instr_trace_t(uint64_t uuid)
+     : uuid(uuid)
+@@ -104,6 +106,8 @@
+     , fetch_stall(false)
+     , resume_warp(false)
+     , ibuf_time(0)
++    , lsu_t0(0)
++    , lsu_cls(0)
+     , log_once_(false)
+   {}
+ 
+@@ -133,6 +137,8 @@
+     , fetch_stall(rhs.fetch_stall)
+     , resume_warp(rhs.resume_warp)
+     , ibuf_time(rhs.ibuf_time)
++    , lsu_t0(rhs.lsu_t0)
++    , lsu_cls(rhs.lsu_cls)
+     , log_once_(false)
+   {}
+ 
+--- a/sim/simx/kmu/kmu.cpp
++++ b/sim/simx/kmu/kmu.cpp
+@@ -13,6 +13,7 @@
+ 
+ #include "kmu.h"
+ #include <cassert>
++#include <cstdio>
+ 
+ using namespace vortex;
+ 
+@@ -96,6 +97,7 @@
+            && (cluster_dim_[2] > 0);
+   ctx_id_ += 1;
+   cluster_locked_ = false;
++  fprintf(stderr, "KMU_START cycle=%llu running=%d\n", (unsigned long long)SimPlatform::instance().cycles(), (int)running_);
+   if (running_) {
+     cta_id_          = 0;
+     group_origin_[0] = group_origin_[1] = group_origin_[2] = 0;
+--- a/sim/simx/lsu_unit.cpp
++++ b/sim/simx/lsu_unit.cpp
+@@ -14,6 +14,7 @@
+ #include "lsu_unit.h"
+ #include <iostream>
+ #include <iomanip>
++#include <cstdio>
+ #include <string.h>
+ #include <assert.h>
+ #include <util.h>
+@@ -189,8 +190,13 @@
+ 	}
+ }
+ 
+-LsuUnit::~LsuUnit()
+-{}
++LsuUnit::~LsuUnit() {
++	for (auto &kv : lsu_lat_bins_) {
++		fprintf(stderr, "LSULAT %s cls=%u bin=%u n=%llu sum=%llu max=%llu\n", this->name().c_str(),
++		        (uint32_t)(kv.first >> 32), (uint32_t)kv.first, (unsigned long long)kv.second[0],
++		        (unsigned long long)kv.second[1], (unsigned long long)kv.second[2]);
++	}
++}
+ 
+ // Returns true when no block holds an instruction with requests still to send
+ // or a read awaiting its response; ops still in the dispatch buffer do not hold
+@@ -428,6 +434,20 @@
+ 			state.rsp_tracks.release(track_id);
+ 		}
+ 	}
++	if (rsp_last && trace->lsu_t0 != 0 && trace->lsu_cls != 0) {
++		uint64_t now = SimPlatform::instance().cycles();
++		uint64_t d = now - trace->lsu_t0;
++		auto &lb = lsu_lat_bins_[((uint64_t)trace->lsu_cls << 32) | (trace->lsu_t0 >> 19)];
++		lb[0] += 1; lb[1] += d; lb[2] = std::max(lb[2], d);
++		// the same load from its entry into the instruction buffer, issue wait included
++		uint64_t di = now - trace->ibuf_time;
++		auto &li = lsu_lat_bins_[((uint64_t)(trace->lsu_cls + 2) << 32) | (trace->lsu_t0 >> 19)];
++		li[0] += 1; li[1] += di; li[2] = std::max(li[2], di);
++		// and from issue entry to LSU entry
++		uint64_t dq = trace->lsu_t0 - trace->ibuf_time;
++		auto &lq = lsu_lat_bins_[((uint64_t)(trace->lsu_cls + 4) << 32) | (trace->lsu_t0 >> 19)];
++		lq[0] += 1; lq[1] += dq; lq[2] = std::max(lq[2], dq);
++	}
+ 	if (is_final && entry.eop) {
+ 		trace->rsp_tracked = true;
+ 		trace->rsp_last = rsp_last;
+@@ -500,6 +520,10 @@
+ 		no_rsp_bufs_.at(b).send(trace, 1);
+ 		trace = copy;
+ 	}
++	if (is_read && !(lsu_type_tag && *lsu_type_tag == LsuType::FENCE)) {
++		trace->lsu_t0 = SimPlatform::instance().cycles();
++		trace->lsu_cls = 0;
++	}
+ 	state.req_queue.push(trace);
+ 	input.pop();
+ #ifdef TCU_META_ENABLE
+@@ -744,6 +768,7 @@
+ 			// the cache; with VM off, the address is already the PA.
+ 			lsu_req.mask.set(i);
+ 			lsu_req.addrs.at(i) = entry.addr;
++			trace->lsu_cls = (get_addr_type(entry.addr) == AddrType::Shared) ? 1 : 2;
+ 			lane_entries.at(i) = entry;
+ 			if (is_write || is_amo) {
+ 				// Package the lane's value into a per-lane block + byteen.
+--- a/sim/simx/lsu_unit.h
++++ b/sim/simx/lsu_unit.h
+@@ -15,6 +15,7 @@
+ 
+ #include <array>
+ #include <deque>
++#include <map>
+ #include <mempool.h>
+ #include <ringqueue.h>
+ #include "func_unit.h"
+@@ -86,6 +87,9 @@
+ 	LsuUnit(const SimContext& ctx, const char* name, Core*);
+ 	~LsuUnit();
+ 
++	// load latency, LSU entry to last response, by (class << 32 | entry cycle >> 19)
++	std::map<uint64_t, std::array<uint64_t, 3>> lsu_lat_bins_;
++
+ #ifdef TCU_META_ENABLE
+ 	// TCU metadata client ports (TCU_AGU_PORTS, starting at block 0): TCU_LD
+ 	// load requests arbitrate with the block's own traffic into its
+--- a/sim/simx/mem/cache.cpp
++++ b/sim/simx/mem/cache.cpp
+@@ -22,6 +22,9 @@
+ #include <algorithm>
+ #include <cstring>
+ #include <list>
++#include <map>
++#include <array>
++#include <cstdio>
+ #include <queue>
+ #include <unordered_map>
+ #include <util.h>
+@@ -855,6 +858,19 @@
+     this->on_reset();
+   }
+ 
++  ~CacheBank() {
++    for (auto &kv : lat_bins_) {
++      fprintf(stderr, "LATSTAT %s bin=%llu n=%llu sum=%llu max=%llu\n", this->name().c_str(),
++              (unsigned long long)kv.first, (unsigned long long)kv.second[0],
++              (unsigned long long)kv.second[1], (unsigned long long)kv.second[2]);
++    }
++    for (auto &kv : lat_regions_) {
++      fprintf(stderr, "LATREG %s mb=0x%llx n=%llu sum=%llu max=%llu\n", this->name().c_str(),
++              (unsigned long long)kv.first, (unsigned long long)kv.second[0],
++              (unsigned long long)kv.second[1], (unsigned long long)kv.second[2]);
++    }
++  }
++
+   const Cache::PerfStats &perf_stats() const {
+     return perf_stats_;
+   }
+@@ -1147,6 +1163,7 @@
+           fwd_data_   = mem_rsp.data;
+         }
+         DT(3, this->name() << " fill-rsp: " << mem_rsp);
++        this->lat_fill_done(mshr_id);
+         this->mem_rsp_in.pop();
+         --pending_fill_reqs_;
+         return;
+@@ -1731,9 +1748,28 @@
+       return;
+     }
+   #endif
++    if (req.op == MemOp::LD && !req.flags.flush) {
++      lat_t0_[req.tag] = {SimPlatform::instance().cycles(), req.addr};
++    }
+     this->mem_req_out.send(req, mem_req_delay_);
+   }
+ 
++  // fill round trip, from the bank's send to its acceptance of the fill, binned by send cycle
++  std::unordered_map<uint32_t, std::pair<uint64_t, uint64_t>> lat_t0_;
++  std::map<uint64_t, std::array<uint64_t, 3>> lat_bins_;
++  std::map<uint64_t, std::array<uint64_t, 3>> lat_regions_;
++  void lat_fill_done(uint32_t tag) {
++    auto it = lat_t0_.find(tag);
++    if (it == lat_t0_.end()) return;
++    uint64_t now = SimPlatform::instance().cycles();
++    uint64_t d = now - it->second.first;
++    auto &b = lat_bins_[it->second.first >> 19];
++    b[0] += 1; b[1] += d; b[2] = std::max(b[2], d);
++    auto &r = lat_regions_[it->second.second >> 20];
++    r[0] += 1; r[1] += d; r[2] = std::max(r[2], d);
++    lat_t0_.erase(it);
++  }
++
+   // Emit a write-through store downstream, with the optional core response.
+   // All backpressure is checked before any send, so a false return stalls
+   // the caller with no partial effects.
+--- a/tests/regression/gemm_block/common.h
++++ b/tests/regression/gemm_block/common.h
+@@ -47,6 +47,8 @@
+   uint32_t cp_wrap;  // memory-bound role, of CTA b % cp_wrap in the other
+   uint32_t idle_role;  // the role whose CTAs do no work, or ROLE_NONE
+   uint32_t last_cta;   // the grid's last CTA: a CTA of the idle role waits for its record
++  uint32_t cp_nomem;   // the compute role multiplies register-held tiles: no loads or staging
++  uint64_t idle_until; // nonzero: an idle CTA spins on its core's cycle counter to this cycle, no fence or load
+   uint64_t A_addr;
+   uint64_t B_addr;
+   uint64_t C_addr;
+--- a/tests/regression/gemm_block/kernel.cpp
++++ b/tests/regression/gemm_block/kernel.cpp
+@@ -56,6 +56,18 @@
+ // grid from the cores that work. The host sizes the grid so that the last CTA
+ // goes to a working core.
+ static __attribute__((noinline)) void idle_cta(kernel_arg_t* __UNIFORM__ arg) {
++  if (arg->idle_until) {
++    while (vx_rdcycle() < arg->idle_until) {
++      for (uint32_t i = 0; i < 4096; ++i) {
++        __asm__ volatile("nop");
++      }
++    }
++#ifdef PROFILE_ENABLE
++    reinterpret_cast<uint32_t*>(arg->cycles_addr)[blockIdx.x * get_num_sub_groups() + get_sub_group_id()] = 0;
++#endif
++    record_cta(arg, 0);
++    return;
++  }
+   auto last = reinterpret_cast<volatile uint32_t*>(arg->core_addr) + arg->last_cta;
+   for (;;) {
+     // a core's data cache does not see another core's store: the fence
+@@ -213,8 +225,68 @@
+ // The compute-bound role's walk is a function of its own, so that its many
+ // accumulators do not take registers from the memory-bound role's walk, which
+ // stays in the kernel's entry as it is when both roles have the same tiles.
++// The compute role's multiplies from tiles loaded once, with no loads, stores
++// or staging in the walk. cp_nomem 1: one accumulator takes all MTILES
++// products, so nothing spills; 2: MTILES accumulators, as the walk keeps them.
++template <uint32_t ACCS>
++static __attribute__((noinline)) void walk_nomem(kernel_arg_t* __UNIFORM__ arg) {
++  auto pA = reinterpret_cast<ctx::input_t *>(arg->A_addr);
++  auto pB = reinterpret_cast<ctx::input_t *>(arg->B_addr);
++  auto pC = reinterpret_cast<ctx::output_t *>(arg->C_addr);
++  const size_t N = arg->N;
++  const size_t K = arg->K;
++  const uint32_t warp = get_sub_group_id();
++  const uint32_t num_warps = get_num_sub_groups();
++  const uint32_t cta_cols = num_warps * ctx::tileN;
++  const size_t tile_col = (size_t)blockIdx.x * cta_cols + warp * ctx::tileN;
++  const uint32_t bar0 = get_local_group_id();
++  ctx::fragment_a fragA;
++  ctx::fragment_b fragB;
++  ctx::fragment_acc acc[ACCS];
++  vt::unroll_for<ACCS>([&](auto m) {
++    ctx::fill_fragment(acc[decltype(m)::value], 0);
++  });
++  ctx::load_matrix_sync(fragA, pA, K);
++  ctx::load_matrix_sync<vt::col_major>(fragB, pB, K);
++#ifdef PROFILE_ENABLE
++  __rdcycle_time t0 = vx_rdcycle_sync_begin();
++#endif
++  const uint32_t chunks = K / arg->chunk_k;
++  for (uint32_t i = 0; i < chunks; ++i) {
++    vx_barrier(bar0, num_warps);
++    for (uint32_t k = 0; k < arg->chunk_k; k += ctx::tileK) {
++      vt::unroll_for<MTILES>([&](auto m) {
++        constexpr uint32_t a = decltype(m)::value % ACCS;
++        ctx::mma_sync(acc[a], fragA, fragB, acc[a]);
++      });
++    }
++    vx_barrier(bar0, num_warps);
++  }
++#ifdef PROFILE_ENABLE
++  __rdcycle_time t1 = vx_rdcycle_sync_end();
++  reinterpret_cast<uint32_t*>(arg->cycles_addr)[blockIdx.x * num_warps + warp] = vx_rdcycle_sync_diff(t0, t1);
++#endif
++  vt::unroll_for<ACCS>([&](auto m) {
++    constexpr uint32_t mt = decltype(m)::value;
++    ctx::store_matrix_sync(pC + (size_t)mt * ctx::tileM * N + tile_col, acc[mt], N);
++  });
++#ifdef PROFILE_ENABLE
++  record_cta(arg, t0.lo);
++#else
++  record_cta(arg, 0);
++#endif
++}
++
+ #if BW_TILES != MTILES
+ static __attribute__((noinline)) void walk_cp(kernel_arg_t* __UNIFORM__ arg) {
++  if (arg->cp_nomem == 1) {
++    walk_nomem<1>(arg);
++    return;
++  }
++  if (arg->cp_nomem == 2) {
++    walk_nomem<MTILES>(arg);
++    return;
++  }
+   walk<MTILES>(arg, false);
+ }
+ #endif
+--- a/tests/regression/gemm_block/main.cpp
++++ b/tests/regression/gemm_block/main.cpp
+@@ -471,6 +471,8 @@
+ uint32_t xr = 1;          // rounds: the grid is this many times the N / cta_cols CTAs of one round
+ uint32_t xR = 0;          // B columns the compute-bound CTAs share (0: each its own)
+ uint32_t xo = ROLE_NONE;  // the role that runs alone (the other's CTAs do no work)
++uint32_t xX = 0;          // the compute role multiplies register-held tiles, no memory (its result is not checked)
++uint64_t xD = 0;          // an idle CTA spins to this core cycle instead of polling with fences
+ 
+ vx_device_h device = nullptr;
+ vx_buffer_h A_buffer = nullptr;
+@@ -496,7 +498,7 @@
+ 
+ static void parse_args(int argc, char **argv) {
+   int c;
+-  while ((c = getopt(argc, argv, "m:n:k:w:c:s:d:b:t:r:R:o:h")) != -1) {
++  while ((c = getopt(argc, argv, "m:n:k:w:c:s:d:b:t:r:R:o:X:D:h")) != -1) {
+     switch (c) {
+     case 'm':
+       xm = atoi(optarg);
+@@ -534,6 +536,12 @@
+     case 'o':
+       xo = atoi(optarg);
+       break;
++    case 'X':
++      xX = atoi(optarg);
++      break;
++    case 'D':
++      xD = strtoull(optarg, nullptr, 10);
++      break;
+     case 'h':
+       show_usage();
+       exit(0);
+@@ -697,6 +705,8 @@
+   kernel_arg.cp_wrap = xR ? xR / cta_cols : round_ctas;
+   kernel_arg.idle_role = (xo == ROLE_BW) ? ROLE_CP : (xo == ROLE_CP) ? ROLE_BW : ROLE_NONE;
+   kernel_arg.last_cta = grid_dim[0] - 1;
++  kernel_arg.cp_nomem = xX;
++  kernel_arg.idle_until = xD;
+   // An idle core takes `slots` CTAs and the launch lane's two more, and holds
+   // them until the last CTA is done: the last one must not be among them.
+   if (xo != ROLE_NONE && grid_dim[0] <= num_cores * (slots + 2))
+@@ -884,6 +894,7 @@
+       }
+       cta_begin[b] = begin;
+       cta_end[b] = end;
++      printf("CTA %u core=%u begin=%u end=%u walk=%u\n", b, h_core[b], begin, end, cycles);
+       auto& r = roles[is_bw(b) ? 0 : 1];
+       ++r.ctas;
+       if (idle(b))
+@@ -1007,7 +1018,7 @@
+       continue;
+     }
+     // an idle CTA stores nothing
+-    uint32_t rows = idle(b) ? 0 : (is_bw(b) ? xt : MTILES) * cfg::tileM;
++    uint32_t rows = (idle(b) || (xX && !is_bw(b))) ? 0 : (is_bw(b) ? xt : MTILES) * cfg::tileM;
+     // the CTA of the first round whose columns of B this one staged
+     uint32_t src = b % (is_bw(b) ? kernel_arg.bw_wrap : kernel_arg.cp_wrap);
+     for (uint32_t m = 0; m < rows; ++m) {
