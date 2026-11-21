@@ -936,8 +936,10 @@ public:
         this->check_issue_timeout(iw, wid, trace, uop_trace);
 
         if (scoreboard_->in_use(uop_trace)) {
-          auto uses = scoreboard_->get_uses(uop_trace);
           if (!uop_trace->log_once(true)) {
+          #ifndef NDEBUG
+            // the dependents are listed only for the trace
+            auto uses = scoreboard_->get_uses(uop_trace);
             DTH(4, "*** scoreboard-stall: dependents={");
             for (uint32_t j = 0, n = uses.size(); j < n; ++j) {
               auto& use = uses.at(j);
@@ -946,6 +948,7 @@ public:
               DTN(4, use.reg_type << use.reg_id << " (#" << use.uuid << ")");
             }
             DTN(4, "}, " << *uop_trace << std::endl);
+          #endif
           }
           // Count once per cycle per issue slice regardless of how many
           // warps are blocked.
