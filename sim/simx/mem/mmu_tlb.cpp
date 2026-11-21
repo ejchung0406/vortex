@@ -12,6 +12,7 @@
 #include "mmu_tlb.h"
 #include "tlb_types.h"
 #include <VX_types.h>
+#include <algorithm>
 #include <cstddef>
 
 namespace vortex {
@@ -26,10 +27,10 @@ static_assert((VX_VM_PT_SIZE / VX_VM_PTE_SIZE) == (1u << VPN_LEVEL_BITS),
 
 Tlb::Result Tlb::lookup(uint64_t vpn) {
   ++reads_;
-  for (auto& e : entries_) {
-    if (!e.valid) {
-      continue;
-    }
+  // the valid entries in index order: the first match wins, as in a scan of
+  // the whole array
+  for (uint32_t i : valid_ids_) {
+    auto& e = entries_[i];
     uint32_t shift = e.level * VPN_LEVEL_BITS;
     if ((e.vpn >> shift) == (vpn >> shift)) {
       e.mru = true;
@@ -62,6 +63,8 @@ void Tlb::fill(uint64_t vpn, uint64_t ppn, uint8_t flags, uint8_t level) {
 
   if (entries_[victim].valid) {
     ++evictions_;
+  } else {
+    valid_ids_.insert(std::lower_bound(valid_ids_.begin(), valid_ids_.end(), (uint32_t)victim), (uint32_t)victim);
   }
 
   uint64_t low_mask = (uint64_t(1) << (level * VPN_LEVEL_BITS)) - 1;
@@ -78,6 +81,7 @@ void Tlb::flush() {
     e.valid = false;
     e.mru = false;
   }
+  valid_ids_.clear();
 }
 
 } // namespace vortex

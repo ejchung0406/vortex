@@ -60,6 +60,8 @@ private:
   // Linear flat array; small enough (typ. 32 entries) for a per-cycle
   // linear scan to model CAM lookup behavior.
   std::vector<Entry> entries_;
+  // Indices of the valid entries, ascending: a lookup visits only these.
+  std::vector<uint32_t> valid_ids_;
 
   uint64_t reads_     = 0;
   uint64_t hits_      = 0;
