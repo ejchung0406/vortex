@@ -126,6 +126,16 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     localparam K_STEPS_W          = `CLOG2(TCU_WG_K_STEPS);
     // ldm field width: the descriptor's per-row 32-bit-word stride.
     localparam LDM_W              = 32 - TCU_SMEM_DESC_OFF_BITS;
+    // Row-major rows one bank-row read serves: one, or with
+    // VX_CFG_TCU_TMEM_A_BANKROW every remaining row that lies in that bank row.
+`ifdef VX_CFG_TCU_TMEM_ENABLE
+    localparam bit A_MERGE        = (`VX_CFG_TCU_TMEM_A_BANKROW != 0);
+`else
+    localparam bit A_MERGE        = 1'b0;
+`endif
+    localparam MRG_ROWS_ROW       = BANK_ROW_WORDS / TCU_TC_K;
+    localparam MRG_ROWS_MAX       = (MRG_ROWS_ROW < A_TOTAL_ROWS) ? MRG_ROWS_ROW : A_TOTAL_ROWS;
+    localparam MRG_ROWS           = A_MERGE ? MRG_ROWS_MAX : 1;
 
     // Canonical configs fit an A block in one bank-row normally and two
     // bank-rows with dense FEDP2K.
@@ -247,8 +257,10 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     wire all_requested = (req_ctr_r >= target_fetches);
     wire can_issue     = in_fetch && !all_requested
                       && (!req_inflight_r || tcu_lmem_if.rsp_valid);
+    // Rows the request being issued and the response being received carry.
+    wire [FETCH_CTR_W-1:0] req_rows, rsp_rows;
     wire last_rsp      = in_fetch && tcu_lmem_if.rsp_valid
-                      && (rsp_ctr_r == target_fetches - FETCH_CTR_W'(1));
+                      && (rsp_ctr_r + rsp_rows >= target_fetches);
 
     // Per-row 32-bit-word offset (relative to fetch_base_r * BANK_ROW_WORDS).
     // Width = LDM (row stride) + counter + a bit for step_k*TC_K headroom.
@@ -268,6 +280,36 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
 
     wire [BANK_ADDR_WIDTH-1:0] row_lmem_addr =
         fetch_base_r + BANK_ADDR_WIDTH'(row_word_off_req_r >> BANK_ROW_WORDS_LOG2);
+
+    // Row j past the next one to request (to receive) is at the offset plus j
+    // row strides, and is served by the same read while it stays in the bank
+    // row: the rows of a read are a run.
+    wire [MRG_ROWS:0][ROW_OFF_W-1:0] mrg_req_off, mrg_rsp_off;
+    logic [MRG_ROWS-1:0] mrg_req_in, mrg_rsp_in;
+    for (genvar j = 0; j <= MRG_ROWS; ++j) begin : g_mrg_off
+        assign mrg_req_off[j] = row_word_off_req_r + ROW_OFF_W'(j) * ROW_OFF_W'(slot_ldm_words_r);
+        assign mrg_rsp_off[j] = row_word_off_rsp_r + ROW_OFF_W'(j) * ROW_OFF_W'(slot_ldm_words_r);
+    end
+    always_comb begin
+        automatic logic req_run = 1'b1;
+        automatic logic rsp_run = 1'b1;
+        for (int j = 0; j < MRG_ROWS; ++j) begin
+            if (j != 0) begin
+                req_run = req_run && slot_row_major_r
+                       && (32'(req_ctr_r) + j < 32'(target_fetches))
+                       && ((mrg_req_off[j] >> BANK_ROW_WORDS_LOG2) == (mrg_req_off[0] >> BANK_ROW_WORDS_LOG2));
+                rsp_run = rsp_run && slot_row_major_r
+                       && (32'(rsp_ctr_r) + j < 32'(target_fetches))
+                       && ((mrg_rsp_off[j] >> BANK_ROW_WORDS_LOG2) == (mrg_rsp_off[0] >> BANK_ROW_WORDS_LOG2));
+            end
+            mrg_req_in[j] = req_run;
+            mrg_rsp_in[j] = rsp_run;
+        end
+    end
+    assign req_rows = FETCH_CTR_W'($countones(mrg_req_in));
+    assign rsp_rows = FETCH_CTR_W'($countones(mrg_rsp_in));
+    wire [ROW_OFF_W-1:0] row_word_off_req_next = mrg_req_off[req_rows];
+    wire [ROW_OFF_W-1:0] row_word_off_rsp_next = mrg_rsp_off[rsp_rows];
 
     // LMEM master driver
     assign tcu_lmem_if.req_valid       = can_issue;
@@ -354,8 +396,8 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
                     end
                     S_FETCH: begin
                         if (tcu_lmem_if.req_valid && tcu_lmem_if.req_ready) begin
-                            req_ctr_r <= req_ctr_r + FETCH_CTR_W'(1);
-                            row_word_off_req_r <= row_word_off_req_r + ROW_OFF_W'(slot_ldm_words_r);
+                            req_ctr_r <= req_ctr_r + req_rows;
+                            row_word_off_req_r <= row_word_off_req_next;
                         end
                         if (last_rsp) begin
                             fsm_state_r     <= S_IDLE;
@@ -363,8 +405,8 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
                             slot_valid_r    <= 1'b1;
                             req_inflight_r  <= 1'b0;
                         end else if (tcu_lmem_if.rsp_valid) begin
-                            rsp_ctr_r <= rsp_ctr_r + FETCH_CTR_W'(1);
-                            row_word_off_rsp_r <= row_word_off_rsp_r + ROW_OFF_W'(slot_ldm_words_r);
+                            rsp_ctr_r <= rsp_ctr_r + rsp_rows;
+                            row_word_off_rsp_r <= row_word_off_rsp_next;
                         end
                     end
                     default: fsm_state_r <= S_IDLE;
@@ -384,19 +426,22 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     wire storage_write = in_fetch && tcu_lmem_if.rsp_valid;
     wire [BANK_ROW_WORDS-1:0][31:0] rsp_words = tcu_lmem_if.rsp_data.data;
 
-    // Row-major per-response decoding: the row being written is rsp_ctr_r,
-    // and its tcK source words start at lane = row_word_off & (BANK_ROW_WORDS-1)
-    // within the LMEM response (registered accumulator, see above).
-    wire [BANK_ROW_WORDS_LOG2:0] row_lane_rsp = (BANK_ROW_WORDS_LOG2+1)'(
-        row_word_off_rsp_r & ROW_OFF_W'(BANK_ROW_WORDS - 1));
-
-    // Source word k of the current row. A lane past the response is never
-    // written, so its index may wrap.
-    wire [TCU_WG_FEDP_K-1:0][31:0] row_src_words;
-    for (genvar k = 0; k < TCU_WG_FEDP_K; ++k) begin : g_row_src
-        wire [`UP(BANK_ROW_WORDS_LOG2)-1:0] src_idx = `UP(BANK_ROW_WORDS_LOG2)'(row_lane_rsp)
-                                                    + `UP(BANK_ROW_WORDS_LOG2)'(k);
-        assign row_src_words[k] = rsp_words[src_idx];
+    // Row-major per-response decoding: the rows being written are rsp_ctr_r
+    // + j, and row j's source words start at lane = its word offset &
+    // (BANK_ROW_WORDS-1) within the LMEM response (registered accumulator, see
+    // above).
+    wire [MRG_ROWS-1:0][BANK_ROW_WORDS_LOG2:0] row_lane_rsp;
+    // Source word k of row j. A lane past the response is never written, so
+    // its index may wrap.
+    wire [MRG_ROWS-1:0][TCU_WG_FEDP_K-1:0][31:0] row_src_words;
+    for (genvar j = 0; j < MRG_ROWS; ++j) begin : g_row_lane
+        assign row_lane_rsp[j] = (BANK_ROW_WORDS_LOG2+1)'(
+            mrg_rsp_off[j] & ROW_OFF_W'(BANK_ROW_WORDS - 1));
+        for (genvar k = 0; k < TCU_WG_FEDP_K; ++k) begin : g_row_src
+            wire [`UP(BANK_ROW_WORDS_LOG2)-1:0] src_idx = `UP(BANK_ROW_WORDS_LOG2)'(row_lane_rsp[j])
+                                                        + `UP(BANK_ROW_WORDS_LOG2)'(k);
+            assign row_src_words[j][k] = rsp_words[src_idx];
+        end
     end
 
     // Stripe word w has one source per mode: response word w % BANK_ROW_WORDS
@@ -410,15 +455,32 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
         localparam BM_ROW = w / BANK_ROW_WORDS;
         localparam BM_B   = w % BANK_ROW_WORDS;
 
-        wire dn_wren = (int'(rsp_ctr_r) == DN_ROW) && (int'(row_lane_rsp) + DN_K < BANK_ROW_WORDS);
-        wire sp_wren = (int'(rsp_ctr_r) == SP_ROW) && (int'(row_lane_rsp) + SP_K < BANK_ROW_WORDS);
+        // Row j of the response is this word's row: one j at most.
+        logic dn_wren, sp_wren;
+        logic [31:0] dn_wdata, sp_wdata;
+        always_comb begin
+            dn_wren  = 1'b0;
+            sp_wren  = 1'b0;
+            dn_wdata = row_src_words[0][DN_K];
+            sp_wdata = row_src_words[0][SP_K];
+            for (int j = 0; j < MRG_ROWS; ++j) begin
+                if (mrg_rsp_in[j] && (int'(rsp_ctr_r) + j == DN_ROW)) begin
+                    dn_wren  = (int'(row_lane_rsp[j]) + DN_K < BANK_ROW_WORDS);
+                    dn_wdata = row_src_words[j][DN_K];
+                end
+                if (mrg_rsp_in[j] && (int'(rsp_ctr_r) + j == SP_ROW)) begin
+                    sp_wren  = (int'(row_lane_rsp[j]) + SP_K < BANK_ROW_WORDS);
+                    sp_wdata = row_src_words[j][SP_K];
+                end
+            end
+        end
         wire bm_wren = (int'(rsp_ctr_r) == BM_ROW);
 
         wire fetch_wren = storage_write
                        && (slot_row_major_r ? (slot_is_sparse_r ? sp_wren : dn_wren)
                                             : bm_wren);
         wire [31:0] fetch_wdata = slot_row_major_r
-            ? (slot_is_sparse_r ? row_src_words[SP_K] : row_src_words[DN_K])
+            ? (slot_is_sparse_r ? sp_wdata : dn_wdata)
             : rsp_words[BM_B];
     `ifdef VX_CFG_TCU_TMEM_ENABLE
         // A from TMEM: word (row, k) comes from read k / TC_N, word k % TC_N
