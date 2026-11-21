@@ -180,6 +180,39 @@ inline constexpr bool tcu_output_valid(uint32_t it, uint32_t ot) {
   return (it >= int32::id) ? (ot == int32::id) : (ot == fp32::id);
 }
 
+// The accumulator format of an input format: int32 for integers, else fp32.
+// MX scales a WGMMA/tensor-op FEDP takes per A row and B column of a step
+// (VX_tcu_pkg TCU_MX_MAX_SF): the most over the enabled block-scaled formats
+// of fedpK words' elements (doubled with sparse support) per scale block.
+inline constexpr uint32_t mx_fedp_sf_count(uint32_t data_bits, uint32_t block_elems, uint32_t fedp_k) {
+#ifdef VX_CFG_TCU_SPARSE_ENABLE
+  uint32_t sparse_ratio = 2;
+#else
+  uint32_t sparse_ratio = 1;
+#endif
+  uint32_t fedp_elems = fedp_k * (32 / data_bits) * sparse_ratio;
+  return (fedp_elems + block_elems - 1) / block_elems;
+}
+
+inline constexpr uint32_t mx_max_fedp_sf(uint32_t fedp_k) {
+  (void)fedp_k;   // unused without a block-scaled format
+  uint32_t sf = 1;
+#ifdef VX_CFG_TCU_FP8_ENABLE
+  sf = (mx_fedp_sf_count(8, 32, fedp_k) > sf) ? mx_fedp_sf_count(8, 32, fedp_k) : sf;
+#endif
+#ifdef VX_CFG_TCU_MXFP4_ENABLE
+  sf = (mx_fedp_sf_count(4, 32, fedp_k) > sf) ? mx_fedp_sf_count(4, 32, fedp_k) : sf;
+#endif
+#ifdef VX_CFG_TCU_NVFP4_ENABLE
+  sf = (mx_fedp_sf_count(4, 16, fedp_k) > sf) ? mx_fedp_sf_count(4, 16, fedp_k) : sf;
+#endif
+  return sf;
+}
+
+inline constexpr uint32_t tcu_output_fmt(uint32_t it) {
+  return (it >= int32::id) ? int32::id : fp32::id;
+}
+
 inline constexpr bool mx_scale_format(uint32_t fmt) {
   switch (fmt) {
   case mxfp8::id:
@@ -385,7 +418,24 @@ public:
   static constexpr uint32_t k_steps = xtileK / fedpK;
   static constexpr uint32_t b_blk_k = fedpK * i_ratio; // K elements per dense B block
   static constexpr uint32_t NRC = NRC_;
+  // Sparse (2:4) WGMMA K coverage. Under VX_CFG_TCU_SPARSE_FULLK_ENABLE a
+  // sparse uop drives every FEDP lane with compressed A (fedpK words), so it
+  // covers twice the logical K of a dense uop -- Hopper's wgmma.sp is k32
+  // against dense k16. Otherwise sparse fills only tcK lanes and covers the
+  // dense tile K.
+  // It needs two half-K metadata banks per m-step (WMMA k_steps >= 4).
+#ifdef VX_CFG_TCU_SPARSE_FULLK_ENABLE
+  static constexpr uint32_t sp_k_mult = (wmma_config_t<NT>::k_steps / 2 >= 2) ? (fedpK / tcK) : 1;
+#else
+  static constexpr uint32_t sp_k_mult = 1;
+#endif
+  static constexpr uint32_t tileK_sp  = tileK * sp_k_mult;
+  static constexpr uint32_t sp_k_words = tcK * sp_k_mult; // compressed A words per sparse uop
 };
+
+#if defined(VX_CFG_TCU_SPARSE_FULLK_ENABLE) && !defined(VX_CFG_TCU_FEDP2K)
+#error "VX_CFG_TCU_SPARSE_FULLK_ENABLE requires VX_CFG_TCU_FEDP2K"
+#endif
 
 } // namespace tensor
 } // namespace vortex

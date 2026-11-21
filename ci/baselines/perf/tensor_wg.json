@@ -1,4 +1,15 @@
 {
+  "tensor_wg:perf_gate-tmem:rtlsim": {
+    "32": {
+      "cycles": 42602,
+      "instrs": 7660
+    },
+    "app": "sgemm_tcu_tmem",
+    "args": "-m64 -n64 -k256",
+    "config_hash": "a70fa02ffc227813",
+    "configs": "-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_TMEM_ENABLE -DVX_CFG_TCU_TYPE_DPI -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1 -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=32 -DPIPE_N=2 -DB_KMAJOR",
+    "driver": "rtlsim"
+  },
   "tensor_wg:perf_gate-wgmma-fedp2k-rs:rtlsim": {
     "32": {
       "cycles": 134813,
@@ -19,6 +30,17 @@
     "args": "-m 128 -n 128 -k 128",
     "config_hash": "731fefa477a89198",
     "configs": "-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=32 -DWGMMA_SS -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1",
+    "driver": "rtlsim"
+  },
+  "tensor_wg:perf_gate-wgmma-sparse-fullk:rtlsim": {
+    "32": {
+      "cycles": 588514,
+      "instrs": 390176
+    },
+    "app": "sgemm_tcu_wg_sp",
+    "args": "-m 128 -n 128 -k 128",
+    "config_hash": "c641ba6a33e91df6",
+    "configs": "-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_TCU_SPARSE_ENABLE -DVX_CFG_TCU_FEDP2K -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=8 -DWGMMA_RS -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1",
     "driver": "rtlsim"
   },
   "tensor_wg:perf_gate-wgmma-sparse:rtlsim": {

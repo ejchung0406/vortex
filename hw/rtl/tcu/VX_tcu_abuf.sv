@@ -64,12 +64,20 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     input  wire                     req_valid,
     input  wire                     req_setup,
     input  wire [3:0]               req_step_m,
-    input  wire [3:0]               req_step_n,
+    input  wire [TCU_TBUF_N_W-1:0]  req_step_n,
     input  wire [3:0]               req_step_k,
     input  wire [`VX_CFG_XLEN-1:0]  req_desc_a,
     input  wire                     req_a_is_smem,
-    input  wire                     req_is_sparse,
+    input  wire                     req_is_sparse_in,
     input  wire [UUID_WIDTH-1:0]    req_uuid,
+
+`ifdef VX_CFG_TCU_TMEM_ENABLE
+    // One TMEM read of a tensor op's A: K words [a_fill_idx * TC_N, +TC_N) of
+    // every M row of the block.
+    input  wire                     a_fill_valid,
+    input  wire [3:0]               a_fill_idx,
+    input  wire [TCU_WG_TILE_M-1:0][TCU_TC_N-1:0][31:0] a_fill_data,
+`endif
 
     // LMEM bank-parallel read port
     VX_mem_bus_if.master            tcu_lmem_if,
@@ -79,6 +87,9 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     output wire [TCU_WG_A_DATA_SIZE-1:0][`VX_CFG_XLEN-1:0] abuf_rs1_data
 );
     `UNUSED_SPARAM (INSTANCE_ID)
+
+    // Sparse FULLK compressed A has the dense per-uop shape (fedpK words).
+    wire req_is_sparse = req_is_sparse_in && (TCU_WG_SP_FULLK == 0);
     `UNUSED_VAR (req_wid)
 
     // -----------------------------------------------------------------------
@@ -92,6 +103,9 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     localparam A_BLOCK_BANK_ROWS  = (A_BLOCK_WORDS + NUM_BANKS - 1) / NUM_BANKS;
     localparam A_BLOCK_BANK_ROWS_SP = (A_BLOCK_WORDS_SP + NUM_BANKS - 1) / NUM_BANKS;
     localparam BLOCK_WORDS_PADDED = A_BLOCK_BANK_ROWS * NUM_BANKS;
+`ifdef VX_CFG_TCU_TMEM_ENABLE
+    `STATIC_ASSERT (BLOCK_WORDS_PADDED == A_BLOCK_WORDS, ("A from TMEM assumes unpadded A blocks"))
+`endif
     localparam BLOCK_WORDS_PADDED_SP = A_BLOCK_BANK_ROWS_SP * NUM_BANKS;
     localparam A_STRIPE_BANK_ROWS = TCU_WG_M_STEPS * A_BLOCK_BANK_ROWS;
     localparam A_STRIPE_BANK_ROWS_SP = TCU_WG_M_STEPS * A_BLOCK_BANK_ROWS_SP;
@@ -400,12 +414,23 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
         wire sp_wren = (int'(rsp_ctr_r) == SP_ROW) && (int'(row_lane_rsp) + SP_K < BANK_ROW_WORDS);
         wire bm_wren = (int'(rsp_ctr_r) == BM_ROW);
 
-        assign storage_wren[w] = storage_write
-                              && (slot_row_major_r ? (slot_is_sparse_r ? sp_wren : dn_wren)
-                                                   : bm_wren);
-        assign storage_wdata[w] = slot_row_major_r
+        wire fetch_wren = storage_write
+                       && (slot_row_major_r ? (slot_is_sparse_r ? sp_wren : dn_wren)
+                                            : bm_wren);
+        wire [31:0] fetch_wdata = slot_row_major_r
             ? (slot_is_sparse_r ? row_src_words[SP_K] : row_src_words[DN_K])
             : rsp_words[BM_B];
+    `ifdef VX_CFG_TCU_TMEM_ENABLE
+        // A from TMEM: word (row, k) comes from read k / TC_N, word k % TC_N
+        // of the row, with fixed wiring.
+        wire        fill_wren  = (int'(a_fill_idx) == DN_K / TCU_TC_N);
+        wire [31:0] fill_wdata = a_fill_data[DN_ROW][DN_K % TCU_TC_N];
+        assign storage_wren[w]  = a_fill_valid ? fill_wren : fetch_wren;
+        assign storage_wdata[w] = a_fill_valid ? fill_wdata : fetch_wdata;
+    `else
+        assign storage_wren[w]  = fetch_wren;
+        assign storage_wdata[w] = fetch_wdata;
+    `endif
     end
 
     wire [A_STRIPE_WORDS-1:0][31:0] storage_rdata;
@@ -421,7 +446,11 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
         .clk   (clk),
         .reset (reset),
         .read  (1'b1),
+    `ifdef VX_CFG_TCU_TMEM_ENABLE
+        .write (storage_write || a_fill_valid),
+    `else
         .write (storage_write),
+    `endif
         .wren  (storage_wren),
         .waddr (1'b0),
         .wdata (storage_wdata),
@@ -434,25 +463,31 @@ module VX_tcu_abuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     // then expanded into FEDP_K row stride with the unavailable tail lanes zero.
     // -----------------------------------------------------------------------
 
+    // The stripe holds A_M_BLOCKS M blocks; a lane's word of block m is at a
+    // fixed index, so the read is an A_M_BLOCKS-way select on step_m (a step
+    // past the stripe reads zero).
+    localparam A_M_BLOCKS    = (A_STRIPE_WORDS + BLOCK_WORDS_PADDED - 1) / BLOCK_WORDS_PADDED;
+    localparam A_M_BLOCKS_SP = (A_STRIPE_WORDS + BLOCK_WORDS_PADDED_SP - 1) / BLOCK_WORDS_PADDED_SP;
     logic [TCU_WG_A_DATA_SIZE-1:0][`VX_CFG_XLEN-1:0] rs1_mux;
     always_comb begin
         rs1_mux = '0;
         for (int lane = 0; lane < TCU_WG_A_DATA_SIZE; ++lane) begin
-            int src_idx;
             if (req_is_sparse) begin
                 automatic int row = lane / int'(TCU_WG_FEDP_K);
                 automatic int k   = lane % int'(TCU_WG_FEDP_K);
                 if (row < int'(TCU_TC_M) && k < int'(TCU_TC_K)) begin
-                    src_idx = int'(req_step_m) * int'(BLOCK_WORDS_PADDED_SP)
-                            + row * int'(TCU_TC_K)
-                            + k;
-                    if (src_idx < int'(A_STRIPE_WORDS))
-                        rs1_mux[lane] = `VX_CFG_XLEN'(storage_rdata[src_idx]);
+                    for (int m = 0; m < A_M_BLOCKS_SP; ++m) begin
+                        automatic int src = m * int'(BLOCK_WORDS_PADDED_SP) + row * int'(TCU_TC_K) + k;
+                        if (src < int'(A_STRIPE_WORDS) && int'(req_step_m) == m)
+                            rs1_mux[lane] = `VX_CFG_XLEN'(storage_rdata[src]);
+                    end
                 end
             end else if (lane < int'(A_BLOCK_WORDS)) begin
-                src_idx = int'(req_step_m) * int'(BLOCK_WORDS_PADDED) + lane;
-                if (src_idx < int'(A_STRIPE_WORDS))
-                    rs1_mux[lane] = `VX_CFG_XLEN'(storage_rdata[src_idx]);
+                for (int m = 0; m < A_M_BLOCKS; ++m) begin
+                    automatic int src = m * int'(BLOCK_WORDS_PADDED) + lane;
+                    if (src < int'(A_STRIPE_WORDS) && int'(req_step_m) == m)
+                        rs1_mux[lane] = `VX_CFG_XLEN'(storage_rdata[src]);
+                end
             end
         end
     end
