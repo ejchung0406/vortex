@@ -502,6 +502,26 @@ void Mmu::on_tick() {
   if (reserve) {
     reserved_port_ = selected;
   }
+
+  // Sleep when a tick with no input changes nothing: no packet queued or in
+  // flight toward an input, no miss, park, replay, fault answer or report
+  // held, and the miss reservation settled on "none". A packet reserved
+  // toward any input re-arms the tick.
+  if (reserved_port_ == num_ports_ && this->idle()) {
+    this->tick_sleep();
+  }
+}
+
+bool Mmu::idle() const {
+  if (TlbFillIn.size() != 0 || !this->empty()) {
+    return false;
+  }
+  for (uint32_t p = 0; p < num_ports_; ++p) {
+    if (ReqIn.at(p).size() != 0 || RspIn.at(p).size() != 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 #endif // VX_CFG_VM_ENABLE
