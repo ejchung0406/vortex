@@ -291,6 +291,34 @@ Wrong: it has been per SM since July. Check the instantiation, not the comment.
 ## 21. What the real H200 measurements changed (study direction, not an upstream item)
 - One SM alone reaches ~210 GB/s; the "100 GB/s per SM" was 4 x 16 KB in flight. Software borrowing through thread-block clusters works but adds nothing. A GPC returns at most ~1.28 TB/s (about 6 SMs); spreading memory-bound SMs over the 8 GPCs gives 2.4x over packing; MPS appears to pack. Co-residency starves the memory job (0.6-22%). See `tpc-placement-and-borrowing.md`, `noc-and-design-space.md`.
 
+## Added 2026-11-21 afternoon (items 22-27)
+
+### 22. A lone warp executes one instruction per ~11 cycles (design, old; performance)
+- `hw/rtl/core/VX_warp_sched.sv` stalls a warp at every schedule until its instruction is decoded ("stall the warp until decode stage"), for every instruction, not only control flow. In the history since at least 2021 (b1eef0fb7 "warp scheduler optimization"; the comment since Vortex 2.0, c1e168fdb). SimX mirrors it.
+- With 64 ready warps the core still reaches IPC ~3.3 of 4, so throughput tests do not show it. Anything paced by one warp does: a lone warp issuing `tc.mma` gives one per ~128 cycles; a producer warp issues one DXA transfer per 354-436 cycles (35-37 instructions per iteration), which capped one SM's copy at ~125 GB/s where a real H200 does 210; warps reading shared memory with loads reach 48-74 GB/s where the part does 251-253.
+- Hopper/Blackwell-style kernels (one warp issuing TMA or tensor ops for the SM) depend on exactly this.
+- In progress: per-warp instruction rate measured on a real H200, a stage-by-stage budget in Vortex, and a SimX prototype (keep fetching past instructions that are not control flow or mask changes; knob, default off). Unrolling the issuing loop is a kernel-side workaround (75 -> 100 B/clock on one case), not a fix.
+
+### 23. SimX's L2 replays a forwarded fill on a full response queue; the RTL holds (as item 10, for the L2)
+- Same `VX_cache_bank`; SimX wired the hold only for the dcache. Knob `VX_CFG_L2_FWD_HOLD` (default 0), and `VX_CFG_L2_CRSQ_SIZE` now reaches the model. h200s: 11-SM stream 133,189 -> 130,691 cycles; decode GEMM 653,498 -> 635,151; with the DXA calibration set a deep copy point went 73.6 -> 85.3 B/clock. rtlsim parity not shown: the small multi-core runs never filled the queue.
+- Seen on the way: `bwstream_dxa` on 4 cores (16x16, L2) takes 19,874 cycles in SimX and 18,321 on rtlsim (8.5% apart; 2 cores 3.2%), with either setting. Not explained.
+
+### 24. DXA against the real part's copy curves (calibration; SimX knobs in `notes/dxa_lmem_calib.patch`)
+- Real H200, one SM, GB/s: 16 KB x 1/2/4/8 = 30/57/104/142; 8 KB x 16 = 71; 32 KB x 1/2/3/6 = 52/99/142/208; 64 KB x 3 = 201; L2-resident 16 KB x 1/2/4 = 61/122/142, 32 KB x 1/2/3 = 95/183/211.
+- Vortex today: 25/47/70/123; 97 (above the part); 32/61/87/125; 102; 37/64/80; 47/69/84.
+- With the experimental set (2 gmem ports, 2 lines per worker per cycle, 512 lines in flight, shared-memory DMA budget 160 B/clock, 228-cycle issue interval per warp, capture buffer, L2 hold, 120-cycle start latency, unrolled issuing loop): 29/58/110/144; 72; 52/104/147/184; 162; 56/114/133; 92/184/188. 13 of 16 points within 10%, none more than 5% above.
+- What each knob stands for: the worker's 64 B-per-cycle request/capture/write datapath is the RTL design (`VX_dxa_smem_wr.sv` holds one pending line), and its single capture slot head-of-line blocks the L2 response path; Vortex has no per-transfer issue cost (hence the 8 KB overshoot); the 120-cycle start latency compensates a missing SM-to-L2 network (warm 16 KB transfer: 571 cycles on the part, ~358 in Vortex) and should become link latency instead.
+- Not yet RTL; to be redone after item 22.
+
+### 25. The megapage heap leaves the first 2 MB on 4 KB pages
+- `VORTEX_VM_MEGAPAGE_HEAP` maps from the heap start (0x10000) to the first 2 MB boundary with 4 KB pages (`vm.cpp` picks the leaf by alignment). A small buffer placed there walks every ~9 KB: 1,800 walks in a 4 MB copy (66.6 vs 75.2 B/clock). Workaround in the test: allocate past the first 2 MB.
+
+### 26. SimX routed a tile-buffer word by comparing descriptor bases (bug, fixed 0c1054236)
+- When an A row and B start at the same shared-memory address, B reads went to the A buffer and the run aborted with "TCU buffer miss". The RTL keeps separate A and B buffers.
+
+### 27. The shared-memory DMA port is exclusive between DXA writes and tile-buffer reads
+- One client per cycle (`local_mem.cpp` dma_fire; `VX_lmem_unit.sv`). A real SM does 215 GB/s of TMA writes, 253 of reads and 157-170 staged, i.e. the two overlap partly. In Vortex the decode kernel was bound by this port at 82 GB/s per SM; with a 160 B/clock budget it is engine-bound at 114. The budget value could not be checked against load-instruction consumers because of item 22.
+
 ## How these were found (for the talk)
 - Rule that produced most of them: match a real H200, never provision above it, and when a number looks wrong test several hypotheses instead of tuning.
 - Wrong turns worth showing: bank count as the stream limit (artifact); "DXA is cluster-shared" (stale comment and design doc; it has been per SM since 7d6950de5); buffer overwrite as the M=256 cause (it was the dcache); the first dcache fix (opened a new hole, caught by review).

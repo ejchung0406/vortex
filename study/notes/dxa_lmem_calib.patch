@@ -1,6 +1,17 @@
 --- src_tmem/VX_config.toml	2026-11-21 01:36:33.677665338 -0500
-+++ src_tmemk/VX_config.toml	2026-11-21 05:33:28.108277511 -0500
-@@ -398,6 +398,11 @@
++++ src_tmemk/VX_config.toml	2026-11-21 13:43:46.659571176 -0500
+@@ -360,6 +360,10 @@
+ VX_CFG_L2_MRSQ_SIZE = 4
+ VX_CFG_L2_MREQ_SIZE = 0
+ VX_CFG_L2_CRSQ_SIZE = 0
++# 1: an L2 bank holds a forwardable fill head on a full core-response queue
++# instead of replaying it, as the RTL bank does (DCACHE_FWD_HOLD for the L2).
++# SimX only; 0 replays.
++VX_CFG_L2_FWD_HOLD = 0
+ 
+ VX_CFG_L2_NUM_BANKS = "expr: pow(2, clog2(min($VX_CFG_L2_NUM_REQS, 16)))"
+ # On at every bank count: unlike the dcache, a 2-bank L2 measured neutral
+@@ -398,6 +402,11 @@
  # capacity like 96 KB or 228 KB sets both (LMEM_LOG_SIZE = clog2(LMEM_SIZE)).
  VX_CFG_LMEM_SIZE = "expr: pow(2, $VX_CFG_LMEM_LOG_SIZE)"
  
@@ -12,7 +23,7 @@
  [tcu]
  # string enum: 'DPI'|'DSP'|'BHF'|'TFR'|'FPNEW'; TFR is the universal default. On
  # FPGA its FEDP multipliers map onto DSP48 via VX_CFG_TCU_USE_DSP below.
-@@ -463,6 +468,16 @@
+@@ -463,6 +472,23 @@
  VX_CFG_DXA_GMEM_PORTS = 1
  VX_CFG_DXA_QUEUE_SIZE = 16
  VX_CFG_DXA_MAX_INFLIGHT = 8
@@ -26,11 +37,115 @@
 +# Lines a worker requests, captures and writes to shared memory per cycle;
 +# with several GMEM ports, lane l uses port l % ports. SimX only.
 +VX_CFG_DXA_WORKER_LINES = 1
++# Lines a worker holds captured ahead of its shared-memory writes (at least
++# WORKER_LINES). SimX only.
++VX_CFG_DXA_FILL_LINES = 1
++# Cycles a transfer waits after its set-up before its first request, as the
++# fixed latency of a transfer (descriptor fetch, address set-up). 0: none.
++# SimX only.
++VX_CFG_DXA_START_LATENCY = 0
  
  [rtu]
  # RTU (Ray-Tracing Unit)
+--- src_tmem/sim/simx/types.h	2026-11-21 00:01:52.923486214 -0500
++++ src_tmemk/sim/simx/types.h	2026-11-21 12:05:55.025816250 -0500
+@@ -1563,6 +1563,38 @@
+ 
+ ///////////////////////////////////////////////////////////////////////////////
+ 
++#ifdef PATH_STATS
++// Measurement only: per arbiter output, cycles a request (or response) was
++// passed, and cycles one waited because the next stage refused it.
++struct PathStats {
++  std::string name;
++  std::vector<uint64_t> sent, refused;
++  static std::vector<PathStats*>& registry() {
++    static std::vector<PathStats*> reg;
++    static bool hooked = (std::atexit([] {
++      for (auto* p : registry()) {
++        uint64_t s = 0, r = 0;
++        for (auto v : p->sent) s += v;
++        for (auto v : p->refused) r += v;
++        if (s == 0 && r == 0) continue;
++        std::cout << "PATH: " << p->name << " sent=";
++        for (size_t i = 0; i < p->sent.size(); ++i) std::cout << (i ? "," : "") << p->sent[i];
++        std::cout << " refused=";
++        for (size_t i = 0; i < p->refused.size(); ++i) std::cout << (i ? "," : "") << p->refused[i];
++        std::cout << std::endl;
++      }
++    }), true);
++    (void)hooked;
++    return reg;
++  }
++  PathStats* init(const std::string& n, size_t outs) {
++    name = n; sent.assign(outs, 0); refused.assign(outs, 0);
++    registry().push_back(this);
++    return this;
++  }
++};
++#endif
++
+ template <typename Type>
+ class TxArbiter : public SimObject<TxArbiter<Type>> {
+ public:
+@@ -1629,6 +1661,9 @@
+   uint32_t delay_;
+   uint32_t lg2_num_reqs_;
+   std::vector<Arbiter> arbiters_;
++#ifdef PATH_STATS
++  PathStats* pst_ = (new PathStats())->init(std::string(this->name()) + ".req", Outputs.size());
++#endif
+ 
+   friend class SimObject<TxArbiter<Type>>;
+ };
+@@ -1671,6 +1706,11 @@
+         DT(4, this->name() << " req" << i << "_" << o << ": " << req);
+         req_in.pop();
+         arbiters_.at(o).commit(g);
++      #ifdef PATH_STATS
++        ++pst_->sent[o];
++      } else {
++        ++pst_->refused[o];
++      #endif
+       }
+     }
+   }
+@@ -1910,6 +1950,9 @@
+   typename ReqArb::Ptr arbiter_;
+   uint32_t rsp_delay_;
+   uint32_t lg2_num_reqs_;
++#ifdef PATH_STATS
++  PathStats* pst_ = (new PathStats())->init(std::string(this->name()) + ".rsp", RspIn.size());
++#endif
+ 
+   friend class SimObject<TxRxArbiter<Req, Rsp>>;
+ };
+@@ -1941,6 +1984,11 @@
+       if (RspOut.at(i).try_send(out_rsp, rsp_delay_)) {
+         DT(4, this->name() << " rsp" << o << "_" << i << ": " << out_rsp);
+         rsp_in.pop();
++      #ifdef PATH_STATS
++        ++pst_->sent[o];
++      } else {
++        ++pst_->refused[o];
++      #endif
+       }
+     }
+     idle &= (rsp_in.size() == 0);
+--- src_tmem/sim/simx/cluster.cpp	2026-11-20 14:56:04.000000000 -0500
++++ src_tmemk/sim/simx/cluster.cpp	2026-11-21 13:43:46.665361468 -0500
+@@ -112,6 +112,9 @@
+         true,                          // next_is_poc
+         false,                         // line merging
+         true,                          // core-request skid
++        false,                         // set_hash
++        0,                             // crsq_size
++        VX_CFG_L2_FWD_HOLD != 0,       // fwd_hold
+       });
+     }
+ 
 --- src_tmem/sim/simx/dxa/dxa_core.cpp	2026-11-20 14:56:04.000000000 -0500
-+++ src_tmemk/sim/simx/dxa/dxa_core.cpp	2026-11-21 05:59:05.741915517 -0500
++++ src_tmemk/sim/simx/dxa/dxa_core.cpp	2026-11-21 13:58:31.399065126 -0500
 @@ -17,7 +17,10 @@
  #include <array>
  #include <cstring>
@@ -42,17 +157,30 @@
  #include "core.h"
  #include "socket.h"
  #include "socket.h"
-@@ -36,6 +39,9 @@
+@@ -36,6 +39,12 @@
  // GMEM ports: port i joins the arb of the socket's L1 memory port i as a peer,
  // and the workers are split evenly over the ports.
  constexpr uint32_t kDxaMemPorts = VX_CFG_DXA_GMEM_PORTS;
 +// Lines a worker requests, captures and writes per cycle (one arbiter input
 +// per lane; lane l goes to port l % ports).
 +constexpr uint32_t kWorkerLanes = VX_CFG_DXA_WORKER_LINES;
++// Lines a worker holds captured ahead of its shared-memory writes (the RTL's
++// pend register is one).
++constexpr uint32_t kFillLines = (VX_CFG_DXA_FILL_LINES > kWorkerLanes) ? VX_CFG_DXA_FILL_LINES : kWorkerLanes;
  static_assert(kDxaMemPorts >= 1 && kDxaMemPorts <= VX_CFG_NUM_DXA_CORES
             && kDxaMemPorts <= VX_CFG_L1_MEM_PORTS,
                "DXA_GMEM_PORTS: at most one per worker and per socket memory port");
-@@ -153,11 +159,16 @@
+@@ -131,7 +140,8 @@
+     // addr_gen: pre-enumerated work list (one entry per GMEM CL +
+     // multicast replays handled at smem_wr stage).
+     std::vector<LineWork>   work_list;
+-    uint32_t                ag_idx = 0;          // next entry to issue (gmem_req)
++    uint32_t                ag_idx = 0;          // next entry to issue (gmem_req); with lanes, entries issued
++    std::array<uint32_t, 4> lane_idx = {};       // with lanes: each lane's next entry
+ 
+     // gmem_req → smem_wr inflight bookkeeping.
+     std::array<InflightSlot, VX_CFG_DXA_MAX_INFLIGHT> inflight;
+@@ -153,11 +163,16 @@
    {
      for (uint32_t i = 0; i < VX_CFG_NUM_DXA_CORES; ++i)
        workers_[i].worker_id = i;
@@ -69,7 +197,32 @@
      // perf_stats_ survives: the MPM counters run from device reset.
      for (auto& w : workers_) {
        w.state = WState::IDLE;
-@@ -238,9 +249,11 @@
+@@ -167,7 +182,7 @@
+       w.drain_slot = UINT32_MAX;
+       for (auto& s : w.inflight) { s = InflightSlot(); }
+       w.staged = false;
+-      w.ag_idx = 0;
++      w.ag_idx = 0; w.lane_idx = {};
+       w.mc_cta_idx = 0;
+       w.km_elem_idx = 0;
+       w.writes_emitted = 0;
+@@ -223,6 +238,15 @@
+ 
+   void tick() {
+     ++cycle_;
++  #ifdef DXA_PATH_STATS
++    {
++      uint32_t r = 0;
++      for (auto& w : workers_) r += (w.state == WState::RUNNING);
++      dps_.running += r;
++      dps_.busy += (r != 0);
++      dps_.queued += queue_.size();
++    }
++  #endif
+ 
+     // Drain in reverse-pipeline order (smem_wr → gmem_req → addr_gen →
+     // setup → req-arb) so each stage's tick reads what its upstream produced
+@@ -238,9 +262,11 @@
        if (w.state == WState::RUNNING) {
          tick_worker_smem_wr(w);
        }
@@ -84,11 +237,12 @@
        }
      }
  
-@@ -255,10 +268,18 @@
+@@ -255,10 +281,18 @@
            start_worker(w, w.staged_req);
          } else if (!w.staged && !queue_.empty() && w.started_cycle != cycle_
                  && (pass == 1 || w.state == WState::IDLE)) {
 -          w.staged_req   = queue_.front();
+-          w.staged_ready = cycle_ + this->setup_latency(w.staged_req);
 +          // VX_CFG_DXA_ISSUE_INTERVAL: the oldest request whose issuer's
 +          // interval has passed; requests of other warps go ahead of it.
 +          size_t q = 0;
@@ -97,7 +251,7 @@
 +            if (q == queue_.size()) continue;
 +          }
 +          w.staged_req   = queue_.at(q);
-           w.staged_ready = cycle_ + this->setup_latency(w.staged_req);
++          w.staged_ready = cycle_ + this->setup_latency(w.staged_req) + VX_CFG_DXA_START_LATENCY;
            w.staged       = true;
 -          queue_.pop_front();
 +          queue_.erase(queue_.begin() + q);
@@ -105,7 +259,7 @@
          }
        }
      }
-@@ -270,6 +291,16 @@
+@@ -270,6 +304,16 @@
    const DxaCore::PerfStats& perf_stats() const { return perf_stats_; }
  
  private:
@@ -122,7 +276,7 @@
    // ── Descriptor helpers ───────────────────────────────────────────────
    static uint32_t desc_rank(uint32_t meta) {
      uint32_t r = (meta >> DXA_DESC_META_DIM_LSB)
-@@ -360,6 +391,13 @@
+@@ -360,6 +404,13 @@
        if (ch.empty()) continue;
        if (queue_.size() >= VX_CFG_DXA_QUEUE_SIZE) break;
        queue_.push_back(ch.peek());
@@ -136,7 +290,16 @@
        ch.pop();
        rr_req_ = (cid + 1) % chs.size();
        break;
-@@ -571,13 +609,13 @@
+@@ -371,7 +422,7 @@
+     w.req = req;
+     w.issue_cycle = cycle_;
+     w.work_list.clear();
+-    w.ag_idx = 0;
++    w.ag_idx = 0; w.lane_idx = {};
+     w.issued_order.clear();
+     w.drain_slot = UINT32_MAX;
+     for (auto& s : w.inflight) { s.allocated = false; s.rsp_arrived = false; s.rsp_data.reset(); }
+@@ -571,13 +622,13 @@
    // while others are outstanding. A response it cannot take stays on the
    // memory response path and holds the responses queued behind it.
    void capture_line(Worker& w, SimChannel<MemRsp>& ch) {
@@ -152,19 +315,19 @@
        }
        if (s.oob_pending && oob_slot == UINT32_MAX) {
          oob_slot = i;
-@@ -598,7 +636,10 @@
+@@ -598,7 +649,10 @@
  
      auto& s = w.inflight[slot];
      bool defer = s.work.last && (w.issued_order.size() > 1);
 -    if (defer ? defer_busy : pend_busy) {
-+    if (defer ? defer_busy : (pend_lines >= kWorkerLanes)) {
++    if (defer ? defer_busy : (pend_lines >= kFillLines)) {
 +    #ifdef DXA_PATH_STATS
 +      if (!ch.empty()) ++dps_.capture_full;
 +    #endif
        return;
      }
      if (!ch.empty()) {
-@@ -612,7 +653,7 @@
+@@ -612,12 +666,25 @@
    }
  
    // ── gmem_req: issue MemReqs with available inflight slots ────────────
@@ -173,7 +336,42 @@
      // One AGU step per cycle: advance ag_idx by at most one, issuing at most
      // one GMEM read to this worker's ReqIn port (or one OOB skip). A while-loop
      // here would issue many reads to a single port in one cycle.
-@@ -662,8 +703,16 @@
+     if (w.ag_idx >= w.work_list.size())
+       return;
++    // Several lanes: lane l takes the lines of the L2 lines l, l + lanes, ...
++    // so the lanes reach different L2 banks in the same cycle.
++    uint32_t idx = w.ag_idx;
++    if (kWorkerLanes > 1) {
++      uint32_t& c = w.lane_idx[lane];
++      while (c < w.work_list.size()
++          && ((w.work_list[c].gmem_cl_addr / VX_CFG_L2_LINE_SIZE) % kWorkerLanes) != lane) {
++        ++c;
++      }
++      if (c >= w.work_list.size())
++        return;
++      idx = c;
++    }
+ 
+     // Find a free slot.
+     uint32_t slot = UINT32_MAX;
+@@ -628,7 +695,7 @@
+       }
+     }
+ 
+-    const LineWork& lw = w.work_list[w.ag_idx];
++    const LineWork& lw = w.work_list[idx];
+ 
+     if (slot == UINT32_MAX) {
+       // All slots in flight. Out-of-bounds lines issue no read, so they are
+@@ -650,6 +717,7 @@
+       w.inflight[slot].work        = lw;
+       w.issued_order.push_back(slot);
+       ++w.ag_idx;
++      if (kWorkerLanes > 1) ++w.lane_idx[lane];
+       return;
+     }
+ 
+@@ -662,8 +730,16 @@
      mreq.hart_id   = w.req.core->id();
      mreq.uuid  = w.req.uuid;
  
@@ -192,7 +390,15 @@
  
      w.inflight[slot].allocated   = true;
      w.inflight[slot].rsp_arrived = false;
-@@ -688,24 +737,39 @@
+@@ -673,6 +749,7 @@
+     w.inflight[slot].work        = lw;
+     w.issued_order.push_back(slot);
+     ++w.ag_idx;
++    if (kWorkerLanes > 1) ++w.lane_idx[lane];
+   }
+ 
+   // ── smem_wr: drain ready slots, build LMEM MemReqs ───────────────────
+@@ -688,24 +765,39 @@
      // the same slot because the multicast/scatter cursors are worker-local.
      // The last work item carries notify_done and must remain deferred until
      // it is the only outstanding slot.
@@ -238,7 +444,7 @@
        if (slot == UINT32_MAX) return;
        w.drain_slot = slot;
      }
-@@ -731,11 +795,17 @@
+@@ -731,11 +823,17 @@
  
      constexpr uint64_t kRowMask = ~uint64_t(DxaCore::LMEM_ROW_SIZE - 1);
      uint64_t beat_row = UINT64_MAX;
@@ -257,7 +463,7 @@
        }
        auto& s = w.inflight[slot];
  
-@@ -784,7 +854,7 @@
+@@ -784,7 +882,7 @@
        uint64_t row = base_byte0 & kRowMask;
        if (beat_row == UINT64_MAX) {
          beat_row = row;
@@ -266,7 +472,7 @@
          break; // next block lands in a different row — next cycle's beat
        }
  
-@@ -792,6 +862,10 @@
+@@ -792,6 +890,10 @@
        uint32_t half = (DxaCore::LMEM_PORTS_PER_CORE > 1)
            ? uint32_t((dword / kLmemWordSize) & (DxaCore::LMEM_PORTS_PER_CORE - 1))
            : 0u;
@@ -277,18 +483,29 @@
        auto& lmem_ch = simobject_->lmem_req_out.at(
            socket_local_cid * DxaCore::LMEM_PORTS_PER_CORE + half);
        if (lmem_ch.full()) {
-@@ -917,7 +991,25 @@
+@@ -907,7 +1009,7 @@
+     w.cta_indices.clear();
+     w.issued_order.clear();
+     w.drain_slot = UINT32_MAX;
+-    w.ag_idx = 0;
++    w.ag_idx = 0; w.lane_idx = {};
+     w.mc_cta_idx = 0;
+     w.km_elem_idx = 0;
+     w.writes_emitted = 0;
+@@ -917,7 +1019,27 @@
    DxaCore*    simobject_;
    MemArbiter* gmem_arb_;
    std::array<Descriptor, VX_DCR_DXA_DESC_COUNT> descriptors_;
 +#ifdef DXA_PATH_STATS
 +  // Measurement only: per lane, reads issued and cycles the arbiter refused one;
 +  // responses a worker could not capture.
-+  struct { uint64_t issued[4] = {}, backpressure[4] = {}, capture_full = 0; } dps_;
++  struct { uint64_t issued[4] = {}, backpressure[4] = {}, capture_full = 0, running = 0, busy = 0, queued = 0; } dps_;
 +  void dps_print() const {
 +    std::cout << "DXA_PATH: issued=" << dps_.issued[0] << "," << dps_.issued[1]
 +              << " backpressure=" << dps_.backpressure[0] << "," << dps_.backpressure[1]
-+              << " capture_full=" << dps_.capture_full << std::endl;
++              << " capture_full=" << dps_.capture_full << " running_worker_cycles=" << dps_.running
++              << " busy_cycles=" << dps_.busy << " queued_req_cycles=" << dps_.queued
++              << " avg_transfer_lat=" << (perf_stats_.transfers ? perf_stats_.total_latency / perf_stats_.transfers : 0) << std::endl;
 +  }
 +  void dps_register() {
 +    static std::vector<const Impl*> reg;
@@ -303,7 +520,7 @@
    std::vector<Worker>    workers_;
    uint32_t               rr_req_ = 0;
    uint64_t               cycle_;
-@@ -943,7 +1035,7 @@
+@@ -943,7 +1065,7 @@
    // responses back to the right input.
    char sname[100];
    snprintf(sname, 100, "%s-gmem-arb", name);
@@ -312,6 +529,144 @@
    for (uint32_t i = 0; i < kDxaMemPorts; ++i) {
    #ifdef SIMX_SOCKET_UNIT_MMU
      // The unit MMU's lookup starts from a registered request: the DXA owns it.
+--- src_tmem/sim/simx/mem/cache.cpp	2026-11-20 14:56:04.000000000 -0500
++++ src_tmemk/sim/simx/mem/cache.cpp	2026-11-21 13:29:37.277194161 -0500
+@@ -1271,6 +1271,13 @@
+       // responses from draining — a deadlock. Reserve at admission.
+       bool needs_mshr = !is_amo_passthru;
+       (void)is_amo;
++    #ifdef PATH_STATS
++      // LLC banks, summed: sent = admission checks, MSHR occupancy summed over
++      // them; refused = MSHR full, a miss's fill refused by mem_req_out.
++      static PathStats* llc_pst = (new PathStats())->init("llc_bank.admit(checks,occ_sum)/(mshr_full,memreq_full)", 2);
++      if (config_.is_llc) { ++llc_pst->sent[0]; llc_pst->sent[1] += mshr_occupancy_; }
++      if (config_.is_llc && needs_mshr && mshr_occupancy_ >= mshr_.capacity()) ++llc_pst->refused[0];
++    #endif
+       if (needs_mshr && mshr_occupancy_ >= mshr_.capacity()) {
+         ++perf_stats_.mshr_stalls;
+         return;
+@@ -2208,6 +2215,10 @@
+             return;
+           }
+           if (!fill_pending && !lazy_alloc && !refetch_loop && this->mem_req_out.full()) {
++          #ifdef PATH_STATS
++            static PathStats* llc_mq = (new PathStats())->init("llc_bank.miss_memreq_full", 1);
++            if (config_.is_llc) ++llc_mq->refused[0];
++          #endif
+             return;
+           }
+ 
+@@ -2581,7 +2592,7 @@
+ 
+   MemReq take_token(uint32_t i) {
+     auto req = ReqIn.at(i).peek();
+-    ReqIn.at(i).pop();
++    this->pst_pop(i);
+     return req;
+   }
+ 
+@@ -2619,7 +2630,27 @@
+     return std::min(kMaxFanout, inputs - sl * kMaxFanout);
+   }
+ 
++#ifdef PATH_STATS
++  // Measurement only: per core port, cycles its head request waited and requests accepted.
++  PathStats* pst_ = (new PathStats())->init(std::string(this->name()) + ".in", ReqIn.size());
++  PathStats* pst_bank_ = nullptr;  // per bank: cycles a grant went out / the bank input was full
++  PathStats* pst_cls_[3] = {};
++  struct Head { uint32_t port; uint32_t size; uint32_t bank; };
++  std::vector<Head> pst_head_;
++#endif
++  void pst_pop(uint32_t i) {
++  #ifdef PATH_STATS
++    ++pst_->sent[i];
++  #endif
++    ReqIn.at(i).pop();
++  }
++
+   void on_tick() {
++  #ifdef PATH_STATS
++    for (uint32_t i = 0; i < ReqIn.size(); ++i) {
++      pst_->refused[i] += !ReqIn.at(i).empty();
++    }
++  #endif
+     if (init_cycles_ != 0) {
+       --init_cycles_;
+       return;
+@@ -2737,6 +2768,14 @@
+         }
+         continue;
+       }
++    #ifdef PATH_STATS
++      if (!pst_cls_[0]) {
++        const char* nm[3] = {".held", ".bankfull", ".lost"};
++        for (int k = 0; k < 3; ++k) pst_cls_[k] = (new PathStats())->init(std::string(this->name()) + nm[k], n);
++      }
++      if (hold || this->realign_hold(i)) ++pst_cls_[0]->refused[i];
++      else pst_head_.push_back({i, in.size(), params_.addr_bank_id(req.addr)});
++    #endif
+       if (!hold && !this->realign_hold(i)) {
+         uint32_t b = params_.addr_bank_id(req.addr);
+         want.at(b * slices + i / slice_ports) |= 1u << (i % slice_ports);
+@@ -2755,6 +2794,11 @@
+       for (uint32_t sl = 0; sl < slices; ++sl) {
+         uint32_t slice_want = want.at(b * slices + sl);
+         auto& out = (nl != 0) ? tree_stage_.at(0).at(b * slices + sl) : ReqOut.at(b);
++      #ifdef PATH_STATS
++        if (!pst_bank_) pst_bank_ = (new PathStats())->init(std::string(this->name()) + ".bank", nb);
++        if (slice_want != 0 && out.full()) ++pst_bank_->refused[b];
++        if (slice_want != 0 && !out.full()) ++pst_bank_->sent[b];
++      #endif
+         if (slice_want == 0 || out.full()) {
+           continue;
+         }
+@@ -2776,6 +2820,16 @@
+         collisions_ += wants.at(b) - 1;
+       }
+     }
++  #ifdef PATH_STATS
++    // a wanting port that was not taken: its bank's input was full, or another port won
++    for (auto& h : pst_head_) {
++      auto& out = (nl != 0) ? tree_stage_.at(0).at(h.bank * slices + h.port / slice_ports) : ReqOut.at(h.bank);
++      if (ReqIn.at(h.port).size() == h.size) {
++        ++pst_cls_[out.full() ? 1 : 2]->refused[h.port];
++      }
++    }
++    pst_head_.clear();
++  #endif
+   }
+ 
+   // Offer port i's request, with the ports merged into it, to bank b; the
+@@ -2820,10 +2874,10 @@
+       for (uint64_t f = offer.mask; f != 0; f &= f - 1) {
+         uint32_t port = base + __builtin_ctzll(f);
+         DT(3, this->name() << " read-merge: port=" << port << ", leader=" << i << ", " << ReqIn.at(port).peek());
+-        ReqIn.at(port).pop();
++        this->pst_pop(port);
+       }
+     }
+-    ReqIn.at(i).pop();
++    this->pst_pop(i);
+     *offer.rr = offer.rr_next;
+     collisions_ += offer.collisions;
+     offer.valid = false;
+@@ -2857,14 +2911,14 @@
+       for (uint64_t f = mask; f != 0; f &= f - 1) {
+         uint32_t port = base + __builtin_ctzll(f);
+         DT(3, this->name() << " read-merge: port=" << port << ", leader=" << i << ", " << req);
+-        ReqIn.at(port).pop();
++        this->pst_pop(port);
+       }
+     }
+     uint64_t tag = (((uint64_t(req.tag) << this->merge_bits()) | mask) << lg2_inputs_) | i;
+     __assert((tag >> 32) == 0, "cache bank tag overflow");
+     req.tag = uint32_t(tag);
+     out.send(req, levels_.empty() ? delay_ : 1);
+-    ReqIn.at(i).pop();
++    this->pst_pop(i);
+   }
+ 
+   // A load or store with no flush, IO or local attribute.
 --- src_tmem/sim/simx/mem/local_mem.cpp	2026-11-20 14:56:04.000000000 -0500
 +++ src_tmemk/sim/simx/mem/local_mem.cpp	2026-11-21 04:58:10.299240429 -0500
 @@ -18,6 +18,11 @@
@@ -519,3 +874,54 @@
    }
  
    void tick() {
+--- src_tmem/sim/simx/mem/mmu.h	2026-11-20 14:56:04.000000000 -0500
++++ src_tmemk/sim/simx/mem/mmu.h	2026-11-21 12:06:43.999417822 -0500
+@@ -114,6 +114,10 @@
+   void report_fault(const MemReq& req);
+ 
+   uint32_t                 num_ports_;
++#ifdef PATH_STATS
++  PathStats* pst_ = nullptr;   // measurement only: per port, translated requests passed / refused downstream
++  PathStats* pst_miss_ = nullptr;
++#endif
+   uint32_t                 client_id_;
+   bool                     exec_side_;
+   // Each response leaves a cycle late through its own stage.
+--- src_tmem/sim/simx/mem/mmu.cpp	2026-11-20 14:56:04.000000000 -0500
++++ src_tmemk/sim/simx/mem/mmu.cpp	2026-11-21 13:58:31.402411545 -0500
+@@ -376,6 +376,12 @@
+     miss.slot = (uint32_t)i;
+     TlbMissOut.send(miss, 1);
+     DT(4, this->name() << " tlb-miss: " << miss);
++  #ifdef PATH_STATS
++    // the miss station's walks: sent[0] counts them, sent[1] the TLB's reads, sent[2] its hits
++    if (!pst_miss_) pst_miss_ = (new PathStats())->init(this->name() + ".miss", num_ports_);
++    ++pst_miss_->sent[0];
++    if (num_ports_ > 2) { pst_miss_->sent[1] = tlb_.reads(); pst_miss_->sent[2] = tlb_.hits(); }
++  #endif
+     e.issued = true;
+     break;
+   }
+@@ -458,10 +464,22 @@
+       MemReq translated = req;
+       translated.addr = (res.ppn << VX_VM_PAGE_LOG2_SIZE) |
+                         (req.addr & ((1ULL << VX_VM_PAGE_LOG2_SIZE) - 1));
++    #ifdef PATH_STATS
++      if (!pst_) pst_ = (new PathStats())->init(this->name() + ".hit", num_ports_);
++    #endif
+       if (!replaying && ReqOut.at(p).try_send(translated)) {
+         ReqIn.at(p).pop();
++      #ifdef PATH_STATS
++        ++pst_->sent[p];
++      } else {
++        ++pst_->refused[p];
++      #endif
+       }
+     } else {
++    #ifdef PATH_STATS
++      if (!pst_miss_) pst_miss_ = (new PathStats())->init(this->name() + ".miss", num_ports_);
++      ++pst_miss_->refused[p];
++    #endif
+       if (selected == num_ports_ || (selected < next_park_port_ && p >= next_park_port_)) {
+         selected = p;
+       }
