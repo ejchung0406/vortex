@@ -51,6 +51,27 @@ tests:
   configs: -DVX_CFG_EXT_A_ENABLE
   shape:
     threads: 16
+# Barrier ordering: after a barrier every warp of a CTA reads the shared and
+# global words the CTA's other warps stored just before it, while the warps of
+# other CTAs keep reads to memory outstanding, on two LSU blocks; once with the
+# core-wide drain, once with a barrier waiting only for its own warp
+# (VX_CFG_BAR_DRAIN_SCOPE=1).
+- id: bar-vis
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: bar_vis
+  configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2
+  args: -w4
+- id: bar-vis-warp-scope
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: bar_vis
+  configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1
+  args: -w4
 # Atomics with two LSU blocks: the read engine drains before an atomic enters
 # the first engine.
 - id: lmem-access-amo-iw2

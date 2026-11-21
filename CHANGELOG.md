@@ -9,6 +9,12 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
 
 ### Added
 
+- **Barrier drain scope (`VX_CFG_BAR_DRAIN_SCOPE`).** A barrier that stalls its warp (`vx_barrier`, `vx_barrier_wait`) can wait
+  only for its own warp's instructions to commit, for every LSU block to have sent its queued requests and for no store to be in
+  flight to the data cache or local memory (1), instead of for the whole core's LSU, other CTAs' outstanding reads included (0,
+  the default). Same rule in
+  [VX_wctl_unit.sv](hw/rtl/core/VX_wctl_unit.sv) and [sim/simx/sfu_unit.cpp](sim/simx/sfu_unit.cpp); `tests/regression/bar_vis`
+  checks the ordering.
 - **Branch naming types.** Branches are named `<type>/<name>` with one of six types (`feature/`, `fix/`, `perf/`, `refactor/`,
   `ci/`, `docs/`), plus the maintainers' `release/` and `archive/`. See [CONTRIBUTING.md](CONTRIBUTING.md#submitting-changes).
 - **Hardware profiles.** `profiles/<name>.json` names a machine (`tinygpu`, `gtx1080`, `v100`, `a100`, `h100`, `rtx5080`) that every flow

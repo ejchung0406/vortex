@@ -319,6 +319,18 @@ void MemCoalescer::flush_out_round() {
   out_round_.valid = false;
 }
 
+bool MemCoalescer::req_idle() const {
+  if (ReqIn.size() != 0 || out_round_.valid) {
+    return false;
+  }
+  for (auto& out : ReqOut) {
+    if (out.size() != 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 const MemCoalescer::PerfStats& MemCoalescer::perf_stats() const {
   return perf_stats_;
 }

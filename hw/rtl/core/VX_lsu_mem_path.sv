@@ -38,6 +38,7 @@ module VX_lsu_mem_path import VX_gpu_pkg::*; #(
 
     // the scheduler holds no request; the global-store path holds no store
     output wire             sched_empty,
+    output wire             sched_sent,
     output wire             store_empty,
     output wire             busy,
 
@@ -92,6 +93,7 @@ module VX_lsu_mem_path import VX_gpu_pkg::*; #(
         .reset      (reset),
         .client_if  (sched_client_if),
         .empty      (sched_empty),
+        .sent       (sched_sent),
         .lsu_mem_if (lsu_mem_if)
     );
 

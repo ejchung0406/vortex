@@ -594,6 +594,15 @@ public:
   const PerfStats& perf_stats() const {
     return perf_stats_;
   }
+
+  bool holds_store() const {
+    for (auto& in : simobject_->ReqIn) {
+      if (!in.empty() && !is_plain_read(in.peek())) {
+        return true;
+      }
+    }
+    return holds_write(engines_.at(0));
+  }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -617,6 +626,10 @@ void LocalMem::on_reset() {
 
 void LocalMem::on_tick() {
   impl_->tick();
+}
+
+bool LocalMem::holds_store() const {
+  return impl_->holds_store();
 }
 
 const LocalMem::PerfStats& LocalMem::perf_stats() const {

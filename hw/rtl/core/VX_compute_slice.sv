@@ -50,6 +50,8 @@ import VX_tcu_pkg::*;
     input wire [PERF_CTR_BITS-1:0] instret,
     input wire [`VX_CFG_NUM_WARPS-1:0] active_warps,
     input wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] all_lsu_sched_empty,
+    input wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] all_lsu_sched_sent,
+    input wire              lsu_store_landed,
     input wire              mmu_empty,
     input cta_bcast_t       cta_bcast,
 `ifdef VX_CFG_VM_ENABLE
@@ -66,6 +68,7 @@ import VX_tcu_pkg::*;
     output wire [PERF_CTR_BITS-1:0] lsu_coalescer_misses,
 `endif
     output wire             lsu_sched_empty,
+    output wire             lsu_sched_sent,
     output wire             lsu_store_empty,
     output wire             lsu_busy,
 `ifdef VX_CFG_LMEM_ENABLE
@@ -241,6 +244,8 @@ import VX_tcu_pkg::*;
     assign warp_ctl_if.mscratch    = dvstack_mscratch[0];
     assign warp_ctl_if.warp_pending_alm_empty = pending_alm_empty;
     assign warp_ctl_if.lsu_sched_empty        = all_lsu_sched_empty;
+    assign warp_ctl_if.lsu_sched_sent         = all_lsu_sched_sent;
+    assign warp_ctl_if.lsu_store_landed       = lsu_store_landed;
     assign warp_ctl_if.mmu_empty              = mmu_empty;
 
     assign csr_rd_wid[0]        = sched_csr_if.csr_rd_wid;
@@ -302,6 +307,7 @@ import VX_tcu_pkg::*;
         .lsu_coalescer_misses (lsu_coalescer_misses),
     `endif
         .lsu_sched_empty      (lsu_sched_empty),
+        .lsu_sched_sent       (lsu_sched_sent),
         .lsu_store_empty      (lsu_store_empty),
         .lsu_busy             (lsu_busy),
     `ifdef VX_CFG_LMEM_ENABLE

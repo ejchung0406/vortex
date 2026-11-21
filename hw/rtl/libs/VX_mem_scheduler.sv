@@ -74,8 +74,9 @@ module VX_mem_scheduler #(
     output wire                             core_req_ready_rd,
     output wire                             core_req_ready_wr,
 
-    // Core request queue
+    // Core request queue: empty, and empty but for reads awaiting their response
     output wire                             req_queue_empty,
+    output wire                             req_queue_sent,
     output wire                             req_queue_rw_notify,
 
     // Core response
@@ -235,6 +236,7 @@ module VX_mem_scheduler #(
     wire coalescer_empty;
     assign req_queue_rw_notify = reqq_valid && reqq_ready && reqq_rw;
     assign req_queue_empty = !reqq_valid && ibuf_empty && coalescer_empty;
+    assign req_queue_sent  = !reqq_valid && coalescer_empty;
 
     // Index buffer ///////////////////////////////////////////////////////////
 

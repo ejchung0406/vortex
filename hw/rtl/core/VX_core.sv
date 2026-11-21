@@ -86,6 +86,7 @@ import VX_tcu_pkg::*;
 
     // the LSU blocks' memory paths
     wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] lsu_sched_empty;
+    wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] lsu_sched_sent;
     wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] lsu_store_empty;
 `ifdef VX_CFG_LMEM_ENABLE
     VX_lsu_mem_if #(
@@ -150,6 +151,9 @@ import VX_tcu_pkg::*;
     // the in-core global-store path is empty
     wire mem_unit_empty = (& lsu_store_empty);
     wire mem_unit_busy;
+    // no store in flight past the LSU schedulers, to the data cache or local memory
+    wire lmem_store_empty;
+    wire lsu_store_landed = mem_unit_empty && lmem_store_empty;
 
 `ifdef VX_CFG_VM_ENABLE
 `ifdef PERF_ENABLE
@@ -456,6 +460,8 @@ import VX_tcu_pkg::*;
                 .instret              (sched_instret),
                 .active_warps         (sched_active_warps),
                 .all_lsu_sched_empty  (lsu_sched_empty),
+                .all_lsu_sched_sent   (lsu_sched_sent),
+                .lsu_store_landed     (lsu_store_landed),
                 .mmu_empty            (mmu_empty),
                 .cta_bcast            (cta_bcast),
             `ifdef VX_CFG_VM_ENABLE
@@ -470,6 +476,7 @@ import VX_tcu_pkg::*;
                 .lsu_coalescer_misses (lsu_coalescer_misses[i]),
             `endif
                 .lsu_sched_empty      (lsu_sched_empty[i]),
+                .lsu_sched_sent       (lsu_sched_sent[i]),
                 .lsu_store_empty      (lsu_store_empty[i]),
                 .lsu_busy             (lsu_busy[i]),
             `ifdef VX_CFG_LMEM_ENABLE
@@ -553,6 +560,8 @@ import VX_tcu_pkg::*;
             .instret              (sched_instret),
             .active_warps         (sched_active_warps),
             .lsu_sched_empty      (lsu_sched_empty),
+            .lsu_sched_sent       (lsu_sched_sent),
+            .lsu_store_landed     (lsu_store_landed),
             .mmu_empty            (mmu_empty),
         `ifdef VX_CFG_VM_ENABLE
             .satp                 (sched_satp),
@@ -689,6 +698,7 @@ import VX_tcu_pkg::*;
                     .lsu_coalescer_misses (lsu_coalescer_misses[i]),
                 `endif
                     .lsu_sched_empty      (lsu_sched_empty[i]),
+                    .lsu_sched_sent       (lsu_sched_sent[i]),
                     .lsu_store_empty      (lsu_store_empty[i]),
                     .lsu_busy             (lsu_busy[i]),
                 `ifdef VX_CFG_LMEM_ENABLE
@@ -770,6 +780,7 @@ import VX_tcu_pkg::*;
                 .lsu_coalescer_misses (lsu_coalescer_misses),
             `endif
                 .lsu_sched_empty      (lsu_sched_empty),
+                .lsu_sched_sent       (lsu_sched_sent),
                 .lsu_store_empty      (lsu_store_empty),
                 .lsu_busy             (lsu_busy),
             `ifdef VX_CFG_LMEM_ENABLE
@@ -848,7 +859,8 @@ import VX_tcu_pkg::*;
         .dcr_flush_if    (dcr_flush_dcache_if),
         .flush_op        (dcr_flush_op),
         .dcache_bus_if   (dcache_bus_if),
-        .busy            (mem_unit_busy)
+        .busy            (mem_unit_busy),
+        .lmem_store_empty(lmem_store_empty)
     );
 
     // Fragment work drains at the producer (VX_raster_core.busy), not here.

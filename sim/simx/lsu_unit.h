@@ -97,6 +97,8 @@ public:
 
 	// Returns true when all LSU blocks have no in-flight requests.
 	bool drained() const;
+	// no block holds a request not yet sent; reads may await their response
+	bool sent() const;
 
 protected:
 	void on_reset() override;

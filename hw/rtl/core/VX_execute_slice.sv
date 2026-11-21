@@ -52,6 +52,7 @@ import VX_tcu_pkg::*;
     output wire [PERF_CTR_BITS-1:0] lsu_coalescer_misses,
 `endif
     output wire             lsu_sched_empty,
+    output wire             lsu_sched_sent,
     output wire             lsu_store_empty,
     output wire             lsu_busy,
 `ifdef VX_CFG_LMEM_ENABLE
@@ -189,6 +190,7 @@ import VX_tcu_pkg::*;
         .tcu_mem_if       (lsu_tcu_mem_if),
     `endif
         .sched_empty      (lsu_sched_empty),
+        .sched_sent       (lsu_sched_sent),
         .store_empty      (lsu_store_empty),
         .busy             (lsu_busy),
     `ifdef VX_CFG_LMEM_ENABLE

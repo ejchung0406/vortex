@@ -275,6 +275,7 @@ module VX_om_mem import VX_gpu_pkg::*; import VX_om_pkg::*; #(
         `UNUSED_PIN (core_req_ready_wr),
         .req_queue_rw_notify (write_notify),
         .req_queue_empty (req_queue_empty_w),
+        `UNUSED_PIN (req_queue_sent),
 
         // Output response
         .core_rsp_valid (mrsp_valid),

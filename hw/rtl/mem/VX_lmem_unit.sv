@@ -68,7 +68,10 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     VX_lsu_mem_if.slave lsu_mem_if [NUM_BLOCKS],
 
     // DMA read/write port
-    VX_mem_bus_if.slave dma_bus_if
+    VX_mem_bus_if.slave dma_bus_if,
+
+    // no store or atomic waits at an input or sits in the first engine
+    output wire         store_empty
 );
     `UNUSED_SPARAM (INSTANCE_ID)
 
@@ -206,6 +209,8 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     // engine is idle, and the read engine takes nothing in that cycle.
 
     wire [NUM_BLOCKS-1:0] in_fire = in_valid & in_ready;
+
+    assign store_empty = ~(| (in_valid & ~in_read)) && ~a_holds_write;
 
     if (DUAL) begin : g_dual_arb
 

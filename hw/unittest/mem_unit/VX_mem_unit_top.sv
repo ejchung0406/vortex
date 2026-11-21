@@ -94,6 +94,7 @@ module VX_mem_unit_top import VX_gpu_pkg::*; #(
             .tcu_mem_if    (tcu_mem_if),
         `endif
             `UNUSED_PIN (sched_empty),
+            `UNUSED_PIN (sched_sent),
             `UNUSED_PIN (store_empty),
             `UNUSED_PIN (busy),
         `ifdef VX_CFG_LMEM_ENABLE
@@ -151,7 +152,8 @@ module VX_mem_unit_top import VX_gpu_pkg::*; #(
         .dcr_flush_if  (dcr_flush_if),
         .flush_op      (FENCE_OP_FULL),
         .dcache_bus_if (mem_bus_if),
-        `UNUSED_PIN    (busy)
+        `UNUSED_PIN    (busy),
+        `UNUSED_PIN    (lmem_store_empty)
     );
 
 endmodule

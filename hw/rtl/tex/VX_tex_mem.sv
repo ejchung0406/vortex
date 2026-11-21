@@ -162,6 +162,7 @@ module VX_tex_mem import VX_gpu_pkg::*; import VX_tex_pkg::*; #(
         `UNUSED_PIN (core_req_ready_rd),
         `UNUSED_PIN (core_req_ready_wr),
         `UNUSED_PIN (req_queue_empty),
+        `UNUSED_PIN (req_queue_sent),
         `UNUSED_PIN (req_queue_rw_notify),
 
         // Output response

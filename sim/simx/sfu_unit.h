@@ -128,6 +128,7 @@ protected:
 
 private:
 	uint32_t latency_of(const instr_trace_t* trace) const;
+	bool bar_lsu_drained(const instr_trace_t* trace) const;
 
 	// Core-wide resources the SFU blocks share: the warp-control resources
 	// (barrier unit, wspawn, warp retirement) and the TEX/RTU/DXA buses each

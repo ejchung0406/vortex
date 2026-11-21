@@ -41,6 +41,7 @@ module VX_lsu_unit import VX_gpu_pkg::*; #(
 `endif
 
     output wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] sched_empty,
+    output wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] sched_sent,
     output wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] store_empty,
     output wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] busy,
 
@@ -102,6 +103,7 @@ module VX_lsu_unit import VX_gpu_pkg::*; #(
             .tcu_mem_if       (tcu_mem_if[block_idx]),
         `endif
             .sched_empty      (sched_empty[block_idx]),
+            .sched_sent       (sched_sent[block_idx]),
             .store_empty      (store_empty[block_idx]),
             .busy             (busy[block_idx]),
         `ifdef VX_CFG_LMEM_ENABLE

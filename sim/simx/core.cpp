@@ -180,7 +180,8 @@ public:
 
     // create the memory coalescer, or the lane adapter that replaces it.
     const bool dcache_coalescing = (VX_CFG_NUM_LSU_LANES > 1) && (DCACHE_WORD_SIZE > LSU_WORD_SIZE);
-    std::vector<LsuMemAdapter::Ptr> lsu_dcache_adapter(VX_CFG_NUM_LSU_BLOCKS);
+    std::vector<LsuMemAdapter::Ptr>& lsu_dcache_adapter = lsu_dcache_adapters_;
+    lsu_dcache_adapter.resize(VX_CFG_NUM_LSU_BLOCKS);
     for (uint32_t b = 0; b < VX_CFG_NUM_LSU_BLOCKS; ++b) {
       snprintf(sname, 100, "%s-coalescer%d", name.c_str(), b);
       // a batch crosses the coalescer's output register, then the lane
@@ -1281,6 +1282,35 @@ public:
     return std::static_pointer_cast<LsuUnit>(func_units_.at((int)FUType::LSU))->drained();
   }
 
+  bool lsu_sent() const {
+    return std::static_pointer_cast<LsuUnit>(func_units_.at((int)FUType::LSU))->sent();
+  }
+
+  // No store is in flight past the LSU blocks' request queues: the local
+  // memory switches, the data-cache coalescers or lane adapters and the local
+  // memory hold none.
+  bool lsu_stores_landed() const {
+    for (uint32_t b = 0; b < VX_CFG_NUM_LSU_BLOCKS; ++b) {
+      if (lmem_switch_.at(b)->ReqIn.size() != 0) {
+        return false;
+      }
+      if (lsu_dcache_adapters_.at(b)) {
+        auto& adapter = *lsu_dcache_adapters_.at(b);
+        if (adapter.ReqIn.size() != 0) {
+          return false;
+        }
+        for (auto& out : adapter.ReqOut) {
+          if (out.size() != 0) {
+            return false;
+          }
+        }
+      } else if (!mem_coalescers_.at(b)->req_idle()) {
+        return false;
+      }
+    }
+    return !local_mem_->holds_store();
+  }
+
   int dcr_read(uint32_t addr, uint32_t tag, uint32_t* value) {
     // tag arrives as (mpm_class << 6) | mpm_tag_idx after socket strips core_id
     switch (addr) {
@@ -1421,6 +1451,7 @@ private:
   LocalMem::Ptr local_mem_;
   std::vector<LocalMemSwitch::Ptr> lmem_switch_;
   std::vector<MemCoalescer::Ptr> mem_coalescers_;
+  std::vector<LsuMemAdapter::Ptr> lsu_dcache_adapters_;
   std::vector<TxBuffer<MemReq>::Ptr> dcache_flush_bufs_;
   TxBuffer<MemReq>::Ptr icache_flush_buf_;
 
@@ -1563,6 +1594,14 @@ bool Core::has_pending_instrs(uint32_t wid) const {
 
 bool Core::lsu_drained() const {
   return impl_->lsu_drained();
+}
+
+bool Core::lsu_sent() const {
+  return impl_->lsu_sent();
+}
+
+bool Core::lsu_stores_landed() const {
+  return impl_->lsu_stores_landed();
 }
 
 void Core::resume(uint32_t wid) {
