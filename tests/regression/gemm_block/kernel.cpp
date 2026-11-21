@@ -56,12 +56,15 @@ static __attribute__((noinline)) void record_cta(kernel_arg_t* __UNIFORM__ arg, 
 // grid from the cores that work. The host sizes the grid so that the last CTA
 // goes to a working core.
 static __attribute__((noinline)) void idle_cta(kernel_arg_t* __UNIFORM__ arg) {
-  auto last = reinterpret_cast<volatile uint32_t*>(arg->core_addr) + arg->last_cta;
+  auto last = reinterpret_cast<uint32_t*>(arg->core_addr) + arg->last_cta;
   for (;;) {
-    // a core's data cache does not see another core's store: the fence
-    // empties it, so the load fetches the record from the shared L2
-    vx_fence();
-    if (*last != UINT32_MAX)
+    // A core's data cache does not see another core's store, so the record
+    // is read with an atomic, which the cache passes on to the shared L2. A
+    // fence would empty the cache instead, and its flush token holds every
+    // core's requests at the L2, which disturbs the role being measured.
+    long __UNIFORM__ record;
+    __asm__ volatile("amoor.w %0, zero, (%1)" : "=r"(record) : "r"(last) : "memory");
+    if (record != -1)
       break;
     // poll seldom: the idle core is to stay out of the L2
     for (uint32_t i = 0; i < 4096; ++i) {

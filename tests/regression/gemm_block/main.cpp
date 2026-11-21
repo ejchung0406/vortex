@@ -471,6 +471,7 @@ uint32_t xt = BW_TILES;   // A tiles a CTA of the memory-bound role multiplies: 
 uint32_t xr = 1;          // rounds: the grid is this many times the N / cta_cols CTAs of one round
 uint32_t xR = 0;          // B columns the compute-bound CTAs share (0: each its own)
 uint32_t xo = ROLE_NONE;  // the role that runs alone (the other's CTAs do no work)
+bool     xP = false;      // print each CTA's core, walk begin, end and cycles
 
 vx_device_h device = nullptr;
 vx_buffer_h A_buffer = nullptr;
@@ -491,12 +492,13 @@ static void show_usage() {
                "[-s 0|1 staging: load, dxa] [-d chunk buffers 1.." << MAX_DEPTH << " (dxa)] "
                "[-b cores of the memory-bound role] [-t its A tiles: " << BW_TILES << "] "
                "[-r rounds of N columns] [-R B columns the compute-bound CTAs share] "
-               "[-o 1|2 run the memory-bound|compute-bound role alone] [-h: help]" << std::endl;
+               "[-o 1|2 run the memory-bound|compute-bound role alone] "
+               "[-P print every CTA] [-h: help]" << std::endl;
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "m:n:k:w:c:s:d:b:t:r:R:o:h")) != -1) {
+  while ((c = getopt(argc, argv, "m:n:k:w:c:s:d:b:t:r:R:o:Ph")) != -1) {
     switch (c) {
     case 'm':
       xm = atoi(optarg);
@@ -533,6 +535,9 @@ static void parse_args(int argc, char **argv) {
       break;
     case 'o':
       xo = atoi(optarg);
+      break;
+    case 'P':
+      xP = true;
       break;
     case 'h':
       show_usage();
@@ -870,7 +875,7 @@ int main(int argc, char *argv[]) {
       uint32_t ctas = 0, max = 0, first = UINT32_MAX, last = 0, last_begin = 0;
       uint64_t sum = 0;
     } roles[2];
-    std::vector<uint32_t> cta_begin(num_blocks), cta_end(num_blocks);
+    std::vector<uint32_t> cta_begin(num_blocks), cta_end(num_blocks), cta_walk(num_blocks);
     for (uint32_t b = 0; b < num_blocks; ++b) {
       if (h_core[b] >= num_cores)
         continue;
@@ -884,6 +889,9 @@ int main(int argc, char *argv[]) {
       }
       cta_begin[b] = begin;
       cta_end[b] = end;
+      cta_walk[b] = cycles;
+      if (xP)
+        printf("CTA %u core=%u begin=%u end=%u walk=%u\n", b, h_core[b], begin, end, cycles);
       auto& r = roles[is_bw(b) ? 0 : 1];
       ++r.ctas;
       if (idle(b))
@@ -992,6 +1000,32 @@ int main(int argc, char *argv[]) {
       }
     }
     report("_steady", steady, hi);
+    // The walk cycles of each core's CTAs, without the core's first generation
+    // (the CTAs that began before its first CTA ended), as quartiles: a
+    // comparison of runs that does not rest on the CTAs one window holds.
+    for (uint32_t c = 0; c < num_cores; ++c) {
+      const bool bw = c < bw_cores;
+      if (xo != ROLE_NONE && xo != (bw ? ROLE_BW : ROLE_CP))
+        continue;
+      uint32_t first_end = UINT32_MAX, all = 0;
+      for (uint32_t b = 0; b < num_blocks; ++b) {
+        if (h_core[b] == c && !idle(b)) {
+          first_end = std::min(first_end, cta_end[b]);
+          ++all;
+        }
+      }
+      std::vector<uint32_t> w;
+      for (uint32_t b = 0; b < num_blocks; ++b) {
+        if (h_core[b] == c && !idle(b) && cta_begin[b] >= first_end)
+          w.push_back(cta_walk[b]);
+      }
+      if (w.empty())
+        continue;
+      std::sort(w.begin(), w.end());
+      auto q = [&](double f) { return w[std::min<size_t>(w.size() - 1, (size_t)(f * (w.size() - 1) + 0.5))]; };
+      printf("walk_%s: core=%u ctas=%u steady_ctas=%zu min=%u q1=%u median=%u q3=%u max=%u\n",
+             names[bw ? 0 : 1], c, all, w.size(), w.front(), q(0.25), q(0.5), q(0.75), w.back());
+    }
 #endif
   }
 
