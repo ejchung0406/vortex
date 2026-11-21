@@ -29,6 +29,7 @@ reviewed, both simulators).
 | 15 | FIFO L2 makes disjoint SMs slow each other | calibration | pseudo-LRU set in `h200s` (9c27e289a) | propose as a default? |
 | 16 | L1 dcache and shared memory both at full size (484 KB vs the part's 256 KB pool) | profile accuracy | found, in every profile from Volta on | decide the split |
 | 17 | Tensor memory engine: B prefetch two blocks ahead and A read by bank rows (on `upstream/feature/tmem-dataflow`) | performance (design change) | SimX patch `tmem_roof.patch`: 1,789 -> 3,684 FLOPs/clock/SM with one 128 B port (part: 3,786); not on the fork yet | merge the branch, RTL counterpart, rtlsim parity |
+| 18 | A barrier waits for the whole core's LSU to drain (cause of the two-state load-mode rate) | design property, performance | found and traced; per-warp drain experiment in SimX (x1.5-1.7 for load-mode staging) | decide whether to change it (RTL + SimX) |
 
 Issue texts in English for 9, 10, 11: `upstream-issue-drafts.md`. Upstream `master` checked at ccf811e11 (2026-11-20): the affected files are unchanged there.
 
@@ -265,6 +266,14 @@ Wrong: it has been per SM since July. Check the instantiation, not the comment.
 - **Not solved**: the branch's GEMM test stays at 1,292 -> 1,299 (staging by the DXA sets the pace, the engine sits empty 60% of the time). A lone issuing warp gives one `tc.mma` per ~128 cycles (11 cycles per ALU instruction), which binds below N = 256 unless the loop is unrolled.
 - **Kind of change**: hardware design (engine control and one more buffer slot), not a kernel change and not a wider port. No size value of the profile changes.
 - **Before sending**: the branch has to land upstream first; RTL counterpart of both knobs; rtlsim parity.
+
+## 18. A barrier waits for the whole core's LSU to drain (design property, performance)
+- **What**: `VX_wctl_unit.sv:185` holds a barrier at execute until every LSU block of the core is empty and the MMU idle (`bar_drain = is_bar && !((&lsu_sched_empty) && mmu_empty)`); SimX does the same (`sfu_unit.cpp`, `core_->lsu_drained()`). So a CTA's barrier waits for the outstanding loads of every other CTA on the SM, and the single SFU block is blocked behind it (the CSR read after each barrier as well). CUDA's `bar.sync` only orders the CTA's own shared-memory writes.
+- **Effect**: with several CTAs per SM staging by loads, barriers release only at core-wide drain moments. If all CTAs start together they lock into step (262K cycles per walk); once staggered, some CTA nearly always has a miss outstanding and every barrier waits longer (about 300K). Runs switch between the two on their own: this was the unexplained "0.86" co-run loss. Per-warp work is the same in both states; all extra time is at barriers and in the SFU queue (+1,753 warp-cycles per chunk).
+- **Which is honest**: random or staggered CTA starts always end slow. The decode baseline measured with all 16 CTAs launched together (15.9 GB/s per SM) is the lockstep figure; staggered it is 14.8.
+- **Experiment** (`VX_BAR_DRAIN=warp` in SimX: a barrier waits for its own warp's requests only; results still pass): load-mode memory role 6.5-7.8 -> 11.6 B/cycle (x1.49 lockstep, x1.72 staggered), no state switching, decode baseline 22.5 GB/s per SM, co-run/solo 0.99. A real H200 does 16-20 GB/s per SM with FP16 cuBLAS, so this would overshoot the load-mode calibration.
+- **DXA mode is not affected** (one warp issues copies ahead; no per-warp load phase).
+- **Status**: instrumentation and the experiment switch in `notes/bwco_instrumentation.patch`; nothing on the fork. A fix is a hardware change in RTL and SimX together; its timing cost is not measured.
 
 ## How these were found (for the talk)
 - Rule that produced most of them: match a real H200, never provision above it, and when a number looks wrong test several hypotheses instead of tuning.

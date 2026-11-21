@@ -78,7 +78,7 @@ Share of SMs (MPS active-thread percentage), each alone:
 | decode matmul weight traffic, GB/s (batch 1) | 3184 | 3184 | 3216 | 3100 | 2842 | 2300 | 1233 | 831 |
 | decode matmul throughput, relative | 1.00 | 1.00 | 1.01 | 0.97 | 0.89 | 0.72 | 0.39 | 0.26 |
 
-So the image step is compute-bound (proportional to SMs below ~70%) and the decode kernels are bandwidth-bound (72% of full speed on a fifth of the SMs), and with few SMs decode falls to roughly 95-125 GB/s per SM (13 SMs: 1233; 6-7 SMs: 831), the per-SM request limit.
+So the image step is compute-bound (proportional to SMs below ~70%) and the decode kernels are bandwidth-bound (72% of full speed on a fifth of the SMs), and with few SMs decode falls to roughly 88-104 GB/s per SM, the per-SM limit. Correction (2026-11-21): MPS percentages do not map linearly to SMs; the streaming sweep under MPS landed on 8, 14, 22, 32, 46, 66, 132 SMs, so "10%" is most likely 14 SMs (1233 / 14 = 88 GB/s per SM) and "5%" 8 SMs (831 / 8 = 104), not 13 and 6-7 as first written. The SM count was not read back in these runs.
 
 Both at once (MPS, complementary shares; ratio to solo at the same share): DiT 0.93-0.96; decode wall-clock 0.97-0.98, decode GPU kernel time 0.71-0.82 (matmul traffic at an 80/20 split: 2300 -> 1741 GB/s). MPS shares do not pin the two clients to disjoint SMs, so this includes any SM sharing; single 30 s windows per point.
 
