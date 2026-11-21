@@ -228,9 +228,17 @@ private:
     };
     h.vortex_start = [this]() {
       future_ = std::async(std::launch::async, [&] { processor_.run(); });
+      start_unseen_ = true;
     };
     h.vortex_busy = [this]() -> bool {
       if (!future_.valid()) return false;
+      // The CP waits to see busy before it waits for the drain: report a
+      // launch busy at least once, however soon the kernel finishes, or a
+      // poller descheduled across the whole run would wait forever.
+      if (start_unseen_) {
+        start_unseen_ = false;
+        return true;
+      }
       return future_.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
     };
     // ProcessorImpl decodes the MMU fault-report DCRs.
@@ -241,6 +249,7 @@ private:
   RAM ram_;
   Processor processor_;
   std::future<void> future_;
+  bool start_unseen_ = false;
   vortex::CommandProcessor cp_;
   std::mutex host_mu_;
   std::map<uint64_t, uint64_t> host_regions_;   // base -> size
