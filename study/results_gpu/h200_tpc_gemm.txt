@@ -1,0 +1,24 @@
+MEM SMs: 0;1;124;125;2;3;18;19;4;5;20;21;6;7;22;23;8;9;24;25;10;11;26;27;12;13;28;29;14;15;30;31
+CMP bits: 1,2,3,11,12,13,14,15,16,20,21,22,23,24,25,29,30,31,32,33,34,38,39,40,41,42,43,47,48,49,50,51,52,56,57,58,59,60,61,62,65,66,67,68,69,70,71,78,81,83
+### GEMM solo, all 132 SMs
+  Avg runtime: 0.019319 ms
+  GFLOPS: 444636
+### GEMM solo, CMP TPCs (100 SMs)
+tpc_preload: mask set, 50 TPCs enabled
+  Avg runtime: 0.0342881 ms
+  GFLOPS: 250522
+tpc_preload: 100001 launches masked
+### MEM W solo
+tag=W_solo mem=tma fused=1 fused_warps=4 consumers=32 cluster=1 self=1 local_issuers=0 consume=0 depth=6 tile_kb=32 nw=3 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=512.0 mem_tpc_mask=000000000000080180c06030180c0601 mem_tpcs=16 mem_cta_sms=32 role_smem_kb=225 reps=50 buf_gib=16 window_mb=0 check=FAIL bad=102 mem_gbs=4489.1 mem_gbs_range=4477.5-4501.3 per_unit_med=150.4 slowest=149.6 fastest=151.4 window_ms=3.59
+### MEM L16 solo
+tag=L16_solo mem=ld mem_sms=32 per_sm=2 ld_carveout=-1 slices=64 mb_per_slice=256.0 mem_tpc_mask=000000000000080180c06030180c0601 mem_tpcs=16 mem_cta_sms=30 role_smem_kb=0 reps=50 buf_gib=16 window_mb=0 check=FAIL bad=204 mem_gbs=4406.4 mem_gbs_range=4391.3-4417.2 per_unit_med=147.7 slowest=146.9 fastest=148.9 window_ms=3.66
+### MEM W while GEMM runs (GEMM started 3 s earlier)
+tag=W_with_gemm mem=tma fused=1 fused_warps=4 consumers=32 cluster=1 self=1 local_issuers=0 consume=0 depth=6 tile_kb=32 nw=3 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=512.0 mem_tpc_mask=000000000000080180c06030180c0601 mem_tpcs=16 mem_cta_sms=32 role_smem_kb=225 reps=50 buf_gib=16 window_mb=0 check=FAIL bad=102 mem_gbs=3664.0 mem_gbs_range=3653.8-3672.5 per_unit_med=122.6 slowest=122.1 fastest=124.1 window_ms=4.40
+tag=L16_with_gemm mem=ld mem_sms=32 per_sm=2 ld_carveout=-1 slices=64 mb_per_slice=256.0 mem_tpc_mask=000000000000080180c06030180c0601 mem_tpcs=16 mem_cta_sms=30 role_smem_kb=0 reps=50 buf_gib=16 window_mb=0 check=FAIL bad=204 mem_gbs=3730.0 mem_gbs_range=3686.1-3741.0 per_unit_med=125.9 slowest=124.3 fastest=128.1 window_ms=4.32
+  Avg runtime: 0.0345803 ms
+  GFLOPS: 248405
+### GEMM while MEM W streams (MEM started 3 s earlier, 3000 reps)
+  Avg runtime: 0.0380147 ms
+  GFLOPS: 225964
+MEM still running after the GEMM (good)
+tag=W_bg mem=tma fused=1 fused_warps=4 consumers=32 cluster=1 self=1 local_issuers=0 consume=0 depth=6 tile_kb=32 nw=3 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=512.0 mem_tpc_mask=000000000000080180c06030180c0601 mem_tpcs=16 mem_cta_sms=32 role_smem_kb=225 reps=3000 buf_gib=16 window_mb=0 check=FAIL bad=6002 mem_gbs=4484.9 mem_gbs_range=3643.3-4497.7 per_unit_med=150.4 slowest=149.5 fastest=151.5 window_ms=3.59

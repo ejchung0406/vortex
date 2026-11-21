@@ -1,0 +1,27 @@
+NVIDIA H200, 615.71.09, 1980 MHz, 1980 MHz, 143771 MiB
+atl1-1-03-018-14-0.pace.gatech.edu
+Sat Nov 21 03:18:18 AM EST 2026
+gpu=NVIDIA H200 test=latency cluster=2 remote_rank=1 tile_kb=16 trials=33 sm_rank0=124 sm_remote=125 data_errs=0
+  local_cold   median_cycles=1867 min=1721 max=2598 median_ns=928
+  local_warm   median_cycles=571 min=571 max=571 median_ns=288
+  remote_cold  median_cycles=2844 min=2537 max=3296 median_ns=1440
+  remote_warm  median_cycles=1317 min=1296 max=1473 median_ns=672
+  pingpong     median_cycles=369 min=369 max=520 median_ns=192
+gpu=NVIDIA H200 test=latency cluster=8 remote_rank=7 tile_kb=16 trials=33 sm_rank0=0 sm_remote=49 data_errs=0
+  local_cold   median_cycles=1867 min=1721 max=3035 median_ns=960
+  local_warm   median_cycles=571 min=571 max=571 median_ns=288
+  remote_cold  median_cycles=2854 min=2541 max=3310 median_ns=1440
+  remote_warm  median_cycles=1466 min=1314 max=1486 median_ns=736
+  pingpong     median_cycles=519 min=369 max=519 median_ns=256
+gpu=NVIDIA H200 test=latency cluster=16 remote_rank=15 tile_kb=16 trials=33 sm_rank0=2 sm_remote=107 data_errs=0
+  local_cold   median_cycles=1867 min=1721 max=3327 median_ns=928
+  local_warm   median_cycles=571 min=571 max=571 median_ns=288
+  remote_cold  median_cycles=2861 min=2559 max=3308 median_ns=1440
+  remote_warm  median_cycles=1339 min=1330 max=1493 median_ns=672
+  pingpong     median_cycles=519 min=369 max=522 median_ns=256
+gpu=NVIDIA H200 test=latency cluster=2 remote_rank=1 tile_kb=32 trials=33 sm_rank0=124 sm_remote=125 data_errs=0
+  local_cold   median_cycles=2013 min=1867 max=2599 median_ns=1024
+  local_warm   median_cycles=721 min=721 max=721 median_ns=352
+  remote_cold  median_cycles=3000 min=2694 max=3604 median_ns=1504
+  remote_warm  median_cycles=1479 min=1469 max=1633 median_ns=736
+  pingpong     median_cycles=369 min=369 max=523 median_ns=192

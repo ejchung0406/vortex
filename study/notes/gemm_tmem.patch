@@ -1,0 +1,1514 @@
+diff -ruN '--exclude=.git' src_tmem/sim/simx/mem/local_mem.cpp src_tmemk/sim/simx/mem/local_mem.cpp
+--- src_tmem/sim/simx/mem/local_mem.cpp	2026-11-20 14:56:04.000000000 -0500
++++ src_tmemk/sim/simx/mem/local_mem.cpp	2026-11-21 03:12:05.171677472 -0500
+@@ -18,6 +18,11 @@
+ #include <vector>
+ #include <deque>
+ #include <cstring>
++#ifdef LMEM_DMA_STATS
++#include <algorithm>
++#include <cstdlib>
++#include <iostream>
++#endif
+ #if VX_CFG_EXT_A_ENABLED
+ #include "amo_ops.h"
+ #include "amo_unit.h"
+@@ -112,6 +117,24 @@
+   bool      dma_slot_;
+   uint32_t  dma_last_grant_;
+   mutable PerfStats perf_stats_;
++#ifdef LMEM_DMA_STATS
++  struct DmaStat { uint64_t grants = 0, waits = 0, reads = 0, writes = 0; };
++  std::vector<DmaStat> dma_st_;
++  static std::vector<Impl*>& dma_registry() {
++    static std::vector<Impl*> reg;
++    static bool hooked = (std::atexit([] { for (auto* impl : dma_registry()) impl->dma_print(); }), true);
++    (void)hooked;
++    return reg;
++  }
++  void dma_print() {
++    for (uint32_t c = 0; c < dma_st_.size(); ++c) {
++      auto& st = dma_st_.at(c);
++      std::cout << "LMEM_DMA: " << simobject_->name() << " client=" << c << " grants=" << st.grants
++                << " waits=" << st.waits << " block_reads=" << st.reads << " block_writes=" << st.writes << std::endl;
++    }
++    dma_st_.clear();
++  }
++#endif
+ 
+   uint64_t to_local_addr(uint64_t addr) const {
+     return bit_getw(addr, 0, addr_bits_ - 1);
+@@ -250,6 +273,29 @@
+   // Serve one DMA client's row access. Clients are served round-robin,
+   // starting after the last one served.
+   void dma_fire() {
++  #ifdef LMEM_DMA_STATS
++    // Measurement only: a client that has a request in a cycle another is
++    // served (or none, for a full response queue) waits.
++    uint32_t granted = ~0u;
++    struct Done {
++      Impl* impl; uint32_t* granted;
++      ~Done() {
++        auto& st = impl->dma_st_;
++        st.resize(impl->config_.dma_clients);
++        for (uint32_t c = 0; c < impl->config_.dma_clients; ++c) {
++          bool pend = false;
++          for (uint32_t p = 0; p < DMA_PORTS; ++p) {
++            pend |= !impl->simobject_->DmaInputs.at(c * DMA_PORTS + p).empty();
++          }
++          if (c == *granted) {
++            ++st.at(c).grants;
++          } else if (pend) {
++            ++st.at(c).waits;
++          }
++        }
++      }
++    } done{this, &granted};
++  #endif
+     for (uint32_t i = 0; i < config_.dma_clients; ++i) {
+       uint32_t c = (dma_last_grant_ + 1 + i) % config_.dma_clients;
+       bool pending = false;
+@@ -297,9 +343,16 @@
+           simobject_->DmaOutputs.at(c * DMA_PORTS + p).send(rsp, 0);
+         }
+         DT(4, simobject_->name() << "-dma" << c << " req : " << req);
++      #ifdef LMEM_DMA_STATS
++        dma_st_.resize(config_.dma_clients);
++        ++(req.is_write() ? dma_st_.at(c).writes : dma_st_.at(c).reads);
++      #endif
+         in.pop();
+       }
+       dma_last_grant_ = c;
++    #ifdef LMEM_DMA_STATS
++      granted = c;
++    #endif
+       return;
+     }
+   }
+@@ -445,9 +498,18 @@
+     for (auto& e : engines_) {
+       e.pending = BitVector<>(config.num_lanes);
+     }
++  #ifdef LMEM_DMA_STATS
++    dma_registry().push_back(this);
++  #endif
+   }
+ 
+-  virtual ~Impl() {}
++  virtual ~Impl() {
++  #ifdef LMEM_DMA_STATS
++    this->dma_print();
++    auto& reg = dma_registry();
++    reg.erase(std::remove(reg.begin(), reg.end(), this), reg.end());
++  #endif
++  }
+ 
+   void reset() {
+     // perf_stats_ survives: the MPM counters run from device reset.
+diff -ruN '--exclude=.git' src_tmem/sim/simx/tcu/tcu_unit.cpp src_tmemk/sim/simx/tcu/tcu_unit.cpp
+--- src_tmem/sim/simx/tcu/tcu_unit.cpp	2026-11-21 01:53:17.944087965 -0500
++++ src_tmemk/sim/simx/tcu/tcu_unit.cpp	2026-11-21 02:30:27.066120595 -0500
+@@ -371,9 +371,38 @@
+   #ifdef VX_CFG_TCU_TMEM_ENABLE
+     tmem_.assign(kTmemLanes * kTmemCols, reg_data_t{});
+   #endif
++  #if defined(VX_CFG_TCU_TMEM_ENABLE) && defined(TCU_ENGINE_STATS)
++    est_registry().push_back(this);
++  #endif
+   }
+ 
+-  ~Impl() {}
++  ~Impl() {
++  #if defined(VX_CFG_TCU_TMEM_ENABLE) && defined(TCU_ENGINE_STATS)
++    this->est_print();
++    auto& reg = est_registry();
++    reg.erase(std::remove(reg.begin(), reg.end(), this), reg.end());
++  #endif
++  }
++
++#if defined(VX_CFG_TCU_TMEM_ENABLE) && defined(TCU_ENGINE_STATS)
++  // The simulator exits without destroying its units: print at exit.
++  static std::vector<Impl*>& est_registry() {
++    static std::vector<Impl*> reg;
++    static bool hooked = (std::atexit([] { for (auto* impl : est_registry()) impl->est_print(); }), true);
++    (void)hooked;
++    return reg;
++  }
++
++  void est_print() {
++    if (est_.ops != 0) {
++      std::cout << "TCU_ENGINE: " << simobject_->name() << " ops=" << est_.ops << " busy=" << est_.busy
++                << " setup=" << est_.setup << " a_wait=" << est_.a_wait << " b_wait=" << est_.b_wait
++                << " step_other=" << est_.step_other << " gap_in_cta=" << est_.gap_cta
++                << " gap_between_ctas=" << est_.gap_between << std::endl;
++      est_.ops = 0;
++    }
++  }
++#endif
+ 
+   void reset() {
+     // perf_stats_ survives: the MPM counters run from device reset.
+@@ -1918,6 +1947,13 @@
+       DT(3, simobject_->name() << " tc-run: cta=" << run_.cta);
+       run_.start_at = now + 1;
+       this->job_set_descs(run_);
++    #ifdef TCU_ENGINE_STATS
++      if (est_.ops != 0) {
++        (run_.cta == est_.last_cta ? est_.gap_cta : est_.gap_between) += now - est_.last_end;
++      }
++      ++est_.ops;
++      est_.last_cta = run_.cta;
++    #endif
+     }
+   }
+ 
+@@ -1951,6 +1987,9 @@
+     uint64_t now = SimPlatform::instance().cycles();
+     if (now < job.start_at) {
+       cyc_.other = true;
++    #ifdef TCU_ENGINE_STATS
++      ++est_.setup;
++    #endif
+       return;
+     }
+ 
+@@ -1966,10 +2005,16 @@
+       }
+       ++perf_stats_.tbuf_stalls;
+       cyc_.opnd = true;
++    #ifdef TCU_ENGINE_STATS
++      ++est_.a_wait;
++    #endif
+       return;
+     }
+ 
+     bool landed = false;
++  #ifdef TCU_ENGINE_STATS
++    bool a_landed = false;
++  #endif
+     if (!job.a_valid) {
+       if (!job.a_fetching) {
+         for (uint32_t b = 0; b < VX_CFG_NUM_TCU_BLOCKS; ++b) {
+@@ -1985,6 +2030,9 @@
+           job.a_fetching = false;
+           job.a_valid = true;
+           landed = true;
++        #ifdef TCU_ENGINE_STATS
++          a_landed = true;
++        #endif
+         }
+       }
+     }
+@@ -2043,6 +2091,9 @@
+     if (!job.a_valid || !b_ready || landed) {
+       ++perf_stats_.tbuf_stalls;
+       cyc_.opnd = true;
++    #ifdef TCU_ENGINE_STATS
++      ++((!job.a_valid || a_landed) ? est_.a_wait : est_.b_wait);
++    #endif
+       return;
+     }
+     uint32_t col0 = job.taddr + job.n * wg_cfg::tcN;
+@@ -2051,6 +2102,9 @@
+     if (rd_taken || (!zero_c && this->row_hazard(job.m, col0))
+      || (last_step && commits_.size() + job.ncommit > kCommitQueue)) {
+       cyc_.other = true;
++    #ifdef TCU_ENGINE_STATS
++      ++est_.step_other;
++    #endif
+       return;
+     }
+ 
+@@ -2089,6 +2143,9 @@
+     ++steps_issued_;
+     step_wb_.push_back({now + kFedpLatency, job.m, col0});
+     cyc_.busy_blocks += VX_CFG_NUM_TCU_BLOCKS;
++  #ifdef TCU_ENGINE_STATS
++    ++est_.busy;
++  #endif
+ 
+     if (++job.m < wg_cfg::m_steps) {
+       return;
+@@ -2102,6 +2159,9 @@
+     this->job_post_commits(job);
+     this->span_ran(job.seq);
+     run_valid_ = false;
++  #ifdef TCU_ENGINE_STATS
++    est_.last_end = now;
++  #endif
+   }
+ 
+   // ---- allocation ----
+@@ -2762,6 +2822,15 @@
+   uint64_t tj_seq_ = 0;
+   std::array<int32_t, kAllocChunks> tmem_owner_{};
+   uint32_t tmem_used_ = 0;  // allocated kAllocCols-column chunks, bit per chunk
++#ifdef TCU_ENGINE_STATS
++  // Measurement only: where the engine's cycles go while a tc.mma runs, and
++  // the gaps between tc.mma ops (within a CTA and between CTAs).
++  struct {
++    uint64_t ops = 0, busy = 0, setup = 0, a_wait = 0, b_wait = 0, step_other = 0;
++    uint64_t gap_cta = 0, gap_between = 0, last_end = 0;
++    int32_t  last_cta = -1;
++  } est_;
++#endif
+ #endif
+ };
+ 
+diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem/common.h src_tmemk/tests/regression/gemm_tmem/common.h
+--- src_tmem/tests/regression/gemm_tmem/common.h	1969-12-31 19:00:00.000000000 -0500
++++ src_tmemk/tests/regression/gemm_tmem/common.h	2026-11-21 03:02:36.352920363 -0500
+@@ -0,0 +1,57 @@
++#ifndef _COMMON_H_
++#define _COMMON_H_
++
++#include <stdint.h>
++
++#ifndef ITYPE
++#define ITYPE fp16
++#endif
++
++#ifndef OTYPE
++#define OTYPE fp32
++#endif
++
++// Accumulator registers of an epilogue transfer.
++#define GEMM_NRC 32
++
++// Columns of one tc.mma (the N tile), at most 128 fragments.
++#ifndef TILE_N
++#define TILE_N 512
++#endif
++
++// 64-row M tiles a CTA multiplies with each staged B slab; their accumulators
++// take MTILES * TILE_N TMEM columns.
++#ifndef MTILES
++#define MTILES 2
++#endif
++
++// tc.mma K steps per pipeline stage.
++#ifndef KSTEPS
++#define KSTEPS 2
++#endif
++
++// Pipeline stages: buffers of a stage's A and B slabs in shared memory.
++#ifndef PIPE
++#define PIPE 5
++#endif
++
++// Warps that drain the accumulators, from rank 4 (a multiple of the 4 TCU
++// blocks: warp r reads block r % 4's lanes).
++#ifndef EPI_WARPS
++#define EPI_WARPS 8
++#endif
++
++// Shared memory starts with the CTA's TMEM column, padded to a bank row.
++#define TMEM_SLOT_BYTES 128
++
++typedef struct {
++  uint32_t M, N, K;
++  uint32_t b_wrap;      // tiles of N tile nt stage the B slabs of N tile nt % b_wrap
++  uint64_t A_addr;      // packed [M/64][K/kstep][64][kstep] (PLAIN_LAYOUT: [M][K])
++  uint64_t B_addr;      // packed [N/TILE_N][K/kstep][TILE_N][kstep] (PLAIN_LAYOUT: W[N][K])
++  uint64_t C_addr;      // [M][N] fp32
++  uint64_t times_addr;  // per tile: core, multiply begin, multiply end, epilogue end;
++                        // then per CTA: begin, end
++} kernel_arg_t;
++
++#endif
+diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem/kernel.cpp src_tmemk/tests/regression/gemm_tmem/kernel.cpp
+--- src_tmem/tests/regression/gemm_tmem/kernel.cpp	1969-12-31 19:00:00.000000000 -0500
++++ src_tmemk/tests/regression/gemm_tmem/kernel.cpp	2026-11-21 02:42:55.509513036 -0500
+@@ -0,0 +1,189 @@
++#include "common.h"
++#include <vx_spawn2.h>
++#include <vx_tensor.h>
++#include <vx_tmem.h>
++#include <vx_intrinsics.h>
++#include <vx_dxa.h>
++#include <vx_barrier.h>
++
++// C = A B with the tensor-memory engine. A tile of C is MTILES * 64 rows by
++// TILE_N columns, its accumulators in TMEM; the CTAs are persistent, CTA c
++// computing tiles c, c + grid, ... (N tile fastest, so the CTAs running at
++// once share their A rows). Warp 0 has the DXA stage each slab of A and B into
++// a ring of PIPE stage buffers, running on into the next tile while the last
++// one drains; warp 1 issues the multiplies, every M tile against the one
++// staged B slab; the EPI_WARPS warps from rank 4 drain the accumulators,
++// warp r reading its TCU block's lanes. A and B are packed by K step in global
++// memory, so a stage's slab of an M tile, and of the B tile, is one
++// contiguous run, and the engine reads each K step's rows 32 bytes apart.
++// PLAIN_LAYOUT: A row-major and B as W[N][K] instead, staged in the same
++// order by 3D transfers that read each 64-byte line twice.
++namespace vt = vortex::tensor;
++namespace tm = vortex::tmem;
++using ctx = vt::wgmma_context<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, false, GEMM_NRC>;
++using wg_cfg = vt::wgmma_config_t<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, GEMM_NRC>;
++
++constexpr uint32_t kDescA = 0;
++constexpr uint32_t kDescB = 1;
++
++constexpr uint32_t kBlocks   = VX_CFG_NUM_TCU_BLOCKS;
++constexpr uint32_t kTileM    = kBlocks * wg_cfg::xtileM;   // rows of one tc.mma
++constexpr uint32_t kStepK    = wg_cfg::fedpK * wg_cfg::i_ratio;  // K elements of one tc.mma
++constexpr uint32_t kStepRow  = wg_cfg::fedpK * 4;          // bytes of one row's K step
++constexpr uint32_t kABlock   = kTileM * kStepRow;          // one M tile's K step
++constexpr uint32_t kBBlock   = TILE_N * kStepRow;          // the B tile's K step
++constexpr uint32_t kStageA   = MTILES * KSTEPS * kABlock;
++constexpr uint32_t kStage    = kStageA + KSTEPS * kBBlock;
++constexpr uint32_t kTmemCols = MTILES * TILE_N;
++constexpr uint32_t kNFrag    = TILE_N / wg_cfg::tcN;
++// Columns of each M tile an epilogue warp drains.
++constexpr uint32_t kEpiCols  = TILE_N / (EPI_WARPS / kBlocks);
++
++static_assert(kTileM == 64, "a tc.mma covers 64 rows");
++static_assert(kNFrag <= 128, "TILE_N: at most 128 fragments");
++static_assert(EPI_WARPS % kBlocks == 0 && kEpiCols % ctx::xtileN == 0, "EPI_WARPS: whole transfers per warp");
++static_assert(kTmemCols <= VX_CFG_TCU_TMEM_COLS, "the accumulators exceed TMEM");
++static_assert(2 * PIPE + 3 <= VX_CFG_NUM_BARRIERS, "not enough barriers for PIPE");
++static_assert(sizeof(ctx::output_t) == sizeof(float), "the epilogue stores fp32 lanes");
++
++__kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
++  const uint32_t warp_rank = threadIdx.x / VX_CFG_NUM_THREADS;
++  const uint32_t N = arg->N;
++  const uint32_t k_steps = arg->K / kStepK;
++  const uint32_t num_stages = k_steps / KSTEPS;
++  const uint32_t n_tiles = N / TILE_N;
++  const uint32_t num_tiles = n_tiles * (arg->M / (MTILES * kTileM));
++  const uint32_t cta = blockIdx.x;
++
++  auto lmem = reinterpret_cast<uint8_t*>(__local_mem());
++  auto tmem_slot = reinterpret_cast<volatile uint32_t*>(lmem);
++  uint8_t* stages = lmem + TMEM_SLOT_BYTES;
++
++  const uint32_t cta_id = get_local_group_id();
++  auto full_bar  = [&](uint32_t s) { return cta_id | (s << 8); };
++  auto empty_bar = [&](uint32_t s) { return cta_id | ((PIPE + s) << 8); };
++  const uint32_t acc_full  = cta_id | ((2 * PIPE) << 8);      // the engine, and the epilogue warps
++  const uint32_t acc_empty = cta_id | ((2 * PIPE + 1) << 8);  // the epilogue warps, and the MMA warp
++  const uint32_t sync_bar  = cta_id | ((2 * PIPE + 2) << 8);
++
++  auto pT = reinterpret_cast<uint64_t*>(arg->times_addr);
++  auto pCta = pT + 4 * num_tiles + 2 * cta;
++  if (warp_rank == 0) {
++    uint32_t col = tm::alloc(kTmemCols);
++    if (vx_thread_id() == 0) {
++      *tmem_slot = col;
++      pCta[0] = csr_read(VX_CSR_MCYCLE);
++    }
++  }
++  vx_barrier(sync_bar, 4 + EPI_WARPS);
++  const uint32_t taddr = *tmem_slot;
++
++  if (warp_rank == 0) {
++    // Producer: this warp and the MMA warp are the two participants of every
++    // full and empty barrier.
++    uint32_t g = 0;
++    for (uint32_t tile = cta; tile < num_tiles; tile += gridDim.x) {
++      const uint32_t mt = tile / n_tiles, nt = (tile % n_tiles) % arg->b_wrap;
++      for (uint32_t i = 0; i < num_stages; ++i, ++g) {
++        uint32_t s = g % PIPE;
++        if (g >= PIPE) {
++          int phase = vx_barrier_arrive(empty_bar(s), 2);
++          vx_barrier_wait(empty_bar(s), phase);
++        }
++        uint8_t* buf = stages + s * kStage;
++        vx_barrier_expect_tx(full_bar(s), MTILES + KSTEPS);
++      #ifdef PLAIN_LAYOUT
++        // A [M][K] and B as W[N][K]: a 3D tile (a K step's elements, rows, K
++        // steps) lands in the same K-step-major order.
++        for (uint32_t t = 0; t < MTILES; ++t) {
++          vx_dxa_issue_3d_wg(kDescA, full_bar(s), buf + t * KSTEPS * kABlock, 0, (mt * MTILES + t) * kTileM, i * KSTEPS);
++        }
++        for (uint32_t j = 0; j < KSTEPS; ++j) {
++          vx_dxa_issue_3d_wg(kDescB, full_bar(s), buf + kStageA + j * kBBlock, 0, nt * TILE_N, i * KSTEPS + j);
++        }
++      #else
++        for (uint32_t t = 0; t < MTILES; ++t) {
++          vx_dxa_issue_2d_wg(kDescA, full_bar(s), buf + t * KSTEPS * kABlock, 0, (mt * MTILES + t) * k_steps + i * KSTEPS);
++        }
++        for (uint32_t j = 0; j < KSTEPS; ++j) {
++          vx_dxa_issue_2d_wg(kDescB, full_bar(s), buf + kStageA + j * kBBlock, 0, nt * k_steps + i * KSTEPS + j);
++        }
++      #endif
++        vx_barrier_arrive(full_bar(s), 2);
++      }
++    }
++    // Close the last generation of every empty barrier the MMA warp committed.
++    for (uint32_t i = (g > PIPE) ? (g - PIPE) : 0; i < g; ++i) {
++      int phase = vx_barrier_arrive(empty_bar(i % PIPE), 2);
++      vx_barrier_wait(empty_bar(i % PIPE), phase);
++    }
++  } else if (warp_rank == 1) {
++    // Per stage: wait for it, multiply every M tile with each K step of the
++    // B slab, and commit the stage back to the producer. A tile's first
++    // multiply waits until the epilogue has read the previous accumulators.
++    const uint32_t base = tm::smem_offset(stages);
++    uint32_t g = 0;
++    for (uint32_t tile = cta; tile < num_tiles; tile += gridDim.x) {
++      if (tile != cta) {
++        int phase = vx_barrier_arrive(acc_empty, EPI_WARPS + 1);
++        vx_barrier_wait(acc_empty, phase);
++      }
++      for (uint32_t i = 0; i < num_stages; ++i, ++g) {
++        uint32_t s = g % PIPE;
++        int phase = vx_barrier_arrive(full_bar(s), 2);
++        vx_barrier_wait(full_bar(s), phase);
++        if (i == 0 && vx_thread_id() == 0) {
++          pT[4 * tile + 0] = vx_core_id();
++          pT[4 * tile + 1] = csr_read(VX_CSR_MCYCLE);
++        }
++        const uint32_t a_off = base + s * kStage;
++        const uint32_t b_off = a_off + kStageA;
++        #pragma unroll
++        for (uint32_t j = 0; j < KSTEPS; ++j) {
++          const auto b = tm::smem_desc(b_off + j * kBBlock, kStepRow);
++          #pragma unroll
++          for (uint32_t t = 0; t < MTILES; ++t) {
++            tm::mma(tm::make_idesc<vt::ITYPE>(kNFrag, taddr + t * TILE_N, i == 0 && j == 0),
++                    tm::smem_desc(a_off + (t * KSTEPS + j) * kABlock, kStepRow), b);
++          }
++        }
++        tm::commit(empty_bar(s), 2);
++      }
++      tm::commit(acc_full, EPI_WARPS + 1);
++    }
++  } else if (warp_rank >= 4) {
++    // Epilogue warp e: its block's lanes, columns [part * kEpiCols, ...) of each M tile.
++    const uint32_t e = warp_rank - 4;
++    const uint32_t lane = tm::warp_lane();
++    const uint32_t col0 = (e / kBlocks) * kEpiCols;
++    for (uint32_t tile = cta; tile < num_tiles; tile += gridDim.x) {
++      vx_barrier(acc_full, EPI_WARPS + 1);
++      if (e == 0 && vx_thread_id() == 0) {
++        pT[4 * tile + 2] = csr_read(VX_CSR_MCYCLE);
++      }
++      const uint32_t mt = tile / n_tiles, nt = tile % n_tiles;
++      for (uint32_t t = 0; t < MTILES; ++t) {
++        auto pC = reinterpret_cast<ctx::output_t*>(arg->C_addr)
++                + size_t((mt * MTILES + t) * kTileM + lane) * N + nt * TILE_N;
++        for (uint32_t c = col0; c < col0 + kEpiCols; c += ctx::xtileN) {
++          ctx::fragment_acc frag;
++          tm::load<tm::FRAGMENT>(frag, tm::make_taddr(lane, taddr + t * TILE_N + c));
++          ctx::store_matrix_sync(pC + c, frag, N);
++        }
++      }
++      // The loads are done: the next tile's multiplies may overwrite the columns.
++      vx_barrier_arrive(acc_empty, EPI_WARPS + 1);
++      if (e == 0 && vx_thread_id() == 0) {
++        pT[4 * tile + 3] = csr_read(VX_CSR_MCYCLE);
++      }
++    }
++  }
++
++  vx_barrier(sync_bar, 4 + EPI_WARPS);
++  if (warp_rank == 0) {
++    tm::dealloc(taddr, kTmemCols);
++    if (vx_thread_id() == 0) {
++      pCta[1] = csr_read(VX_CSR_MCYCLE);
++    }
++  }
++}
+diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem/main.cpp src_tmemk/tests/regression/gemm_tmem/main.cpp
+--- src_tmem/tests/regression/gemm_tmem/main.cpp	1969-12-31 19:00:00.000000000 -0500
++++ src_tmemk/tests/regression/gemm_tmem/main.cpp	2026-11-21 02:38:01.940332311 -0500
+@@ -0,0 +1,311 @@
++#include "common.h"
++#include <algorithm>
++#include <cmath>
++#include <iostream>
++#include <rvfloats.h>
++#include <string>
++#include <string.h>
++#include <tensor_cfg.h>
++#include <type_traits>
++#include <unistd.h>
++#include <util.h>
++#include <vector>
++#include <vortex2.h>
++#include <dxa.h>
++
++#define MAX_ERRORS 100
++
++#define RT_CHECK(_expr)                                      \
++  do {                                                       \
++    int _ret = _expr;                                        \
++    if (0 == _ret)                                           \
++      break;                                                 \
++    printf("Error: '%s' returned %d!\n", #_expr, (int)_ret); \
++    cleanup();                                               \
++    exit(-1);                                                \
++  } while (false)
++
++using namespace vortex;
++namespace vt = tensor;
++
++static_assert(std::is_same<vt::ITYPE, vt::fp16>::value, "gemm_tmem generates fp16 operands");
++static_assert(std::is_same<vt::OTYPE, vt::fp32>::value, "gemm_tmem accumulates in fp32");
++
++using cfg = vt::wgmma_config_t<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, GEMM_NRC>;
++using itype_t = vt::ITYPE::dtype;
++
++constexpr uint32_t kTileM = 64;
++constexpr uint32_t kStepK = cfg::fedpK * cfg::i_ratio;
++constexpr uint32_t kCtaM  = MTILES * kTileM;
++constexpr uint32_t kStage = (kCtaM + TILE_N) * KSTEPS * kStepK * sizeof(itype_t);
++
++// The drift of the tensor core's fp32 accumulation from a double reference
++// tracks K (sgemm_tcu_tmem's bound).
++static uint32_t float_ulp(uint32_t K) {
++  return std::max<uint32_t>(8, K / 5);
++}
++
++const char *kernel_file = "kernel.vxbin";
++uint32_t xm = 256;
++uint32_t xn = 1024;
++uint32_t xk = 1024;
++uint32_t xR = 0;  // B columns the CTAs share (0: each N tile its own)
++
++vx_device_h device = nullptr;
++vx_buffer_h A_buffer = nullptr;
++vx_buffer_h B_buffer = nullptr;
++vx_buffer_h C_buffer = nullptr;
++vx_buffer_h T_buffer = nullptr;
++vx_queue_h  queue = nullptr;
++vx_module_h module_ = nullptr;
++vx_kernel_h kernel = nullptr;
++kernel_arg_t kernel_arg = {};
++
++static void show_usage() {
++  std::cout << "Vortex tensor-memory GEMM." << std::endl;
++  std::cout << "Usage: [-m M] [-n N] [-k K] [-R B columns the CTAs share] [-h: help]" << std::endl;
++}
++
++static void parse_args(int argc, char **argv) {
++  int c;
++  while ((c = getopt(argc, argv, "m:n:k:R:h")) != -1) {
++    switch (c) {
++    case 'm': xm = atoi(optarg); break;
++    case 'n': xn = atoi(optarg); break;
++    case 'k': xk = atoi(optarg); break;
++    case 'R': xR = atoi(optarg); break;
++    case 'h': show_usage(); exit(0); break;
++    default:  show_usage(); exit(-1);
++    }
++  }
++}
++
++void cleanup() {
++  if (device) {
++    if (A_buffer) vx_buffer_release(A_buffer);
++    if (B_buffer) vx_buffer_release(B_buffer);
++    if (C_buffer) vx_buffer_release(C_buffer);
++    if (T_buffer) vx_buffer_release(T_buffer);
++    if (kernel)  vx_kernel_release(kernel);
++    if (module_) vx_module_release(module_);
++    if (queue)   vx_queue_release(queue);
++    vx_device_dump_perf(device, stdout);
++    vx_device_release(device);
++  }
++}
++
++static void reject(const std::string& msg) {
++  std::cout << "Error: " << msg << "!" << std::endl;
++  cleanup();
++  exit(-1);
++}
++
++int main(int argc, char *argv[]) {
++  parse_args(argc, argv);
++  std::srand(50);
++
++  RT_CHECK(vx_device_open(0, &device));
++  vx_queue_info_t qi = { sizeof(qi), nullptr, VX_QUEUE_PRIORITY_NORMAL, 0 };
++  RT_CHECK(vx_queue_create(device, &qi, &queue));
++
++  uint64_t isa_flags, NT, issue_width, num_cores, lmem_bytes;
++  RT_CHECK(vx_device_query(device, VX_CAPS_ISA_FLAGS, &isa_flags));
++  RT_CHECK(vx_device_query(device, VX_CAPS_NUM_THREADS, &NT));
++  RT_CHECK(vx_device_query(device, VX_CAPS_ISSUE_WIDTH, &issue_width));
++  RT_CHECK(vx_device_query(device, VX_CAPS_NUM_CORES, &num_cores));
++  RT_CHECK(vx_device_query(device, VX_CAPS_LOCAL_MEM_SIZE, &lmem_bytes));
++  if ((isa_flags & VX_ISA_EXT_TCU) == 0 || (isa_flags & VX_ISA_EXT_DXA) == 0)
++    reject("needs the TCU and DXA extensions");
++  if (NT != VX_CFG_NUM_THREADS)
++    reject("device warp size must match VX_CFG_NUM_THREADS");
++  if (issue_width * cfg::xtileM != kTileM)
++    reject("a tc.mma must cover 64 rows (4 TCU blocks)");
++
++  const uint32_t M = xm, N = xn, K = xk;
++  const uint32_t NB = xR ? xR : N;  // B columns on the device
++  if (M % kCtaM != 0)
++    reject("M must be a multiple of MTILES * 64 = " + std::to_string(kCtaM));
++  if (N % TILE_N != 0 || NB % TILE_N != 0 || NB > N)
++    reject("N and -R must be multiples of TILE_N = " + std::to_string(TILE_N) + ", -R at most N");
++  if (K % (KSTEPS * kStepK) != 0)
++    reject("K must be a multiple of KSTEPS * " + std::to_string(kStepK));
++  const uint32_t k_steps = K / kStepK;
++  const uint32_t lmem_size = TMEM_SLOT_BYTES + PIPE * kStage;
++  if (lmem_size > lmem_bytes)
++    reject("PIPE stages of " + std::to_string(kStage) + " bytes exceed the local memory");
++
++  // Persistent CTAs: as many as the cores hold at once, by TMEM and by local memory.
++  const uint32_t num_tiles = (N / TILE_N) * (M / kCtaM);
++  const uint32_t per_core = std::min<uint32_t>(VX_CFG_TCU_TMEM_COLS / (MTILES * TILE_N), lmem_bytes / lmem_size);
++  const uint32_t num_ctas = std::min<uint32_t>(num_tiles, per_core * num_cores);
++  printf("GEMM_TMEM: M=%u N=%u K=%u R=%u tile=%ux%u mtiles=%u ksteps=%u pipe=%u epi_warps=%u stage_bytes=%u lmem=%u "
++         "tmem_cols=%u tiles=%u ctas=%u ctas_per_core=%u cores=%u\n",
++         M, N, K, xR, kCtaM, TILE_N, MTILES, KSTEPS, PIPE, EPI_WARPS, kStage, lmem_size, MTILES * TILE_N,
++         num_tiles, num_ctas, per_core, (uint32_t)num_cores);
++
++  // Operands, then their packed device copies: an M tile's (an N tile's) K
++  // step is a block of 64 (TILE_N) rows of kStepK elements.
++  std::vector<itype_t> h_A(size_t(M) * K), h_B(size_t(K) * NB);
++  for (auto& v : h_A) v = rv_ftoh_s(bit_cast<uint32_t>(float(rand()) / RAND_MAX), 0, nullptr);
++  for (auto& v : h_B) v = rv_ftoh_s(bit_cast<uint32_t>(float(rand()) / RAND_MAX), 0, nullptr);
++  std::vector<itype_t> h_Ap(h_A.size()), h_Bp(h_B.size());
++  for (uint32_t m = 0; m < M; ++m)
++    for (uint32_t k = 0; k < K; ++k)
++      h_Ap[((size_t(m / kTileM) * k_steps + k / kStepK) * kTileM + m % kTileM) * kStepK + k % kStepK] = h_A[size_t(m) * K + k];
++  for (uint32_t k = 0; k < K; ++k)
++    for (uint32_t n = 0; n < NB; ++n)
++      h_Bp[((size_t(n / TILE_N) * k_steps + k / kStepK) * TILE_N + n % TILE_N) * kStepK + k % kStepK] = h_B[size_t(k) * NB + n];
++
++  RT_CHECK(vx_buffer_create(device, h_Ap.size() * sizeof(itype_t), VX_MEM_READ, &A_buffer));
++  RT_CHECK(vx_buffer_address(A_buffer, &kernel_arg.A_addr));
++  RT_CHECK(vx_buffer_create(device, h_Bp.size() * sizeof(itype_t), VX_MEM_READ, &B_buffer));
++  RT_CHECK(vx_buffer_address(B_buffer, &kernel_arg.B_addr));
++  RT_CHECK(vx_buffer_create(device, size_t(M) * N * sizeof(float), VX_MEM_WRITE, &C_buffer));
++  RT_CHECK(vx_buffer_address(C_buffer, &kernel_arg.C_addr));
++  const uint32_t num_times = 4 * num_tiles + 2 * num_ctas;
++  RT_CHECK(vx_buffer_create(device, num_times * sizeof(uint64_t), VX_MEM_WRITE, &T_buffer));
++  RT_CHECK(vx_buffer_address(T_buffer, &kernel_arg.times_addr));
++#ifdef PLAIN_LAYOUT
++  // A as it is, B as the weights of a linear layer, W[N][K].
++  h_Ap = h_A;
++  for (uint32_t k = 0; k < K; ++k)
++    for (uint32_t n = 0; n < NB; ++n)
++      h_Bp[size_t(n) * K + k] = h_B[size_t(k) * NB + n];
++#endif
++  RT_CHECK(vx_enqueue_write(queue, A_buffer, 0, h_Ap.data(), h_Ap.size() * sizeof(itype_t), 0, nullptr, nullptr));
++  RT_CHECK(vx_enqueue_write(queue, B_buffer, 0, h_Bp.data(), h_Bp.size() * sizeof(itype_t), 0, nullptr, nullptr));
++
++  kernel_arg.M = M;
++  kernel_arg.N = N;
++  kernel_arg.K = K;
++  kernel_arg.b_wrap = NB / TILE_N;
++
++#ifdef PLAIN_LAYOUT
++  // A transfer is (K step elements, rows, K steps): KSTEPS K steps of one M
++  // tile, or one K step of the B tile.
++  RT_CHECK(vortex::dxa::program_3d(device, 0, kernel_arg.A_addr,
++    /*size0=*/kStepK, /*size1=*/M, /*size2=*/k_steps,
++    /*stride0_bytes=*/K * sizeof(itype_t), /*stride1_bytes=*/kStepK * sizeof(itype_t),
++    /*tile0=*/kStepK, /*tile1=*/kTileM, /*tile2=*/KSTEPS, /*elem_bytes=*/sizeof(itype_t)));
++  RT_CHECK(vortex::dxa::program_3d(device, 1, kernel_arg.B_addr,
++    /*size0=*/kStepK, /*size1=*/NB, /*size2=*/k_steps,
++    /*stride0_bytes=*/K * sizeof(itype_t), /*stride1_bytes=*/kStepK * sizeof(itype_t),
++    /*tile0=*/kStepK, /*tile1=*/TILE_N, /*tile2=*/1, /*elem_bytes=*/sizeof(itype_t)));
++#else
++  // A transfer copies KSTEPS K-step blocks of one M tile, or one of the B tile.
++  RT_CHECK(vortex::dxa::program_2d(device, 0, kernel_arg.A_addr,
++    /*size0=*/kTileM * kStepK, /*size1=*/(M / kTileM) * k_steps,
++    /*stride0_bytes=*/kTileM * kStepK * sizeof(itype_t),
++    /*tile0=*/kTileM * kStepK, /*tile1=*/KSTEPS, /*elem_bytes=*/sizeof(itype_t)));
++  RT_CHECK(vortex::dxa::program_2d(device, 1, kernel_arg.B_addr,
++    /*size0=*/TILE_N * kStepK, /*size1=*/(NB / TILE_N) * k_steps,
++    /*stride0_bytes=*/TILE_N * kStepK * sizeof(itype_t),
++    /*tile0=*/TILE_N * kStepK, /*tile1=*/1, /*elem_bytes=*/sizeof(itype_t)));
++#endif
++
++  RT_CHECK(vx_module_load_file(device, kernel_file, &module_));
++  RT_CHECK(vx_module_get_kernel(module_, "main", &kernel));
++
++  std::vector<float> h_C(size_t(M) * N);
++  std::vector<uint64_t> h_T(num_times);
++
++  vx_launch_info_t li = {};
++  li.struct_size  = sizeof(li);
++  li.kernel       = kernel;
++  li.args_host    = &kernel_arg;
++  li.args_size    = sizeof(kernel_arg);
++  li.ndim         = 2;
++  li.grid_dim[0]  = num_ctas;
++  li.grid_dim[1]  = 1;
++  li.block_dim[0] = (4 + EPI_WARPS) * NT;
++  li.block_dim[1] = 1;
++  li.lmem_size    = lmem_size;
++  li.tmem_cols    = MTILES * TILE_N;
++
++  vx_event_h launch_ev = nullptr, read_ev = nullptr, t_ev = nullptr;
++  RT_CHECK(vx_enqueue_launch(queue, &li, 0, nullptr, &launch_ev));
++  RT_CHECK(vx_enqueue_read(queue, h_C.data(), C_buffer, 0, h_C.size() * sizeof(float), 1, &launch_ev, &read_ev));
++  RT_CHECK(vx_enqueue_read(queue, h_T.data(), T_buffer, 0, h_T.size() * sizeof(uint64_t), 1, &read_ev, &t_ev));
++  RT_CHECK(vx_event_wait_value(t_ev, 1, VX_TIMEOUT_INFINITE));
++  vx_event_release(t_ev);
++  vx_event_release(read_ev);
++  vx_event_release(launch_ev);
++
++  {
++    // The multiply phase of a tile runs from its first stage landing to its
++    // last multiply completing; per core the union of its tiles' phases.
++    uint64_t first = UINT64_MAX, last = 0, mult = 0, epi = 0;
++    for (uint32_t c = 0; c < num_ctas; ++c) {
++      first = std::min(first, h_T[4 * num_tiles + 2 * c]);
++      last = std::max(last, h_T[4 * num_tiles + 2 * c + 1]);
++    }
++    for (uint32_t core = 0; core < num_cores; ++core) {
++      std::vector<std::pair<uint64_t, uint64_t>> iv;
++      for (uint32_t t = 0; t < num_tiles; ++t) {
++        if (h_T[4 * t] == core) {
++          iv.push_back({h_T[4 * t + 1], h_T[4 * t + 2]});
++          epi += h_T[4 * t + 3] - h_T[4 * t + 2];
++        }
++      }
++      std::sort(iv.begin(), iv.end());
++      uint64_t lo = iv.empty() ? 0 : iv[0].first, hi = lo;
++      for (auto& p : iv) {
++        if (p.first > hi) {
++          mult += hi - lo;
++          lo = p.first;
++        }
++        hi = std::max(hi, p.second);
++      }
++      mult += hi - lo;
++    }
++    double flops = 2.0 * M * N * K;
++    double staged = double(num_tiles) * (kCtaM + TILE_N) * K * sizeof(itype_t);
++    uint64_t span = last - first;
++    printf("GEMM_CYCLES: span=%lu multiply=%lu (summed over cores) epilogue=%lu (summed over tiles)\n", span, mult, epi);
++    printf("GEMM_FLOPS_PER_CLOCK_PER_SM: multiply=%.1f kernel=%.1f\n", flops / mult, flops / (double(num_cores) * span));
++    printf("GEMM_STAGED_BYTES_PER_CLOCK_PER_SM: multiply=%.2f kernel=%.2f total_bytes=%.0f\n",
++           staged / mult, staged / (double(num_cores) * span), staged);
++  }
++
++  // Reference over the B columns on the device; CTA column nt used tile nt % b_wrap.
++  int errors = 0;
++  uint32_t max_ulp = 0;
++  const uint32_t ulp_bound = float_ulp(K);
++  {
++    std::vector<float> fA(h_A.size()), fB(h_B.size());
++    for (size_t i = 0; i < h_A.size(); ++i) fA[i] = bit_cast<float>(rv_htof_s(h_A[i], 0, nullptr));
++    for (size_t i = 0; i < h_B.size(); ++i) fB[i] = bit_cast<float>(rv_htof_s(h_B[i], 0, nullptr));
++    std::vector<double> acc(NB);
++    for (uint32_t m = 0; m < M; ++m) {
++      std::fill(acc.begin(), acc.end(), 0.0);
++      for (uint32_t k = 0; k < K; ++k) {
++        double a = fA[size_t(m) * K + k];
++        const float* pB = &fB[size_t(k) * NB];
++        for (uint32_t n = 0; n < NB; ++n)
++          acc[n] += a * pB[n];
++      }
++      for (uint32_t n = 0; n < N; ++n) {
++        float expected = float(acc[n % NB]);
++        float actual = h_C[size_t(m) * N + n];
++        int32_t d = std::abs(bit_cast<int32_t>(actual) - bit_cast<int32_t>(expected));
++        max_ulp = std::max<uint32_t>(max_ulp, d);
++        if (d > (int32_t)ulp_bound) {
++          if (errors < MAX_ERRORS)
++            printf("*** error: [%u,%u] expected=%f, actual=%f\n", m, n, expected, actual);
++          ++errors;
++        }
++      }
++    }
++  }
++  printf("reference drift: max=%u ULP, bound=%u ULP (K=%u)\n", max_ulp, ulp_bound, K);
++
++  cleanup();
++
++  if (errors != 0) {
++    std::cout << "Found " << errors << " / " << size_t(M) * N << " errors!" << std::endl;
++    std::cout << "FAILED!" << std::endl;
++    return 1;
++  }
++  std::cout << "PASSED!" << std::endl;
++  return 0;
++}
+diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem/Makefile src_tmemk/tests/regression/gemm_tmem/Makefile
+--- src_tmem/tests/regression/gemm_tmem/Makefile	1969-12-31 19:00:00.000000000 -0500
++++ src_tmemk/tests/regression/gemm_tmem/Makefile	2026-11-21 02:23:58.212623562 -0500
+@@ -0,0 +1,23 @@
++ROOT_DIR := $(realpath ../../..)
++include $(ROOT_DIR)/config.mk
++
++CONFIGS := $(if $(findstring -DVX_CFG_EXT_TCU_ENABLE,$(CONFIGS)),$(CONFIGS),$(CONFIGS) -DVX_CFG_EXT_TCU_ENABLE)
++CONFIGS := $(if $(findstring -DVX_CFG_EXT_DXA_ENABLE,$(CONFIGS)),$(CONFIGS),$(CONFIGS) -DVX_CFG_EXT_DXA_ENABLE)
++CONFIGS := $(if $(findstring -DVX_CFG_TCU_WGMMA_ENABLE,$(CONFIGS)),$(CONFIGS),$(CONFIGS) -DVX_CFG_TCU_WGMMA_ENABLE)
++CONFIGS := $(if $(findstring -DVX_CFG_TCU_TMEM_ENABLE,$(CONFIGS)),$(CONFIGS),$(CONFIGS) -DVX_CFG_TCU_TMEM_ENABLE)
++
++PROJECT := gemm_tmem
++
++SRC_DIR := $(VORTEX_HOME)/tests/regression/$(PROJECT)
++
++SRCS := $(SRC_DIR)/main.cpp $(SW_COMMON_DIR)/rvfloats.cpp $(SW_COMMON_DIR)/softfloat_ext.cpp
++
++VX_SRCS := $(SRC_DIR)/kernel.cpp
++
++CXXFLAGS += -I$(THIRD_PARTY_DIR)/softfloat/source/include
++
++LDFLAGS += $(THIRD_PARTY_DIR)/softfloat/build/Linux-x86_64-GCC/softfloat.a
++
++KERNEL_LIB := vortex2
++
++include ../common.mk
+diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem_decode/common.h src_tmemk/tests/regression/gemm_tmem_decode/common.h
+--- src_tmem/tests/regression/gemm_tmem_decode/common.h	1969-12-31 19:00:00.000000000 -0500
++++ src_tmemk/tests/regression/gemm_tmem_decode/common.h	2026-11-21 03:12:17.137490037 -0500
+@@ -0,0 +1,73 @@
++#ifndef _COMMON_H_
++#define _COMMON_H_
++
++#include <stdint.h>
++
++#ifndef ITYPE
++#define ITYPE fp16
++#endif
++
++#ifndef OTYPE
++#define OTYPE fp32
++#endif
++
++// Accumulator registers of an epilogue transfer.
++#define GEMM_NRC 32
++
++// Columns of one tc.mma (the N tile of a CTA), at most 128 fragments. A CTA
++// keeps two tiles' accumulators in TMEM, so one drains while the next fills.
++#ifndef TILE_N
++#define TILE_N 512
++#endif
++
++// tc.mma K steps per pipeline stage.
++#ifndef KSTEPS
++#define KSTEPS 1
++#endif
++
++// Pipeline stages: buffers of a stage's A and W slabs in shared memory.
++#ifndef PIPE
++#define PIPE 5
++#endif
++
++// Bytes of W one staging transfer (or one load-staging pass) moves.
++#ifndef XFER
++#define XFER (TILE_N * 32)
++#endif
++
++// How W sits in global memory:
++#define LAYOUT_PACKED 0  // [N/TILE_N][K/kstep][TILE_N][kstep]: a stage is one contiguous run
++#define LAYOUT_NK16   1  // W[N][K]: rows of one K step (32 B), each 64 B line read twice
++#define LAYOUT_NK32   2  // W[N][K]: rows of two K steps (one 64 B line), read once
++#define LAYOUT_KN     3  // W[K][N]: transposed by the DXA's K-major scatter
++#ifndef LAYOUT
++#define LAYOUT LAYOUT_PACKED
++#endif
++
++// How a stage reaches shared memory: 0 the DXA, 1 loads by LOAD_WARPS warps.
++#ifndef STAGE_LOAD
++#define STAGE_LOAD 0
++#endif
++
++#ifndef LOAD_WARPS
++#define LOAD_WARPS 16
++#endif
++
++// Shared memory starts with the CTA's TMEM column, padded to a bank row.
++#define TMEM_SLOT_BYTES 128
++
++// Warps: 0 the DXA producer, 1 the MMA issuer, 4..7 the epilogue (warp r
++// drains TCU block r % 4), from 8 the loaders when STAGE_LOAD.
++#define EPI_WARP0  4
++#define LOAD_WARP0 8
++
++typedef struct {
++  uint32_t M, N, K;
++  uint64_t A_addr;      // [K/kstep][M][kstep]
++  uint64_t W_addr;      // LAYOUT
++  uint64_t C_addr;      // [16 * ceil(M / 16)][N] fp32
++  uint64_t times_addr;  // per tile: core, multiply begin, multiply end, epilogue end;
++                        // then per CTA: begin, end
++} kernel_arg_t;
++
++#endif
+diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem_decode/kernel.cpp src_tmemk/tests/regression/gemm_tmem_decode/kernel.cpp
+--- src_tmem/tests/regression/gemm_tmem_decode/kernel.cpp	1969-12-31 19:00:00.000000000 -0500
++++ src_tmemk/tests/regression/gemm_tmem_decode/kernel.cpp	2026-11-21 03:29:08.289597549 -0500
+@@ -0,0 +1,233 @@
++#include "common.h"
++#include <vx_spawn2.h>
++#include <vx_tensor.h>
++#include <vx_tmem.h>
++#include <vx_intrinsics.h>
++#include <vx_dxa.h>
++#include <vx_barrier.h>
++
++// Decode-shaped C = A W: a few rows of A (M <= 64, the 64 lanes of one
++// tc.mma; lanes past M compute on whatever shared memory holds and are not
++// stored) against a weight matrix W read once. A persistent CTA computes N
++// tiles cta, cta + grid, ..., each TILE_N columns over all of K, into one of
++// two TMEM accumulator buffers, so the epilogue of a tile overlaps the next
++// tile's multiplies. Each pipeline stage holds KSTEPS K steps of A and of the
++// tile's W, staged by the DXA (warp 0) or by loads (the loader warps); warp 1
++// issues one tc.mma per K step. In shared memory a K step of A is M rows of
++// 32 bytes and a K step of W is TILE_N rows of 32 bytes (LAYOUT_NK32: rows of
++// 64 bytes holding two K steps). NO_MMA (a measurement of the staging
++// alone) releases each stage without multiplying.
++namespace vt = vortex::tensor;
++namespace tm = vortex::tmem;
++using ctx = vt::wgmma_context<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, false, GEMM_NRC>;
++using wg_cfg = vt::wgmma_config_t<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, GEMM_NRC>;
++
++constexpr uint32_t kDescA = 0;
++constexpr uint32_t kDescW = 1;
++
++constexpr uint32_t kBlocks   = VX_CFG_NUM_TCU_BLOCKS;
++constexpr uint32_t kStepK    = wg_cfg::fedpK * wg_cfg::i_ratio;  // K elements of one tc.mma
++constexpr uint32_t kStepRow  = wg_cfg::fedpK * 4;          // bytes of one row's K step
++constexpr uint32_t kRowBytes = (LAYOUT == LAYOUT_NK32) ? 2 * kStepRow : kStepRow;
++constexpr uint32_t kStageW   = KSTEPS * TILE_N * kStepRow;
++constexpr uint32_t kXfers    = kStageW / XFER;             // W transfers per stage
++constexpr uint32_t kNFrag    = TILE_N / wg_cfg::tcN;
++
++static_assert(kBlocks * wg_cfg::xtileM == 64, "a tc.mma covers 64 rows");
++static_assert(kNFrag <= 128 && TILE_N % ctx::xtileN == 0, "TILE_N: at most 128 fragments, whole transfers");
++static_assert(2 * TILE_N <= VX_CFG_TCU_TMEM_COLS, "two accumulator buffers exceed TMEM");
++static_assert(2 * PIPE + 4 <= VX_CFG_NUM_BARRIERS, "not enough barriers for PIPE");
++static_assert(kStageW % XFER == 0 && XFER % kRowBytes == 0, "XFER: whole rows, divides a stage");
++static_assert(LAYOUT != LAYOUT_NK32 || KSTEPS % 2 == 0, "LAYOUT_NK32 stages K steps in pairs");
++static_assert(!STAGE_LOAD || LAYOUT == LAYOUT_PACKED, "load staging copies the packed layout");
++static_assert(sizeof(ctx::output_t) == sizeof(float), "the epilogue stores fp32 lanes");
++
++typedef uint64_t __attribute__((may_alias)) word_t;
++
++__kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
++  const uint32_t warp_rank = threadIdx.x / VX_CFG_NUM_THREADS;
++  const uint32_t num_warps = blockDim.x / VX_CFG_NUM_THREADS;
++  const uint32_t M = arg->M, N = arg->N;
++  const uint32_t k_steps = arg->K / kStepK;
++  const uint32_t num_stages = k_steps / KSTEPS;
++  const uint32_t num_tiles = N / TILE_N;
++  const uint32_t cta = blockIdx.x;
++  // The A region holds what the 64 lanes of the last K step read: lanes past
++  // M must not read W, which the tile buffer fetches at the same time.
++  const uint32_t stage_a = ((KSTEPS - 1) * M * kStepRow + 64 * kStepRow + 127) / 128 * 128;
++  const uint32_t stage_bytes = stage_a + kStageW;
++  // Epilogue warps with lanes below M, and the participants of the barriers
++  // between the stagers and the MMA warp.
++  const uint32_t epi = (M + wg_cfg::xtileM - 1) / wg_cfg::xtileM;
++  const uint32_t stagers = STAGE_LOAD ? LOAD_WARPS : 1;
++
++  auto lmem = reinterpret_cast<uint8_t*>(__local_mem());
++  auto tmem_slot = reinterpret_cast<volatile uint32_t*>(lmem);
++  uint8_t* stages = lmem + TMEM_SLOT_BYTES;
++
++  const uint32_t cta_id = get_local_group_id();
++  auto full_bar  = [&](uint32_t s) { return cta_id | (s << 8); };
++  auto empty_bar = [&](uint32_t s) { return cta_id | ((PIPE + s) << 8); };
++  auto acc_empty = [&](uint32_t b) { return cta_id | ((2 * PIPE + b) << 8); };
++  const uint32_t acc_full = cta_id | ((2 * PIPE + 2) << 8);
++  const uint32_t sync_bar = cta_id | ((2 * PIPE + 3) << 8);
++
++  auto pT = reinterpret_cast<uint64_t*>(arg->times_addr);
++  auto pCta = pT + 4 * num_tiles + 2 * cta;
++  if (warp_rank == 0) {
++    uint32_t col = tm::alloc(2 * TILE_N);
++    if (vx_thread_id() == 0) {
++      *tmem_slot = col;
++      pCta[0] = csr_read(VX_CSR_MCYCLE);
++    }
++  }
++  vx_barrier(sync_bar, num_warps);
++  const uint32_t taddr = *tmem_slot;
++
++  if (warp_rank == 0 && !STAGE_LOAD) {
++    // DXA producer: one transfer of A and kXfers of W per stage.
++    uint32_t g = 0;
++    for (uint32_t tile = cta; tile < num_tiles; tile += gridDim.x) {
++      for (uint32_t i = 0; i < num_stages; ++i, ++g) {
++        uint32_t s = g % PIPE;
++        if (g >= PIPE) {
++          int phase = vx_barrier_arrive(empty_bar(s), 2);
++          vx_barrier_wait(empty_bar(s), phase);
++        }
++        uint8_t* buf = stages + s * stage_bytes;
++        const uint32_t ks0 = i * KSTEPS;
++        vx_barrier_expect_tx(full_bar(s), 1 + kXfers);
++        vx_dxa_issue_2d_wg(kDescA, full_bar(s), buf, 0, ks0);
++        for (uint32_t q = 0; q < kXfers; ++q) {
++          uint8_t* dst = buf + stage_a + q * XFER;
++        #if LAYOUT == LAYOUT_PACKED
++          vx_dxa_issue_2d_wg(kDescW, full_bar(s), dst, 0, ((tile * k_steps + ks0) * TILE_N * kStepRow + q * XFER) / XFER);
++        #else
++          // Transfer q: rows p * (XFER / kRowBytes) on of its K step (pair) j.
++          constexpr uint32_t kPer = TILE_N * kRowBytes / XFER;
++          constexpr uint32_t kRows = XFER / kRowBytes;
++          const uint32_t j = q / kPer, n0 = tile * TILE_N + (q % kPer) * kRows;
++          #if LAYOUT == LAYOUT_NK16
++          vx_dxa_issue_3d_wg(kDescW, full_bar(s), dst, 0, n0, ks0 + j);
++          #elif LAYOUT == LAYOUT_NK32
++          vx_dxa_issue_3d_wg(kDescW, full_bar(s), dst, 0, n0, ks0 / 2 + j);
++          #else
++          vx_dxa_issue_2d_wg(kDescW, full_bar(s), dst, n0, (ks0 + j) * kStepK);
++          #endif
++        #endif
++        }
++        vx_barrier_arrive(full_bar(s), 2);
++      }
++    }
++    for (uint32_t i = (g > PIPE) ? (g - PIPE) : 0; i < g; ++i) {
++      int phase = vx_barrier_arrive(empty_bar(i % PIPE), 2);
++      vx_barrier_wait(empty_bar(i % PIPE), phase);
++    }
++  } else if (STAGE_LOAD && warp_rank >= LOAD_WARP0) {
++    // Loaders: thread t copies words t, t + T, ... of the stage, every load
++    // of the stage before its stores.
++    constexpr uint32_t kT = LOAD_WARPS * VX_CFG_NUM_THREADS;
++    constexpr uint32_t kWords = kStageW / sizeof(word_t) / kT;
++    static_assert(kStageW % (sizeof(word_t) * kT) == 0, "a stage is whole words per loader thread");
++    const uint32_t t = threadIdx.x - LOAD_WARP0 * VX_CFG_NUM_THREADS;
++    const uint32_t a_words = KSTEPS * M * kStepRow / sizeof(word_t);
++    auto pA = reinterpret_cast<const word_t*>(arg->A_addr);
++    auto pW = reinterpret_cast<const word_t*>(arg->W_addr);
++    uint32_t g = 0;
++    for (uint32_t tile = cta; tile < num_tiles; tile += gridDim.x) {
++      for (uint32_t i = 0; i < num_stages; ++i, ++g) {
++        uint32_t s = g % PIPE;
++        if (g >= PIPE) {
++          int phase = vx_barrier_arrive(empty_bar(s), LOAD_WARPS + 1);
++          vx_barrier_wait(empty_bar(s), phase);
++        }
++        auto dst = reinterpret_cast<word_t*>(stages + s * stage_bytes);
++        const uint32_t ks0 = i * KSTEPS;
++        auto src = pW + size_t(tile * k_steps + ks0) * TILE_N * kStepRow / sizeof(word_t) + t;
++        word_t v[kWords];
++        #pragma unroll
++        for (uint32_t w = 0; w < kWords; ++w) {
++          v[w] = src[w * kT];
++        }
++        word_t a = (t < a_words) ? pA[size_t(ks0) * M * kStepRow / sizeof(word_t) + t] : 0;
++        #pragma unroll
++        for (uint32_t w = 0; w < kWords; ++w) {
++          dst[stage_a / sizeof(word_t) + t + w * kT] = v[w];
++        }
++        if (t < a_words) {
++          dst[t] = a;
++        }
++        vx_barrier_arrive(full_bar(s), LOAD_WARPS + 1);
++      }
++    }
++    for (uint32_t i = (g > PIPE) ? (g - PIPE) : 0; i < g; ++i) {
++      int phase = vx_barrier_arrive(empty_bar(i % PIPE), LOAD_WARPS + 1);
++      vx_barrier_wait(empty_bar(i % PIPE), phase);
++    }
++  } else if (warp_rank == 1) {
++    // MMA issuer: one tc.mma per K step into the tile's accumulator buffer,
++    // which the epilogue must have drained two tiles ago.
++    const uint32_t base = tm::smem_offset(stages);
++    uint32_t g = 0, j = 0;
++    for (uint32_t tile = cta; tile < num_tiles; tile += gridDim.x, ++j) {
++      const uint32_t d_col = taddr + (j % 2) * TILE_N;
++      if (j >= 2) {
++        int phase = vx_barrier_arrive(acc_empty(j % 2), epi + 1);
++        vx_barrier_wait(acc_empty(j % 2), phase);
++      }
++      for (uint32_t i = 0; i < num_stages; ++i, ++g) {
++        uint32_t s = g % PIPE;
++        int phase = vx_barrier_arrive(full_bar(s), stagers + 1);
++        vx_barrier_wait(full_bar(s), phase);
++        if (i == 0 && vx_thread_id() == 0) {
++          pT[4 * tile + 0] = vx_core_id();
++          pT[4 * tile + 1] = csr_read(VX_CSR_MCYCLE);
++        }
++        const uint32_t a_off = base + s * stage_bytes;
++        const uint32_t w_off = a_off + stage_a;
++      #ifndef NO_MMA
++        #pragma unroll
++        for (uint32_t k = 0; k < KSTEPS; ++k) {
++          const uint32_t w_k = (LAYOUT == LAYOUT_NK32) ? (k / 2) * TILE_N * kRowBytes + (k % 2) * kStepRow
++                                                       : k * TILE_N * kStepRow;
++          tm::mma(tm::make_idesc<vt::ITYPE>(kNFrag, d_col, i == 0 && k == 0),
++                  tm::smem_desc(a_off + k * M * kStepRow, kStepRow), tm::smem_desc(w_off + w_k, kRowBytes));
++        }
++      #else
++        (void)a_off; (void)w_off; (void)d_col;
++      #endif
++        tm::commit(empty_bar(s), stagers + 1);
++      }
++      tm::commit(acc_full, epi + 1);
++    }
++  } else if (warp_rank >= EPI_WARP0 && warp_rank < EPI_WARP0 + epi) {
++    // Epilogue: this warp's block's lanes of the tile's buffer, rows below M
++    // only (C has rows up to the block's last lane).
++    const uint32_t lane = tm::warp_lane();
++    uint32_t j = 0;
++    for (uint32_t tile = cta; tile < num_tiles; tile += gridDim.x, ++j) {
++      vx_barrier(acc_full, epi + 1);
++      if (warp_rank == EPI_WARP0 && vx_thread_id() == 0) {
++        pT[4 * tile + 2] = csr_read(VX_CSR_MCYCLE);
++      }
++      auto pC = reinterpret_cast<ctx::output_t*>(arg->C_addr) + size_t(lane) * N + tile * TILE_N;
++      for (uint32_t c = 0; c < TILE_N; c += ctx::xtileN) {
++        ctx::fragment_acc frag;
++        tm::load<tm::FRAGMENT>(frag, tm::make_taddr(lane, taddr + (j % 2) * TILE_N + c));
++        ctx::store_matrix_sync(pC + c, frag, N);
++      }
++      vx_barrier_arrive(acc_empty(j % 2), epi + 1);
++      if (warp_rank == EPI_WARP0 && vx_thread_id() == 0) {
++        pT[4 * tile + 3] = csr_read(VX_CSR_MCYCLE);
++      }
++    }
++  }
++
++  vx_barrier(sync_bar, num_warps);
++  if (warp_rank == 0) {
++    tm::dealloc(taddr, 2 * TILE_N);
++    if (vx_thread_id() == 0) {
++      pCta[1] = csr_read(VX_CSR_MCYCLE);
++    }
++  }
++}
+diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem_decode/main.cpp src_tmemk/tests/regression/gemm_tmem_decode/main.cpp
+--- src_tmem/tests/regression/gemm_tmem_decode/main.cpp	1969-12-31 19:00:00.000000000 -0500
++++ src_tmemk/tests/regression/gemm_tmem_decode/main.cpp	2026-11-21 03:29:08.292110677 -0500
+@@ -0,0 +1,315 @@
++#include "common.h"
++#include <algorithm>
++#include <cmath>
++#include <iostream>
++#include <rvfloats.h>
++#include <string>
++#include <string.h>
++#include <tensor_cfg.h>
++#include <type_traits>
++#include <unistd.h>
++#include <util.h>
++#include <vector>
++#include <vortex2.h>
++#include <dxa.h>
++
++#define MAX_ERRORS 100
++
++#define RT_CHECK(_expr)                                      \
++  do {                                                       \
++    int _ret = _expr;                                        \
++    if (0 == _ret)                                           \
++      break;                                                 \
++    printf("Error: '%s' returned %d!\n", #_expr, (int)_ret); \
++    cleanup();                                               \
++    exit(-1);                                                \
++  } while (false)
++
++using namespace vortex;
++namespace vt = tensor;
++
++static_assert(std::is_same<vt::ITYPE, vt::fp16>::value, "gemm_tmem_decode generates fp16 operands");
++static_assert(std::is_same<vt::OTYPE, vt::fp32>::value, "gemm_tmem_decode accumulates in fp32");
++
++using cfg = vt::wgmma_config_t<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, GEMM_NRC>;
++using itype_t = vt::ITYPE::dtype;
++
++constexpr uint32_t kStepK   = cfg::fedpK * cfg::i_ratio;
++constexpr uint32_t kStepRow = kStepK * sizeof(itype_t);
++constexpr uint32_t kStageW  = KSTEPS * TILE_N * kStepRow;
++
++// The drift of the tensor core's fp32 accumulation from a double reference
++// tracks K (sgemm_tcu_tmem's bound).
++static uint32_t float_ulp(uint32_t K) {
++  return std::max<uint32_t>(8, K / 5);
++}
++
++const char *kernel_file = "kernel.vxbin";
++uint32_t xm = 16;
++uint32_t xn = 8192;
++uint32_t xk = 4096;
++
++vx_device_h device = nullptr;
++vx_buffer_h A_buffer = nullptr;
++vx_buffer_h W_buffer = nullptr;
++vx_buffer_h C_buffer = nullptr;
++vx_buffer_h T_buffer = nullptr;
++vx_queue_h  queue = nullptr;
++vx_module_h module_ = nullptr;
++vx_kernel_h kernel = nullptr;
++kernel_arg_t kernel_arg = {};
++
++static void show_usage() {
++  std::cout << "Vortex tensor-memory decode GEMM." << std::endl;
++  std::cout << "Usage: [-m M (1..64)] [-n N] [-k K] [-h: help]" << std::endl;
++}
++
++static void parse_args(int argc, char **argv) {
++  int c;
++  while ((c = getopt(argc, argv, "m:n:k:h")) != -1) {
++    switch (c) {
++    case 'm': xm = atoi(optarg); break;
++    case 'n': xn = atoi(optarg); break;
++    case 'k': xk = atoi(optarg); break;
++    case 'h': show_usage(); exit(0); break;
++    default:  show_usage(); exit(-1);
++    }
++  }
++}
++
++void cleanup() {
++  if (device) {
++    if (A_buffer) vx_buffer_release(A_buffer);
++    if (W_buffer) vx_buffer_release(W_buffer);
++    if (C_buffer) vx_buffer_release(C_buffer);
++    if (T_buffer) vx_buffer_release(T_buffer);
++    if (kernel)  vx_kernel_release(kernel);
++    if (module_) vx_module_release(module_);
++    if (queue)   vx_queue_release(queue);
++    vx_device_dump_perf(device, stdout);
++    vx_device_release(device);
++  }
++}
++
++static void reject(const std::string& msg) {
++  std::cout << "Error: " << msg << "!" << std::endl;
++  cleanup();
++  exit(-1);
++}
++
++int main(int argc, char *argv[]) {
++  parse_args(argc, argv);
++  std::srand(50);
++
++  RT_CHECK(vx_device_open(0, &device));
++  vx_queue_info_t qi = { sizeof(qi), nullptr, VX_QUEUE_PRIORITY_NORMAL, 0 };
++  RT_CHECK(vx_queue_create(device, &qi, &queue));
++
++  uint64_t isa_flags, NT, issue_width, num_cores, lmem_bytes;
++  RT_CHECK(vx_device_query(device, VX_CAPS_ISA_FLAGS, &isa_flags));
++  RT_CHECK(vx_device_query(device, VX_CAPS_NUM_THREADS, &NT));
++  RT_CHECK(vx_device_query(device, VX_CAPS_ISSUE_WIDTH, &issue_width));
++  RT_CHECK(vx_device_query(device, VX_CAPS_NUM_CORES, &num_cores));
++  RT_CHECK(vx_device_query(device, VX_CAPS_LOCAL_MEM_SIZE, &lmem_bytes));
++  if ((isa_flags & VX_ISA_EXT_TCU) == 0 || (isa_flags & VX_ISA_EXT_DXA) == 0)
++    reject("needs the TCU and DXA extensions");
++  if (NT != VX_CFG_NUM_THREADS)
++    reject("device warp size must match VX_CFG_NUM_THREADS");
++  if (issue_width * cfg::xtileM != 64)
++    reject("a tc.mma must cover 64 rows (4 TCU blocks)");
++
++  const uint32_t M = xm, N = xn, K = xk;
++  if (M < 1 || M > 64)
++    reject("M must be 1..64, the lanes of one tc.mma");
++  if (N % TILE_N != 0)
++    reject("N must be a multiple of TILE_N = " + std::to_string(TILE_N));
++  if (K % (KSTEPS * kStepK) != 0)
++    reject("K must be a multiple of KSTEPS * " + std::to_string(kStepK));
++  const uint32_t k_steps = K / kStepK;
++  const uint32_t num_tiles = N / TILE_N;
++  if (num_tiles < num_cores)
++    reject("N must give every core a tile: at least " + std::to_string(num_cores * TILE_N));
++  const uint32_t stage_a = ((KSTEPS - 1) * M * kStepRow + 64 * kStepRow + 127) / 128 * 128;
++  const uint32_t lmem_size = TMEM_SLOT_BYTES + PIPE * (stage_a + kStageW);
++  if (lmem_size > lmem_bytes)
++    reject("PIPE stages exceed the local memory");
++  // One persistent CTA per core: its two accumulator buffers take TMEM.
++  const uint32_t num_ctas = num_cores;
++  const uint32_t c_rows = (M + cfg::xtileM - 1) / cfg::xtileM * cfg::xtileM;
++  const uint32_t warps = STAGE_LOAD ? (LOAD_WARP0 + LOAD_WARPS) : LOAD_WARP0;
++  const double w_bytes = double(N) * K * sizeof(itype_t);
++  printf("GEMM_DECODE: M=%u N=%u K=%u tile_n=%u ksteps=%u pipe=%u xfer=%u xfers_per_stage=%u layout=%u "
++         "stage=%s warps=%u stage_bytes=%u lmem=%u tiles=%u ctas=%u cores=%u weight_bytes=%.0f\n",
++         M, N, K, TILE_N, KSTEPS, PIPE, XFER, kStageW / XFER, LAYOUT, STAGE_LOAD ? "load" : "dxa",
++         warps, stage_a + kStageW, lmem_size, num_tiles, num_ctas, (uint32_t)num_cores, w_bytes);
++
++  // A is packed by K step, [K/kstep][M][kstep]; W is the logical [K][N] in
++  // the device layout LAYOUT.
++  std::vector<itype_t> h_A(size_t(M) * K), h_W(size_t(K) * N);
++  for (auto& v : h_A) v = rv_ftoh_s(bit_cast<uint32_t>(float(rand()) / RAND_MAX), 0, nullptr);
++  for (auto& v : h_W) v = rv_ftoh_s(bit_cast<uint32_t>(float(rand()) / RAND_MAX), 0, nullptr);
++  std::vector<itype_t> h_Ap(h_A.size()), h_Wd(h_W.size());
++  for (uint32_t m = 0; m < M; ++m)
++    for (uint32_t k = 0; k < K; ++k)
++      h_Ap[(size_t(k / kStepK) * M + m) * kStepK + k % kStepK] = h_A[size_t(m) * K + k];
++  for (uint32_t k = 0; k < K; ++k) {
++    for (uint32_t n = 0; n < N; ++n) {
++      size_t idx;
++      if (LAYOUT == LAYOUT_PACKED)
++        idx = ((size_t(n / TILE_N) * k_steps + k / kStepK) * TILE_N + n % TILE_N) * kStepK + k % kStepK;
++      else if (LAYOUT == LAYOUT_KN)
++        idx = size_t(k) * N + n;
++      else
++        idx = size_t(n) * K + k;
++      h_Wd[idx] = h_W[size_t(k) * N + n];
++    }
++  }
++
++  RT_CHECK(vx_buffer_create(device, h_Ap.size() * sizeof(itype_t), VX_MEM_READ, &A_buffer));
++  RT_CHECK(vx_buffer_address(A_buffer, &kernel_arg.A_addr));
++  RT_CHECK(vx_buffer_create(device, h_Wd.size() * sizeof(itype_t), VX_MEM_READ, &W_buffer));
++  RT_CHECK(vx_buffer_address(W_buffer, &kernel_arg.W_addr));
++  RT_CHECK(vx_buffer_create(device, size_t(c_rows) * N * sizeof(float), VX_MEM_WRITE, &C_buffer));
++  RT_CHECK(vx_buffer_address(C_buffer, &kernel_arg.C_addr));
++  const uint32_t num_times = 4 * num_tiles + 2 * num_ctas;
++  RT_CHECK(vx_buffer_create(device, num_times * sizeof(uint64_t), VX_MEM_WRITE, &T_buffer));
++  RT_CHECK(vx_buffer_address(T_buffer, &kernel_arg.times_addr));
++  RT_CHECK(vx_enqueue_write(queue, A_buffer, 0, h_Ap.data(), h_Ap.size() * sizeof(itype_t), 0, nullptr, nullptr));
++  RT_CHECK(vx_enqueue_write(queue, W_buffer, 0, h_Wd.data(), h_Wd.size() * sizeof(itype_t), 0, nullptr, nullptr));
++
++  kernel_arg.M = M;
++  kernel_arg.N = N;
++  kernel_arg.K = K;
++
++  if (!STAGE_LOAD) {
++    // A: KSTEPS K steps of M rows, one contiguous run.
++    RT_CHECK(vortex::dxa::program_2d(device, 0, kernel_arg.A_addr,
++      /*size0=*/M * kStepK, /*size1=*/k_steps, /*stride0_bytes=*/M * kStepRow,
++      /*tile0=*/M * kStepK, /*tile1=*/KSTEPS, /*elem_bytes=*/sizeof(itype_t)));
++    // W: one transfer is XFER bytes of a stage, landing as rows of the K step.
++    if (LAYOUT == LAYOUT_PACKED) {
++      RT_CHECK(vortex::dxa::program_2d(device, 1, kernel_arg.W_addr,
++        /*size0=*/XFER / sizeof(itype_t), /*size1=*/uint32_t(w_bytes / XFER), /*stride0_bytes=*/XFER,
++        /*tile0=*/XFER / sizeof(itype_t), /*tile1=*/1, /*elem_bytes=*/sizeof(itype_t)));
++    } else if (LAYOUT == LAYOUT_NK16 || LAYOUT == LAYOUT_NK32) {
++      // (elements of a row, n, K step or pair): rows of 32 or 64 bytes.
++      const uint32_t row = (LAYOUT == LAYOUT_NK32) ? 2 * kStepK : kStepK;
++      RT_CHECK(vortex::dxa::program_3d(device, 1, kernel_arg.W_addr,
++        /*size0=*/row, /*size1=*/N, /*size2=*/K / row,
++        /*stride0_bytes=*/K * sizeof(itype_t), /*stride1_bytes=*/row * sizeof(itype_t),
++        /*tile0=*/row, /*tile1=*/XFER / (row * sizeof(itype_t)), /*tile2=*/1, /*elem_bytes=*/sizeof(itype_t)));
++    } else {
++      // W[K][N]: (n, k) tiles scattered K-major, n's K step 32 bytes apart.
++      RT_CHECK(vortex::dxa::program_2d(device, 1, kernel_arg.W_addr,
++        /*size0=*/N, /*size1=*/K, /*stride0_bytes=*/N * sizeof(itype_t),
++        /*tile0=*/XFER / kStepRow, /*tile1=*/kStepK, /*elem_bytes=*/sizeof(itype_t)));
++      RT_CHECK(vortex::dxa::set_layout(device, 1, vortex::dxa::Layout::KMajor, /*rank=*/2, sizeof(itype_t)));
++    }
++  }
++
++  RT_CHECK(vx_module_load_file(device, kernel_file, &module_));
++  RT_CHECK(vx_module_get_kernel(module_, "main", &kernel));
++
++  std::vector<float> h_C(size_t(c_rows) * N);
++  std::vector<uint64_t> h_T(num_times);
++
++  vx_launch_info_t li = {};
++  li.struct_size  = sizeof(li);
++  li.kernel       = kernel;
++  li.args_host    = &kernel_arg;
++  li.args_size    = sizeof(kernel_arg);
++  li.ndim         = 2;
++  li.grid_dim[0]  = num_ctas;
++  li.grid_dim[1]  = 1;
++  li.block_dim[0] = warps * NT;
++  li.block_dim[1] = 1;
++  li.lmem_size    = lmem_size;
++  li.tmem_cols    = 2 * TILE_N;
++
++  vx_event_h launch_ev = nullptr, read_ev = nullptr, t_ev = nullptr;
++  RT_CHECK(vx_enqueue_launch(queue, &li, 0, nullptr, &launch_ev));
++  RT_CHECK(vx_enqueue_read(queue, h_C.data(), C_buffer, 0, h_C.size() * sizeof(float), 1, &launch_ev, &read_ev));
++  RT_CHECK(vx_enqueue_read(queue, h_T.data(), T_buffer, 0, h_T.size() * sizeof(uint64_t), 1, &read_ev, &t_ev));
++  RT_CHECK(vx_event_wait_value(t_ev, 1, VX_TIMEOUT_INFINITE));
++  vx_event_release(t_ev);
++  vx_event_release(read_ev);
++  vx_event_release(launch_ev);
++
++  {
++    // The multiply phase of a tile runs from its first stage landing to its
++    // last multiply completing; per core the union of its tiles' phases.
++    uint64_t first = UINT64_MAX, last = 0, mult = 0;
++    for (uint32_t c = 0; c < num_ctas; ++c) {
++      first = std::min(first, h_T[4 * num_tiles + 2 * c]);
++      last = std::max(last, h_T[4 * num_tiles + 2 * c + 1]);
++    }
++    for (uint32_t core = 0; core < num_cores; ++core) {
++      std::vector<std::pair<uint64_t, uint64_t>> iv;
++      for (uint32_t t = 0; t < num_tiles; ++t) {
++        if (h_T[4 * t] == core)
++          iv.push_back({h_T[4 * t + 1], h_T[4 * t + 2]});
++      }
++      std::sort(iv.begin(), iv.end());
++      uint64_t lo = iv.empty() ? 0 : iv[0].first, hi = lo;
++      for (auto& p : iv) {
++        if (p.first > hi) {
++          mult += hi - lo;
++          lo = p.first;
++        }
++        hi = std::max(hi, p.second);
++      }
++      mult += hi - lo;
++    }
++    uint64_t span = last - first;
++    double per_mult = w_bytes / mult, per_kernel = w_bytes / (double(num_cores) * span);
++    printf("DECODE_CYCLES: span=%lu multiply=%lu (summed over cores)\n", span, mult);
++    printf("DECODE_W_BYTES_PER_CLOCK_PER_SM: multiply=%.2f kernel=%.2f\n", per_mult, per_kernel);
++    printf("DECODE_W_GBS_PER_SM: multiply=%.1f kernel=%.1f total_kernel=%.1f (at %d MHz)\n",
++           per_mult * VX_CFG_PLATFORM_CLOCK_RATE / 1000.0, per_kernel * VX_CFG_PLATFORM_CLOCK_RATE / 1000.0,
++           w_bytes / span * VX_CFG_PLATFORM_CLOCK_RATE / 1000.0, VX_CFG_PLATFORM_CLOCK_RATE);
++  }
++
++  int errors = 0;
++  uint32_t max_ulp = 0;
++  const uint32_t ulp_bound = float_ulp(K);
++#ifdef NO_MMA
++  std::cout << "NO_MMA: staging only, C not checked" << std::endl;
++  if (false)
++#endif
++  {
++    std::vector<float> fW(h_W.size());
++    for (size_t i = 0; i < h_W.size(); ++i) fW[i] = bit_cast<float>(rv_htof_s(h_W[i], 0, nullptr));
++    std::vector<double> acc(N);
++    for (uint32_t m = 0; m < M; ++m) {
++      std::fill(acc.begin(), acc.end(), 0.0);
++      for (uint32_t k = 0; k < K; ++k) {
++        double a = bit_cast<float>(rv_htof_s(h_A[size_t(m) * K + k], 0, nullptr));
++        const float* pW = &fW[size_t(k) * N];
++        for (uint32_t n = 0; n < N; ++n)
++          acc[n] += a * pW[n];
++      }
++      for (uint32_t n = 0; n < N; ++n) {
++        float expected = float(acc[n]);
++        float actual = h_C[size_t(m) * N + n];
++        int32_t d = std::abs(bit_cast<int32_t>(actual) - bit_cast<int32_t>(expected));
++        max_ulp = std::max<uint32_t>(max_ulp, d);
++        if (d > (int32_t)ulp_bound) {
++          if (errors < MAX_ERRORS)
++            printf("*** error: [%u,%u] expected=%f, actual=%f\n", m, n, expected, actual);
++          ++errors;
++        }
++      }
++    }
++  }
++  printf("reference drift: max=%u ULP, bound=%u ULP (K=%u)\n", max_ulp, ulp_bound, K);
++
++  cleanup();
++
++  if (errors != 0) {
++    std::cout << "Found " << errors << " / " << size_t(M) * N << " errors!" << std::endl;
++    std::cout << "FAILED!" << std::endl;
++    return 1;
++  }
++  std::cout << "PASSED!" << std::endl;
++  return 0;
++}
+diff -ruN '--exclude=.git' src_tmem/tests/regression/gemm_tmem_decode/Makefile src_tmemk/tests/regression/gemm_tmem_decode/Makefile
+--- src_tmem/tests/regression/gemm_tmem_decode/Makefile	1969-12-31 19:00:00.000000000 -0500
++++ src_tmemk/tests/regression/gemm_tmem_decode/Makefile	2026-11-21 03:13:36.586211239 -0500
+@@ -0,0 +1,23 @@
++ROOT_DIR := $(realpath ../../..)
++include $(ROOT_DIR)/config.mk
++
++CONFIGS := $(if $(findstring -DVX_CFG_EXT_TCU_ENABLE,$(CONFIGS)),$(CONFIGS),$(CONFIGS) -DVX_CFG_EXT_TCU_ENABLE)
++CONFIGS := $(if $(findstring -DVX_CFG_EXT_DXA_ENABLE,$(CONFIGS)),$(CONFIGS),$(CONFIGS) -DVX_CFG_EXT_DXA_ENABLE)
++CONFIGS := $(if $(findstring -DVX_CFG_TCU_WGMMA_ENABLE,$(CONFIGS)),$(CONFIGS),$(CONFIGS) -DVX_CFG_TCU_WGMMA_ENABLE)
++CONFIGS := $(if $(findstring -DVX_CFG_TCU_TMEM_ENABLE,$(CONFIGS)),$(CONFIGS),$(CONFIGS) -DVX_CFG_TCU_TMEM_ENABLE)
++
++PROJECT := gemm_tmem_decode
++
++SRC_DIR := $(VORTEX_HOME)/tests/regression/$(PROJECT)
++
++SRCS := $(SRC_DIR)/main.cpp $(SW_COMMON_DIR)/rvfloats.cpp $(SW_COMMON_DIR)/softfloat_ext.cpp
++
++VX_SRCS := $(SRC_DIR)/kernel.cpp
++
++CXXFLAGS += -I$(THIRD_PARTY_DIR)/softfloat/source/include
++
++LDFLAGS += $(THIRD_PARTY_DIR)/softfloat/build/Linux-x86_64-GCC/softfloat.a
++
++KERNEL_LIB := vortex2
++
++include ../common.mk
+Binary files src_tmem/third_party/softfloat/build/Linux-x86_64-GCC/softfloat.a and src_tmemk/third_party/softfloat/build/Linux-x86_64-GCC/softfloat.a differ

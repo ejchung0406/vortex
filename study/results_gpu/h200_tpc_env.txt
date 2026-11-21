@@ -1,0 +1,48 @@
++ hostname
+atl1-1-03-019-14-0.pace.gatech.edu
++ date
+Sat Nov 21 03:46:07 AM EST 2026
++ nvidia-smi --query-gpu=name,driver_version,clocks.max.sm,clocks.max.mem,memory.total,compute_mode,mig.mode.current --format=csv
+name, driver_version, clocks.max.sm [MHz], clocks.max.memory [MHz], memory.total [MiB], compute_mode, mig.mode.current
+NVIDIA H200, 615.71.09, 1980 MHz, 3201 MHz, 143771 MiB, Default, Disabled
++ nvidia-smi
++ head -5
+Sat Nov 21 03:46:07 2026       
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 615.71.09              KMD Version: 615.71.09     CUDA UMD Version: 13.4     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
++ echo '== libsmctrl original tests (third_party/libsmctrl @ c250928)'
+== libsmctrl original tests (third_party/libsmctrl @ c250928)
++ for t in next_mask global_mask stream_mask
++ echo '-- libsmctrl_test_next_mask'
+-- libsmctrl_test_next_mask
++ timeout 60 ./third_party/libsmctrl/libsmctrl_test_next_mask
++ rc=1
++ tail -6 /tmp/echung67.tpc_t.txt
+libsmctrl: WARNING, TPC masking is untested on Hopper, and will likely yield incorrect results! Proceed with caution.
+./third_party/libsmctrl/libsmctrl_test_next_mask: ***Test failure.***
+./third_party/libsmctrl/libsmctrl_test_next_mask: Reason: With TPC mask set to constrain all kernels to TPC 32, a kernel was run and found to run on an SM IDs: as high as 83 and as low as 82 (range of 65 to 64 expected).
++ echo exit=1
+exit=1
++ for t in next_mask global_mask stream_mask
++ echo '-- libsmctrl_test_global_mask'
+-- libsmctrl_test_global_mask
++ timeout 60 ./third_party/libsmctrl/libsmctrl_test_global_mask
++ rc=1
++ tail -6 /tmp/echung67.tpc_t.txt
+libsmctrl: WARNING, TPC masking is untested on Hopper, and will likely yield incorrect results! Proceed with caution.
+./third_party/libsmctrl/libsmctrl_test_global_mask: ***Test failure.***
+./third_party/libsmctrl/libsmctrl_test_global_mask: Reason: With TPC mask set to constrain all kernels to TPC 32, a kernel was run and found to run on an SM IDs: as high as 83 and as low as 82 (range of 65 to 64 expected).
++ echo exit=1
+exit=1
++ for t in next_mask global_mask stream_mask
++ echo '-- libsmctrl_test_stream_mask'
+-- libsmctrl_test_stream_mask
++ timeout 60 ./third_party/libsmctrl/libsmctrl_test_stream_mask
++ rc=1
++ tail -6 /tmp/echung67.tpc_t.txt
+libsmctrl: WARNING, TPC masking is untested on Hopper, and will likely yield incorrect results! Proceed with caution.
+./third_party/libsmctrl/libsmctrl_test_stream_mask:libsmctrl.c:404: Stream masking unsupported on this CUDA version (13040), and no fallback MASK_OFF set!
++ echo exit=1
+exit=1

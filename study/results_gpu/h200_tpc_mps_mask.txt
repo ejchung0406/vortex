@@ -1,0 +1,19 @@
+-- without MPS
+tpc_preload: mask set, 1 TPCs enabled
+tpc_preload: 5 launches masked
+gpu=NVIDIA H200 sms=132 pattern=coalesced unroll=4 blocks=8 threads=1024 gib=8.00 gbs_best=221.4 gbs_mean=221.4
+gpu=NVIDIA H200 sms=132 pattern=coalesced unroll=4 blocks=8 threads=1024 gib=8.00 gbs_best=603.1 gbs_mean=602.7
+-- MPS client, mask bit 0
+tpc_preload: mask set, 1 TPCs enabled
+tpc_preload: 5 launches masked
+gpu=NVIDIA H200 sms=132 pattern=coalesced unroll=4 blocks=8 threads=1024 gib=8.00 gbs_best=221.5 gbs_mean=221.4
+-- MPS client, mask bits 0-3 (8 SMs, 1 GPC)
+tpc_preload: mask set, 4 TPCs enabled
+tpc_preload: 5 launches masked
+gpu=NVIDIA H200 sms=132 pattern=coalesced unroll=4 blocks=16 threads=1024 gib=8.00 gbs_best=851.6 gbs_mean=851.0
+-- MPS client, no mask
+gpu=NVIDIA H200 sms=132 pattern=coalesced unroll=4 blocks=8 threads=1024 gib=8.00 gbs_best=602.9 gbs_mean=602.7
+-- MPS client, tpc_lab next-mask (SM 0 only, plain loads)
+tag=- mem=ld mem_sms=1 per_sm=2 ld_carveout=-1 slices=2 mb_per_slice=512.0 mem_tpc_mask=00000000000000000000000000000001 mem_tpcs=1 mem_cta_sms=1 role_smem_kb=0 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=239.5 mem_gbs_range=239.4-239.6 per_unit_med=239.5 slowest=239.5 fastest=239.5 window_ms=4.48
+  per_unit_gbs: 239.6
+  ld_sms: 0

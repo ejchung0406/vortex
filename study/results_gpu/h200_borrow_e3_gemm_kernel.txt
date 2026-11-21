@@ -1,0 +1,40 @@
+Generating SQLite file /tmp/echung67/borrow_e3_nsys.sqlite from /tmp/echung67/borrow_e3_nsys.nsys-rep
+Processing [/tmp/echung67/borrow_e3_nsys.sqlite] with [/storage/pace-apps/spack/packages/linux-rhel9-x86_64_v3/none-none/cuda-12.9.1-leytg2766xv4h3xx3vg4rkxawtyj5qvl/nsight-systems-2025.1.3/host-linux-x64/reports/cuda_gpu_kern_sum.py]... 
+Time (%),Total Time (ns),Instances,Avg (ns),Med (ns),Min (ns),Max (ns),StdDev (ns),Name
+64.0,861965602,571,1509572.0,1483170.0,1216609,1924610,133192.7,nvjet_hsh_320x128_64x3_1x2_h_bz_coopB_NNT
+0.4,4905989,1,4905989.0,4905989.0,4905989,4905989,0.0,"init_buf(unsigned int *, unsigned long)"
+0.0,94336,2,47168.0,47168.0,46976,47360,271.5,"init_half(__half *, unsigned long)"
+
+Processing [/tmp/echung67/borrow_e3_nsys.sqlite] with [/storage/pace-apps/spack/packages/linux-rhel9-x86_64_v3/none-none/cuda-12.9.1-leytg2766xv4h3xx3vg4rkxawtyj5qvl/nsight-systems-2025.1.3/host-linux-x64/reports/cuda_gpu_trace.py]... 
+Start (ns),Duration (ns),CorrId,GrdX,GrdY,GrdZ,BlkX,BlkY,BlkZ,Reg/Trd,StcSMem (MB),DymSMem (MB),Bytes (MB),Throughput (MB/s),SrcMemKd,DstMemKd,Device,Ctx,GreenCtx,Strm,Name
+533770190,4905989,120,528,1,1,1024,1,1,16,0.000,0.000,,,,,NVIDIA H200 (0),1,,7,"init_buf(unsigned int *, unsigned long)"
+557169799,46976,1300,528,1,1,1024,1,1,16,0.000,0.000,,,,,NVIDIA H200 (0),1,,7,"init_half(__half *, unsigned long)"
+557217863,47360,1301,528,1,1,1024,1,1,16,0.000,0.000,,,,,NVIDIA H200 (0),1,,7,"init_half(__half *, unsigned long)"
+558846505,3135,0,,,,,,,,,,0.037,11758.842,Unknown,Unknown,NVIDIA H200 (0),,,,[CUDA memcpy Unified Device-to-Host]
+558849641,2527,0,,,,,,,,,,0.004,1620.894,Unknown,Unknown,NVIDIA H200 (0),,,,[CUDA memcpy Unified Device-to-Host]
+558852169,2848,0,,,,,,,,,,0.025,8629.199,Unknown,Unknown,NVIDIA H200 (0),,,,[CUDA memcpy Unified Device-to-Host]
+558960233,2207,0,,,,,,,,,,0.004,1855.910,Unknown,Unknown,NVIDIA H200 (0),,,,[CUDA memcpy Unified Host-to-Device]
+558962441,3232,0,,,,,,,,,,0.061,19009.843,Unknown,Unknown,NVIDIA H200 (0),,,,[CUDA memcpy Unified Host-to-Device]
+598236691,3071,0,,,,,,,,,,0.037,12003.877,Unknown,Unknown,NVIDIA H200 (0),,,,[CUDA memcpy Unified Device-to-Host]
+598239763,2495,0,,,,,,,,,,0.004,1641.681,Unknown,Unknown,NVIDIA H200 (0),,,,[CUDA memcpy Unified Device-to-Host]
+598242259,2912,0,,,,,,,,,,0.025,8439.546,Unknown,Unknown,NVIDIA H200 (0),,,,[CUDA memcpy Unified Device-to-Host]
+711786317,1120,1419,,,,,,,,,,0.000,3.571,Device,,NVIDIA H200 (0),1,,14,[CUDA memset]
+711807437,1219746,1420,2,66,1,384,1,1,168,0.000,0.189,,,,,NVIDIA H200 (0),1,,14,nvjet_hsh_320x128_64x3_1x2_h_bz_coopB_NNT
+713075663,800,1435,,,,,,,,,,0.000,5.000,Device,,NVIDIA H200 (0),1,,14,[CUDA memset]
+713080719,1218881,1436,2,66,1,384,1,1,168,0.000,0.189,,,,,NVIDIA H200 (0),1,,14,nvjet_hsh_320x128_64x3_1x2_h_bz_coopB_NNT
+714326160,736,1445,,,,,,,,,,0.000,5.435,Device,,NVIDIA H200 (0),1,,7,[CUDA memset]
+714340464,832,1453,,,,,,,,,,0.000,4.808,Device,,NVIDIA H200 (0),1,,14,[CUDA memset]
+714344432,1218657,1454,2,66,1,384,1,1,168,0.000,0.189,,,,,NVIDIA H200 (0),1,,14,nvjet_hsh_320x128_64x3_1x2_h_bz_coopB_NNT
+715566481,800,1465,,,,,,,,,,0.000,5.000,Device,,NVIDIA H200 (0),1,,14,[CUDA memset]
+715568881,1218178,1466,2,66,1,384,1,1,168,0.000,0.189,,,,,NVIDIA H200 (0),1,,14,nvjet_hsh_320x128_64x3_1x2_h_bz_coopB_NNT
+716790547,960,1477,,,,,,,,,,0.000,4.167,Device,,NVIDIA H200 (0),1,,14,[CUDA memset]
+716793107,1217345,1478,2,66,1,384,1,1,168,0.000,0.189,,,,,NVIDIA H200 (0),1,,14,nvjet_hsh_320x128_64x3_1x2_h_bz_coopB_NNT
+718014196,800,1489,,,,,,,,,,0.000,5.000,Device,,NVIDIA H200 (0),1,,14,[CUDA memset]
+718016948,1217217,1490,2,66,1,384,1,1,168,0.000,0.189,,,,,NVIDIA H200 (0),1,,14,nvjet_hsh_320x128_64x3_1x2_h_bz_coopB_NNT
+719237685,960,1501,,,,,,,,,,0.000,4.167,Device,,NVIDIA H200 (0),1,,14,[CUDA memset]
+719240181,1218786,1502,2,66,1,384,1,1,168,0.000,0.189,,,,,NVIDIA H200 (0),1,,14,nvjet_hsh_320x128_64x3_1x2_h_bz_coopB_NNT
+720462679,800,1513,,,,,,,,,,0.000,5.000,Device,,NVIDIA H200 (0),1,,14,[CUDA memset]
+720465335,1217857,1514,2,66,1,384,1,1,168,0.000,0.189,,,,,NVIDIA H200 (0),1,,14,nvjet_hsh_320x128_64x3_1x2_h_bz_coopB_NNT
+721686616,992,1525,,,,,,,,,,0.000,4.032,Device,,NVIDIA H200 (0),1,,14,[CUDA memset]
+721689944,1217025,1526,2,66,1,384,1,1,168,0.000,0.189,,,,,NVIDIA H200 (0),1,,14,nvjet_hsh_320x128_64x3_1x2_h_bz_coopB_NNT
+722910681,800,1537,,,,,,,,,,0.000,5.000,Device,,NVIDIA H200 (0),1,,14,[CUDA memset]

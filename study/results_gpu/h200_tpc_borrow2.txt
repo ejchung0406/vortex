@@ -1,0 +1,208 @@
+# BOR k=1 same_tpc helper=13 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 2 --roles 12:13
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=2 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000040000000000000 mem_tpcs=1 mem_cta_sms=2 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.2-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.8
+# BOR k=1 other_tpc bit=55 helper=28 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:28
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000000c0000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.2-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=56 helper=44 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:44
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000140000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=57 helper=60 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:60
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000240000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=58 helper=74 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:74
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000440000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=59 helper=88 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:88
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000840000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=60 helper=102 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:102
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000001040000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=61 helper=116 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:116
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000002040000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=62 helper=120 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:120
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000004040000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.6
+# BOR k=1 same_tpc helper=13 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 2 --roles 12:13
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=2 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000040000000000000 mem_tpcs=1 mem_cta_sms=2 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=55 helper=28 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:28
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000000c0000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=56 helper=44 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:44
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000140000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=57 helper=60 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:60
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000240000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=58 helper=74 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:74
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000440000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=59 helper=88 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:88
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000840000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=60 helper=102 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:102
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000001040000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=61 helper=116 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:116
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000002040000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=62 helper=120 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:120
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000004040000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 self=0 depth=13 nearest helpers [13]
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 13 --consume 0 --cluster 2 --roles 12:13
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=2 self=0 local_issuers=0 consume=0 depth=13 tile_kb=16 nw=1 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000040000000000000 mem_tpcs=1 mem_cta_sms=2 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=46.5 mem_gbs_range=46.5-46.5 per_unit_med=46.5 slowest=46.5 fastest=46.5 window_ms=23.07
+exit=0 secs=0.7
+# BOR k=1 self=1 depth=6 nearest helpers [13]
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 1 --depth 6 --consume 0 --cluster 2 --roles 12:13
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=2 self=1 local_issuers=0 consume=0 depth=6 tile_kb=16 nw=4 spin=100 issuers_min=2 issuers_max=2 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000040000000000000 mem_tpcs=1 mem_cta_sms=2 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=144.3 mem_gbs_range=144.3-144.3 per_unit_med=144.3 slowest=144.3 fastest=144.3 window_ms=7.44
+exit=0 secs=0.6
+# BOR k=3 self=0 depth=4 nearest helpers [13, 28, 29]
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 4 --consume 0 --cluster 4 --roles 12:13,28,29
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=4 tile_kb=16 nw=4 spin=100 issuers_min=3 issuers_max=3 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000000c0000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=177.9 mem_gbs_range=177.9-177.9 per_unit_med=177.9 slowest=177.9 fastest=177.9 window_ms=6.03
+exit=0 secs=0.6
+# BOR k=3 self=1 depth=3 nearest helpers [13, 28, 29]
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 1 --depth 3 --consume 0 --cluster 4 --roles 12:13,28,29
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=1 local_issuers=0 consume=0 depth=3 tile_kb=16 nw=4 spin=100 issuers_min=4 issuers_max=4 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000000c0000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=176.0 mem_gbs_range=176.0-176.0 per_unit_med=176.0 slowest=176.0 fastest=176.0 window_ms=6.10
+exit=0 secs=0.6
+# BOR k=7 self=0 depth=1 nearest helpers [13, 28, 29, 44, 45, 60, 61]
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 1 --consume 0 --cluster 8 --roles 12:13,28,29,44,45,60,61
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=8 self=0 local_issuers=0 consume=0 depth=1 tile_kb=16 nw=1 spin=100 issuers_min=7 issuers_max=7 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000003c0000000000000 mem_tpcs=4 mem_cta_sms=8 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=46.5 mem_gbs_range=46.5-46.5 per_unit_med=46.5 slowest=46.5 fastest=46.5 window_ms=23.07
+exit=0 secs=0.7
+# BOR k=7 self=1 depth=1 nearest helpers [13, 28, 29, 44, 45, 60, 61]
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 1 --depth 1 --consume 0 --cluster 8 --roles 12:13,28,29,44,45,60,61
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=8 self=1 local_issuers=0 consume=0 depth=1 tile_kb=16 nw=4 spin=100 issuers_min=8 issuers_max=8 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000003c0000000000000 mem_tpcs=4 mem_cta_sms=8 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=133.4 mem_gbs_range=133.4-133.5 per_unit_med=133.4 slowest=133.4 fastest=133.4 window_ms=8.05
+exit=0 secs=0.6
+# BOR k=3 self=1 with CMP on helpers ilp=4 mem_first=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 1 --depth 3 --consume 0 --cluster 4 --roles 12:13,28,29 --cmp-sms 13,28,29 --cmp-ilp 4 --mem-first 0
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=1 local_issuers=0 consume=0 depth=3 tile_kb=16 nw=4 spin=100 issuers_min=4 issuers_max=4 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000000c0000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 mem_first=0 cmp_ilp=4 cmp_carveout=100 cmp_sms=3 cmp_threads=1024 cmp_per_sm=1 cmp_cov_sms=3 cmp_slots=3 cmp_tpcs=2 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=1.1 mem_gbs_range=1.1-1.1 per_unit_med=1.1 slowest=1.1 fastest=1.1 window_ms=1008.09 cmp_gflops=1275 cmp_gflops_range=1274-1275 cmp_solo_gflops=1275 cmp_ratio=1.000
+exit=0 secs=7.7
+# BOR k=3 self=1 with CMP on helpers ilp=2 mem_first=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 1 --depth 3 --consume 0 --cluster 4 --roles 12:13,28,29 --cmp-sms 13,28,29 --cmp-ilp 2 --mem-first 1
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=1 local_issuers=0 consume=0 depth=3 tile_kb=16 nw=4 spin=100 issuers_min=4 issuers_max=4 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000000c0000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 mem_first=1 cmp_ilp=2 cmp_carveout=100 cmp_sms=3 cmp_threads=1024 cmp_per_sm=1 cmp_cov_sms=3 cmp_slots=3 cmp_tpcs=2 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=176.3 mem_gbs_range=176.3-176.5 per_unit_med=176.3 slowest=176.3 fastest=176.3 window_ms=6.09 cmp_gflops=1126 cmp_gflops_range=1126-1126 cmp_solo_gflops=1233 cmp_ratio=0.913
+exit=0 secs=0.7
+# BOR k=1 same_tpc helper=13 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 2 --roles 12:13
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=2 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000040000000000000 mem_tpcs=1 mem_cta_sms=2 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.9
+# BOR k=1 other_tpc bit=55 helper=28 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:28
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000000c0000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=56 helper=44 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:44
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000140000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.2-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=57 helper=60 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:60
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000240000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.2-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=58 helper=74 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:74
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000440000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.2-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=59 helper=88 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:88
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000840000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.2-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=60 helper=102 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:102
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000001040000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.2-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=61 helper=116 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:116
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000002040000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.2 mem_gbs_range=75.2-75.3 per_unit_med=75.2 slowest=75.2 fastest=75.2 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=62 helper=120 self=0 consume=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 0 --cluster 4 --roles 12:120
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000004040000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 same_tpc helper=13 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 2 --roles 12:13
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=2 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000040000000000000 mem_tpcs=1 mem_cta_sms=2 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=55 helper=28 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:28
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000000c0000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=56 helper=44 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:44
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000140000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=57 helper=60 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:60
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000240000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=58 helper=74 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:74
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000440000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=59 helper=88 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:88
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000840000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=60 helper=102 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:102
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000001040000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=61 helper=116 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:116
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000002040000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 other_tpc bit=62 helper=120 self=0 consume=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 12 --consume 1 --cluster 4 --roles 12:120
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=1 depth=12 tile_kb=16 nw=4 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000004040000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=75.3 mem_gbs_range=75.3-75.3 per_unit_med=75.3 slowest=75.3 fastest=75.3 window_ms=14.27
+exit=0 secs=0.7
+# BOR k=1 self=0 depth=13 nearest helpers [13]
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 13 --consume 0 --cluster 2 --roles 12:13
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=2 self=0 local_issuers=0 consume=0 depth=13 tile_kb=16 nw=1 spin=100 issuers_min=1 issuers_max=1 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000040000000000000 mem_tpcs=1 mem_cta_sms=2 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=46.5 mem_gbs_range=46.5-46.5 per_unit_med=46.5 slowest=46.5 fastest=46.5 window_ms=23.07
+exit=0 secs=0.7
+# BOR k=1 self=1 depth=6 nearest helpers [13]
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 1 --depth 6 --consume 0 --cluster 2 --roles 12:13
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=2 self=1 local_issuers=0 consume=0 depth=6 tile_kb=16 nw=4 spin=100 issuers_min=2 issuers_max=2 mb_per_consumer=1024.0 mem_tpc_mask=00000000000000000040000000000000 mem_tpcs=1 mem_cta_sms=2 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=144.3 mem_gbs_range=144.3-144.3 per_unit_med=144.3 slowest=144.3 fastest=144.3 window_ms=7.44
+exit=0 secs=0.6
+# BOR k=3 self=0 depth=4 nearest helpers [13, 28, 29]
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 4 --consume 0 --cluster 4 --roles 12:13,28,29
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=0 local_issuers=0 consume=0 depth=4 tile_kb=16 nw=4 spin=100 issuers_min=3 issuers_max=3 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000000c0000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=177.9 mem_gbs_range=177.8-178.0 per_unit_med=177.9 slowest=177.9 fastest=177.9 window_ms=6.04
+exit=0 secs=0.6
+# BOR k=3 self=1 depth=3 nearest helpers [13, 28, 29]
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 1 --depth 3 --consume 0 --cluster 4 --roles 12:13,28,29
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=1 local_issuers=0 consume=0 depth=3 tile_kb=16 nw=4 spin=100 issuers_min=4 issuers_max=4 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000000c0000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=175.9 mem_gbs_range=175.9-176.0 per_unit_med=175.9 slowest=175.9 fastest=175.9 window_ms=6.10
+exit=0 secs=0.6
+# BOR k=7 self=0 depth=1 nearest helpers [13, 28, 29, 44, 45, 60, 61]
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 0 --depth 1 --consume 0 --cluster 8 --roles 12:13,28,29,44,45,60,61
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=8 self=0 local_issuers=0 consume=0 depth=1 tile_kb=16 nw=1 spin=100 issuers_min=7 issuers_max=7 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000003c0000000000000 mem_tpcs=4 mem_cta_sms=8 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=46.5 mem_gbs_range=46.5-46.5 per_unit_med=46.5 slowest=46.5 fastest=46.5 window_ms=23.07
+exit=0 secs=0.7
+# BOR k=7 self=1 depth=1 nearest helpers [13, 28, 29, 44, 45, 60, 61]
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 1 --depth 1 --consume 0 --cluster 8 --roles 12:13,28,29,44,45,60,61
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=8 self=1 local_issuers=0 consume=0 depth=1 tile_kb=16 nw=4 spin=100 issuers_min=8 issuers_max=8 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000003c0000000000000 mem_tpcs=4 mem_cta_sms=8 role_smem_kb=225 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=133.3 mem_gbs_range=133.2-133.4 per_unit_med=133.3 slowest=133.3 fastest=133.3 window_ms=8.05
+exit=0 secs=0.6
+# BOR k=3 self=1 with CMP on helpers ilp=4 mem_first=0
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 1 --depth 3 --consume 0 --cluster 4 --roles 12:13,28,29 --cmp-sms 13,28,29 --cmp-ilp 4 --mem-first 0
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=1 local_issuers=0 consume=0 depth=3 tile_kb=16 nw=4 spin=100 issuers_min=4 issuers_max=4 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000000c0000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 mem_first=0 cmp_ilp=4 cmp_carveout=100 cmp_sms=3 cmp_threads=1024 cmp_per_sm=1 cmp_cov_sms=3 cmp_slots=3 cmp_tpcs=2 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=1.0 mem_gbs_range=1.0-1.1 per_unit_med=1.0 slowest=1.0 fastest=1.0 window_ms=1023.66 cmp_gflops=1275 cmp_gflops_range=1275-1275 cmp_solo_gflops=1275 cmp_ratio=1.000
+exit=0 secs=7.8
+# BOR k=3 self=1 with CMP on helpers ilp=2 mem_first=1
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_lab run --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_tpc_map.txt --reps 3 --mem tma --tile-kb 16 --spin 100 --self 1 --depth 3 --consume 0 --cluster 4 --roles 12:13,28,29 --cmp-sms 13,28,29 --cmp-ilp 2 --mem-first 1
+tag=- mem=tma fused=0 fused_warps=0 consumers=1 cluster=4 self=1 local_issuers=0 consume=0 depth=3 tile_kb=16 nw=4 spin=100 issuers_min=4 issuers_max=4 mb_per_consumer=1024.0 mem_tpc_mask=000000000000000000c0000000000000 mem_tpcs=2 mem_cta_sms=4 role_smem_kb=225 mem_first=1 cmp_ilp=2 cmp_carveout=100 cmp_sms=3 cmp_threads=1024 cmp_per_sm=1 cmp_cov_sms=3 cmp_slots=3 cmp_tpcs=2 reps=3 buf_gib=24 window_mb=0 check=ok bad=0 mem_gbs=176.2 mem_gbs_range=176.2-176.4 per_unit_med=176.2 slowest=176.2 fastest=176.2 window_ms=6.09 cmp_gflops=1126 cmp_gflops_range=1126-1126 cmp_solo_gflops=1234 cmp_ratio=0.913
+exit=0 secs=0.7

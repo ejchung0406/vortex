@@ -1,0 +1,29 @@
+---------------------------------------
+Begin Slurm Prolog: Nov-21-2026 03:44:41
+Job ID:    15954225
+User ID:   echung67
+Account:   gts-hkim358-paid
+Job name:  tpcmask_h200
+Partition: gpu-h200
+QOS:       inferno
+---------------------------------------
+atl1-1-03-019-14-0.pace.gatech.edu
+GPU 0: NVIDIA H200 (UUID: GPU-3f9a2800-c6fb-242a-e145-979b7a922277)
+NVIDIA H200, 615.71.09, 1980 MHz, 143771 MiB
+Sat Nov 21 03:44:41 AM EST 2026
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+[2026-11-21T04:24:45.727] error: *** STEP 15954225.0 ON atl1-1-03-019-14-0 CANCELLED AT 2026-11-21T04:24:45 DUE to SIGNAL Terminated ***
+[2026-11-21T04:24:45.727] error: *** JOB 15954225 ON atl1-1-03-019-14-0 CANCELLED AT 2026-11-21T04:24:45 DUE to SIGNAL Terminated ***
+srun: error: atl1-1-03-019-14-0: task 0: Terminated
+---------------------------------------
+Begin Slurm Epilog: Nov-21-2026 04:24:45
+Job ID:        15954225
+User ID:       echung67
+Account:       gts-hkim358-paid
+Job name:      tpcmask_h200
+Resources:     cpu=8,gres/gpu:h200=1,mem=64G,node=1
+Rsrc Used:     cput=05:21:04,vmem=0,walltime=00:40:08,mem=22572K,energy_used=0
+Partition:     gpu-h200
+QOS:           inferno
+Nodes:         atl1-1-03-019-14-0
+---------------------------------------
