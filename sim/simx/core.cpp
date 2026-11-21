@@ -909,7 +909,7 @@ public:
         // check scoreboard against sequencer micro-op (handles uop WAW/RAW)
         auto trace = ibuffer->peek();
 
-        auto seq = sequencers_.at(wid);
+        auto& seq = sequencers_.at(wid);
         auto uop_trace = seq->get(trace);  // returns cached uop or generates next
 
         // The head moves into the warp's staging register, freeing its buffer
@@ -1000,7 +1000,7 @@ public:
         auto trace = ibuffer->peek();
 
         // Retrieve the (already-generated) micro-op from the sequencer
-        auto seq = sequencers_.at(wid);
+        auto& seq = sequencers_.at(wid);
         auto uop_trace = seq->get(trace);
 
         // to operand stage
@@ -1372,11 +1372,11 @@ public:
   }
 
   bool lsu_drained() const {
-    return std::static_pointer_cast<LsuUnit>(func_units_.at((int)FUType::LSU))->drained();
+    return static_cast<const LsuUnit*>(func_units_.at((int)FUType::LSU).get())->drained();
   }
 
   bool lsu_sent() const {
-    return std::static_pointer_cast<LsuUnit>(func_units_.at((int)FUType::LSU))->sent();
+    return static_cast<const LsuUnit*>(func_units_.at((int)FUType::LSU).get())->sent();
   }
 
   // No request is in flight past the LSU blocks' request queues: the local
@@ -1496,7 +1496,7 @@ public:
   Scheduler*    scheduler() { return scheduler_.get(); }
   Scoreboard*   scoreboard() { return scoreboard_.get(); }
   // CSR is a sub-unit of SFU; reach it through SfuUnit.
-  CsrUnit&      csr_unit()  { return this->sfu_unit()->csr_unit(); }
+  CsrUnit&      csr_unit()  { return static_cast<SfuUnit*>(func_units_.at((int)FUType::SFU).get())->csr_unit(); }
   uint32_t      mpm_class() const { return mpm_class_; }
 #ifdef VX_CFG_EXT_TCU_ENABLE
   std::shared_ptr<TcuUnit>& tcu_unit() { return tcu_unit_; }
