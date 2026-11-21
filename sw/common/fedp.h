@@ -47,6 +47,15 @@ public:
     assert(frm_ >= 0 && frm_ <= 4);
   }
 
+  // Switch the input format, keeping the term buffers (a caller evaluating
+  // several formats can hold one object).
+  void set_format(int exp_bits, int sig_bits) {
+    exp_bits_ = exp_bits;
+    sig_bits_ = sig_bits;
+    assert(exp_bits_ > 0 && exp_bits_ <= 8);
+    assert(sig_bits_ > 0 && sig_bits_ <= 10);
+  }
+
   // Block-scaled formats: one scale byte per lane for A and B, two lanes per
   // 32-bit register (a lane is 16 bits of it: two fp8 or four fp4 elements).
   //   fp8/bf8 (MXFP8/MXBF8) and fp4 (MXFP4): E8M0 scales;
@@ -69,25 +78,26 @@ public:
     const auto c_dec = decode_input(c_enc, 8, 23);
     const auto c_term = decodeC_to_common(c_dec);
 
-    const auto mul_res = (exp_bits_ == 2 && sig_bits_ == 1)
-                       ? multiply_f4(a, b, n, c_term)
-                       : multiply_to_common(decode_inputs(a, b, n), c_term);
+    // The product terms and C, in the term buffers; returns the term count.
+    const auto mul = (exp_bits_ == 2 && sig_bits_ == 1)
+                   ? multiply_f4(a, b, n, c_term)
+                   : multiply_to_common(a, b, n, c_term);
 
-    rtl_watch_s1(mul_res, c_term, c_enc);
+    rtl_watch_s1(mul, c_term, c_enc);
 
-    HR_ = 32 - lzcN(mul_res.terms.size() - 1, 32);
+    HR_ = 32 - lzcN(mul.nt - 1, 32);
 
-    const auto aln = alignment(mul_res);
+    const auto aln = alignment(mul);
 
-    rtl_watch_s2(aln, mul_res, c_term, c_enc);
+    rtl_watch_s2(aln, mul, c_term, c_enc);
 
-    const auto acc = accumulate(aln);
+    const auto acc = accumulate(aln, mul.nt);
 
-    rtl_watch_s3(acc, mul_res, c_term, c_enc);
+    rtl_watch_s3(acc, mul, c_term, c_enc);
 
     const auto nrm = normalize(acc);
 
-    rtl_watch_norm(nrm, acc.flags, mul_res.L);
+    rtl_watch_norm(nrm, acc.flags, mul.L);
 
     const auto out = rounding(nrm);
     rtl_watch_s4(out);
@@ -127,20 +137,19 @@ private:
     int Mp;
   };
 
+  // The terms live in the per-object buffers below (sign_, mp_, eps_ then
+  // shifts_): nt terms, the products first and C last.
   struct mul_res_t {
-    std::vector<pterm_t> terms;
+    uint32_t nt;
     int L;
-    std::vector<int> shifts;
     uint8_t flags;
   };
 
+  // Aligned terms in aln_ (and their sticky bits in stk_).
   struct align_t {
-    std::vector<uint32_t> terms;
     int sticky;
     int L;
     uint8_t flags;
-    std::vector<uint32_t> dbg_aln_sigs;
-    std::vector<int> dbg_sticky_bits;
   };
   struct acc_t {
     uint32_t V;
@@ -194,11 +203,11 @@ private:
 #ifdef FEDP_RTL_WATCH
     RTL_WATCH("[RTL_WATCH] FEDP-S1(%lu): max_exp=0x%x, shift_amt=", req_id_, res.L);
     RTL_WATCH("{");
-    if (!res.shifts.empty()) {
-      RTL_WATCH("0x%x", res.shifts.back());
-      if (res.shifts.size() > 1) RTL_WATCH(", ");
-      for (int i = (int)res.shifts.size() - 2; i >= 0; --i) {
-        RTL_WATCH("0x%x", res.shifts[i]);
+    if (res.nt != 0) {
+      RTL_WATCH("0x%x", shifts_[res.nt - 1]);
+      if (res.nt > 1) RTL_WATCH(", ");
+      for (int i = (int)res.nt - 2; i >= 0; --i) {
+        RTL_WATCH("0x%x", shifts_[i]);
         if (i > 0) RTL_WATCH(", ");
       }
     }
@@ -207,10 +216,10 @@ private:
     if (c_term.sign) c_raw |= (1u << 24);
     if (c_term.cls == 2 || c_term.cls == 1) c_raw |= (1u << 23);
     RTL_WATCH("0x%x", c_raw);
-    if (res.terms.size() > 1) RTL_WATCH(", ");
-    for (int i = (int)res.terms.size() - 2; i >= 0; --i) {
-      uint32_t raw_val = res.terms[i].Mp;
-      if (res.terms[i].sign) raw_val |= (1u << 24);
+    if (res.nt > 1) RTL_WATCH(", ");
+    for (int i = (int)res.nt - 2; i >= 0; --i) {
+      uint32_t raw_val = mp_[i];
+      if (sign_[i]) raw_val |= (1u << 24);
       RTL_WATCH("0x%x", raw_val);
       if (i > 0) RTL_WATCH(", ");
     }
@@ -222,21 +231,21 @@ private:
 #ifdef FEDP_RTL_WATCH
     RTL_WATCH("[RTL_WATCH] FEDP-S2(%lu): max_exp=0x%x, aln_sig=", req_id_, res.L);
     RTL_WATCH("{");
-    if (!aln.dbg_aln_sigs.empty()) {
-      uint32_t c_sig = aln.dbg_aln_sigs.back();
+    if (res.nt != 0) {
+      uint32_t c_sig = aln_[res.nt - 1];
       RTL_WATCH("0x%x", c_sig);
-      if (aln.dbg_aln_sigs.size() > 1) RTL_WATCH(", ");
-      for (int i = (int)aln.dbg_aln_sigs.size() - 2; i >= 0; --i) {
-        RTL_WATCH("0x%x", aln.dbg_aln_sigs[i]);
+      if (res.nt > 1) RTL_WATCH(", ");
+      for (int i = (int)res.nt - 2; i >= 0; --i) {
+        RTL_WATCH("0x%x", aln_[i]);
         if (i > 0) RTL_WATCH(", ");
       }
     }
     RTL_WATCH("}, sticky_bits={");
-    if (!aln.dbg_sticky_bits.empty()) {
-      RTL_WATCH("0x%x", aln.dbg_sticky_bits.back());
-      if (aln.dbg_sticky_bits.size() > 1) RTL_WATCH(", ");
-      for (int i = (int)aln.dbg_sticky_bits.size() - 2; i >= 0; --i) {
-        RTL_WATCH("0x%x", aln.dbg_sticky_bits[i]);
+    if (res.nt != 0) {
+      RTL_WATCH("0x%x", stk_[res.nt - 1]);
+      if (res.nt > 1) RTL_WATCH(", ");
+      for (int i = (int)res.nt - 2; i >= 0; --i) {
+        RTL_WATCH("0x%x", stk_[i]);
         if (i > 0) RTL_WATCH(", ");
       }
     }
@@ -247,8 +256,8 @@ private:
   inline void rtl_watch_s3([[maybe_unused]] const acc_t& acc, [[maybe_unused]] const mul_res_t& res, [[maybe_unused]] const cterm_t& c_term, [[maybe_unused]] uint32_t c_enc) {
 #ifdef FEDP_RTL_WATCH
     uint32_t sigs_sign = 0;
-    for (size_t i = 0; i < res.terms.size() - 1; ++i) {
-      if (res.terms[i].sign) sigs_sign |= (1 << i);
+    for (size_t i = 0; i < res.nt - 1; ++i) {
+      if (sign_[i]) sigs_sign |= (1 << i);
     }
     RTL_WATCH("[RTL_WATCH] FEDP-S3(%lu): acc_sig=0x%x, max_exp=0x%x, sigs_sign=0x%x, sticky=%d\n",
         req_id_, acc.V, res.L, sigs_sign, acc.sticky ? 1 : 0);
@@ -277,14 +286,22 @@ private:
   // The datapath's accumulator width over `lanes` product terms and C.
   int acc_width(uint32_t lanes) const { return W_ + 2 + (32 - lzcN(lanes, 32)); }
 
-  // -------- logic --------
-  static inline std::pair<uint32_t, uint32_t> csa(uint32_t a, uint32_t b, uint32_t c) {
-    uint32_t s = a ^ b ^ c;
-    uint32_t k = ((a & b) | (a & c) | (b & c)) << 1;
-    return {s, k};
+  // Size the term buffers for `terms` terms; they only grow, so a reused
+  // object stops allocating after its first evaluation.
+  void reserve_terms(uint32_t terms) {
+    if (mp_.size() < terms) {
+      sign_.resize(terms);
+      mp_.resize(terms);
+      eps_.resize(terms);
+      sel_eps_.resize(terms);
+      nz_.resize(terms);
+      shifts_.resize(terms);
+      aln_.resize(terms);
+      stk_.resize(terms);
+    }
   }
-  static inline uint32_t cpa(uint32_t s, uint32_t c) { return s + c; }
 
+  // -------- logic --------
   static dec_t decode_input(uint32_t enc, int eb, int sb) {
     dec_t d{};
     d.sign = (enc >> (eb + sb)) & 1u;
@@ -293,23 +310,6 @@ private:
     d.is_zero = (d.exp == 0 && d.frac == 0);
     d.is_sub = (d.exp == 0 && d.frac != 0);
     return d;
-  }
-
-  std::vector<std::array<dec_t, 2>> decode_inputs(const uint32_t *a, const uint32_t *b, uint32_t n) {
-    const uint32_t width = 1u + exp_bits_ + sig_bits_;
-    const bool packed = (width <= 16u) && ((32u % width) == 0u);
-    const uint32_t epw = packed ? (32u / width) : 1u;
-    std::vector<std::array<dec_t, 2>> out(n * epw);
-    for (uint32_t w = 0; w < n; ++w) {
-      uint32_t aw = a[w], bw = b[w];
-      for (uint32_t i = 0; i < epw; ++i) {
-        uint32_t aenc = packed ? (aw & ((1u << width) - 1u)) : aw;
-        uint32_t benc = packed ? (bw & ((1u << width) - 1u)) : bw;
-        out[w * epw + i] = {decode_input(aenc, exp_bits_, sig_bits_), decode_input(benc, exp_bits_, sig_bits_)};
-        if (packed) { aw >>= width; bw >>= width; }
-      }
-    }
-    return out;
   }
 
   static cterm_t decodeC_to_common(const dec_t &c) {
@@ -322,141 +322,159 @@ private:
     return {c.sign, Mc, eC, cls, sp};
   }
 
-  mul_res_t multiply_to_common(const std::vector<std::array<dec_t, 2>> &v, const cterm_t &c_term) {
+  // Decode the n packed words of a and b and form their products in the term
+  // buffers; fp8/bf8 then reduce them pairwise in place.
+  mul_res_t multiply_to_common(const uint32_t *a, const uint32_t *b, uint32_t n, const cterm_t &c_term) {
     const int sb = sig_bits_, eb = exp_bits_;
-    std::vector<pterm_t> out;
-    std::vector<int> eps; // per-term *window LSB exponent* (not raw Ep/Ec)
-    std::vector<int> sel_eps;
-    std::vector<bool> nonzero;
-    out.reserve(v.size() + 1);
-    eps.reserve(v.size() + 1);
-
+    const uint32_t width = 1u + eb + sb;
+    const bool packed = (width <= 16u) && ((32u % width) == 0u);
+    const uint32_t epw = packed ? (32u / width) : 1u;
+    const uint32_t wmask = packed ? ((1u << width) - 1u) : ~0u;
+    const uint32_t np = n * epw;
+    reserve_terms(np + 1);
 
     uint8_t c_nan  = (c_term.sp == 3) ? FL_NAN  : 0;
     uint8_t c_pinf = (c_term.sp == 1) ? FL_PINF : 0;
     uint8_t c_ninf = (c_term.sp == 2) ? FL_NINF : 0;
     uint8_t flags  = (c_nan | c_pinf | c_ninf);
 
-    for (const auto &ab : v) {
-      auto a = ab[0], b = ab[1];
-      int all1 = (1 << eb) - 1;
+    const int all1 = (1 << eb) - 1;
+    const bool is_e4m3 = (eb == 4 && sb == 3);
+    const int bs = bias(eb);
+    const int shift_sf = 22 - (2 * sb);
+    const int ep_off = F32_BIAS + EXP_POS_BIAS + 1 - W_;
+    int* const sign = sign_.data();
+    int* const mp = mp_.data();
+    int* const eps = eps_.data();     // per-term *window LSB exponent* (not raw Ep/Ec)
+    int* const sel_eps = sel_eps_.data();
+    uint8_t* const nonzero = nz_.data();
 
-      bool zA = a.is_zero;
-      bool zB = b.is_zero;
-      bool p_is_zero = zA || zB;
+    for (uint32_t w = 0; w < n; ++w) {
+      uint32_t aw = a[w], bw = b[w];
+      for (uint32_t e = 0; e < epw; ++e) {
+        const auto ad = decode_input(aw & wmask, eb, sb);
+        const auto bd = decode_input(bw & wmask, eb, sb);
+        if (packed) { aw >>= width; bw >>= width; }
 
-      bool is_e4m3 = (eb == 4 && sb == 3);
-      bool infA, infB, nanA, nanB;
-      if (is_e4m3) {
-        infA = false; infB = false;
-        nanA = (a.exp == 15 && a.frac == 7);
-        nanB = (b.exp == 15 && b.frac == 7);
-      } else {
-        infA = (a.exp == all1 && !a.frac); infB = (b.exp == all1 && !b.frac);
-        nanA = (a.exp == all1 && a.frac); nanB = (b.exp == all1 && b.frac);
+        bool zA = ad.is_zero;
+        bool zB = bd.is_zero;
+        bool p_is_zero = zA || zB;
+
+        bool infA, infB, nanA, nanB;
+        if (is_e4m3) {
+          infA = false; infB = false;
+          nanA = (ad.exp == 15 && ad.frac == 7);
+          nanB = (bd.exp == 15 && bd.frac == 7);
+        } else {
+          infA = (ad.exp == all1 && !ad.frac); infB = (bd.exp == all1 && !bd.frac);
+          nanA = (ad.exp == all1 && ad.frac); nanB = (bd.exp == all1 && bd.frac);
+        }
+
+        bool is_nan = nanA || nanB || (infA && zB) || (infB && zA);
+        bool is_inf = (infA || infB) && !is_nan;
+        bool sign_xor = ((ad.sign ^ bd.sign) != 0);
+
+        flags |= is_nan ? FL_NAN : 0;
+        flags |= is_inf ? (sign_xor ? FL_NINF : FL_PINF) : 0;
+
+        int Ea = ad.is_sub ? (1 - bs) : (ad.exp - bs);
+        int Eb = bd.is_sub ? (1 - bs) : (bd.exp - bs);
+        int Ma = zA ? 0 : (ad.is_sub ? ad.frac : ((1 << sb) | ad.frac));
+        int Mb = zB ? 0 : (bd.is_sub ? bd.frac : ((1 << sb) | bd.frac));
+
+        int Mp = (Ma * Mb) << shift_sf;
+        int Ep = (Ea + Eb) + ep_off;
+
+        if (renorm_) {
+          int lzc_prod = (ad.is_sub ? lzcN(Ma, sb) : 0) + (bd.is_sub ? lzcN(Mb, sb) : 0);
+          Mp <<= lzc_prod;
+          Ep -= lzc_prod;
+        }
+
+        const uint32_t k = w * epw + e;
+        // the fp8 lane pairs its two products by their exponent fields even
+        // when one is zero (a zero field counts as 1, as for a subnormal)
+        sel_eps[k] = (std::max(ad.exp, 1) - bs) + (std::max(bd.exp, 1) - bs) + ep_off;
+        nonzero[k] = !p_is_zero;
+
+        if (p_is_zero) {
+          Ep = kZeroE;
+          Mp = 0;
+        }
+
+        sign[k] = sign_xor;
+        mp[k] = Mp;
+        eps[k] = Ep;
       }
-
-      bool is_nan = nanA || nanB || (infA && zB) || (infB && zA);
-      bool is_inf = (infA || infB) && !is_nan;
-      bool sign_xor = ((a.sign ^ b.sign) != 0);
-
-      flags |= is_nan ? FL_NAN : 0;
-      flags |= is_inf ? (sign_xor ? FL_NINF : FL_PINF) : 0;
-
-      int Ea = a.is_sub ? (1 - bias(eb)) : (a.exp - bias(eb));
-      int Eb = b.is_sub ? (1 - bias(eb)) : (b.exp - bias(eb));
-      int Ma = zA ? 0 : (a.is_sub ? a.frac : ((1 << sb) | a.frac));
-      int Mb = zB ? 0 : (b.is_sub ? b.frac : ((1 << sb) | b.frac));
-
-      int shift_sf = 22 - (2 * sb);
-      int Mp = (Ma * Mb) << shift_sf;
-      int Ep = (Ea + Eb) + F32_BIAS + EXP_POS_BIAS + 1 - W_;
-
-      if (renorm_) {
-        int lzc_prod = (a.is_sub ? lzcN(Ma, sb) : 0) + (b.is_sub ? lzcN(Mb, sb) : 0);
-        Mp <<= lzc_prod;
-        Ep -= lzc_prod;
-      }
-
-      // the fp8 lane pairs its two products by their exponent fields even
-      // when one is zero (a zero field counts as 1, as for a subnormal)
-      sel_eps.push_back((std::max(a.exp, 1) - bias(eb)) + (std::max(b.exp, 1) - bias(eb))
-                        + F32_BIAS + EXP_POS_BIAS + 1 - W_);
-      nonzero.push_back(!p_is_zero);
-
-      if (p_is_zero) {
-        Ep = kZeroE;
-        Mp = 0;
-      }
-
-      out.push_back({sign_xor, Mp});
-      eps.push_back(Ep);
     }
 
-    // FP8/BF8: reduce product terms pairwise
-    if ((1 + eb + sb) <= 8) {
-      std::vector<pterm_t> red_out;
-      std::vector<int> red_eps;
-      red_out.reserve((out.size() + 1) / 2);
-      red_eps.reserve((eps.size() + 1) / 2);
+    uint32_t nprod = np;
 
-      for (size_t j = 0; j < out.size(); j += 2) {
-        if (j + 1 < out.size()) {
-          auto r = reduce_f8(out[j], sel_eps[j], nonzero[j], out[j + 1], sel_eps[j + 1], nonzero[j + 1]);
+    // FP8/BF8: reduce product terms pairwise, lane j/2 written over term j
+    if (width <= 8) {
+      const int WA = acc_width(np / 2);
+      for (uint32_t j = 0; j < np; j += 2) {
+        const uint32_t r = j / 2;
+        if (j + 1 < np) {
+          auto red = reduce_f8({sign[j], mp[j]}, sel_eps[j], nonzero[j] != 0,
+                               {sign[j + 1], mp[j + 1]}, sel_eps[j + 1], nonzero[j + 1] != 0);
           // MX: the lane's E8M0 scales add to its exponent field, which is
           // 10 bits wide and sits WA - 1 above this model's exponents
           if (sf_a_) {
             // an E8M0 scale of 0xFF is NaN, and so is every element it scales
-            if (sf_a_[j / 2] == 0xff || sf_b_[j / 2] == 0xff) {
+            if (sf_a_[r] == 0xff || sf_b_[r] == 0xff) {
               flags |= FL_NAN;
             }
             // a lane scaled below the exponent range sits at exponent 0,
             // where it only adds to the sticky bit
-            if (r.second != kZeroE) {
-              const int WA = acc_width(uint32_t(out.size() / 2));
-              int lane_exp = r.second + (WA - 1) + int(sf_a_[j / 2]) + int(sf_b_[j / 2]) - 254;
-              r.second = std::max(lane_exp, 0) - (WA - 1);
+            if (red.second != kZeroE) {
+              int lane_exp = red.second + (WA - 1) + int(sf_a_[r]) + int(sf_b_[r]) - 254;
+              red.second = std::max(lane_exp, 0) - (WA - 1);
             }
           }
-          red_out.push_back(r.first);
-          red_eps.push_back(r.second);
+          sign[r] = red.first.sign;
+          mp[r] = red.first.Mp;
+          eps[r] = red.second;
         } else {
-          red_out.push_back(out[j]);
-          red_eps.push_back(eps[j]);
+          sign[r] = sign[j];
+          mp[r] = mp[j];
+          eps[r] = eps[j];
         }
       }
-
-      out.swap(red_out);
-      eps.swap(red_eps);
+      nprod = (np + 1) / 2;
     }
 
-    return add_c_term(std::move(out), std::move(eps), c_term, flags);
+    return add_c_term(nprod, c_term, flags);
   }
 
-  // Append the C term and take every term's shift to the largest exponent.
-  mul_res_t add_c_term(std::vector<pterm_t> out, std::vector<int> eps, const cterm_t &c_term, uint8_t flags) {
+  // Append the C term after the nprod products and take every term's shift
+  // to the largest exponent.
+  mul_res_t add_c_term(uint32_t nprod, const cterm_t &c_term, uint8_t flags) {
     bool c_is_zero = (c_term.cls == 0 && c_term.sp == 0);
     int Ec = c_term.Ec + F32_BIAS + EXP_POS_BIAS + 24 - W_;
     if (c_is_zero) {
       Ec = kZeroE;
     }
 
-    out.push_back({c_term.sign, c_term.Mc});
-    eps.push_back(Ec);
-    const int WA = acc_width(uint32_t(out.size() - 1));
-    for (auto &e : eps) {
-      if (e == kZeroE) e = -(WA - 1);
+    const uint32_t nt = nprod + 1;
+    int* const eps = eps_.data();
+    sign_[nprod] = c_term.sign;
+    mp_[nprod] = c_term.Mc;
+    eps[nprod] = Ec;
+    const int WA = acc_width(nprod);
+    int L = std::numeric_limits<int>::min();
+    for (uint32_t i = 0; i < nt; ++i) {
+      int e = (eps[i] == kZeroE) ? -(WA - 1) : eps[i];
+      eps[i] = e;
+      L = std::max(L, e);
     }
 
-    int L = *std::max_element(eps.begin(), eps.end());
-
-    std::vector<int> shifts;
-    shifts.reserve(out.size());
-    for (size_t i = 0; i < out.size(); ++i) {
-      shifts.push_back(L - eps[i]);
+    int* const shifts = shifts_.data();
+    for (uint32_t i = 0; i < nt; ++i) {
+      shifts[i] = L - eps[i];
     }
 
-    return {out, L , shifts, flags};
+    return {nt, L, flags};
   }
 
   // Block-scaled fp4 (E2M1), one lane per 16 bits: its four products are
@@ -480,8 +498,7 @@ private:
       uint32_t e2 = (x >> 2) & 1, e1 = (x >> 1) & 1;
       return (e2 & ~e1 & 1) | ((e2 & e1) << 1);
     };
-    std::vector<pterm_t> out;
-    std::vector<int> eps;
+    reserve_terms(2 * n + 1);
     uint8_t flags = 0;
     if (c_term.sp == 3) flags |= FL_NAN;
     if (c_term.sp == 1) flags |= FL_PINF;
@@ -529,15 +546,17 @@ private:
       uint32_t sum_sign = (sum >> 26) & 1;
       uint32_t abs_sum = (sum_sign ? (0u - sum) : sum) & 0x3ffffff;
       if (abs_sum == 0) {
-        out.push_back({0, 0});
-        eps.push_back(kZeroE);
+        sign_[lane] = 0;
+        mp_[lane] = 0;
+        eps_[lane] = kZeroE;
         continue;
       }
       const int lane_exp = (int(max_exp) + bias_base + exp_comp + sf_lane_exp) & 1023;
-      out.push_back({int(sum_sign), int(abs_sum & 0xffffff)});
-      eps.push_back(lane_exp - (WA - 1));
+      sign_[lane] = int(sum_sign);
+      mp_[lane] = int(abs_sum & 0xffffff);
+      eps_[lane] = lane_exp - (WA - 1);
     }
-    return add_c_term(std::move(out), std::move(eps), c_term, flags);
+    return add_c_term(2 * n, c_term, flags);
   }
 
   // One fp8 lane: its two products, aligned to the one the datapath picks as
@@ -598,21 +617,21 @@ private:
   }
 
   align_t alignment(const mul_res_t &res) {
-    const auto& t = res.terms;
-    int L = res.L;
-    const auto& shifts = res.shifts;
+    const uint32_t nt = res.nt;
+    const int* const sign = sign_.data();
+    const int* const mp = mp_.data();
+    const int* const shifts = shifts_.data();
+    uint32_t* const Ts = aln_.data();
+    uint8_t* const stk = stk_.data();
 
     const int WA = W_ + 2;
     const uint32_t mask = (1ULL << WA) - 1;
-    std::vector<uint32_t> dbg_aln_sigs;
-    std::vector<int> dbg_sticky_bits;
-    std::vector<uint32_t> Ts;
     int global_sticky = 0;
 
-    for (size_t i = 0; i < t.size(); ++i) {
-      const int MANT = (i + 1 == t.size()) ? (W_ - 24) : (W_ - 23);
+    for (uint32_t i = 0; i < nt; ++i) {
+      const int MANT = (i + 1 == nt) ? (W_ - 24) : (W_ - 23);
 
-      uint32_t mag = t[i].Mp;
+      uint32_t mag = mp[i];
       int k = shifts[i];
 
       uint32_t shifted_mag = 0;
@@ -635,30 +654,29 @@ private:
       }
 
       uint32_t final_val = shifted_mag & mask;
-      if (t[i].sign) final_val = (~final_val + 1) & mask;
+      if (sign[i]) final_val = (~final_val + 1) & mask;
 
       int s_bit = sticky_bit ? 1 : 0;
-      dbg_aln_sigs.push_back(final_val);
-      dbg_sticky_bits.push_back(s_bit);
-
-      Ts.push_back(final_val);
+      Ts[i] = final_val;
+      stk[i] = uint8_t(s_bit);
       global_sticky |= s_bit;
     }
 
-    return {Ts, global_sticky, L, res.flags, dbg_aln_sigs, dbg_sticky_bits};
+    return {global_sticky, res.L, res.flags};
   }
 
-  acc_t accumulate(const align_t &a) {
+  // The datapath's carry-save tree over the sign-extended terms: its result,
+  // taken modulo the tree width, is their plain sum modulo that width.
+  acc_t accumulate(const align_t &a, uint32_t nt) {
     const int Wa = W_ + 2;
     const int Ww = Wa + HR_;
     const uint32_t mask = (1ULL << Ww) - 1;
-    uint32_t s_acc = 0, c_acc = 0;
-    for (const auto &val : a.terms) {
-      uint32_t v = sign_ext(val, Wa) & mask;
-      auto sc = csa(s_acc, c_acc, v);
-      s_acc = sc.first & mask; c_acc = sc.second & mask;
+    const uint32_t* const Ts = aln_.data();
+    uint32_t sum = 0;
+    for (uint32_t i = 0; i < nt; ++i) {
+      sum += sign_ext(Ts[i], Wa);
     }
-    return {cpa(s_acc, c_acc) & mask, a.sticky, a.L, a.flags};
+    return {sum & mask, a.sticky, a.L, a.flags};
   }
 
   nrm_t normalize(const acc_t &x) {
@@ -728,4 +746,13 @@ private:
   const uint8_t *sf_b_ = nullptr;
   bool e4m3_scale_ = false;
   uint64_t req_id_ = 0;
+  // term buffers, one entry per term (see reserve_terms)
+  std::vector<int>      sign_;
+  std::vector<int>      mp_;
+  std::vector<int>      eps_;
+  std::vector<int>      sel_eps_;
+  std::vector<uint8_t>  nz_;
+  std::vector<int>      shifts_;
+  std::vector<uint32_t> aln_;
+  std::vector<uint8_t>  stk_;
 };

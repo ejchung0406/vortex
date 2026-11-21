@@ -39,6 +39,8 @@ namespace vt = vortex::tensor;
 using cfg    = vt::wmma_config_t<VX_CFG_NUM_THREADS>;
 using wg_cfg = vt::wgmma_config_t<VX_CFG_NUM_THREADS, vt::fp32, vt::fp32>;
 static constexpr uint32_t kFedpWords = wg_cfg::fedpK;
+// The most K words one dot product reads (dense or sparse uop).
+static constexpr uint32_t kMaxFedpWords = std::max<uint32_t>(kFedpWords, wg_cfg::sp_k_words);
 #ifdef VX_CFG_TCU_FEDP2K
 static constexpr bool kFedp2K = true;
 #else
@@ -175,24 +177,26 @@ template <> struct TfrFormat<vt::tf32> { static constexpr bool valid = true; sta
 template <typename It, typename Ot>
 struct FEDP {
   using itype = typename It::dtype;
-  static uint32_t eval(const reg_data_t *a_row, const reg_data_t *b_col, uint32_t c_val) {
-    return eval_n(a_row, b_col, c_val, cfg::tcK);
+  static uint32_t eval(TfrFedp& tfr, const reg_data_t *a_row, const reg_data_t *b_col, uint32_t c_val) {
+    return eval_n(tfr, a_row, b_col, c_val, cfg::tcK);
   }
 
-  static uint32_t eval_n(const reg_data_t *a_row, const reg_data_t *b_col, uint32_t c_val, uint32_t k_words) {
+  static uint32_t eval_n(TfrFedp& tfr, const reg_data_t *a_row, const reg_data_t *b_col, uint32_t c_val, uint32_t k_words) {
     constexpr uint32_t i_ratio = sizeof(uint32_t) / sizeof(itype);
     static_assert(i_ratio * sizeof(itype) == sizeof(uint32_t), "FEDP: tcK * i_ratio must be <= 32");
+    __unused(tfr);
 #ifdef VX_CFG_TCU_TYPE_TFR
     if constexpr (std::is_same_v<Ot, vt::fp32> && TfrFormat<It>::valid) {
-      std::vector<uint32_t> a(k_words), b(k_words);
+      assert(k_words <= kMaxFedpWords);
+      uint32_t a[kMaxFedpWords], b[kMaxFedpWords];
       for (uint32_t z = 0; z < k_words; ++z) {
         a[z] = a_row[z].u32;
         b[z] = b_col[z].u32;
       }
-      TfrFedp fedp(TfrFormat<It>::eb, TfrFormat<It>::sb);
+      tfr.set_format(TfrFormat<It>::eb, TfrFormat<It>::sb);
       float c;
       std::memcpy(&c, &c_val, sizeof(c));
-      float d = fedp(a.data(), b.data(), c, k_words);
+      float d = tfr(a, b, c, k_words);
       uint32_t d_bits;
       std::memcpy(&d_bits, &d, sizeof(d_bits));
       return d_bits;
@@ -227,11 +231,12 @@ struct FEDP {
 
 template <>
 struct FEDP<vt::int4, vt::int32>{
-  static uint32_t eval(const reg_data_t *a_row, const reg_data_t *b_col, uint32_t c_val) {
-    return eval_n(a_row, b_col, c_val, cfg::tcK);
+  static uint32_t eval(TfrFedp& tfr, const reg_data_t *a_row, const reg_data_t *b_col, uint32_t c_val) {
+    return eval_n(tfr, a_row, b_col, c_val, cfg::tcK);
   }
 
-  static uint32_t eval_n(const reg_data_t *a_row, const reg_data_t *b_col, uint32_t c_val, uint32_t k_words) {
+  static uint32_t eval_n(TfrFedp& tfr, const reg_data_t *a_row, const reg_data_t *b_col, uint32_t c_val, uint32_t k_words) {
+    __unused(tfr);
     auto acc = bit_cast<int32_t>(c_val);
     for (uint32_t z = 0; z < k_words; ++z) {
       auto a = a_row[z].u32;
@@ -254,11 +259,12 @@ struct FEDP<vt::int4, vt::int32>{
 
 template <>
 struct FEDP<vt::uint4, vt::int32>{
-  static uint32_t eval(const reg_data_t *a_row, const reg_data_t *b_col, uint32_t c_val) {
-    return eval_n(a_row, b_col, c_val, cfg::tcK);
+  static uint32_t eval(TfrFedp& tfr, const reg_data_t *a_row, const reg_data_t *b_col, uint32_t c_val) {
+    return eval_n(tfr, a_row, b_col, c_val, cfg::tcK);
   }
 
-  static uint32_t eval_n(const reg_data_t *a_row, const reg_data_t *b_col, uint32_t c_val, uint32_t k_words) {
+  static uint32_t eval_n(TfrFedp& tfr, const reg_data_t *a_row, const reg_data_t *b_col, uint32_t c_val, uint32_t k_words) {
+    __unused(tfr);
     auto acc = bit_cast<int32_t>(c_val);
     for (uint32_t z = 0; z < k_words; ++z) {
       auto a = a_row[z].u32;
@@ -273,7 +279,7 @@ struct FEDP<vt::uint4, vt::int32>{
   }
 };
 
-using PFN_FEDP_N = uint32_t (*)(const reg_data_t*, const reg_data_t*, uint32_t, uint32_t);
+using PFN_FEDP_N = uint32_t (*)(TfrFedp&, const reg_data_t*, const reg_data_t*, uint32_t, uint32_t);
 
 static PFN_FEDP_N select_FEDP_N(uint32_t IT, uint32_t OT) {
   switch (OT) {
@@ -2475,8 +2481,9 @@ private:
           std::abort();
         }
         uint32_t sparse_ratio = is_sparse ? 2 : 1;
-        std::vector<uint32_t> a(fedp_words), b(fedp_words);
-        std::vector<uint8_t> sf_a(2 * fedp_words), sf_b(2 * fedp_words);
+        assert(fedp_words <= kMaxFedpWords);
+        uint32_t a[kMaxFedpWords], b[kMaxFedpWords];
+        uint8_t sf_a[2 * kMaxFedpWords], sf_b[2 * kMaxFedpWords];
         for (uint32_t z = 0; z < fedp_words; ++z) {
           a[z] = a_row[z].u32;
           b[z] = b_col[z].u32;
@@ -2488,10 +2495,10 @@ private:
           sf_a[lane] = uint8_t(scale_a(elem_k));
           sf_b[lane] = uint8_t(scale_b(elem_k));
         }
-        TfrFedp fedp(eb, sb);
+        tfr_.set_format(eb, sb);
         float c;
         std::memcpy(&c, &c_val, sizeof(c));
-        float d = fedp(a.data(), b.data(), c, fedp_words, sf_a.data(), sf_b.data(), e4m3_scale);
+        float d = tfr_(a, b, c, fedp_words, sf_a, sf_b, e4m3_scale);
         uint32_t d_bits;
         std::memcpy(&d_bits, &d, sizeof(d_bits));
         return d_bits;
@@ -2697,7 +2704,7 @@ private:
                        ? eval_mx_fedp(wid, fmt_s, fmt_d, step_m, step_n, step_k,
                                       i, j, a_row, b_col, c_val, is_sparse,
                                       fedp_words, tile_k_words)
-                       : fedp(a_row, b_col, c_val, k_words);
+                       : fedp(tfr_, a_row, b_col, c_val, k_words);
 
         rd_data.at(t).u64 = nan_box(d_val);
         DTH(3, simobject_->name() << " FEDP"
@@ -2712,6 +2719,8 @@ private:
 
   TcuUnit*   simobject_;
   Core*         core_;
+  // The TFR dot-product model, kept so its term buffers are reused.
+  mutable TfrFedp tfr_;
   std::vector<std::vector<uint32_t>> sparse_meta_;
 #ifdef VX_CFG_TCU_MX_ENABLE
   std::vector<std::vector<uint32_t>> mx_meta_a_;
