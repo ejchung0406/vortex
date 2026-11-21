@@ -601,11 +601,9 @@ public:
     }
     sparse_meta_.at(wid).at(bank * kMaxMetaCols + col) = word;
     // Trace: META_SRAM write (CSV: wid,bank,col,addr,value).
-    if (const char* p = std::getenv("VORTEX_TCU_TRACE")) {
-      if (p[0] == '1') {
-        fprintf(stderr, "META_TRC,%u,%u,%u,0x%lx,0x%08x\n",
-                wid, bank, col, (unsigned long)agu.addrs.at(T), word);
-      }
+    if (tcu_trace_) {
+      fprintf(stderr, "META_TRC,%u,%u,%u,0x%lx,0x%08x\n",
+              wid, bank, col, (unsigned long)agu.addrs.at(T), word);
     }
   #else
     __unused(T, word);
@@ -2289,6 +2287,8 @@ public:
     }
     cur_is_sparse_ = is_sparse;
     cur_xtile_n_ = xtile_n;
+    // The buffers hold still while this MMA reads them.
+    memo_a_addr_ = memo_b_addr_ = ~uint64_t(0);
 
     reg_data_t a_tile[cfg::tcM * kFedpWords] = {};
     for (uint32_t i = 0; i < cfg::tcM; ++i) {
@@ -2322,11 +2322,9 @@ public:
         uint32_t word_idx = wg_bank * kMaxMetaCols + bit_idx / 32;
         uint32_t word_val = sparse_meta_.at(this->meta_slot(wid)).at(word_idx);
         // Trace: META_RD (CSV: wid,step_m,step_k,bank,value).
-        if (const char* p = std::getenv("VORTEX_TCU_TRACE")) {
-          if (p[0] == '1' && (bit_idx % 32) == 0) {
-            fprintf(stderr, "META_RD,%u,%u,%u,%u,0x%08x\n",
-                    wid, step_m, step_k, wg_bank, word_val);
-          }
+        if (tcu_trace_ && (bit_idx % 32) == 0) {
+          fprintf(stderr, "META_RD,%u,%u,%u,%u,0x%08x\n",
+                  wid, step_m, step_k, wg_bank, word_val);
         }
         return (word_val >> (bit_idx % 32)) & 1u;
       };
@@ -2349,26 +2347,27 @@ public:
             uint32_t gathered = gather_sparse(bword0, bword1, lo, hi, ebits);
             b_tile[(i * cfg::tcN + j) * k_words + z].u32 = gathered;
             // Trace: B-gather (CSV: wid,step_m,step_n,i,lane,bword0,bword1,lo,hi,gathered).
-            if (const char* p = std::getenv("VORTEX_TCU_TRACE")) {
-              if (p[0] == '1') {
-                fprintf(stderr, "GATHER,%u,%u,%u,%u,%u,0x%08x,0x%08x,%u,%u,0x%08x\n",
-                        wid, step_m, step_n, i, j*k_words+z,
-                        bword0, bword1, lo, hi, gathered);
-              }
+            if (tcu_trace_) {
+              fprintf(stderr, "GATHER,%u,%u,%u,%u,%u,0x%08x,0x%08x,%u,%u,0x%08x\n",
+                      wid, step_m, step_n, i, j*k_words+z,
+                      bword0, bword1, lo, hi, gathered);
             }
           }
         }
       }
     } else {
-      for (uint32_t i = 0; i < cfg::tcM; ++i) {
-        for (uint32_t j = 0; j < cfg::tcN; ++j) {
-          uint32_t b_col_idx = step_n * cfg::tcN + j;
-          for (uint32_t z = 0; z < k_words; ++z) {
-            uint32_t k_elem = (step_k * k_words + z) * ratio;
-            b_tile[(i * cfg::tcN + j) * k_words + z].u32 =
-                load_lmem_word(sd_b, k_elem, b_col_idx, fmt_s, true, false, false);
-          }
+      // Dense B is the same for every A row: read it once, copy it to the
+      // other rows' slices.
+      for (uint32_t j = 0; j < cfg::tcN; ++j) {
+        uint32_t b_col_idx = step_n * cfg::tcN + j;
+        for (uint32_t z = 0; z < k_words; ++z) {
+          uint32_t k_elem = (step_k * k_words + z) * ratio;
+          b_tile[j * k_words + z].u32 =
+              load_lmem_word(sd_b, k_elem, b_col_idx, fmt_s, true, false, false);
         }
+      }
+      for (uint32_t i = 1; i < cfg::tcM; ++i) {
+        std::copy_n(b_tile, cfg::tcN * k_words, b_tile + i * cfg::tcN * k_words);
       }
     }
 
@@ -2649,16 +2648,31 @@ private:
   // The operand, not its address, picks the buffer: A and B descriptors may
   // start at the same shared-memory address. sparse_b selects the flat
   // candidate-pair B layout.
+  // Lookups go through a one-line memo per buffer, reset by each mma_lmem.
   uint32_t load_lmem_word(const lmem_desc_t& desc, uint32_t row, uint32_t col,
                           uint32_t fmt_s, bool pack_along_row, bool sparse_b, bool is_a) const {
     auto& tbuf = simobject_->tbuf();
     if (is_a) {
       uint32_t b = cur_block_;
-      return gather_word([&](uint64_t addr) { return tbuf->read_a(b, addr); },
+      return gather_word([&](uint64_t addr) {
+                           uint64_t line_addr = addr & kLineMask;
+                           if (line_addr != memo_a_addr_) {
+                             memo_a_addr_ = line_addr;
+                             memo_a_line_ = tbuf->line_a(b, line_addr);
+                           }
+                           return memo_a_line_;
+                         },
                          desc, row, col, fmt_s, pack_along_row, false,
                          cur_is_sparse_ && !kSpFullK);
     }
-    return gather_word([&](uint64_t addr) { return tbuf->read_b(addr); },
+    return gather_word([&](uint64_t addr) {
+                         uint64_t line_addr = addr & kLineMask;
+                         if (line_addr != memo_b_addr_) {
+                           memo_b_addr_ = line_addr;
+                           memo_b_line_ = tbuf->line_b(line_addr);
+                         }
+                         return memo_b_line_;
+                       },
                        desc, row, col, fmt_s, pack_along_row, sparse_b, false);
   }
 
@@ -2719,6 +2733,11 @@ private:
 
   TcuUnit*   simobject_;
   Core*         core_;
+  // VORTEX_TCU_TRACE=1: CSV trace of the sparse metadata path on stderr.
+  const bool tcu_trace_ = [] {
+    const char* p = std::getenv("VORTEX_TCU_TRACE");
+    return p && p[0] == '1';
+  }();
   // The TFR dot-product model, kept so its term buffers are reused.
   mutable TfrFedp tfr_;
   std::vector<std::vector<uint32_t>> sparse_meta_;
@@ -2746,6 +2765,11 @@ private:
   std::array<bool, VX_CFG_NUM_TCU_BLOCKS> in_wgmma_;
   // Current block index, set before delegating to wgmma().
   uint32_t cur_block_ = 0;
+  // The line each tile buffer last returned to the current MMA.
+  mutable uint64_t memo_a_addr_ = ~uint64_t(0);
+  mutable uint64_t memo_b_addr_ = ~uint64_t(0);
+  mutable const mem_block_t* memo_a_line_ = nullptr;
+  mutable const mem_block_t* memo_b_line_ = nullptr;
   // B buffer slot read by the current MMA.
   bool cur_is_sparse_ = false;
   // xtileN for the active WGMMA (derived from NRC).

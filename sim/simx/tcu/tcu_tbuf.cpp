@@ -72,6 +72,11 @@ struct Buffer {
     return it->second;
   }
 
+  const mem_block_t* line(uint64_t line_addr) const {
+    auto it = lines_.find(line_addr & kLineMask);
+    return (it == lines_.end()) ? nullptr : it->second.get();
+  }
+
   // A response still in flight for an abandoned fill finds no tag and is dropped.
   void invalidate() {
     pending_.clear();
@@ -266,6 +271,13 @@ std::shared_ptr<mem_block_t> TcuTbuf::read_a(uint32_t b, uint64_t line_addr) con
 }
 std::shared_ptr<mem_block_t> TcuTbuf::read_b(uint64_t line_addr) const {
   return impl_->buf(kBOffset).read(line_addr);
+}
+
+const mem_block_t* TcuTbuf::line_a(uint32_t b, uint64_t line_addr) const {
+  return impl_->buf(kAOffset + b).line(line_addr);
+}
+const mem_block_t* TcuTbuf::line_b(uint64_t line_addr) const {
+  return impl_->buf(kBOffset).line(line_addr);
 }
 
 #ifdef VX_CFG_TCU_TMEM_ENABLE
