@@ -535,7 +535,7 @@ void LsuUnit::send_fence_token(uint32_t b) {
 	lsu_req.op = MemOp::LD;
 	lsu_req.flags.flush = 1;
 	lsu_req.flags.fence_op = std::get<IntrLsuArgs>(trace->instr_ptr->get_args()).fence_op;
-	std::vector<mem_addr_size_t> lane_entries(VX_CFG_NUM_LSU_LANES);
+	lane_list_t lane_entries{};
 	for (uint32_t t = base; t < VX_CFG_NUM_THREADS; ++t) {
 		if (trace->tmask.test(t)) {
 			lsu_req.mask.set(t - base);
@@ -597,7 +597,7 @@ void LsuUnit::process_request_step(uint32_t b) {
 		if (!state.pending_reqs.full() && core_->lmem_switch(b)->req_ready(to_dc, to_lmem)) {
 			LsuReq lsu_req = meta_req;
 			uint32_t count = lsu_req.mask.count();
-			std::vector<mem_addr_size_t> lane_entries(VX_CFG_NUM_LSU_LANES);
+			lane_list_t lane_entries{};
 			for (uint32_t i = 0; i < VX_CFG_NUM_LSU_LANES; ++i) {
 				if (!lsu_req.mask.test(i)) {
 					continue;
@@ -746,7 +746,7 @@ void LsuUnit::process_request_step(uint32_t b) {
 		}
 		uint32_t t0 = state.addr_list.size() - state.remain_addrs;
 		uint32_t beat_n = std::min<uint32_t>(VX_CFG_NUM_LSU_LANES, state.remain_addrs);
-		std::vector<mem_addr_size_t> lane_entries(VX_CFG_NUM_LSU_LANES);
+		lane_list_t lane_entries{};
 		for (uint32_t i = 0; i < beat_n; ++i) {
 			auto& entry = state.addr_list.at(t0 + i);
 			if (entry.size == 0)

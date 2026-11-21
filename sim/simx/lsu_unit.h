@@ -124,11 +124,14 @@ private:
 		uint32_t tid;
 	};
 
+	// a request's lanes, inline: one per LSU lane
+	using lane_list_t = std::array<mem_addr_size_t, VX_CFG_NUM_LSU_LANES>;
+
  	struct pending_req_t {
 		instr_trace_t* trace;
 		uint32_t count;
 		bool eop;
-		std::vector<mem_addr_size_t> lanes;
+		lane_list_t lanes;
 		IntrLsuArgs lsu_args;
 		bool        is_load;
 		// The instruction's response-tracking slot.
