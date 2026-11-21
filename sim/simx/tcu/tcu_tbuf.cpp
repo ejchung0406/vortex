@@ -109,6 +109,9 @@ public:
     for (auto& b : bufs_) {
       b.reset();
     }
+  #ifdef VX_CFG_TCU_TMEM_ENABLE
+    cbuf_issue_at_ = 0;
+  #endif
   }
 
   Buffer& buf(uint32_t source) {
@@ -174,6 +177,13 @@ public:
       if (s == kBOffset && b.rsp_seen_ && b.max_inflight_ == 1) {
         continue;
       }
+    #ifdef VX_CFG_TCU_TMEM_ENABLE
+      // A tc.cp row is requested the cycle after the previous one's response,
+      // which returns two cycles after its request.
+      if (s == kCOffset && SimPlatform::instance().cycles() < cbuf_issue_at_) {
+        continue;
+      }
+    #endif
       this->issue(s, b);
       break;
     }
@@ -209,6 +219,11 @@ private:
       b.pending_.pop_front();
     }
     ++b.reads_;
+  #ifdef VX_CFG_TCU_TMEM_ENABLE
+    if (source == kCOffset) {
+      cbuf_issue_at_ = SimPlatform::instance().cycles() + kCopyRowCycles;
+    }
+  #endif
   }
 
 
@@ -225,6 +240,10 @@ private:
 
   TcuTbuf* simobject_;
   std::array<Buffer, kNumBuffers> bufs_;
+#ifdef VX_CFG_TCU_TMEM_ENABLE
+  static constexpr uint64_t kCopyRowCycles = 3;
+  uint64_t cbuf_issue_at_ = 0;
+#endif
 };
 
 TcuTbuf::TcuTbuf(const SimContext& ctx, const char* name)
