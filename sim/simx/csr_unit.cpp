@@ -397,14 +397,19 @@ void CsrUnit::set_csr(uint32_t addr, Word value, uint32_t wid, uint32_t tid) {
   }
 }
 
+// The FPU's per-thread accesses to the warp's fcsr, as get_csr/set_csr of
+// FRM, FCSR and FFLAGS do them.
 uint32_t CsrUnit::get_fpu_rm(uint32_t funct3, uint32_t wid, uint32_t tid) {
-  return (funct3 == 0x7) ? this->get_csr(VX_CSR_FRM, wid, tid) : funct3;
+  __unused(tid);
+  return (funct3 == 0x7) ? Word(core_->scheduler().warp(wid).fcsr >> 5) : funct3;
 }
 
 void CsrUnit::update_fcrs(uint32_t fflags, uint32_t wid, uint32_t tid) {
+  __unused(tid);
   if (fflags) {
-    this->set_csr(VX_CSR_FCSR, this->get_csr(VX_CSR_FCSR, wid, tid) | fflags, wid, tid);
-    this->set_csr(VX_CSR_FFLAGS, this->get_csr(VX_CSR_FFLAGS, wid, tid) | fflags, wid, tid);
+    auto& fcsr = core_->scheduler().warp(wid).fcsr;
+    fcsr = (Word(fcsr) | fflags) & 0xff;
+    fcsr = (fcsr & ~0x1F) | ((Word(fcsr & 0x1F) | fflags) & 0x1F);
   }
 }
 
