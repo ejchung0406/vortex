@@ -1770,6 +1770,9 @@ protected:
   uint32_t lg2_outputs_;
   std::function<uint32_t(const Type& req)> output_sel_;
   uint64_t collisions_;
+  // per-tick scratch: each input head's output and the heads per output
+  std::vector<int32_t> head_out_;
+  std::vector<uint32_t> wants_;
 
   friend class SimObject<TxCrossBar<Type>>;
 };
@@ -1783,26 +1786,36 @@ void TxCrossBar<Type>::on_tick() {
     return;
   }
 
+  // Each input head's output, selected once per head: output_sel_ is a pure
+  // function of the request, and a head changes only when this tick pops it.
+  // -1 marks an empty input; wants_ counts the heads per output.
+  head_out_.resize(I);
+  wants_.assign(O, 0);
+  bool any = false;
+  for (uint32_t i = 0; i < I; ++i) {
+    int32_t sel = -1;
+    if (!Inputs[i].empty()) {
+      sel = (lg2_outputs_ != 0) ? (int32_t)output_sel_(Inputs[i].peek()) : 0;
+      if ((uint32_t)sel < O) {
+        ++wants_[sel];
+      }
+      any = true;
+    }
+    head_out_[i] = sel;
+  }
+
   // process incoming requests: each output arbitrates on its own, and a
   // round-robin grant advances only when the request is accepted.
-  for (uint32_t o = 0; o < O; ++o) {
-    uint32_t start = (type_ == ArbiterType::RoundRobin) ? (last_grant_.at(o) + 1) : 0;
+  for (uint32_t o = 0; any && o < O; ++o) {
+    if (wants_[o] == 0) {
+      continue;
+    }
+    uint32_t start = (type_ == ArbiterType::RoundRobin) ? (last_grant_[o] + 1) % I : 0;
     int32_t input_idx = -1;
     bool has_collision = false;
-    for (uint32_t k = 0; k < I; ++k) {
-      uint32_t i = (start + k) % I;
-      auto& req_in = Inputs.at(i);
-      if (req_in.empty())
+    for (uint32_t k = 0, i = start; k < I; ++k, i = (i + 1 == I) ? 0 : i + 1) {
+      if (head_out_[i] != (int32_t)o)
         continue;
-      auto& req = req_in.peek();
-      uint32_t output_idx = 0;
-      if (lg2_outputs_ != 0) {
-        // select output index
-        output_idx = output_sel_(req);
-        // skip if input is not going to current output
-        if (output_idx != o)
-          continue;
-      }
       if (input_idx != -1) {
         has_collision = true;
         break;
@@ -1810,12 +1823,23 @@ void TxCrossBar<Type>::on_tick() {
       input_idx = i;
     }
     if (input_idx != -1) {
-      auto& req_in = Inputs.at(input_idx);
+      auto& req_in = Inputs[input_idx];
       auto& req = req_in.peek();
-      if (Outputs.at(o).try_send(RspType(req, input_idx), delay_)) {
+      if (Outputs[o].try_send(RspType(req, input_idx), delay_)) {
         DT(4, this->name() << " req" << input_idx << "_" << o << ": " << req);
         req_in.pop();
-        last_grant_.at(o) = input_idx;
+        last_grant_[o] = input_idx;
+        // the input's next head, if already queued, is offered to the
+        // outputs after this one, as before
+        --wants_[o];
+        int32_t sel = -1;
+        if (!req_in.empty()) {
+          sel = (lg2_outputs_ != 0) ? (int32_t)output_sel_(req_in.peek()) : 0;
+          if ((uint32_t)sel < O) {
+            ++wants_[sel];
+          }
+        }
+        head_out_[input_idx] = sel;
       }
       collisions_ += has_collision;
     }
@@ -1823,7 +1847,7 @@ void TxCrossBar<Type>::on_tick() {
 
   bool idle = true;
   for (uint32_t i = 0; i < I; ++i) {
-    idle &= (Inputs.at(i).size() == 0);
+    idle &= (Inputs[i].size() == 0);
   }
   if (idle) {
     this->tick_sleep();
@@ -2039,6 +2063,9 @@ protected:
   Arbiter arbiter_;
   uint32_t rsp_delay_;
   uint32_t lg2_inputs_;
+  // per-tick scratch: each response head's input and the heads per input
+  std::vector<int32_t> head_in_;
+  std::vector<uint32_t> wants_;
 
   friend class SimObject<TxRxCrossBar<Req, Rsp>>;
 };
@@ -2055,41 +2082,68 @@ void TxRxCrossBar<Req, Rsp>::on_tick() {
   uint32_t O = ReqOut.size();
   uint32_t R = 1 << lg2_inputs_;
 
+  // Each response head's input, read once per head (a head changes only
+  // when this tick pops it); -1 marks an empty output. wants_ counts the
+  // heads per input.
+  head_in_.resize(O);
+  wants_.assign(I, 0);
+  bool any = false;
+  for (uint32_t o = 0; o < O; ++o) {
+    int32_t dst = -1;
+    if (!RspIn[o].empty()) {
+      dst = (lg2_inputs_ != 0) ? (int32_t)(RspIn[o].peek().tag & (R-1)) : -2;
+      if (dst >= 0 && (uint32_t)dst < I) {
+        ++wants_[dst];
+      }
+      any = true;
+    }
+    head_in_[o] = dst;
+  }
+
   // process outgoing responses
-  for (uint32_t i = 0; i < I; ++i) {
+  for (uint32_t i = 0; any && i < I; ++i) {
+    // without input bits every response head requests every input
+    if (lg2_inputs_ != 0 && wants_[i] == 0) {
+      continue;
+    }
     BitVector<> requests(O);
     for (uint32_t o = 0; o < O; ++o) {
-      auto& rsp_in = RspIn.at(o);
-      if (rsp_in.empty())
-        continue;
-      auto& rsp = rsp_in.peek();
-      // skip if response is not going to current input
-      if (lg2_inputs_ != 0) {
-        uint32_t input_idx = rsp.tag & (R-1);
-        if (input_idx != i)
-          continue;
+      if (head_in_[o] == (int32_t)i || head_in_[o] == -2) {
+        requests.set(o);
       }
-      requests.set(o);
     }
     if (requests.any()) {
       uint32_t g = arbiter_.select(requests);
-      auto& rsp_in = RspIn.at(g);
+      auto& rsp_in = RspIn[g];
       auto& rsp = rsp_in.peek();
       Rsp out_rsp(rsp);
       if (lg2_inputs_ != 0) {
         out_rsp.tag = rsp.tag >> lg2_inputs_;
       }
-      if (RspOut.at(i).try_send(out_rsp, rsp_delay_)) {
+      if (RspOut[i].try_send(out_rsp, rsp_delay_)) {
         DT(4, this->name() << " rsp" << g << "_" << i << ": " << out_rsp);
         rsp_in.pop();
         arbiter_.commit(g);
+        // the output's next head, if already queued, is offered to the
+        // inputs after this one, as before
+        if (head_in_[g] >= 0) {
+          --wants_[head_in_[g]];
+        }
+        int32_t dst = -1;
+        if (!rsp_in.empty()) {
+          dst = (lg2_inputs_ != 0) ? (int32_t)(rsp_in.peek().tag & (R-1)) : -2;
+          if (dst >= 0 && (uint32_t)dst < I) {
+            ++wants_[dst];
+          }
+        }
+        head_in_[g] = dst;
       }
     }
   }
 
   bool idle = true;
   for (uint32_t o = 0; o < O; ++o) {
-    idle &= (RspIn.at(o).size() == 0);
+    idle &= (RspIn[o].size() == 0);
   }
   if (idle) {
     this->tick_sleep();
