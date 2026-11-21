@@ -34,8 +34,11 @@
   #define KB 1
 #endif
 
-// Shared memory starts with the CTA's TMEM column, padded to keep the stages aligned.
-#define TMEM_SLOT_BYTES 64
+// Shared memory starts with the CTA's TMEM column, padded to keep the stages
+// aligned: a multiple of the LMEM bank row (128 B with 16 XLEN=64 banks).
+#ifndef TMEM_SLOT_BYTES
+  #define TMEM_SLOT_BYTES 64
+#endif
 
 typedef struct {
   uint32_t M, N, K;
