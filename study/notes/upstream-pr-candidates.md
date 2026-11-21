@@ -3,7 +3,7 @@
 Things found on the fork (`feature/dxa-borrowing`) that could go to upstream
 Vortex, one PR per topic, once each is verified. Nothing here has been sent.
 Numbers are SimX unless noted; `h200s` is one sixth of an H200 (22 SMs, one
-HBM3e stack, 800 GB/s). Last updated 2026-11-20.
+HBM3e stack, 800 GB/s). Last updated 2026-11-21.
 
 Status words: **idea** (not implemented), **experimental** (works in a throwaway
 copy, behind build macros), **on fork** (committed on the fork branch),
@@ -14,22 +14,32 @@ reviewed, both simulators).
 |---|---|---|---|---|
 | 1 | DRAM model: HBM3E type, scheduler window, bank groups, 1 KB interleave | feature | on fork (299605e51), SimX + rtlsim | row timings are placeholders; review |
 | 2 | Streaming test with a CUDA-shaped access pattern (`bwstream -b`) | test | on fork (601a1d482) | short README |
-| 3 | Decode GEMM test `gemm_block` (load and DXA staging, two roles, rates) | test | on fork (3d21214d2..69e11596b), passes | CI case |
+| 3 | Decode GEMM test `gemm_block` (load and DXA staging, two roles, rates, per-CTA walk quartiles) | test | on fork (3d21214d2..b56fc65e4), passes | CI case |
 | 4 | DXA dispatch prefers an idle worker | fix, SimX/RTL parity | on fork, RTL b0adb2663; rtlsim 66,067 -> 60,307 | review |
-| 5 | DXA engine on several memory ports | feature | SimX only | dropped for now: 8 workers x 1 port chosen |
+| 5 | DXA engine on several memory ports | feature | SimX only; ports alone give nothing (see 24) | superseded by 24 |
 | 6 | Core limits that hold the compute roof | config | profile values; rtlsim 118,350 -> 35,006 (SimX 118,418 -> 33,419) | defaults vs profile-only |
 | 7 | Smaller findings | notes | see below | |
 | 8 | **DXA workers per SM scale with the number of SMs simulated** | **bug** (config + stale doc) | found; profile works around it | report; pick the per-SM count |
-| 9 | **SimX dcache returns a younger store's data to an older load** | **bug** (wrong results) | fixed on fork dab77b7f2 + 51a4cce00, test `war_order`, reviewed twice; rtlsim passes `war_order` (write-back 16x16: 1,296,287 cycles, SimX 1,295,606) | h200s-size rtlsim run (running); CI case |
-| 10 | **SimX replays a forwarded fill on a full response queue; RTL holds** | **bug** (SimX/RTL divergence, timing) | fixed on fork cbc696a98 behind a knob; rtlsim 20,570 vs SimX 20,266 / 25,824 | make it the default |
+| 9 | **SimX dcache returns a younger store's data to an older load** | **bug** (wrong results) | fixed on fork dab77b7f2 + 51a4cce00, test `war_order`, reviewed twice; rtlsim passes it (16x16 write-back: 1,296,287 vs SimX 1,295,606) | h200s-size rtlsim still running; CI case |
+| 10 | **SimX dcache replays a forwarded fill on a full response queue; RTL holds** | **bug** (SimX/RTL divergence, timing) | fixed on fork cbc696a98 behind a knob, on in `h200s`; rtlsim 20,570 vs SimX 20,266 / 25,824 | make it the default |
 | 11 | **Runtime: device address can alias a CP host region** | **bug** (crash or silent corruption) | fixed on fork b974a9e98 (simx), 51a4cce00 (rtlsim) | foldsim, firesim |
 | 12 | **DXA memory tag too narrow for more in-flight slots** | **bug** (RTL does not elaborate) | fixed on fork 348263623, rtlsim builds and passes | review |
-| 13 | **rtlsim stops at time 0 on H100-shaped profiles with WGMMA** (`VX_tcu_bbuf.sv` wants LMEM banks 32, profiles set 16) | **bug** (RTL/profile mismatch) | found; rtlsim runs disable WGMMA | fix comes with 14 |
-| 14 | wgmma throughput: one shared B buffer puts the four tensor blocks in lockstep | performance | SimX patch `wgmma_tbuf.patch` (340 -> 1,326..2,989 FLOPs/cycle); not on fork | port count decision; RTL |
+| 13 | **rtlsim stopped at time 0 on H100-shaped profiles with WGMMA** | **bug** (RTL/profile mismatch) | fixed on fork 86143baa1; 32 threads / 16 banks and the h200s shape pass on rtlsim | review |
+| 14 | wgmma throughput: one shared B buffer puts the four tensor blocks in lockstep | performance | SimX patch `wgmma_tbuf.patch` (340 -> 1,326..2,989); not on fork | set aside: 17 reaches the part's rate without more ports |
 | 15 | FIFO L2 makes disjoint SMs slow each other | calibration | pseudo-LRU set in `h200s` (9c27e289a) | propose as a default? |
 | 16 | L1 dcache and shared memory both at full size (484 KB vs the part's 256 KB pool) | profile accuracy | found, in every profile from Volta on | decide the split |
-| 17 | Tensor memory engine: B prefetch two blocks ahead and A read by bank rows (on `upstream/feature/tmem-dataflow`) | performance (design change) | SimX patch `tmem_roof.patch`: 1,789 -> 3,684 FLOPs/clock/SM with one 128 B port (part: 3,786); not on the fork yet | merge the branch, RTL counterpart, rtlsim parity |
-| 18 | A barrier waits for the whole core's LSU to drain (cause of the two-state load-mode rate) | design property, performance | found and traced; per-warp drain experiment in SimX (x1.5-1.7 for load-mode staging) | decide whether to change it (RTL + SimX) |
+| 17 | Tensor-memory engine: B fetched two blocks ahead, A read by bank rows | performance (design change) | on fork, RTL + SimX (93a8adad4, 055e5d12d, merge 303d10c29), on in `h200s`: 1,787 -> 3,684 FLOPs/clock/SM (part 3,786); rtlsim/SimX within 1% | the upstream TMEM branch must land first; logic depth and area not measured |
+| 18 | A barrier waited for the whole core's LSU to drain | design property, performance | on fork, RTL + SimX (9215d3f88, caa4fcd4d, merge 7658376d9), on in `h200s`: load-staged decode 15.8 -> 22.2 GB/s per SM, no two-state rate | review of the store terms; logic depth |
+| 19 | New kernels on the tensor-memory engine (`gemm_tmem`, `gemm_tmem_decode`) | tests | patch `gemm_tmem.patch`; 3,334 FLOPs/clock and 82 GB/s per SM | put on the fork after 22 and 24 |
+| 20 | DXA and shared-memory port against the real part | calibration | merged into 24 and 27 | |
+| 21 | What the real H200 measurements changed (per-SM ingest ~210 GB/s, GPC limit 1.28 TB/s, co-residency starves) | study direction | measured; `tpc-placement-and-borrowing.md` | not an upstream item |
+| 22 | **A lone warp executes one instruction per ~11 cycles** (stalled until decode at every instruction) | design (since 2021), performance | found and traced; H200 measurement and SimX prototype in progress | prototype, RTL, parity |
+| 23 | **SimX's L2 replays a forwarded fill on a full response queue; RTL holds** | bug (SimX/RTL divergence, timing) | knob on fork (462002754), default off; not confirmed on rtlsim | a test that fills the L2's response queue |
+| 24 | DXA against the real part's copy curves (16 points) | calibration (design changes) | SimX knobs in `dxa_lmem_calib.patch`: 13 of 16 points within 10%; not on fork | redo after 22; RTL |
+| 25 | The megapage heap leaves the first 2 MB on 4 KB pages | runtime behaviour | found; test-side workaround | decide whether to change the mapping |
+| 26 | **SimX routed a tile-buffer word by comparing descriptor bases** | **bug** (abort) | fixed on fork 0c1054236 | review |
+| 27 | The shared-memory DMA port is exclusive between DXA writes and tile-buffer reads | calibration (design change) | SimX knob (budget 160 B/clock) in `dxa_lmem_calib.patch`; value not checked | check after 22; RTL |
+| – | DXA copy on 4 cores: SimX 19,874 vs rtlsim 18,321 cycles (8.5%) | unexplained divergence | noted under 23 | find the cause |
 
 Issue texts in English for 9, 10, 11: `upstream-issue-drafts.md`. Upstream `master` checked at ccf811e11 (2026-11-20): the affected files are unchanged there.
 
