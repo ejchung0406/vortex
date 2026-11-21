@@ -135,6 +135,8 @@ module VX_tcu_tmem import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     // MMA steps issue to every block's core in one cycle; a time-multiplexed
     // FEDP array takes a micro-op over several.
     `STATIC_ASSERT (`VX_CFG_TCU_PE_RATIO == 1, ("TMEM requires VX_CFG_TCU_PE_RATIO=1"))
+    `STATIC_ASSERT (TCU_TMEM_B_AHEAD >= 1 && TCU_TMEM_B_AHEAD < (1 << TCU_TBUF_N_W),
+                    ("VX_CFG_TCU_TMEM_B_AHEAD must be at least 1 and below the N blocks of a tensor op"))
 
     `IGNORE_UNUSED_BEGIN
     // WGMMA shared-memory descriptor: byte offset below, row stride in words above.

@@ -16,7 +16,8 @@
 `ifdef VX_CFG_TCU_WGMMA_ENABLE
 
 //
-// TB-shared B buffer (block-major SMEM, 1 bank-row storage).
+// TB-shared B buffer (block-major or K-major SMEM; two logical-row slots, and
+// with TCU_TMEM_B_AHEAD above 1 that many plus one more for tensor ops).
 //
 // Single instance per core (in VX_tcu_shared). Holds the bank-row of B that contains
 // the current (step_k, step_n) block. All Q tcu_cores read from the
@@ -153,12 +154,12 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
 
     // LMEM bank-row offset.
     //
-    //   Dense:  one logical 32-bit bank-row holds B_SUB_BLOCKS dense
+    //   Dense:  one logical row holds B_SUB_BLOCKS dense
     //           blocks; LROWS_PER_ROW of them fit in one physical bank-row.
     //           So advance the LMEM addr every
     //             (B_SUB_BLOCKS * LROWS_PER_ROW) blocks.
     // Sparse blocks use the flat producer layout and can span one or two
-    // logical 32-bit bank rows.
+    // logical rows.
     localparam TOTAL_SHIFT = LG_B_SUB_BLOCKS + LG_LROWS_PER_ROW;
     wire [BANK_ADDR_WIDTH-1:0] dense_offset = BANK_ADDR_WIDTH'(block_index >> TOTAL_SHIFT);
 
@@ -631,7 +632,8 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     end
 
     // -----------------------------------------------------------------------
-    // Storage (LUTRAM): two slots × LROW_WORDS 32-bit words.
+    // Storage (LUTRAM): two slots × LROW_WORDS 32-bit words (the ahead fetcher
+    // below has its own).
     //   slot A is always written on FETCH_A response (dense + sparse).
     //   slot B is written on FETCH_B response (sparse only).
     //
@@ -837,7 +839,7 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     end
     wire [B_BUF_WORDS-1:0][31:0] pf_rdata;
     for (genvar lane = 0; lane < TCU_WG_RS2_WIDTH; ++lane) begin : g_rs2_out
-        if (PF_EN && lane < B_BUF_WORDS) begin : g_pf
+        if (PF_EN && lane < B_BUF_WORDS) begin : g_ahead
             assign bbuf_rs2_data[lane] = pf_req ? `VX_CFG_XLEN'(pf_rdata[lane]) : rs2_mux[lane];
         end else begin : g_lg
             assign bbuf_rs2_data[lane] = rs2_mux[lane];
@@ -1076,6 +1078,21 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
         assign pf_rdata = pf_rdata_mux;
 
         `RUNTIME_ASSERT (~(pf_rsp && in_fetch), ("%s B responses of both fetchers in flight", INSTANCE_ID))
+        `RUNTIME_ASSERT (~(pf_start && (pf_inflight_r != '0)),
+            ("%s tensor op starts with B reads of the op before it in flight", INSTANCE_ID))
+        `RUNTIME_ASSERT (~(can_issue && pf_rq_valid), ("%s both B fetchers request", INSTANCE_ID))
+    `ifndef SYNTHESIS
+        logic pf_row_spill;
+        always_comb begin
+            pf_row_spill = 1'b0;
+            for (int jj = 0; jj < TCU_TC_N; ++jj) begin
+                if (pf_rsp && pf_rs_in[jj] && !pf_rot_ok[jj][TCU_WG_FEDP_K - 1])
+                    pf_row_spill = 1'b1;
+            end
+        end
+        `RUNTIME_ASSERT (~pf_row_spill,
+            ("%s K-major B row straddles an LMEM bank row (misaligned descriptor)", INSTANCE_ID))
+    `endif
     end else begin : g_pf_off
         assign pf_rsp      = 1'b0;
         assign pf_resident = 1'b0;
@@ -1105,6 +1122,17 @@ module VX_tcu_bbuf import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     end
     `RUNTIME_ASSERT (~km_sp_row_spill,
         ("%s K-major sparse B row straddles an LMEM bank row (misaligned descriptor)", INSTANCE_ID))
+    logic km_dn_row_spill;
+    always_comb begin
+        km_dn_row_spill = 1'b0;
+        for (int jj = 0; jj < TCU_TC_N; ++jj) begin
+            if (lg_rsp_valid && in_fetch_a && slot_row_major_r && !slot_is_sparse_r
+             && km_row_in_rsp[jj] && !km_rot_ok[jj % KM_NROT][TCU_WG_FEDP_K - 1])
+                km_dn_row_spill = 1'b1;
+        end
+    end
+    `RUNTIME_ASSERT (~km_dn_row_spill,
+        ("%s K-major B row straddles an LMEM bank row (misaligned descriptor)", INSTANCE_ID))
 `endif
 
     // -----------------------------------------------------------------------
