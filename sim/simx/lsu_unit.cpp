@@ -823,9 +823,9 @@ void LsuUnit::process_request_step(uint32_t b) {
 
 		// update stats
 		if (is_write) {
-			core_->perf_stats().stores += count;
+			core_->perf_counters().stores += count;
 		} else {
-			core_->perf_stats().loads += count;
+			core_->perf_counters().loads += count;
 			pending_loads_ += count;
 		}
 	}
@@ -848,7 +848,7 @@ void LsuUnit::process_request_step(uint32_t b) {
 }
 
 void LsuUnit::on_tick() {
-	core_->perf_stats().load_latency += pending_loads_;
+	core_->perf_counters().load_latency += pending_loads_;
 
 	for (uint32_t b = 0; b < VX_CFG_NUM_LSU_BLOCKS; ++b) {
 		// Drain-before-fill ordering: consume responses, dispatch from req_queue

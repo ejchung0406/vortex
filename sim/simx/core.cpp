@@ -1467,6 +1467,10 @@ public:
     return perf_stats_;
   }
 
+  PerfStats& perf_counters() {
+    return perf_stats_;
+  }
+
   int get_exitcode() const {
     return operands_.at(0)->get_exit_code();
   }
@@ -1816,6 +1820,10 @@ Core::PerfStats& Core::perf_stats() {
 
 const Core::PerfStats& Core::perf_stats() const {
   return impl_->perf_stats();
+}
+
+Core::PerfStats& Core::perf_counters() {
+  return impl_->perf_counters();
 }
 
 int Core::get_exitcode() const {

@@ -128,7 +128,7 @@ bool WctlUnit::process(instr_trace_t* trace, bool* exit) {
         }
         next_tmask = (then_tmask.count() <= else_tmask.count()) ? then_tmask : else_tmask;
         warp.ipdom_stack.emplace(warp.tmask, next_pc);
-        core_->perf_stats().divergence += 1;
+        core_->perf_counters().divergence += 1;
       }
       release_warp = core_->setTmask(trace->wid, next_tmask);
     }

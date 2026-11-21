@@ -48,7 +48,9 @@ using namespace vortex;
 Word CsrUnit::get_csr(uint32_t addr, uint32_t wid, uint32_t tid) {
   auto& sched     = core_->scheduler();
   auto& warp      = sched.warp(wid);
-  auto core_perf  = core_->perf_stats();
+  // opds_stalls, the one counter gathered from other units, is read through
+  // perf_stats() below
+  auto& core_perf = core_->perf_counters();
   switch (addr) {
   case VX_CSR_PMPCFG0:
   case VX_CSR_PMPADDR0:
@@ -143,7 +145,7 @@ Word CsrUnit::get_csr(uint32_t addr, uint32_t wid, uint32_t tid) {
         CSR_READ_64(VX_CSR_MPM_STALL_FETCH, core_perf.fetch_stalls);
         CSR_READ_64(VX_CSR_MPM_STALL_IBUF, core_perf.ibuf_stalls);
         CSR_READ_64(VX_CSR_MPM_STALL_SCRB, core_perf.scrb_stalls);
-        CSR_READ_64(VX_CSR_MPM_STALL_OPDS, core_perf.opds_stalls);
+        CSR_READ_64(VX_CSR_MPM_STALL_OPDS, core_->perf_stats().opds_stalls);
         CSR_READ_64(VX_CSR_MPM_STALL_ALU, core_perf.alu_stalls);
         CSR_READ_64(VX_CSR_MPM_STALL_FPU, core_perf.fpu_stalls);
         CSR_READ_64(VX_CSR_MPM_STALL_LSU, core_perf.lsu_stalls);

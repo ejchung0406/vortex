@@ -397,7 +397,7 @@ void AluUnit::execute(instr_trace_t* trace) {
 			if (curr_taken) {
 				warp.PC = trace->PC + offset;
 			}
-			core_->perf_stats().branches += 1;
+			core_->perf_counters().branches += 1;
 		} break;
 		case BrType::JAL: {
 			// RVC source returns PC+2; full RV32I returns PC+4.
@@ -407,7 +407,7 @@ void AluUnit::execute(instr_trace_t* trace) {
 				rd_data[t].i = link_pc;
 			}
 			warp.PC = trace->PC + offset;
-			core_->perf_stats().branches += 1;
+			core_->perf_counters().branches += 1;
 		} break;
 		case BrType::JALR: {
 			// RVC source returns PC+2; full RV32I returns PC+4.
@@ -419,7 +419,7 @@ void AluUnit::execute(instr_trace_t* trace) {
 			// JALR clears bit 0 of the computed target (RISC-V ISA); the RTL
 			// release build drops it implicitly via from_fullPC() truncation.
 			warp.PC = (rs1_data[thread_last].u + offset) & ~Word(1);
-			core_->perf_stats().branches += 1;
+			core_->perf_counters().branches += 1;
 		} break;
 		case BrType::SYS:
 			switch (brArgs.offset) {
@@ -430,7 +430,7 @@ void AluUnit::execute(instr_trace_t* trace) {
 			case 0x002: case 0x102: case 0x302: sched.mret(trace->wid); break;
 			default: std::abort();
 			}
-			core_->perf_stats().branches += 1;
+			core_->perf_counters().branches += 1;
 			break;
 		default:
 			std::abort();
