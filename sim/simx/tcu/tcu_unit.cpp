@@ -1331,30 +1331,32 @@ public:
 
   #ifdef VX_CFG_TCU_TMEM_ENABLE
     if (VX_CFG_TCU_TMEM_A_BANKROW != 0 && sd_a.ldm != 0 && req.wid >= kJobKeyBase) {
-      return bank_row_reads(std::move(lines));
+      // One read per run of rows that start in the same bank row.
+      constexpr uint64_t kBankRowBytes = uint64_t(kLmemBanks) * (VX_CFG_XLEN / 8);
+      std::vector<TcuTbuf::LmemRead> reads;
+      uint64_t prev_row = ~uint64_t(0);
+      for (uint32_t row = 0; row < wg_cfg::m_steps * cfg::tcM; ++row) {
+        uint32_t k_elem0 = req.step_k * k_words * ratio;
+        uint64_t start = sd_a.base + elem_offset(sd_a, row, k_elem0, e_bits, xtile_n,
+                                                 false, false, sparse_a) * e_bits / 8;
+        if (start / kBankRowBytes != prev_row) {
+          reads.emplace_back();
+          prev_row = start / kBankRowBytes;
+        }
+        auto& read = reads.back();
+        for (uint64_t b = 0; b < uint64_t(k_words) * 4; b += e_bits / 8) {
+          uint64_t line = (start + b) & kLineMask;
+          if (std::find(read.begin(), read.end(), line) == read.end()) {
+            read.push_back(line);
+          }
+        }
+      }
+      return reads;
     }
   #endif
     uint32_t num_reads = (sd_a.ldm != 0) ? (wg_cfg::m_steps * cfg::tcM)
                        : sparse_a ? kAStripeReadsSp : kAStripeReads;
     return split_reads(std::move(lines), num_reads);
-  }
-
-  // One read per LMEM bank row the lines touch.
-  static std::vector<TcuTbuf::LmemRead> bank_row_reads(std::vector<uint64_t> lines) {
-    constexpr uint64_t kBankRowBytes = uint64_t(kLmemBanks) * (VX_CFG_XLEN / 8);
-    std::sort(lines.begin(), lines.end());
-    lines.erase(std::unique(lines.begin(), lines.end()), lines.end());
-    std::vector<TcuTbuf::LmemRead> reads;
-    uint64_t prev_row = ~uint64_t(0);
-    for (uint64_t line : lines) {
-      uint64_t row = line / kBankRowBytes;
-      if (row != prev_row) {
-        reads.emplace_back();
-        prev_row = row;
-      }
-      reads.back().push_back(line);
-    }
-    return reads;
   }
 
   // Spread a refill's distinct lines over the hardware's read count.
