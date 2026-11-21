@@ -62,7 +62,8 @@ protected:
       --credits_;
       In.pop();
     }
-    if (In.size() == 0) {
+    // Out of credits, the stage waits on a credit return, which re-arms it.
+    if (In.size() == 0 || credits_ == 0) {
       this->tick_sleep();
     }
   }
