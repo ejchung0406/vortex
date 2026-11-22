@@ -4,19 +4,24 @@
 //  - the read and write buffer sizes are parameters (constants there);
 //  - with the FRFCFS scheduler and a device whose prerequisites depend on its
 //    state only (HBM2, HBM3, GDDR6), the scheduling is the same choice made
-//    with less work. A request's prerequisite command changes only when this
-//    controller issues a command (the device has no other state change), so
-//    it is kept until the next issue; whether a command is ready depends on
-//    the command and the nodes down to its bank only, so it is asked once per
-//    (command, bank) and cycle; and a read or write buffer holds its requests
-//    in arrival order, so FRFCFS's choice in it is the first ready request,
-//    or the oldest if none is.
+//    with less work. The device's state changes only when this controller
+//    issues a command, and only in the nodes the command's address selects
+//    and below them (its actions). The prerequisite of a read or write is
+//    decided at its bank (RequireRowOpen), so it is kept until a command
+//    reaches that bank. Whether a command is ready depends on the command and
+//    the nodes from the channel to its bank only, so it is asked once per
+//    (command, bank) and cycle, and a ready answer is kept until the next
+//    issue (the nodes' ready cycles do not change before it and the answer
+//    is monotonic in the cycle). A read or write buffer holds its requests in
+//    arrival order, so FRFCFS's choice in it is the first ready request, or
+//    the oldest if none is.
 // The choices, the commands issued and every statistic are those of the
 // generic controller.
 
 #include "dram_controller/controller.h"
 #include "memory_system/memory_system.h"
 
+#include <algorithm>
 #include <cstring>
 
 namespace Ramulator {
@@ -26,15 +31,23 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
   private:
     // Prerequisite caching and the ready memo (see the top of the file).
     bool m_fast = false;
-    // Commands issued so far, plus one: a request's cached prerequisite is
-    // valid while the epoch it was computed at (in its scratchpad) is current.
+    // Commands issued so far, plus one.
     uint64_t m_epoch = 1;
     int m_bank_levels = 0;              // levels from the channel down to the bank
     std::vector<int> m_level_count;     // nodes per parent at each of those levels
+    std::vector<std::vector<int>> m_bank_ids;  // per bank: its id at each of those levels
+    // Per bank: the epoch of the last command that reached it. A request's
+    // prerequisite is valid while this equals the version it was computed at.
+    std::vector<uint64_t> m_bank_version;
     int m_num_commands = 0;
-    std::vector<Clk_t> m_ready_clk;     // per (bank, command): the cycle of the memo, -1 none
-    std::vector<uint64_t> m_ready_epoch;
-    std::vector<char> m_ready_val;
+    // Per (bank, command): check_ready's last answer, the epoch and the cycle
+    // it was asked at.
+    struct ready_memo_t {
+      uint64_t epoch = 0;
+      Clk_t clk = -1;
+      bool ready = false;
+    };
+    std::vector<ready_memo_t> m_ready;
 
     std::deque<Request> pending;          // A queue for read requests that are about to finish (callback after RL)
 
@@ -204,9 +217,9 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
 
     void tick() override {
       m_clk++;
-      if (!m_dram->m_future_actions.empty()) {
+      if (m_fast && !m_dram->m_future_actions.empty()) {
         // A device that changes its state on its own: nothing is kept.
-        ++m_epoch;
+        this->state_changed(-1, nullptr);
       }
 
       // Update statistics
@@ -240,7 +253,9 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
           update_request_stats(req_it);
         }
         m_dram->issue_command(req_it->command, req_it->addr_vec);
-        ++m_epoch;
+        if (m_fast) {
+          this->state_changed(req_it->command, &req_it->addr_vec);
+        }
 
         // If we are issuing the last command, set depart clock cycle and move the request to the pending queue
         if (req_it->command == req_it->final_command) {
@@ -394,59 +409,93 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
         m_level_count.push_back(count);
         num_banks *= count;
       }
+      for (int b = 0; b < num_banks; ++b) {
+        std::vector<int> ids(m_bank_levels);
+        for (int l = m_bank_levels - 1, x = b; l >= 0; --l) {
+          ids[l] = x % m_level_count[l];
+          x /= m_level_count[l];
+        }
+        m_bank_ids.push_back(ids);
+      }
+      m_bank_version.assign(num_banks, m_epoch);
       m_num_commands = m_dram->m_commands.size();
-      m_ready_clk.assign(size_t(num_banks) * m_num_commands, -1);
-      m_ready_epoch.assign(m_ready_clk.size(), 0);
-      m_ready_val.assign(m_ready_clk.size(), 0);
+      m_ready.assign(size_t(num_banks) * m_num_commands, ready_memo_t());
     }
 
-    // The epoch a request's command was computed at, in its scratchpad (FRFCFS
-    // does not use it).
-    static uint64_t cached_epoch(const Request& req) {
-      uint64_t e;
-      std::memcpy(&e, req.scratchpad.data(), sizeof(e));
-      return e;
+    // The device's state changed: `command` was issued at `addr_vec` (-1: any
+    // state may have changed). Its actions change the nodes it selects down
+    // to its scope and the nodes below them, so the banks whose ids match its
+    // address (-1 matching any) down to that level.
+    void state_changed(int command, const AddrVec_t* addr_vec) {
+      ++m_epoch;
+      int last = -1;
+      if (command >= 0) {
+        last = std::min(int(m_dram->m_command_scopes(command)), m_bank_levels - 1);
+      }
+      for (size_t b = 0; b < m_bank_ids.size(); ++b) {
+        bool reached = true;
+        for (int l = 0; l <= last && reached; ++l) {
+          int id = (*addr_vec)[l];
+          reached = (id == -1) || (id == m_bank_ids[b][l]);
+        }
+        if (reached) {
+          m_bank_version[b] = m_epoch;
+        }
+      }
     }
 
-    static void set_cached_epoch(Request& req, uint64_t e) {
-      std::memcpy(req.scratchpad.data(), &e, sizeof(e));
+    // A request's scratchpad (FRFCFS does not use it): [0..1] the version of
+    // its bank its command was computed at, [2] its bank + 1 (0 not known
+    // yet, -1 none).
+    static uint64_t cached_version(const Request& req) {
+      uint64_t v;
+      std::memcpy(&v, req.scratchpad.data(), sizeof(v));
+      return v;
+    }
+
+    static void set_cached_version(Request& req, uint64_t v) {
+      std::memcpy(req.scratchpad.data(), &v, sizeof(v));
+    }
+
+    int bank_of(Request& req) {
+      int& slot = req.scratchpad[2];
+      if (slot == 0) {
+        int idx = 0;
+        for (int l = 0; l < m_bank_levels && idx >= 0; ++l) {
+          int id = req.addr_vec[l];
+          idx = (id < 0 || id >= m_level_count[l]) ? -1 : (idx * m_level_count[l] + id);
+        }
+        slot = (idx < 0) ? -1 : (idx + 1);
+      }
+      return (slot < 0) ? -1 : (slot - 1);
     }
 
     // The request's prerequisite command, stored in req.command as FRFCFS does.
     int update_command(Request& req) {
-      if (!m_fast) {
+      int bank = m_fast ? this->bank_of(req) : -1;
+      if (bank < 0) {
         req.command = m_dram->get_preq_command(req.final_command, req.addr_vec);
-      } else if (cached_epoch(req) != m_epoch) {
+      } else if (cached_version(req) != m_bank_version[bank]) {
         req.command = m_dram->get_preq_command(req.final_command, req.addr_vec);
-        set_cached_epoch(req, m_epoch);
+        set_cached_version(req, m_bank_version[bank]);
       }
       return req.command;
     }
 
-    // check_ready of the device. Its answer depends on the command, the nodes
-    // from the channel to the bank, their timing (changed by an issue) and the
-    // cycle; with the timing unchanged, a ready command stays ready.
-    bool check_ready(int command, const AddrVec_t& addr_vec) {
-      if (!m_fast) {
-        return m_dram->check_ready(command, addr_vec);
+    // check_ready of the device for the request's command.
+    bool check_ready(Request& req) {
+      int bank = m_fast ? this->bank_of(req) : -1;
+      if (bank < 0) {
+        return m_dram->check_ready(req.command, req.addr_vec);
       }
-      size_t idx = 0;
-      for (int l = 0; l < m_bank_levels; ++l) {
-        int id = addr_vec[l];
-        if (id < 0 || id >= m_level_count[l]) {
-          return m_dram->check_ready(command, addr_vec);
-        }
-        idx = idx * m_level_count[l] + id;
+      auto& memo = m_ready[size_t(bank) * m_num_commands + req.command];
+      if (memo.epoch == m_epoch && (memo.clk == m_clk || memo.ready)) {
+        return memo.ready;
       }
-      idx = idx * m_num_commands + command;
-      if (m_ready_epoch[idx] == m_epoch && (m_ready_clk[idx] == m_clk || m_ready_val[idx])) {
-        return m_ready_val[idx];
-      }
-      bool ready = m_dram->check_ready(command, addr_vec);
-      m_ready_clk[idx] = m_clk;
-      m_ready_epoch[idx] = m_epoch;
-      m_ready_val[idx] = ready;
-      return ready;
+      memo.ready = m_dram->check_ready(req.command, req.addr_vec);
+      memo.clk = m_clk;
+      memo.epoch = m_epoch;
+      return memo.ready;
     }
 
     // FRFCFS::get_best_request: the first ready request by arrival, else the
@@ -462,16 +511,19 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
       }
       if (in_order) {
         for (auto it = buffer.begin(); it != buffer.end(); ++it) {
-          if (this->check_ready(this->update_command(*it), it->addr_vec)) {
+          this->update_command(*it);
+          if (this->check_ready(*it)) {
             return it;
           }
         }
         return buffer.begin();
       }
       auto candidate = buffer.begin();
-      bool candidate_ready = this->check_ready(this->update_command(*candidate), candidate->addr_vec);
+      this->update_command(*candidate);
+      bool candidate_ready = this->check_ready(*candidate);
       for (auto next = std::next(buffer.begin(), 1); next != buffer.end(); next++) {
-        bool next_ready = this->check_ready(this->update_command(*next), next->addr_vec);
+        this->update_command(*next);
+        bool next_ready = this->check_ready(*next);
         bool take_next = (candidate_ready ^ next_ready) ? next_ready : !(candidate->arrive <= next->arrive);
         if (take_next) {
           candidate = next;
@@ -489,7 +541,7 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
       bool request_found = false;
       // 2.1    First, check the act buffer to serve requests that are already activating (avoid useless ACTs)
       if (req_it= this->get_best_request(m_active_buffer, false); req_it != m_active_buffer.end()) {
-        if (this->check_ready(req_it->command, req_it->addr_vec)) {
+        if (this->check_ready(*req_it)) {
           request_found = true;
           req_buffer = &m_active_buffer;
         }
@@ -516,7 +568,7 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
           auto& buffer = m_is_write_mode ? m_write_buffer : m_read_buffer;
           // Requests enter the read and write buffers in arrival order.
           if (req_it = this->get_best_request(buffer, true); req_it != buffer.end()) {
-            request_found = this->check_ready(req_it->command, req_it->addr_vec);
+            request_found = this->check_ready(*req_it);
             req_buffer = &buffer;
           }
         }
