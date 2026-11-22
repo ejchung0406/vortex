@@ -534,6 +534,26 @@ tests:
   xlen: [64]
   args: -k2 -w16 -i16
   configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_ALU_LANES=16 -DVX_CFG_LANE_DISPATCH_GAPLESS=1
+# 32-thread warps on an 8-lane LSU, each op split into passes through the lane
+# dispatch's packet register: stores and unread loads to shared memory, one
+# warp fetching ahead, one packet per cycle into the unit. Tighter than the
+# default: the models agree to within a few cycles here.
+- id: parity-warp-rate-lsu-lanes-store
+  check: model_parity
+  tolerance: 0.01
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k11 -w1 -i32
+  configs: -DVX_CFG_NUM_WARPS=4 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+- id: parity-warp-rate-lsu-lanes-load
+  check: model_parity
+  tolerance: 0.01
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k12 -w1 -i32
+  configs: -DVX_CFG_NUM_WARPS=4 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 # SGEMM with local-memory tiling (kernel-managed shared memory).
 - id: parity-sgemmx
   check: model_parity
