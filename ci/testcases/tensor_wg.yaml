@@ -660,6 +660,53 @@ tests:
   configs: -DVX_CFG_NUM_THREADS=32 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_LMEM_NUM_BANKS=16 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
     -DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_TMEM_ENABLE -DVX_CFG_TCU_TMEM_COLS=512 -DVX_CFG_TCU_TMEM_B_AHEAD=2 -DVX_CFG_TCU_TMEM_A_BANKROW=1 -DVX_CFG_TCU_TYPE_DPI -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=2 -DVX_CFG_NUM_FPU_BLOCKS=1
     -DVX_CFG_LMEM_TCU_RDPORT=1
+# The row reads against the other users of the banks. race: the DXA, stores
+# and atomics overwrite the rows the tensor engine is copying; on rtlsim the
+# local memory's assertion fails if a row read meets a write of its word.
+# starve: the row reads beside warps' loads on both read engines, each side
+# held to a share of its solo rate; a read per A row at 32 threads keeps the
+# read port requested in every cycle.
+- id: lmem_rdport-race
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: lmem_rdport
+  xlen: [64]
+  args: -m0
+  configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
+    -DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_TMEM_ENABLE -DVX_CFG_TCU_TMEM_B_AHEAD=2 -DVX_CFG_TCU_TMEM_A_BANKROW=1 -DVX_CFG_TCU_TYPE_DPI -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=2 -DVX_CFG_NUM_FPU_BLOCKS=1
+    -DVX_CFG_LMEM_TCU_RDPORT=1 -DVX_CFG_EXT_A_ENABLE
+- id: lmem_rdport-starve
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: lmem_rdport
+  xlen: [64]
+  args: -m1 -W8
+  configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
+    -DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_TMEM_ENABLE -DVX_CFG_TCU_TMEM_B_AHEAD=2 -DVX_CFG_TCU_TMEM_A_BANKROW=1 -DVX_CFG_TCU_TYPE_DPI -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=2 -DVX_CFG_NUM_FPU_BLOCKS=1
+    -DVX_CFG_LMEM_TCU_RDPORT=1 -DVX_CFG_EXT_A_ENABLE
+- id: model_parity-lmem-rdport-starve
+  check: model_parity
+  via: blackbox
+  app: lmem_rdport
+  xlen: [64]
+  args: -m1 -W8
+  configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
+    -DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_TMEM_ENABLE -DVX_CFG_TCU_TMEM_B_AHEAD=2 -DVX_CFG_TCU_TMEM_A_BANKROW=1 -DVX_CFG_TCU_TYPE_DPI -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=2 -DVX_CFG_NUM_FPU_BLOCKS=1
+    -DVX_CFG_LMEM_TCU_RDPORT=1 -DVX_CFG_EXT_A_ENABLE
+- id: lmem_rdport-starve-32t
+  via: blackbox
+  drivers:
+  - simx
+  app: lmem_rdport
+  xlen: [64]
+  args: -m1 -W8
+  configs: -DVX_CFG_NUM_THREADS=32 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_LMEM_NUM_BANKS=16 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
+    -DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_TMEM_ENABLE -DVX_CFG_TCU_TMEM_COLS=512 -DVX_CFG_TCU_TMEM_B_AHEAD=2 -DVX_CFG_TCU_TYPE_DPI -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=2 -DVX_CFG_NUM_FPU_BLOCKS=1
+    -DVX_CFG_LMEM_TCU_RDPORT=1 -DVX_CFG_EXT_A_ENABLE
 # Sparse MMAs: 2:4 compressed A, K-tile metadata read from TMEM.
 - id: sgemm_tcu_tmem-sparse
   via: blackbox
