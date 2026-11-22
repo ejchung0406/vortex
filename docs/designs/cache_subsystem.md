@@ -1138,9 +1138,44 @@ and the LSU's pending pool, which wait on both crossings, size from
 `PLATFORM_MEMORY_LATENCY + 2 × L2_LINK_LATENCY`; the L2 and L3 MSHRs from the
 memory latency alone.
 
+**`NOC_GROUP_SIZE`** (`0`) — SM groups (a GPC of a large GPU) between the sockets
+and the L2. At `0` every socket port keeps its private link. Otherwise the sockets
+form groups of this many (it must divide the socket count), and each group reaches
+the L2 through a `VX_noc_switch` on **`NOC_UPLINK_PORTS`** lanes (a power of two;
+default the next one at or above the group's ports), so the L2 has
+groups × lanes socket inputs instead of sockets × `L1_MEM_PORTS`, and its tag
+carries the port within the group. A socket port crosses **`NOC_SM_LATENCY`**
+cycles to the switch and a lane **`NOC_UPLINK_LATENCY`** cycles to the L2, each
+way; their defaults split `L2_LINK_LATENCY` around the switch's one cycle.
+- A request takes the lane an XOR fold of its line address selects, so requests
+  of one line keep their order. The switch is a `VX_stream_xbar` in each
+  direction: a round-robin arbiter per output and a registered output, a cycle,
+  and one more in a direction whose outputs arbitrate more than 12 inputs
+  (registered slices of 8).
+- A flush token (a fence) must stay behind its port's earlier requests and ahead
+  of its later ones, which separate lanes do not give. The switch counts each
+  port's requests between itself and the L2: a token waits until the port has
+  none in flight, and the port's later requests wait until the token has entered
+  the L2.
+- **`NOC_UPLINK_BYTES`** (`0` = no limit) limits the bytes of read lines a
+  group's lanes pass per cycle, through a `VX_rate_gate` (a cycle more in the
+  counted direction). With **`NOC_UPLINK_GATE_REQ`** `= 0` it counts the
+  responses returning to the group: what the group requests beyond the limit
+  waits in the lanes' delay buffers and then in the L2 banks' response queues,
+  which every group's responses share, so a group over its limit slows the
+  others. With `1` it counts requests, held inside the group. Writes are not
+  counted.
+- The gate's credit grows by the limit each cycle and saturates one line per
+  lane above it: the long-run rate is exact, and after an idle spell at most one
+  line per lane passes beyond it.
+- The command processor's and the walker's L2 ports stay outside the groups.
+  Builds with the cluster-resident graphics caches do not support groups.
+SimX models the switch with `NocSwitch` and the gate with `NocRateGate`
+(`sim/simx/mem/noc.h`).
+
 **`SM_INGRESS_BYTES`** (`0` = no limit) — the bytes of read lines a socket may
 request per cycle over all its memory ports, the caches' misses and the DXA's
-reads together: a `VX_rate_gate` on the requests leaving the socket (a
+reads together: the same `VX_rate_gate`, on the requests leaving the socket (a
 cycle more). Writes and flush tokens pass free, and responses are never held, so
 a socket at its limit does not block the responses of others.
 
