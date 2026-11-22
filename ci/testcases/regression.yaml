@@ -750,9 +750,23 @@ tests:
   shape:
     cores: 4
     l2cache: true
-# The L2's inputs stalled at random (DBG_FLUSH_STALL), so a lane holds a
-# port's last stores back while its token's lane runs: without the switch's
-# hold the token is answered first and those stores are lost.
+# A fence inside a kernel, on a small dcache, with the L2's inputs stalled at
+# random (DBG_FLUSH_STALL) at the end of a 48-cycle lane: the port's stores
+# are still on one lane when its token arrives on another. Without the
+# switch's hold the token enters the L2 ahead of them and the switch's
+# assertion stops the run.
+- id: fence-noc-stress
+  via: blackbox
+  drivers:
+  - rtlsim
+  app: fence
+  configs: -DDBG_FLUSH_STALL -DVX_CFG_EXT_A_ENABLE -DVX_CFG_DCACHE_SIZE=4096 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_SM_LATENCY=0 -DVX_CFG_NOC_UPLINK_LATENCY=48
+  shape:
+    cores: 4
+    l2cache: true
+# The store-burst flush test through the groups under the same stalls. It
+# does not reach the hold: at a launch boundary the token is sent only once
+# the cluster is idle, the switch included.
 - id: flush_coherence-noc-stress
   via: blackbox
   drivers:
