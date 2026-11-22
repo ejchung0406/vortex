@@ -249,7 +249,9 @@ static inline bool sector_written(const sector_t& sec) {
 
 struct line_t {
   uint64_t tag;
-  uint32_t lru_ctr;
+  // PLRU age, kept as the set's access clock at the line's last reset: the
+  // age is lru_clock - lru_stamp (see set_t::lru_age)
+  uint32_t lru_stamp;
   std::vector<sector_t> sectors;       // sectors_per_line (1 when no sectoring)
   // Sectors whose valid bit is set: a sector becomes valid only through
   // validate() and invalid only through reset_sector() or reset().
@@ -277,7 +279,7 @@ struct line_t {
     sec.reset();
   }
   void reset() {
-    lru_ctr = 0;
+    lru_stamp = 0;
     for (auto &s : sectors) s.reset();
     num_valid = 0;
   }
@@ -308,9 +310,14 @@ static inline void sector_merge(sector_t& sec, const std::shared_ptr<mem_block_t
 struct set_t {
   std::vector<line_t> lines;
   uint32_t fifo_ptr;    // next victim for FIFO policy
+  // PLRU: committed accesses to the set. A valid line ages by one on every
+  // access but its own hits, which zero its age; an invalid line's age is
+  // never read, and a fill zeroes it. So the age is the number of accesses
+  // since the line's last zeroing, modulo 2^32 as a per-line counter wraps.
+  uint32_t lru_clock;
 
   set_t(uint32_t num_ways, uint32_t sectors_per_line)
-      : lines(num_ways), fifo_ptr(0) {
+      : lines(num_ways), fifo_ptr(0), lru_clock(0) {
     for (auto &line : lines)
       line.sectors.resize(sectors_per_line);
   }
@@ -320,6 +327,16 @@ struct set_t {
       line.reset();
     }
     fifo_ptr = 0;
+    lru_clock = 0;
+  }
+
+  uint32_t lru_age(const line_t &line) const {
+    return lru_clock - line.lru_stamp;
+  }
+
+  // Zero a line's PLRU age.
+  void lru_zero(line_t &line) const {
+    line.lru_stamp = lru_clock;
   }
 
   // Pure tag lookup: returns the line-resident way (tag match with any sector
@@ -351,8 +368,9 @@ struct set_t {
         hit_line_id = i;
 
       if (policy == Cache::PLRU) {
-        if (!plru_chosen || line.lru_ctr >= max_cnt) {
-          max_cnt = line.lru_ctr;
+        uint32_t age = this->lru_age(line);
+        if (!plru_chosen || age >= max_cnt) {
+          max_cnt = age;
           *repl_line_id = i;
           plru_chosen = true;
         }
@@ -380,15 +398,9 @@ struct set_t {
   // Apply PLRU age update for a tag access. Pass hit_line_id == -1 for a miss
   // (all valid lines age, no reset). Call once per *committed* access.
   void update_lru(int hit_line_id) {
-    for (uint32_t i = 0, n = lines.size(); i < n; ++i) {
-      auto &line = lines.at(i);
-      if (!line.any_valid())
-        continue;
-      if ((int)i == hit_line_id) {
-        line.lru_ctr = 0;
-      } else {
-        ++line.lru_ctr;
-      }
+    ++lru_clock;
+    if (hit_line_id >= 0) {
+      this->lru_zero(lines.at(hit_line_id));
     }
   }
 
@@ -410,8 +422,9 @@ struct set_t {
       }
       has_valid = true;
       if (policy == Cache::PLRU) {
-        if (line.lru_ctr >= max_cnt) {
-          max_cnt = line.lru_ctr;
+        uint32_t age = this->lru_age(line);
+        if (age >= max_cnt) {
+          max_cnt = age;
           *repl_line_id = i;
         }
       }
@@ -1701,7 +1714,7 @@ private:
 
     auto &line = set.lines.at(line_id);
     line.tag     = addr_tag;
-    line.lru_ctr = 0;
+    set.lru_zero(line);
     auto &sec    = line.sectors.at(sector_id);
     if (bank_req.nodata) {
       line.validate(sector_id);
