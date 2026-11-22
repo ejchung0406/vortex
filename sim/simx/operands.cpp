@@ -91,7 +91,9 @@ Operands::Operands(const SimContext &ctx, const char* name, Core* core)
     , Input(this)
     , Output(this)
     , core_(core)
-    , opc_units_(VX_CFG_NUM_OPCS) {
+    , opc_units_(VX_CFG_NUM_OPCS)
+    , merge_out_((VX_CFG_NUM_OPCS >= 2 && !VX_CFG_OPC_MERGE_BUF) ? VX_CFG_NUM_OPCS : 0, this)
+    , merge_arb_(ArbiterType::RoundRobin, 1u << log2ceil(VX_CFG_NUM_OPCS)) {
   static_assert(VX_CFG_NUM_OPCS <= PER_ISSUE_WARPS, "invalid VX_CFG_NUM_OPCS value");
   char sname[100];
 
@@ -108,13 +110,24 @@ Operands::Operands(const SimContext &ctx, const char* name, Core* core)
   }
 
   if (VX_CFG_NUM_OPCS >= 2) {
-    // the collectors' round-robin merge registers its output
-    snprintf(sname, 100, "%s-rsp_arb", name);
-    rsp_arb_ = TraceArbiter::Create(sname, ArbiterType::RoundRobin, VX_CFG_NUM_OPCS, 1, 1);
-    for (uint32_t i = 0; i < VX_CFG_NUM_OPCS; ++i) {
-      opc_units_.at(i)->Output.bind(&rsp_arb_->Inputs.at(i));
+    if (VX_CFG_OPC_MERGE_BUF) {
+      // the collectors' round-robin merge registers its output
+      snprintf(sname, 100, "%s-rsp_arb", name);
+      rsp_arb_ = TraceArbiter::Create(sname, ArbiterType::RoundRobin, VX_CFG_NUM_OPCS, 1, 1);
+      for (uint32_t i = 0; i < VX_CFG_NUM_OPCS; ++i) {
+        opc_units_.at(i)->Output.bind(&rsp_arb_->Inputs.at(i));
+      }
+      rsp_arb_->Outputs.at(0).bind(&this->Output);
+    } else {
+      // An unregistered merge: each cycle the round-robin winner among the
+      // collectors' output buffers is offered on Output. It leaves its buffer
+      // only when the dispatch side takes it; one not taken is withdrawn the
+      // next cycle and the collectors are arbitrated afresh.
+      for (uint32_t i = 0; i < VX_CFG_NUM_OPCS; ++i) {
+        opc_units_.at(i)->Output.bind(&merge_out_.at(i));
+      }
+      Output.pop_callback([this]() { this->on_merge_taken(); });
     }
-    rsp_arb_->Outputs.at(0).bind(&this->Output);
     // The scoreboard's output skid buffer feeds the collectors through a
     // demux: its head waits for its own collector, the entries behind it too.
     // The head leaves the buffer at its last operand read, when its collector
@@ -141,10 +154,44 @@ Operands::~Operands() {
 
 void Operands::on_reset() {
   head_offered_ = false;
+  merge_offer_ = -1;
+  merge_arb_.reset();
 }
 
 void Operands::on_tick() {
-  this->tick_sleep(); // the demux runs on Input's delivery and pop events
+  // the demux runs on Input's delivery and pop events
+  if (merge_out_.empty()) {
+    this->tick_sleep();
+    return;
+  }
+  if (merge_offer_ >= 0) {
+    merge_withdrawing_ = true;
+    Output.pop();
+    merge_withdrawing_ = false;
+    merge_offer_ = -1;
+  }
+  BitVector<> requests(1u << log2ceil(VX_CFG_NUM_OPCS));
+  bool queued = false;
+  for (uint32_t i = 0; i < VX_CFG_NUM_OPCS; ++i) {
+    requests.set(i, !merge_out_.at(i).empty());
+    queued |= (merge_out_.at(i).size() != 0);
+  }
+  if (requests.any()) {
+    merge_offer_ = merge_arb_.select(requests);
+    Output.send(merge_out_.at(merge_offer_).peek(), 0);
+  } else if (!queued) {
+    this->tick_sleep();
+  }
+}
+
+void Operands::on_merge_taken() {
+  if (merge_withdrawing_) {
+    return;
+  }
+  assert(merge_offer_ >= 0);
+  merge_out_.at(merge_offer_).pop();
+  merge_arb_.commit(merge_offer_);
+  merge_offer_ = -1;
 }
 
 void Operands::offer_head(instr_trace_t* trace, uint64_t delay) {

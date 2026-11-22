@@ -123,6 +123,11 @@ VX_CFG_ISSUE_WIDTH = "expr: pow(2, clog2(up($VX_CFG_NUM_WARPS / 16)))"
 VX_CFG_FETCH_WIDTH = "expr: $VX_CFG_ISSUE_WIDTH & -$VX_CFG_ISSUE_WIDTH"
 VX_CFG_SIMD_WIDTH = "expr: $VX_CFG_NUM_THREADS"
 VX_CFG_NUM_OPCS = "expr: up($VX_CFG_NUM_WARPS / (4 * $VX_CFG_ISSUE_WIDTH))"
+# With more than one operand collector per issue slice, 1 registers their
+# round-robin merge; 0 merges them through a mux into the dispatch queues, so
+# an operation reaches its queue one cycle earlier. No effect with one
+# collector.
+VX_CFG_OPC_MERGE_BUF = 1
 VX_CFG_NUM_GPR_BANKS = 4
 VX_CFG_NUM_VGPR_BANKS = 2
 

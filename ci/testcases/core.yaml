@@ -498,6 +498,21 @@ tests:
   app: warp_rate
   args: -k0 -w1 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FLUSH_REQ_BUF=0 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+# Two operand collectors per issue slice merged without a register
+# (VX_CFG_OPC_MERGE_BUF=0): independent integer operations from both
+# collectors, and loads that fill the LSU's dispatch queue.
+- id: parity-warp-rate-opc-merge-nobuf
+  check: model_parity
+  via: blackbox
+  app: warp_rate
+  args: -k2 -w8 -i64
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_OPCS=2 -DVX_CFG_OPC_MERGE_BUF=0
+- id: parity-warp-rate-opc-merge-nobuf-lds
+  check: model_parity
+  via: blackbox
+  app: warp_rate
+  args: -k9 -w8 -i64
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_OPCS=2 -DVX_CFG_OPC_MERGE_BUF=0
 # SGEMM with local-memory tiling (kernel-managed shared memory).
 - id: parity-sgemmx
   check: model_parity
