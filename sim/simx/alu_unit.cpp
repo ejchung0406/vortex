@@ -25,7 +25,8 @@
 using namespace vortex;
 
 AluUnit::AluUnit(const SimContext& ctx, const char* name, Core* core)
-	// The output channel also counts results still in flight: it covers the
+	// The output channel's capacity also bounds the results still in the
+	// units, which the unit counts against it as it takes an op: it covers the
 	// deepest path plus the result waiting for the commit side, so the
 	// multiplier keeps one result per cycle.
 	: FuncUnit<VX_CFG_NUM_ALU_BLOCKS>(ctx, name, core, kMulDivLatency + (kGather ? 1 : 0) + 2)
@@ -41,9 +42,9 @@ AluUnit::AluUnit(const SimContext& ctx, const char* name, Core* core)
 	}
 }
 
-// Cycles from this unit's execute to its output, beyond the commit-queue hop.
-// Execute stands for the integer ALU's registered result (the branch_ctl
-// stage), so a plain op leaves at once.
+// Cycles from the unit taking an op to its result reaching the block's result
+// switch. Taking it stands for the integer ALU's registered result (the
+// branch_ctl stage), so a plain op reaches the switch at once.
 uint32_t AluUnit::latency_of(const instr_trace_t* trace) const {
 	if (std::get_if<AluType>(&trace->op_type)) {
 		auto alu_type = std::get<AluType>(trace->op_type);
