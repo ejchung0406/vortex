@@ -79,8 +79,6 @@ module VX_lane_dispatch import VX_gpu_pkg::*; #(
         assign dispatch_if[i].ready = dispatch_ready[i];
     end
 
-    wire [BLOCK_SIZE-1:0] block_valid;
-    wire [BLOCK_SIZE-1:0] block_ready;
     wire [BLOCK_SIZE-1:0][NUM_LANES-1:0] block_tmask;
     wire [BLOCK_SIZE-1:0][2:0][NUM_LANES-1:0][`VX_CFG_XLEN-1:0] block_rsdata;
     wire [BLOCK_SIZE-1:0][LPID_WIDTH-1:0] block_pid;
@@ -252,8 +250,6 @@ module VX_lane_dispatch import VX_gpu_pkg::*; #(
             assign block_pid[block_idx]   = start_p;
             assign block_sop[block_idx]   = is_first_p;
             assign block_eop[block_idx]   = is_last_p;
-            assign block_valid[block_idx] = valid_p;
-            assign block_ready[block_idx] = ready_p;
             assign block_done[block_idx]  = (fire_p && is_last_p) || ~dispatch_valid[issue_idx];
         end else begin : g_full_simd
             assign valid_p = dispatch_valid[issue_idx];
@@ -262,8 +258,6 @@ module VX_lane_dispatch import VX_gpu_pkg::*; #(
             assign block_pid[block_idx]   = 0;
             assign block_sop[block_idx]   = 1;
             assign block_eop[block_idx]   = 1;
-            assign block_valid[block_idx] = valid_p;
-            assign block_ready[block_idx] = ready_p;
             assign block_done[block_idx]  = ready_p || ~valid_p;
             assign {out_uuid, out_wis, out_cta_id, out_sid, out_sop, out_eop, out_args} =
                    {dispatch_uuid, dispatch_wis, dispatch_cta_id, dispatch_sid, dispatch_sop, dispatch_eop, dispatch_args};
