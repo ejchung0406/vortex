@@ -23,7 +23,8 @@
 //
 // -M launches on the listed cores only: the others are masked off in the KMU
 // and the grid is sized by the cores left. -T times each CTA and prints each
-// core's bytes over the span from its first CTA's start to its last's end.
+// core's bytes over the span from its first CTA's start to its last's end,
+// and each enabled core's CTA count.
 //
 // Unwritten memory reads as one value in the simulators, so the host check
 // proves that every load was made, not that it read the right address.
@@ -277,15 +278,19 @@ int main(int argc, char *argv[]) {
   vx_event_release(read_ev);
   vx_event_release(launch_ev);
 
-  // With -M every CTA must report one of the listed cores.
+  // With -M every CTA must report one of the listed cores. Within one wave a
+  // core takes its CTAs without finishing any, so the KMU alone places them
+  // and the enabled cores' counts must differ by one at most; past one wave a
+  // core that drains sooner rightly takes more.
   uint64_t misplaced = 0;
+  bool uneven = false;
   if (timing) {
     std::vector<uint64_t> tm(3 * (uint64_t)grid, 0);
     vx_event_h tm_ev = nullptr;
     RT_CHECK(vx_enqueue_read(queue, tm.data(), timing_buffer, 0, tm.size() * sizeof(uint64_t), 0, nullptr, &tm_ev));
     RT_CHECK(vx_event_wait_value(tm_ev, 1, VX_TIMEOUT_INFINITE));
     vx_event_release(tm_ev);
-    std::vector<uint64_t> first(num_cores, ~0ull), last(num_cores, 0), bytes(num_cores, 0);
+    std::vector<uint64_t> first(num_cores, ~0ull), last(num_cores, 0), bytes(num_cores, 0), ctas(num_cores, 0);
     for (uint64_t g = 0; g < grid; ++g) {
       uint64_t c = tm[3 * g];
       if (c >= num_cores || !cores_on[c]) {
@@ -299,6 +304,7 @@ int main(int argc, char *argv[]) {
       first[c] = std::min(first[c], tm[3 * g + 1]);
       last[c] = std::max(last[c], tm[3 * g + 2]);
       bytes[c] += (uint64_t)steps * num_threads * sizeof(float);
+      ++ctas[c];
     }
     for (uint64_t c = 0; c < num_cores; ++c) {
       if (bytes[c] != 0) {
@@ -307,6 +313,15 @@ int main(int argc, char *argv[]) {
                (unsigned long long)last[c], double(bytes[c]) / double(last[c] - first[c]));
       }
     }
+    uint64_t min_ctas = ~0ull, max_ctas = 0;
+    for (uint64_t c = 0; c < num_cores; ++c) {
+      if (cores_on[c]) {
+        printf("core_ctas: core=%llu ctas=%llu\n", (unsigned long long)c, (unsigned long long)ctas[c]);
+        min_ctas = std::min(min_ctas, ctas[c]);
+        max_ctas = std::max(max_ctas, ctas[c]);
+      }
+    }
+    uneven = (grid % active_cores == 0) && (grid <= active_cores * num_warps) && (max_ctas - min_ctas > 1);
   }
 
   // Every element reads as `fill`: redo the kernel's accumulation in its order.
@@ -335,6 +350,10 @@ int main(int argc, char *argv[]) {
 
   if (misplaced != 0) {
     std::cout << "Found " << misplaced << " CTAs on masked cores!" << std::endl;
+    return 1;
+  }
+  if (uneven) {
+    std::cout << "The enabled cores' CTA counts differ by more than one!" << std::endl;
     return 1;
   }
   if (errors != 0) {
