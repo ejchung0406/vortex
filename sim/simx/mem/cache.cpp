@@ -2762,6 +2762,11 @@ public:
     return req;
   }
 
+  // Requests sent toward IoOut and not yet taken by the cache: with none,
+  // every IoOut is empty. The cache reports each one it pops.
+  uint64_t io_pending() const { return io_pending_; }
+  void io_taken() { --io_pending_; }
+
   // The cache's line initialization holds the core ports for these cycles.
   void set_init_cycles(uint32_t cycles) { init_cycles_ = cycles; }
 
@@ -2920,6 +2925,7 @@ protected:
       if (req.flags.io) {
         if (IoOut.at(i).try_send(req, 0)) {
           in.pop();
+          ++io_pending_;
         }
         continue;
       }
@@ -3185,6 +3191,7 @@ private:
   std::vector<uint8_t>  start_;
   std::vector<uint8_t>  owes_head_;
   uint32_t idle_ticks_ = 0;
+  uint64_t io_pending_ = 0; // see io_pending()
   struct offer_t {
     SimChannel<MemReq>* bank_in = nullptr;
     bool     valid       = false;
@@ -3611,10 +3618,11 @@ public:
     }
 
     // non-cacheable core requests split off by the port arbiter
-    for (uint32_t req_id = 0, n = config_.num_inputs; req_id < n; ++req_id) {
+    for (uint32_t req_id = 0, n = port_arb_->io_pending() ? config_.num_inputs : 0; req_id < n; ++req_id) {
       auto &io_req = port_arb_->IoOut.at(req_id);
       if (!io_req.empty() && this->processBypassRequest(io_req.peek(), req_id)) {
         io_req.pop();
+        port_arb_->io_taken();
       }
     }
   }
