@@ -496,6 +496,7 @@ public:
     std::fill(last_issue_.begin(), last_issue_.end(), 0);
     std::fill(staged_since_.begin(), staged_since_.end(), 0);
     std::fill(head_staged_.begin(), head_staged_.end(), false);
+    std::fill(scrb_waits_.begin(), scrb_waits_.end(), ScrbWait());
 
     std::fill(pending_instrs_.begin(), pending_instrs_.end(), 0);
     pending_total_ = 0;
@@ -990,6 +991,21 @@ public:
     decode_latch.pop();
   }
 
+  // Whether the scoreboard blocks the warp's staged micro-op. A micro-op found
+  // blocked stays blocked until the scoreboard frees one of the warp's
+  // registers, so the answer is kept until then.
+  bool scrb_blocked(uint32_t wid, instr_trace_t* uop_trace) {
+    auto& wait = scrb_waits_[wid];
+    uint32_t gen = scoreboard_->release_gen(wid);
+    if (wait.uop == uop_trace && wait.gen == gen) {
+      return true;
+    }
+    bool blocked = scoreboard_->in_use(uop_trace);
+    wait.uop = blocked ? uop_trace : nullptr;
+    wait.gen = gen;
+    return blocked;
+  }
+
   void issue() {
     // dispatch operands
     for (uint32_t iw = 0; iw < VX_CFG_ISSUE_WIDTH; ++iw) {
@@ -1058,7 +1074,7 @@ public:
 
         this->check_issue_timeout(iw, wid, trace, uop_trace);
 
-        if (scoreboard_->in_use(uop_trace)) {
+        if (this->scrb_blocked(wid, uop_trace)) {
           if (!uop_trace->log_once(true)) {
           #ifndef NDEBUG
             // the dependents are listed only for the trace
@@ -1824,6 +1840,13 @@ private:
   std::vector<uint64_t> last_issue_;   // [wid] cycle of the warp's last issue
   std::vector<uint64_t> staged_since_; // [wid] cycle the last issued candidate was staged
   std::vector<bool>     head_staged_;  // [wid] the buffer head has left for staging
+  // [wid] the micro-op the scoreboard last blocked, and the warp's release
+  // generation then
+  struct ScrbWait {
+    const instr_trace_t* uop = nullptr;
+    uint32_t gen = 0;
+  };
+  std::vector<ScrbWait> scrb_waits_ = std::vector<ScrbWait>(VX_CFG_NUM_WARPS);
 
   PoolAllocator<instr_trace_t, 64> trace_pool_;
 

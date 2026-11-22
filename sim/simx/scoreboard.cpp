@@ -21,6 +21,7 @@ Scoreboard::Scoreboard(const SimContext& ctx, const char* name)
   , in_use_regs_(VX_CFG_NUM_WARPS)
   , in_use_fcsr_(VX_CFG_NUM_WARPS, 0)
   , fflags_accums_(VX_CFG_NUM_WARPS, 0)
+  , release_gen_(VX_CFG_NUM_WARPS, 0)
   , owners_(VX_CFG_NUM_WARPS << RegOpd::ID_BITS, nullptr)
   , commit_counts_(VX_CFG_NUM_WARPS << RegOpd::ID_BITS, 0) {
   for (auto& in_use_reg : in_use_regs_) {
@@ -40,6 +41,9 @@ void Scoreboard::on_reset() {
   }
   std::fill(in_use_fcsr_.begin(), in_use_fcsr_.end(), 0);
   std::fill(fflags_accums_.begin(), fflags_accums_.end(), 0);
+  for (auto& gen : release_gen_) {
+    ++gen;
+  }
   std::fill(owners_.begin(), owners_.end(), nullptr);
   std::fill(commit_counts_.begin(), commit_counts_.end(), 0);
   pending_releases_.clear();
@@ -49,6 +53,7 @@ void Scoreboard::on_tick() {
   uint64_t now = SimPlatform::instance().cycles();
   while (!pending_releases_.empty() && pending_releases_.front().due <= now) {
     auto& r = pending_releases_.front();
+    ++release_gen_.at(r.wid);
     if (r.accum) {
       assert(fflags_accums_.at(r.wid) > 0);
       --fflags_accums_.at(r.wid);
