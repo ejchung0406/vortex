@@ -3073,21 +3073,22 @@ protected:
   }
 
   // A load or store with no flush, IO or local attribute.
+  // (on this tick's port heads, heads_)
   bool is_regular(uint32_t i) const {
-    if (ReqIn.at(i).empty()) {
+    auto* req = heads_[i];
+    if (req == nullptr) {
       return false;
     }
-    auto& req = ReqIn.at(i).peek();
-    return (req.op == MemOp::LD || req.op == MemOp::ST) && !req.flags.flush && !req.flags.io && !req.flags.local;
+    return (req->op == MemOp::LD || req->op == MemOp::ST) && !req->flags.flush && !req->flags.io && !req->flags.local;
   }
 
   // Whether port j holds a regular request with this tag in this line.
   bool owes(uint32_t j, uint32_t tag, uint64_t line) const {
-    return this->is_regular(j) && ReqIn.at(j).peek().tag == tag && this->line_of(j) == line;
+    return this->is_regular(j) && heads_[j]->tag == tag && this->line_of(j) == line;
   }
 
   uint64_t line_of(uint32_t i) const {
-    return ReqIn.at(i).peek().addr >> params_.bank_select_addr_start;
+    return heads_[i]->addr >> params_.bank_select_addr_start;
   }
 
   // The ports of a same-word pair carry the two parts of one request in
@@ -3097,6 +3098,7 @@ protected:
   // same cycle. The wait is decided from the last cycle's heads. Stores can
   // share a tag, so the line tells a part from a later store, and a pair that
   // waited on each other is released.
+  // Reads the port heads through heads_, which on_tick fills just before.
   void update_realign() {
     if (!this->realigns()) {
       return;
@@ -3108,10 +3110,10 @@ protected:
     owes_head.assign(n, 0);
     for (uint32_t i = 0; i < n; ++i) {
       auto& r = realign_.at(i);
-      auto& in = ReqIn.at(i);
+      auto* head = heads_[i];
       uint32_t p = i ^ 1;
       start.at(i) = r.shared && r.head_valid
-                 && !(!in.empty() && in.peek().tag == r.head_tag && this->line_of(i) == r.head_line);
+                 && !(head != nullptr && head->tag == r.head_tag && this->line_of(i) == r.head_line);
       owes_head.at(i) = this->owes(p, r.head_tag, r.head_line);
       r.waits = (start.at(i) && owes_head.at(i)) || (r.ahead && this->owes(p, r.ahead_tag, r.ahead_line));
       r.hold = r.waits && !r.mutual;
@@ -3119,7 +3121,7 @@ protected:
     // the registers, from this cycle's heads
     for (uint32_t i = 0; i < n; ++i) {
       auto& r = realign_.at(i);
-      auto& in = ReqIn.at(i);
+      auto* head = heads_[i];
       uint32_t p = i ^ 1;
       if (start.at(i) && owes_head.at(i)) {
         r.ahead_tag  = r.head_tag;
@@ -3127,9 +3129,9 @@ protected:
       }
       r.ahead  = r.waits;
       r.mutual = r.waits && realign_.at(p).waits;
-      r.head_valid = !in.empty();
+      r.head_valid = (head != nullptr);
       if (r.head_valid) {
-        r.head_tag  = in.peek().tag;
+        r.head_tag  = head->tag;
         r.head_line = this->line_of(i);
       }
       r.shared = this->is_regular(i) && this->owes(p, r.head_tag, r.head_line);
