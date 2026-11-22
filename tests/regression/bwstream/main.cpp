@@ -137,16 +137,16 @@ void cleanup() {
 // False on a malformed list or a core the device does not have.
 static bool parse_cores(const char* list, uint32_t num_cores, std::vector<bool>* on) {
   on->assign(num_cores, list == nullptr);
-  for (const char* p = list; p != nullptr && *p != 0;) {
+  for (const char* p = list; p != nullptr;) {
     char* e;
-    uint32_t a = strtoul(p, &e, 10);
+    unsigned long long a = strtoull(p, &e, 10);
     if (e == p) {
       return false;
     }
-    uint32_t b = a;
+    unsigned long long b = a;
     if (*e == '-') {
       p = e + 1;
-      b = strtoul(p, &e, 10);
+      b = strtoull(p, &e, 10);
       if (e == p) {
         return false;
       }
@@ -154,13 +154,16 @@ static bool parse_cores(const char* list, uint32_t num_cores, std::vector<bool>*
     if (a > b || b >= num_cores) {
       return false;
     }
-    for (uint32_t c = a; c <= b; ++c) {
+    for (uint64_t c = a; c <= b; ++c) {
       (*on)[c] = true;
     }
-    if (*e != ',' && *e != '+' && *e != 0) {
+    if (*e == 0) {
+      break;
+    }
+    if (*e != ',' && *e != '+') {
       return false;
     }
-    p = (*e != 0) ? e + 1 : e;
+    p = e + 1;
   }
   return true;
 }
@@ -274,6 +277,8 @@ int main(int argc, char *argv[]) {
   vx_event_release(read_ev);
   vx_event_release(launch_ev);
 
+  // With -M every CTA must report one of the listed cores.
+  uint64_t misplaced = 0;
   if (timing) {
     std::vector<uint64_t> tm(3 * (uint64_t)grid, 0);
     vx_event_h tm_ev = nullptr;
@@ -283,7 +288,12 @@ int main(int argc, char *argv[]) {
     std::vector<uint64_t> first(num_cores, ~0ull), last(num_cores, 0), bytes(num_cores, 0);
     for (uint64_t g = 0; g < grid; ++g) {
       uint64_t c = tm[3 * g];
-      if (c >= num_cores) {
+      if (c >= num_cores || !cores_on[c]) {
+        if (misplaced < 10) {
+          printf("*** error: CTA %llu ran on core %llu, not in -M\n", (unsigned long long)g,
+                 (unsigned long long)c);
+        }
+        ++misplaced;
         continue;
       }
       first[c] = std::min(first[c], tm[3 * g + 1]);
@@ -323,6 +333,10 @@ int main(int argc, char *argv[]) {
 
   cleanup();
 
+  if (misplaced != 0) {
+    std::cout << "Found " << misplaced << " CTAs on masked cores!" << std::endl;
+    return 1;
+  }
   if (errors != 0) {
     std::cout << "Found " << errors << " errors!" << std::endl;
     return 1;
