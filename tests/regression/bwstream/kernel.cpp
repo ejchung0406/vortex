@@ -40,7 +40,9 @@ static inline float sum_unrolled(const float* p, uint32_t steps, uint32_t stride
   }
 }
 
-__kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
+// Inlined into both entries: a kernel keeps no callee-saved register, so one
+// kernel cannot call another.
+static inline __attribute__((always_inline)) void stream(kernel_arg_t* arg) {
   auto src = reinterpret_cast<const float*>(arg->src_addr);
   auto out = reinterpret_cast<float*>(arg->out_addr);
   uint32_t steps = arg->steps;
@@ -57,4 +59,20 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
     s = sum_unrolled(base + t, steps, W * T, arg->unroll);
   }
   out[gid] = s + (float)(gid + 1);
+}
+
+__kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
+  stream(arg);
+}
+
+// A separate entry, so the untimed kernel's instruction stream stays as it is.
+__kernel void kernel_timed(timed_arg_t* __UNIFORM__ arg) {
+  const uint64_t c0 = vx_rdcycle();
+  stream(&arg->stream);
+  if (threadIdx.x == 0) {
+    auto tm = reinterpret_cast<uint64_t*>(arg->timing_addr) + 3 * blockIdx.x;
+    tm[0] = vx_core_id();
+    tm[1] = c0;
+    tm[2] = vx_rdcycle();
+  }
 }

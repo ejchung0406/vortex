@@ -21,9 +21,14 @@
 // of neither. With -b W there are W times fewer, wider streams; check the
 // differenced value against the whole-run one before using it.
 //
+// -M launches on the listed cores only: the others are masked off in the KMU
+// and the grid is sized by the cores left. -T times each CTA and prints each
+// core's bytes over the span from its first CTA's start to its last's end.
+//
 // Unwritten memory reads as one value in the simulators, so the host check
 // proves that every load was made, not that it read the right address.
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -31,6 +36,7 @@
 #include <unistd.h>
 #include <vector>
 #include <vortex2.h>
+#include <VX_types.h>
 #include "common.h"
 
 #define RT_CHECK(_expr)                                         \
@@ -50,11 +56,14 @@ uint32_t grid    = 0;
 uint32_t pattern = BWSTREAM_COALESCED;
 uint32_t unroll  = 1;
 uint32_t block_warps = 1;
+const char* core_list = nullptr;
+bool timing = false;
 
 vx_device_h device = nullptr;
 vx_buffer_h src_buffer = nullptr;
 vx_buffer_h probe_buffer = nullptr;
 vx_buffer_h out_buffer = nullptr;
+vx_buffer_h timing_buffer = nullptr;
 vx_queue_h  queue   = nullptr;
 vx_module_h module_ = nullptr;
 vx_kernel_h kernel  = nullptr;
@@ -63,14 +72,15 @@ kernel_arg_t kernel_arg = {};
 static void show_usage() {
   std::cout << "Vortex streaming-read bandwidth probe." << std::endl;
   std::cout << "Usage: [-n steps] [-r rounds] [-g grid] [-p 0:coalesced|1:rows] "
-               "[-u unroll] [-b block warps] [-k kernel] [-h]" << std::endl;
+               "[-u unroll] [-b block warps] [-M cores] [-T] [-k kernel] [-h]" << std::endl;
   std::cout << "  -b W (with -p 0): W one-warp CTAs read one slice as the warps of a W-warp block do." << std::endl;
   std::cout << "  The streams' layout moves with -n: with -b 1 do not difference two -n runs." << std::endl;
+  std::cout << "  -M 0,2,8-11 (or 0+2+8-11): launch only on these cores. -T: per-core rates." << std::endl;
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "n:r:g:p:u:b:k:h")) != -1) {
+  while ((c = getopt(argc, argv, "n:r:g:p:u:b:M:Tk:h")) != -1) {
     switch (c) {
     case 'n': steps   = atoi(optarg); break;
     case 'r': rounds  = atoi(optarg); break;
@@ -78,6 +88,8 @@ static void parse_args(int argc, char **argv) {
     case 'p': pattern = atoi(optarg); break;
     case 'u': unroll  = atoi(optarg); break;
     case 'b': block_warps = atoi(optarg); break;
+    case 'M': core_list = optarg; break;
+    case 'T': timing = true; break;
     case 'k': kernel_file = optarg; break;
     case 'h': show_usage(); exit(0);
     default:  show_usage(); exit(-1);
@@ -103,6 +115,9 @@ void cleanup() {
     if (out_buffer) {
       vx_buffer_release(out_buffer);
     }
+    if (timing_buffer) {
+      vx_buffer_release(timing_buffer);
+    }
     if (kernel) {
       vx_kernel_release(kernel);
     }
@@ -114,6 +129,53 @@ void cleanup() {
     }
     vx_device_dump_perf(device, stdout);
     vx_device_release(device);
+  }
+}
+
+// Cores named by a list such as "0,2,8-11" or "0+2+8-11" (the form that
+// survives comma-separated environment lists); every core when there is none.
+// False on a malformed list or a core the device does not have.
+static bool parse_cores(const char* list, uint32_t num_cores, std::vector<bool>* on) {
+  on->assign(num_cores, list == nullptr);
+  for (const char* p = list; p != nullptr && *p != 0;) {
+    char* e;
+    uint32_t a = strtoul(p, &e, 10);
+    if (e == p) {
+      return false;
+    }
+    uint32_t b = a;
+    if (*e == '-') {
+      p = e + 1;
+      b = strtoul(p, &e, 10);
+      if (e == p) {
+        return false;
+      }
+    }
+    if (a > b || b >= num_cores) {
+      return false;
+    }
+    for (uint32_t c = a; c <= b; ++c) {
+      (*on)[c] = true;
+    }
+    if (*e != ',' && *e != '+' && *e != 0) {
+      return false;
+    }
+    p = (*e != 0) ? e + 1 : e;
+  }
+  return true;
+}
+
+// Mask off the cores not in `on`; the mask stays with the device for later launches.
+static void program_core_mask(const std::vector<bool>& on) {
+  for (uint32_t w = 0; w < VX_DCR_KMU_CORE_DISABLE_WORDS; ++w) {
+    uint32_t bits = 0;
+    for (uint32_t b = 0; b < 32; ++b) {
+      uint32_t c = 32 * w + b;
+      if (c < on.size() && !on[c]) {
+        bits |= 1u << b;
+      }
+    }
+    RT_CHECK(vx_enqueue_dcr_write(queue, VX_DCR_KMU_CORE_DISABLE0 + w, bits, 0, nullptr, nullptr));
   }
 }
 
@@ -129,8 +191,25 @@ int main(int argc, char *argv[]) {
   RT_CHECK(vx_device_query(device, VX_CAPS_NUM_THREADS, &num_threads));
   RT_CHECK(vx_device_query(device, VX_CAPS_NUM_WARPS, &num_warps));
   RT_CHECK(vx_device_query(device, VX_CAPS_NUM_CORES, &num_cores));
+  std::vector<bool> cores_on;
+  if (!parse_cores(core_list, (uint32_t)num_cores, &cores_on)
+      || (core_list != nullptr && num_cores > 32 * VX_DCR_KMU_CORE_DISABLE_WORDS)) {
+    std::cerr << "Error: -M must list cores 0.." << (num_cores - 1) << std::endl;
+    cleanup();
+    return -1;
+  }
+  uint32_t active_cores = (uint32_t)std::count(cores_on.begin(), cores_on.end(), true);
+  if (active_cores == 0) {
+    // With every core masked off the KMU never dispatches.
+    std::cerr << "Error: -M leaves no core to launch on" << std::endl;
+    cleanup();
+    return -1;
+  }
+  if (core_list != nullptr) {
+    program_core_mask(cores_on);
+  }
   if (grid == 0) {
-    grid = (uint32_t)(num_cores * num_warps) * rounds;
+    grid = (uint32_t)(active_cores * num_warps) * rounds;
   }
 
   uint64_t total_threads = (uint64_t)grid * num_threads;
@@ -141,8 +220,9 @@ int main(int argc, char *argv[]) {
     cleanup();
     return -1;
   }
-  printf("cores=%u warps=%u threads=%u grid=%u steps=%u pattern=%s unroll=%u block_warps=%u bytes=%llu\n",
-         (unsigned)num_cores, (unsigned)num_warps, (unsigned)num_threads, grid, steps,
+  printf("cores=%u active_cores=%u warps=%u threads=%u grid=%u steps=%u pattern=%s unroll=%u block_warps=%u "
+         "bytes=%llu\n",
+         (unsigned)num_cores, active_cores, (unsigned)num_warps, (unsigned)num_threads, grid, steps,
          pattern == BWSTREAM_ROWS ? "rows" : "coalesced", unroll, block_warps,
          (unsigned long long)src_size);
 
@@ -167,14 +247,22 @@ int main(int argc, char *argv[]) {
   }
 
   RT_CHECK(vx_module_load_file(device, kernel_file, &module_));
-  RT_CHECK(vx_module_get_kernel(module_, "main", &kernel));
+  timed_arg_t timed_arg = {};
+  if (timing) {
+    RT_CHECK(vx_module_get_kernel(module_, "kernel_timed", &kernel));
+    RT_CHECK(vx_buffer_create(device, 3 * (uint64_t)grid * sizeof(uint64_t), VX_MEM_WRITE, &timing_buffer));
+    RT_CHECK(vx_buffer_address(timing_buffer, &timed_arg.timing_addr));
+    timed_arg.stream = kernel_arg;
+  } else {
+    RT_CHECK(vx_module_get_kernel(module_, "main", &kernel));
+  }
 
   vx_event_h launch_ev = nullptr, read_ev = nullptr;
   vx_launch_info_t li = {};
   li.struct_size  = sizeof(li);
   li.kernel       = kernel;
-  li.args_host    = &kernel_arg;
-  li.args_size    = sizeof(kernel_arg);
+  li.args_host    = timing ? (const void*)&timed_arg : (const void*)&kernel_arg;
+  li.args_size    = timing ? sizeof(timed_arg) : sizeof(kernel_arg);
   li.ndim         = 1;
   li.grid_dim[0]  = grid;
   li.block_dim[0] = (uint32_t)num_threads;
@@ -185,6 +273,31 @@ int main(int argc, char *argv[]) {
   RT_CHECK(vx_event_wait_value(read_ev, 1, VX_TIMEOUT_INFINITE));
   vx_event_release(read_ev);
   vx_event_release(launch_ev);
+
+  if (timing) {
+    std::vector<uint64_t> tm(3 * (uint64_t)grid, 0);
+    vx_event_h tm_ev = nullptr;
+    RT_CHECK(vx_enqueue_read(queue, tm.data(), timing_buffer, 0, tm.size() * sizeof(uint64_t), 0, nullptr, &tm_ev));
+    RT_CHECK(vx_event_wait_value(tm_ev, 1, VX_TIMEOUT_INFINITE));
+    vx_event_release(tm_ev);
+    std::vector<uint64_t> first(num_cores, ~0ull), last(num_cores, 0), bytes(num_cores, 0);
+    for (uint64_t g = 0; g < grid; ++g) {
+      uint64_t c = tm[3 * g];
+      if (c >= num_cores) {
+        continue;
+      }
+      first[c] = std::min(first[c], tm[3 * g + 1]);
+      last[c] = std::max(last[c], tm[3 * g + 2]);
+      bytes[c] += (uint64_t)steps * num_threads * sizeof(float);
+    }
+    for (uint64_t c = 0; c < num_cores; ++c) {
+      if (bytes[c] != 0) {
+        printf("core_rate: core=%llu bytes=%llu start=%llu end=%llu B_per_cycle=%.2f\n",
+               (unsigned long long)c, (unsigned long long)bytes[c], (unsigned long long)first[c],
+               (unsigned long long)last[c], double(bytes[c]) / double(last[c] - first[c]));
+      }
+    }
+  }
 
   // Every element reads as `fill`: redo the kernel's accumulation in its order.
   volatile float part = 0.0f;
