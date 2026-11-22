@@ -3321,23 +3321,34 @@ public:
     auto bank_sel = [&](const MemCrossBar::ReqType &req) {
       return params_.addr_bank_id(req.addr);
     };
+    // A bank's core-response queue: the registered skid's two slots plus
+    // crsq_size, rounded up to a power of two.
+    const uint32_t crsq_slots = 1u << log2ceil(2 + config_.crsq_size);
     if (port_arb_->merge_bits() != 0) {
       // one buffered arbiter per core port over the bank lanes
       __assert(config_.core_out_buf, "read merging needs a registered core-response port");
       core_rsp_delay_ = 1;
-    } else if (config_.core_out_buf) {
-      bank_core_xbar_ = MemCrossBar::Create(sname, ArbiterType::RoundRobin, config_.num_inputs, num_banks, bank_sel, 0, 0);
-      core_rsp_delay_ = omega_stages(num_banks, config_.num_inputs);
     } else {
-      bank_core_xbar_ = MemCrossBar::Create(sname, ArbiterType::RoundRobin, config_.num_inputs, num_banks, bank_sel);
+      // A one-bank, one-port crossbar passes the bank's responses straight to
+      // the port, which has no room for more slots.
+      __assert(crsq_slots == 2 || config_.num_inputs != 1 || num_banks != 1,
+               "a deeper core-response queue needs a bank crossbar");
+      if (config_.core_out_buf) {
+        bank_core_xbar_ = MemCrossBar::Create(sname, ArbiterType::RoundRobin, config_.num_inputs, num_banks, bank_sel,
+                                              0, 0, crsq_slots);
+        core_rsp_delay_ = omega_stages(num_banks, config_.num_inputs);
+      } else {
+        const uint32_t xbar_delay = (config_.num_inputs > 2 || num_banks > 2) ? 1 : 0;
+        bank_core_xbar_ = MemCrossBar::Create(sname, ArbiterType::RoundRobin, config_.num_inputs, num_banks, bank_sel,
+                                              xbar_delay, xbar_delay, crsq_slots);
+      }
     }
     if (config_.nc_enable) {
       ++core_rsp_delay_;
     }
-    __assert(config_.crsq_size == 0 || port_arb_->merge_bits() != 0, "a deeper core-response queue is modeled under read merging only");
     if (port_arb_->merge_bits() != 0) {
       rsp_mcast_ = CacheRspMcast::Create(sname, num_banks, config_.num_inputs, port_arb_->merge_bits(), merge_line,
-                                         core_rsp_delay_, 1u << log2ceil(2 + config_.crsq_size));
+                                         core_rsp_delay_, crsq_slots);
       for (uint32_t i = 0; i < config_.num_inputs; ++i) {
         rsp_mcast_->RspOut.at(i).bind(&simobject->core_rsp_out.at(i));
       }
