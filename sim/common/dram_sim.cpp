@@ -101,12 +101,13 @@ private:
   struct channel_t;
 
   // One request (a block); it completes when all its transactions have. Kept
-  // in its channel's requests and reused once complete.
+  // in its channel's requests and reused once nothing refers to it.
   struct request_t {
     ResponseCallback callback;
     void* arg;
     uint32_t pending;
     channel_t* channel;
+    uint32_t in_dram;  // its reads Ramulator holds, whose callbacks point here
   };
 
   struct mem_tx_t {
@@ -284,6 +285,7 @@ private:
     if (!tx.is_write) {
       // Two pointers: held inside the std::function, no allocation.
       callback = [this, request = tx.request](Ramulator::Request& /*dram_req*/) {
+        --request->in_dram;
         request->channel->read_rsps.push_back({request, this->cycle_ + 1 + this->config_.latency});
       };
     }
@@ -291,6 +293,8 @@ private:
       // Ramulator does not handle write responses, so we handle the callback ourselves.
       if (tx.is_write) {
         channel.write_rsps.push_back({tx.request, cycle_});
+      } else {
+        ++tx.request->in_dram;
       }
       channel.pending_txs.pop();
     }
@@ -334,9 +338,14 @@ public:
       channel.read_rsps.clear();
       channel.write_rsps.clear();
       channel.inflight = 0;
+      // Ramulator is not reset: a read it still holds answers later into
+      // read_rsps and retires its request as it would have (a request kept
+      // alive by its callback). Only requests nothing refers to are reused.
       channel.free_requests.clear();
       for (auto& request : channel.requests) {
-        channel.free_requests.push_back(&request);
+        if (request.in_dram == 0) {
+          channel.free_requests.push_back(&request);
+        }
       }
     }
   }
@@ -372,7 +381,7 @@ public:
     }
     request_t* request = ch.free_requests.back();
     ch.free_requests.pop_back();
-    *request = request_t{response_cb, arg, n, &ch};
+    *request = request_t{response_cb, arg, n, &ch, 0};
     for (uint32_t i = 0; i < n; ++i) {
       ch.pending_txs.push({dram_addr(base + i * tx_size_), is_write, request});
     }
