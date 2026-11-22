@@ -251,18 +251,35 @@ struct line_t {
   uint64_t tag;
   uint32_t lru_ctr;
   std::vector<sector_t> sectors;       // sectors_per_line (1 when no sectoring)
+  // Sectors whose valid bit is set: a sector becomes valid only through
+  // validate() and invalid only through reset_sector() or reset().
+  uint32_t num_valid = 0;
 
   bool any_valid() const {
-    for (const auto &s : sectors) if (s.valid) return true;
-    return false;
+    return num_valid != 0;
   }
   bool any_dirty() const {
     for (const auto &s : sectors) if (s.valid && s.dirty) return true;
     return false;
   }
+  void validate(uint32_t sector_id) {
+    auto &sec = sectors.at(sector_id);
+    if (!sec.valid) {
+      sec.valid = true;
+      ++num_valid;
+    }
+  }
+  void reset_sector(uint32_t sector_id) {
+    auto &sec = sectors.at(sector_id);
+    if (sec.valid) {
+      --num_valid;
+    }
+    sec.reset();
+  }
   void reset() {
     lru_ctr = 0;
     for (auto &s : sectors) s.reset();
+    num_valid = 0;
   }
 };
 
@@ -1687,13 +1704,13 @@ private:
     line.lru_ctr = 0;
     auto &sec    = line.sectors.at(sector_id);
     if (bank_req.nodata) {
-      sec.valid      = true;
+      line.validate(sector_id);
       sec.dirty      = false;
       sec.partial    = true;
       sec.dirty_mask = 0;
       sec.data.reset();
     } else {
-      sec.valid      = true;
+      line.validate(sector_id);
       sec.dirty      = false;
       sec.partial    = false;
       sec.dirty_mask = 0;
@@ -2000,7 +2017,7 @@ private:
         ++perf_stats_.evictions;
       }
       if (hit) {
-        set.lines.at(hit_id).sectors.at(sector_id).reset();
+        set.lines.at(hit_id).reset_sector(sector_id);
       }
 
       // Forward AMO downstream. Tag is rewritten so the response
