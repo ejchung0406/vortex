@@ -294,6 +294,10 @@ void Mmu::on_tick() {
   // warps waiting on them cannot drain until they land.
   uint64_t rsp_delay = rsp_reg_ ? 1 : 0;
   for (uint32_t p = 0; p < num_ports_; ++p) {
+    // a port with nothing to answer is skipped before its (chained) full test
+    if (fault_rsp_.at(p).empty() && !pf_slot_.at(p) && RspIn.at(p).empty()) {
+      continue;
+    }
     if (RspOut.at(p).full()) {
       continue;
     }
