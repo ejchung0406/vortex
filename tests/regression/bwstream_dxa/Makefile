@@ -13,7 +13,7 @@ VX_SRCS := $(SRC_DIR)/kernel.cpp
 
 VX_EXTRA_KERNELS := kernel_timed
 
-VX_HDRS := $(SRC_DIR)/stream.h $(SRC_DIR)/common.h
+VX_HDRS := $(SRC_DIR)/common.h $(SRC_DIR)/kernel.cpp
 
 HDRS := $(SRC_DIR)/common.h
 

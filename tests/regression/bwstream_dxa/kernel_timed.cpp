@@ -1,4 +1,15 @@
-#include "stream.h"
+#include <vx_spawn2.h>
+
+// kernel.cpp's kernel_main, compiled here as an inline function named stream:
+// a kernel keeps no callee-saved register, so one kernel cannot call another,
+// and kernel.cpp stays as it is, so kernel.vxbin does not change.
+#pragma push_macro("__kernel")
+#undef __kernel
+#define __kernel static inline __attribute__((always_inline))
+#define kernel_main stream
+#include "kernel.cpp"
+#undef kernel_main
+#pragma pop_macro("__kernel")
 
 // Separate entries in a binary of their own (kernel_timed.vxbin), so the
 // untimed run's kernel.vxbin, and with it everything laid out after it in
