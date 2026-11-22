@@ -721,8 +721,7 @@ public:
         fetch_latch->push(trace);
       } else {
         bool sent = this->send_fetch(f, trace, trace->PC);
-        __unused(sent);
-        assert(sent);
+        __assert(sent, "a fetch pick was made with its request port full");
       }
       // with fetch ahead an instruction is pending once decode accepts it: a
       // fetch that will be dropped is not one
