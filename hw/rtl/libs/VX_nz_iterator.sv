@@ -38,6 +38,7 @@ module VX_nz_iterator #(
     output reg eop,                         // End of valid stream
     output wire last                        // The stream's last element is taken (GAPLESS)
 );
+    `STATIC_ASSERT ((GAPLESS == 0) || ((OUT_REG != 0) && (N > 1)), ("GAPLESS needs the output register and more than one element"))
     if (N > 1) begin : g_iterator
 
         reg [N-1:0] sent_mask_p;
@@ -134,7 +135,6 @@ module VX_nz_iterator #(
             );
 
             assign last = 1'b0;
-            `UNUSED_VAR (advance)
         end
 
     end else begin : g_passthru

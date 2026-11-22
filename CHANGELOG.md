@@ -20,6 +20,12 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
 - **Branch register (`VX_CFG_BRANCH_REG`, default 1).** With 0 a resolved branch goes to the warp scheduler straight from the
   integer ALU's result register, and the warp is picked at the target one cycle earlier; the register between them has no
   function. [VX_alu_int.sv](hw/rtl/core/VX_alu_int.sv), [sim/simx/alu_unit.cpp](sim/simx/alu_unit.cpp).
+- **Lane dispatch without the empty cycle (`VX_CFG_LANE_DISPATCH_GAPLESS`, default 0).** A unit narrower than the warp takes an
+  instruction in packets through a registered iterator, with one empty cycle between instructions. A set bit (1 ALU, 2 LSU, 4 SFU,
+  8 FPU, 16 TCU) removes that cycle for one unit: the instruction leaves its dispatch queue as the register takes its last packet,
+  and its fields are registered with each packet. Acts at SIMD widths above 12 on a unit with one block per issue slot.
+  [VX_nz_iterator.sv](hw/rtl/libs/VX_nz_iterator.sv), [VX_lane_dispatch.sv](hw/rtl/core/VX_lane_dispatch.sv),
+  [sim/simx/dispatcher.cpp](sim/simx/dispatcher.cpp).
 - **Fetch request buffer (`VX_CFG_FETCH_REQ_BUF`, default 1).** With 0 a fetch pick goes from the warp scheduler straight into the
   fetch unit's request buffer, without the scheduler's own buffer in front of it, and reaches the icache one cycle earlier; the
   request still leaves the fetch unit registered and the pick still sees a registered ready. Requires EXT_C off.

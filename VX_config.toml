@@ -115,7 +115,9 @@ VX_CFG_FFLAGS_ACCUM = 0
 # bit removes that cycle for one unit (1 ALU, 2 LSU, 4 SFU, 8 FPU, 16 TCU):
 # the op leaves its queue as the register takes its last packet, and its
 # fields travel with each packet. Applies to a unit whose blocks each have
-# one dispatch queue (blocks = ISSUE_WIDTH).
+# one dispatch queue (blocks = ISSUE_WIDTH); a bit is ignored for a unit
+# with fewer blocks than issue slots, at SIMD widths up to 12 and for a unit
+# as wide as the warp. Costs a register for the op's fields per block.
 VX_CFG_LANE_DISPATCH_GAPLESS = 0
 # 1 registers a resolved branch between the integer ALU and the warp
 # scheduler; 0 sends it straight from the ALU's result register, so the warp

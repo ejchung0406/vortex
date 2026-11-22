@@ -111,6 +111,7 @@ import VX_tcu_pkg::*;
         .BLOCK_SIZE (1),
         .NUM_LANES  (`VX_CFG_NUM_ALU_LANES),
         .OUT_BUF    (ALU_PARTIAL_BW ? 3 : 0),
+        .GAPLESS    ((`VX_CFG_LANE_DISPATCH_GAPLESS >> 0) & 1),
         .NUM_PORTS  (1)
     ) alu_dispatch (
         .clk        (clk),
@@ -160,6 +161,7 @@ import VX_tcu_pkg::*;
         .BLOCK_SIZE (1),
         .NUM_LANES  (`VX_CFG_NUM_LSU_LANES),
         .OUT_BUF    (3),
+        .GAPLESS    ((`VX_CFG_LANE_DISPATCH_GAPLESS >> 1) & 1),
         .NUM_PORTS  (1)
     ) lsu_dispatch (
         .clk        (clk),
@@ -228,6 +230,7 @@ import VX_tcu_pkg::*;
         .BLOCK_SIZE (1),
         .NUM_LANES  (`VX_CFG_NUM_SFU_LANES),
         .OUT_BUF    (3),
+        .GAPLESS    ((`VX_CFG_LANE_DISPATCH_GAPLESS >> 2) & 1),
         .NUM_PORTS  (1)
     ) sfu_dispatch (
         .clk        (clk),
@@ -304,6 +307,7 @@ import VX_tcu_pkg::*;
         .BLOCK_SIZE (1),
         .NUM_LANES  (`VX_CFG_NUM_FPU_LANES),
         .OUT_BUF    (FPU_PARTIAL_BW ? 3 : 0),
+        .GAPLESS    ((`VX_CFG_LANE_DISPATCH_GAPLESS >> 3) & 1),
         .NUM_PORTS  (1)
     ) fpu_dispatch (
         .clk        (clk),
@@ -368,6 +372,7 @@ import VX_tcu_pkg::*;
         .BLOCK_SIZE (1),
         .NUM_LANES  (`VX_CFG_NUM_TCU_LANES),
         .OUT_BUF    (3),
+        .GAPLESS    ((`VX_CFG_LANE_DISPATCH_GAPLESS >> 4) & 1),
         .NUM_PORTS  (1)
     ) tcu_dispatch (
         .clk        (clk),
