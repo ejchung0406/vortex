@@ -56,7 +56,9 @@ public:
 
   // FCSR fields (Instr::FCSR_*) the instruction writes: claimed at
   // issue, freed on the same schedule as a destination register once the
-  // instruction's last packet commits.
+  // instruction's last packet commits. With FFLAGS_ACCUM a floating-point
+  // operation's flags are an accumulation, counted instead of claimed: it
+  // waits only for CSR accesses of the FCSR, and those wait for it.
   void reserve_fcsr(instr_trace_t* trace);
   void release_fcsr(instr_trace_t* trace);
 
@@ -73,15 +75,19 @@ private:
   // register, and the issue stage reads a registered readiness.
   static constexpr uint32_t kReleaseDelay = 2;
 
+  static bool fflags_accumulates(const instr_trace_t* trace);
+
   struct pending_release_t {
     uint32_t wid;
     RegOpd   reg;
     uint8_t  fcsr;
+    bool     accum;
     uint64_t due;
   };
 
   std::vector<std::vector<RegMask>> in_use_regs_;
   std::vector<uint8_t> in_use_fcsr_;
+  std::vector<uint32_t> fflags_accums_;
   std::deque<pending_release_t> pending_releases_;
   std::unordered_map<uint32_t, instr_trace_t*> owners_;
   std::unordered_map<uint32_t, uint32_t> commit_counts_;
