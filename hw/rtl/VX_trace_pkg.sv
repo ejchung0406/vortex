@@ -524,7 +524,14 @@ package VX_trace_pkg;
             `VX_DCR_KMU_WARP_STEP_X:   `TRACE(level, ("WARP_STEP_X"))
             `VX_DCR_KMU_WARP_STEP_Y:   `TRACE(level, ("WARP_STEP_Y"))
             `VX_DCR_KMU_WARP_STEP_Z:   `TRACE(level, ("WARP_STEP_Z"))
-            default:                   `TRACE(level, ("?"))
+            default: begin
+                if (addr >= VX_DCR_ADDR_WIDTH'(`VX_DCR_KMU_CORE_DISABLE0)
+                 && addr < VX_DCR_ADDR_WIDTH'(`VX_DCR_KMU_CORE_DISABLE0 + `VX_DCR_KMU_CORE_DISABLE_WORDS)) begin
+                    `TRACE(level, ("CORE_DISABLE%0d", addr - VX_DCR_ADDR_WIDTH'(`VX_DCR_KMU_CORE_DISABLE0)))
+                end else begin
+                    `TRACE(level, ("?"))
+                end
+            end
         endcase
     endtask
 

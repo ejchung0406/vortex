@@ -107,10 +107,16 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
 
     VX_kmu_bus_if per_socket_kmu_bus_if[NUM_SOCKETS]();
 
+    // The mask crosses the chip from the KMU, so it is registered on arrival.
+    // It changes only on a DCR write, which precedes the launch it applies to
+    // by many cycles, so the cycle of lag never reaches a CTA.
+    wire [`VX_CFG_NUM_CORES-1:0] core_disable_r;
+    `BUFFER(core_disable_r, core_disable);
+
     // A socket takes compute launches while any of its cores is enabled.
     wire [NUM_SOCKETS-1:0] per_socket_disable;
     for (genvar i = 0; i < NUM_SOCKETS; ++i) begin : g_socket_disable
-        assign per_socket_disable[i] = (& core_disable[i * `VX_CFG_SOCKET_SIZE +: `VX_CFG_SOCKET_SIZE]);
+        assign per_socket_disable[i] = (& core_disable_r[i * `VX_CFG_SOCKET_SIZE +: `VX_CFG_SOCKET_SIZE]);
     end
 
 `ifdef VX_CFG_EXT_RASTER_ENABLE
@@ -601,7 +607,7 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         `endif
 
             .kmu_bus_if     (per_socket_kmu_bus_if[socket_id +: 1]),
-            .core_disable   (core_disable[socket_id * `VX_CFG_SOCKET_SIZE +: `VX_CFG_SOCKET_SIZE]),
+            .core_disable   (core_disable_r[socket_id * `VX_CFG_SOCKET_SIZE +: `VX_CFG_SOCKET_SIZE]),
 
             .gbar_bus_if    (per_socket_gbar_bus_if[socket_id]),
 

@@ -432,7 +432,7 @@ module VX_kmu import VX_gpu_pkg::*; import VX_trace_pkg::*; #(
 
     assign busy = running | raster_start_r;
 
-    // A plain wire to every launch router: it changes only between launches.
+    // Changes only between launches; each cluster and socket registers it.
     assign core_disable = dcr_core_disable;
 
 `ifdef DBG_TRACE_PIPELINE
