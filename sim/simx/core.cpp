@@ -485,6 +485,9 @@ public:
     ibuf_full_r_.reset();
     ibuf_queue_full_.reset();
     ibuf_queue_full_r_.reset();
+    for (uint32_t w = 0; w < VX_CFG_NUM_WARPS; ++w) {
+      ibuf_held_.set(w, ibuffers_.at(w)->size() != 0);
+    }
 
     // perf_stats_ deliberately survives: these are the MPM counters, which
     // accumulate from device reset. A kernel launch re-enters reset() here but
@@ -517,7 +520,7 @@ public:
   // Abort when a warp's staged instruction has not issued for STALL_TIMEOUT
   // cycles, naming the registers it still waits on.
   void check_issue_timeout(uint32_t iw, uint32_t wid, instr_trace_t* trace, instr_trace_t* uop_trace) {
-    uint64_t staged = std::max(last_issue_.at(wid), trace->ibuf_time);
+    uint64_t staged = std::max(last_issue_[wid], trace->ibuf_time);
     uint64_t stall_cycles = SimPlatform::instance().cycles() - staged;
     if (stall_cycles < VX_DBG_STALL_TIMEOUT) {
       return;
@@ -849,6 +852,7 @@ public:
     // insert to ibuffer
     trace->ibuf_time = SimPlatform::instance().cycles();
     ibuffer->push(trace);
+    ibuf_held_.set(trace->wid);
 
     // An instruction that arrives with the warp's buffer and staging register
     // both empty moves into the register at once, and its buffer slot frees
@@ -894,7 +898,9 @@ public:
       issue_yield_.at(iw) = kNoYield;
       for (uint32_t w = 0; w < PER_ISSUE_WARPS; ++w) {
         uint32_t wid = w * VX_CFG_ISSUE_WIDTH + iw;
-        auto& ibuffer = ibuffers_.at(wid);
+        if (!ibuf_held_.test(wid))
+          continue;
+        auto& ibuffer = ibuffers_[wid];
         if (ibuffer->empty())
           continue;
 
@@ -1050,6 +1056,9 @@ public:
               trace_pool_.deallocate(trace, 1);
             }
             ibuffer->pop();
+            if (ibuffer->size() == 0) {
+              ibuf_held_.reset(wid);
+            }
             if (!head_staged_.at(wid)) {
               this->ibuf_release(wid);
             }
@@ -1678,6 +1687,7 @@ private:
   WarpMask ibuf_full_r_;        // ... registered
   WarpMask ibuf_queue_full_;    // [wid] full flag from ibuf_queued_
   WarpMask ibuf_queue_full_r_;  // ... registered
+  WarpMask ibuf_held_;          // [wid] the buffer holds an instruction or one on its way in
   std::array<WarpMask, VX_CFG_FETCH_WIDTH> fetch_warps_; // [slice] the warps it fetches for
   std::vector<uint64_t> last_issue_;   // [wid] cycle of the warp's last issue
   std::vector<uint64_t> staged_since_; // [wid] cycle the last issued candidate was staged
