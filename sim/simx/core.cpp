@@ -645,10 +645,10 @@ public:
 
   // Abort when a warp's staged instruction has not issued for STALL_TIMEOUT
   // cycles, naming the registers it still waits on.
-  void check_issue_timeout(uint32_t iw, uint32_t wid, instr_trace_t* trace, instr_trace_t* uop_trace) {
+  void check_issue_timeout(uint64_t now, uint32_t iw, uint32_t wid, instr_trace_t* trace, instr_trace_t* uop_trace) {
     uint64_t staged = std::max(last_issue_[wid], trace->ibuf_time);
-    uint64_t stall_cycles = SimPlatform::instance().cycles() - staged;
-    if (stall_cycles < VX_DBG_STALL_TIMEOUT) {
+    uint64_t stall_cycles = now - staged;
+    if (__builtin_expect(stall_cycles < VX_DBG_STALL_TIMEOUT, 1)) {
       return;
     }
     std::cerr << "*** " << simobject_->name() << " issue timeout: wid=" << wid
@@ -1007,6 +1007,7 @@ public:
   }
 
   void issue() {
+    const uint64_t now = SimPlatform::instance().cycles();
     // dispatch operands
     for (uint32_t iw = 0; iw < VX_CFG_ISSUE_WIDTH; ++iw) {
       auto& operand = operands_.at(iw);
@@ -1048,7 +1049,7 @@ public:
         // check scoreboard against sequencer micro-op (handles uop WAW/RAW)
         auto trace = ibuffer->peek();
 
-        auto& seq = sequencers_.at(wid);
+        auto& seq = sequencers_[wid];
         auto uop_trace = seq->get(trace);  // returns cached uop or generates next
 
         // The head moves into the warp's staging register, freeing its buffer
@@ -1057,7 +1058,7 @@ public:
         // scheduler sees the freed slot the cycle after.
         if (!head_staged_.at(wid)
          && (!trace->instr_ptr->is_macro_op() || seq->last())
-         && SimPlatform::instance().cycles() > std::max(last_issue_.at(wid), trace->ibuf_time)) {
+         && now > std::max(last_issue_.at(wid), trace->ibuf_time)) {
           head_staged_.at(wid) = true;
           this->ibuf_release(wid);
         }
@@ -1069,10 +1070,10 @@ public:
         bool seq_starting = false;
         if (seq->starting()) {
           uint64_t ready = std::max(staged_since_.at(wid), trace->ibuf_time) + 2;
-          seq_starting = (SimPlatform::instance().cycles() < ready);
+          seq_starting = (now < ready);
         }
 
-        this->check_issue_timeout(iw, wid, trace, uop_trace);
+        this->check_issue_timeout(now, iw, wid, trace, uop_trace);
 
         if (this->scrb_blocked(wid, uop_trace)) {
           if (!uop_trace->log_once(true)) {
@@ -1157,7 +1158,7 @@ public:
           // An issue candidate is staged from the cycle after both the warp's
           // previous issue and its own arrival in the buffer.
           staged_since_.at(wid) = std::max(last_issue_.at(wid), trace->ibuf_time) + 1;
-          last_issue_.at(wid) = SimPlatform::instance().cycles();
+          last_issue_.at(wid) = now;
           DT(3, simobject_->name() << "-pipeline issue: " << *uop_trace);
           if (uop_trace->wb) {
             // update scoreboard
@@ -1209,7 +1210,7 @@ public:
             if (!ibuffer->empty()) {
               auto next = ibuffer->peek();
               if (!next->instr_ptr->is_macro_op()
-               && SimPlatform::instance().cycles() > next->ibuf_time) {
+               && now > next->ibuf_time) {
                 head_staged_.at(wid) = true;
                 this->ibuf_release(wid);
               }
