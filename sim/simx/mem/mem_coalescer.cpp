@@ -117,8 +117,8 @@ void MemCoalescer::on_tick() {
     }
 
     // packed combinationally into the lmem switch's response buffer
-    RspOut.send(out_rsp, 1);
     DT(4, this->name() << " mem-rsp: " << out_rsp);
+    RspOut.send(std::move(out_rsp), 1);
 
     // track remaining responses
     assert(!entry.mask.none());
@@ -308,7 +308,8 @@ void MemCoalescer::flush_out_round() {
     if (!out_round_.lanes.test(o)) {
       continue;
     }
-    if (ReqOut.at(o).try_send(out_round_.reqs.at(o), delay_)) {
+    // a lane's request is sent once: it may move out
+    if (ReqOut.at(o).try_send(std::move(out_round_.reqs.at(o)), delay_)) {
       out_round_.lanes.reset(o);
     }
   }

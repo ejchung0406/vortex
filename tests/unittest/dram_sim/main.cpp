@@ -221,6 +221,35 @@ int main() {
   double gconflict = unloaded_latency(gddr6_one, gddr6_conflict);
   check(gopen < gconflict, "GDDR6 row conflicts cost more than row hits", gconflict - gopen);
 
+  // reset() does not reset Ramulator: a read it holds across the reset
+  // answers later and completes its own request, not one sent after the
+  // reset (a launch reset with a fill still in DRAM).
+  {
+    auto single = base;
+    single.num_channels = 1;
+    DramSim dram(single);
+    dram.reset();
+    std::vector<int> order;
+    auto record = [](void* arg) -> bool {
+      auto* req = static_cast<std::pair<std::vector<int>*, int>*>(arg);
+      req->first->push_back(req->second);
+      return true;
+    };
+    std::pair<std::vector<int>*, int> a{&order, 1}, b{&order, 2};
+    dram.send_request(0, 0, false, record, &a);
+    for (int k = 0; k < 3; ++k) {
+      dram.tick();  // the read enters Ramulator, its data is not back yet
+    }
+    bool held = order.empty();
+    dram.reset();
+    dram.send_request(0, 64 << 15, false, record, &b);
+    for (int k = 0; k < 2000; ++k) {
+      dram.tick();
+    }
+    bool ok = held && (order == std::vector<int>{1, 2});
+    check(ok, "a read held across reset() completes its own request, then the next one", double(order.size()));
+  }
+
   if (g_errors != 0) {
     printf("FAILED: %d check(s)\n", g_errors);
     return 1;

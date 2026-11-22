@@ -124,11 +124,14 @@ private:
 		uint32_t tid;
 	};
 
+	// a request's lanes, inline: one per LSU lane
+	using lane_list_t = std::array<mem_addr_size_t, VX_CFG_NUM_LSU_LANES>;
+
  	struct pending_req_t {
 		instr_trace_t* trace;
 		uint32_t count;
 		bool eop;
-		std::vector<mem_addr_size_t> lanes;
+		lane_list_t lanes;
 		IntrLsuArgs lsu_args;
 		bool        is_load;
 		// The instruction's response-tracking slot.
@@ -173,7 +176,7 @@ private:
 		FenceController           fence;
 		// the engaged fence's flush token is still to be sent
 		bool                      fence_token = false;
-		std::vector<mem_addr_size_t> addr_list;
+		FixedVector<mem_addr_size_t, VX_CFG_NUM_THREADS> addr_list;
 		uint32_t                  remain_addrs = 0;
 
 		void reset() {
