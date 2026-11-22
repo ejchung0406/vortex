@@ -1258,8 +1258,8 @@ private:
       }
       bank_req_t bank_req;
       mshr_.dequeue(&bank_req);
-      pipe_req_->push(std::move(bank_req));
       DT(3, this->name() << " replay-deq: " << bank_req);
+      pipe_req_->push(std::move(bank_req));
       return;
     }
 
@@ -1795,8 +1795,8 @@ private:
     MemRsp rsp{req.req_tag, req.hart_id, req.uuid};
     rsp.data = fwd_data_;
     rsp.merged_tags = std::move(req.merged_tags);
-    this->core_rsp_out.send(std::move(rsp));
     DT(3, this->name() << " fwd-rsp: " << rsp);
+    this->core_rsp_out.send(std::move(rsp));
     return true;
   }
 
@@ -1956,9 +1956,9 @@ private:
 #endif
     if (need_rsp) {
       MemRsp rsp{rsp_tag, hart_id, uuid};
+      DT(3, this->name() << " core-rsp: " << rsp);
       this->core_rsp_out.send(std::move(rsp));
       crsp_sent_ = true;
-      DT(3, this->name() << " core-rsp: " << rsp);
     }
     return true;
   }
@@ -2193,9 +2193,9 @@ private:
         if (!bank_req.write)
           rsp.data = hit_sec.data;
         rsp.merged_tags = bank_req.merged_tags;
+        DT(3, this->name() << " replay-rsp: " << rsp);
         this->core_rsp_out.send(std::move(rsp));
         crsp_sent_ = true;
-        DT(3, this->name() << " replay-rsp: " << rsp);
       }
       if (config_.repl_policy == Cache::PLRU)
         set.update_lru(hit_id);
@@ -2339,9 +2339,9 @@ private:
           if (!bank_req.write)
             rsp.data = hit_sec.data;
           rsp.merged_tags = bank_req.merged_tags;
+          DT(3, this->name() << " core-rsp: " << rsp);
           this->core_rsp_out.send(std::move(rsp));
           crsp_sent_ = true;
-          DT(3, this->name() << " core-rsp: " << rsp);
         }
       } else {
         // Cache miss.
@@ -2414,8 +2414,8 @@ private:
             fill.tag   = mshr_id; // routes the fill response back here
             fill.hart_id   = bank_req.hart_id;
             fill.uuid  = bank_req.uuid;
-            this->send_mem_req(std::move(fill));
             DT(3, this->name() << " fill-req: " << fill);
+            this->send_mem_req(std::move(fill));
             ++pending_fill_reqs_;
           }
         }
