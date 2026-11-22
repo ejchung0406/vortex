@@ -155,6 +155,14 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
 
 ### Fixed
 
+- **SimX lane dispatch with fewer lanes than threads.** Two differences from the RTL when a unit takes a warp in packets (SIMD
+  widths above 12). The LSU's input held two packets where the RTL holds three (the packet register and the two-entry skid
+  buffer), so a split load or store took one cycle more per op; and with one batch per unit, a block that had finished its op
+  waited for the unit's other blocks before taking the next. The second also applies, and also moves SimX toward the RTL, when
+  the SIMD width is below the thread count with more than one issue slot, whatever the lane counts. Configurations whose units
+  are as wide as the warp, with SIMD width equal to the thread count, are unchanged. [sim/simx/dispatcher.cpp](sim/simx/dispatcher.cpp),
+  [sim/simx/lsu_unit.cpp](sim/simx/lsu_unit.cpp).
+
 - **ASIC core and top at 800 MHz.** On ASAP7 the core reached 655 MHz and top 654 MHz against the 800 MHz catalog clock, held by
   three datapaths: the FDIV/FSQRT result stage, the FMA's accumulate and rounding stages, and the integer multiplier. Each is
   retimed with no change in latency, so SimX and every cycle count are unchanged. FDIV/FSQRT decides the subnormal shift and tests
