@@ -20,6 +20,10 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
 - **Branch register (`VX_CFG_BRANCH_REG`, default 1).** With 0 a resolved branch goes to the warp scheduler straight from the
   integer ALU's result register, and the warp is picked at the target one cycle earlier; the register between them has no
   function. [VX_alu_int.sv](hw/rtl/core/VX_alu_int.sv), [sim/simx/alu_unit.cpp](sim/simx/alu_unit.cpp).
+- **Fetch request buffer (`VX_CFG_FETCH_REQ_BUF`, default 1).** With 0 a fetch pick goes from the warp scheduler straight into the
+  fetch unit's request buffer, without the scheduler's own buffer in front of it, and reaches the icache one cycle earlier; the
+  request still leaves the fetch unit registered and the pick still sees a registered ready. Requires EXT_C off.
+  [VX_warp_sched.sv](hw/rtl/core/VX_warp_sched.sv), [sim/simx/core.cpp](sim/simx/core.cpp).
 - **FP flags as an accumulation (`VX_CFG_FFLAGS_ACCUM`, default 0).** With 1 the scoreboard counts a warp's FP operations in flight
   instead of reserving fflags for each, so they no longer issue one at a time; a CSR access of fflags or fcsr waits for the count
   to reach zero. [VX_scoreboard.sv](hw/rtl/core/VX_scoreboard.sv), [sim/simx/scoreboard.cpp](sim/simx/scoreboard.cpp).

@@ -88,6 +88,12 @@ VX_CFG_IBUF_SIZE = 4
 # and a fetch that arrives ahead of an older one, and the warp refetches from
 # there once the dropped fetches have all returned. Requires EXT_C off.
 VX_CFG_FETCH_INFLIGHT = 1
+# 1 buffers a fetch pick in the warp scheduler before the fetch unit's
+# request buffer; 0 sends the pick straight to that buffer, so the request
+# reaches the icache one cycle earlier. The fetch unit's buffer still
+# registers the request and gives the pick a registered ready. Requires EXT_C
+# off.
+VX_CFG_FETCH_REQ_BUF = 1
 # 1 treats a floating-point operation's exception flags as an accumulation
 # (sticky OR): the scoreboard counts a warp's FP operations in flight instead
 # of reserving fflags for each, so they no longer issue one at a time. A CSR

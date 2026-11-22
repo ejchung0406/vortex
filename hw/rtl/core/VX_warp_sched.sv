@@ -14,8 +14,8 @@
 `include "VX_define.vh"
 
 // The warp scheduler of one frontend slice: the state of the slice's warps
-// (wid = {wfs, slice_id}), its warp selection and a registered fetch request to
-// the slice's fetch unit, which names warps by wfs. FU block port q carries the
+// (wid = {wfs, slice_id}), its warp selection and a fetch request to the
+// slice's fetch unit, which names warps by wfs. FU block port q carries the
 // traffic of the local warps with wfs mod PORTS == q, addressed by core-wide wid;
 // core-wide events arrive through sched_if already localized.
 module VX_warp_sched import VX_gpu_pkg::*; #(
@@ -71,6 +71,7 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
     `STATIC_ASSERT((FETCH_INFLIGHT >= 1) && `IS_POW2(FETCH_INFLIGHT), ("invalid parameter: VX_CFG_FETCH_INFLIGHT must be a power of two"))
 `ifdef VX_CFG_EXT_C_ENABLE
     `STATIC_ASSERT(!FETCH_AHEAD, ("invalid parameter: VX_CFG_FETCH_INFLIGHT > 1 fetches 4-byte words ahead, which compressed instructions break"))
+    `STATIC_ASSERT(`VX_CFG_FETCH_REQ_BUF != 0, ("invalid parameter: VX_CFG_FETCH_REQ_BUF=0 puts the decompressor's buffer match on the pick's ready"))
 `endif
 
     `UNUSED_VAR (schedule_if.ibuf_pop)
@@ -544,7 +545,9 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
 
     wire [NCTA_WIDTH-1:0] cand_cta_id = port_cta_id[32'(cand_lid) % NPS];
 
-    // fetch request, registered at the slice boundary
+    // fetch request, registered at the slice boundary; without the buffer the
+    // pick goes straight to the fetch unit's request buffer, whose ready is a
+    // register
     wire sched_ready;
     assign sched_fire = cand_valid && sched_ready;
 
@@ -585,7 +588,7 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
 
     VX_elastic_buffer #(
         .DATAW   (SCHED_DATAW + SPEC_DATAW),
-        .SIZE    (2),
+        .SIZE    ((`VX_CFG_FETCH_REQ_BUF != 0) ? 2 : 0),
         .OUT_REG (1)
     ) sched_buf (
         .clk       (clk),
