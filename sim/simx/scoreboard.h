@@ -58,7 +58,8 @@ public:
   // issue, freed on the same schedule as a destination register once the
   // instruction's last packet commits. With FFLAGS_ACCUM a floating-point
   // operation's flags are an accumulation, counted instead of claimed: it
-  // waits only for CSR accesses of the FCSR, and those wait for it.
+  // waits only for a CSR write of the flags, and a CSR access of the flags
+  // waits for it.
   void reserve_fcsr(instr_trace_t* trace);
   void release_fcsr(instr_trace_t* trace);
 
@@ -75,7 +76,9 @@ private:
   // register, and the issue stage reads a registered readiness.
   static constexpr uint32_t kReleaseDelay = 2;
 
+  static constexpr uint8_t kFflagsSlot = 1u << 2;
   static bool fflags_accumulates(const instr_trace_t* trace);
+  static uint8_t fcsr_slots(const instr_trace_t* trace, uint8_t fields);
 
   struct pending_release_t {
     uint32_t wid;

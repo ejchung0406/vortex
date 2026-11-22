@@ -83,11 +83,13 @@ VX_CFG_IBUF_SIZE = 4
 # instruction out of order, and the warp refetches from its PC once released.
 # The instruction buffer (IBUF_SIZE) bounds it as well.
 VX_CFG_FETCH_INFLIGHT = 1
-# SimX only: 1 treats a floating-point operation's exception flags as an
-# accumulation (sticky OR), so a warp's FP operations no longer wait for each
-# other's flags; CSR accesses of fflags, frm or fcsr still wait for them, and
-# they for those. 0 serializes the flag writes, one FP operation of a warp at a
-# time, as the RTL scoreboard does with XREG_0.
+# 1 treats a floating-point operation's exception flags as an accumulation
+# (sticky OR): the scoreboard counts a warp's FP operations in flight instead
+# of reserving fflags for each, so they no longer issue one at a time. A CSR
+# access of fflags or fcsr waits for the count to reach zero, and an FP
+# operation waits for a CSR write of them in flight. The flags then have a
+# scoreboard slot of their own, so the TCU metadata loads that share the slot
+# at 0 no longer wait for FP operations. 0 serializes the flag writes.
 VX_CFG_FFLAGS_ACCUM = 0
 VX_CFG_DISPATCH_QUEUE_SIZE = 4
 # A power of two: a warp's issue slice is the low bits of its id.

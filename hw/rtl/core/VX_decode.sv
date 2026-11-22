@@ -482,9 +482,9 @@ module VX_decode import
                     op_args.csr.addr = u_12;
                     op_args.csr.use_imm = funct3[2];
                     op_args.csr.imm5 = rs1;
-                    rd_xregs[XREG_0] = is_csr_fcsr || is_csr_fflags;
+                    rd_xregs[XREG_FFLAGS] = is_csr_fcsr || is_csr_fflags;
                     rd_xregs[XREG_1]    = is_csr_fcsr || is_csr_frm;
-                    wr_xregs[XREG_0] = csr_write && (is_csr_fcsr || is_csr_fflags);
+                    wr_xregs[XREG_FFLAGS] = csr_write && (is_csr_fcsr || is_csr_fflags);
                     wr_xregs[XREG_1]    = csr_write && (is_csr_fcsr || is_csr_frm);
                     `USED_IREG (rd);
                     `USED_REG (REG_TYPE_I, rs1, ~funct3[2]);
@@ -625,7 +625,7 @@ module VX_decode import
 
                     // track FCSR dependencies
                     rd_xregs[XREG_1] = frm_is_dyn;
-                    wr_xregs[XREG_0] = 1'b1;
+                    wr_xregs[XREG_FFLAGS] = 1'b1;
 
                     `USED_FREG (rd);
                     `USED_FREG (rs1);
@@ -633,7 +633,7 @@ module VX_decode import
                     `USED_FREG (rs3);
                 end else begin
                     // Most FP operations may set exception flags
-                    wr_xregs[XREG_0] = 1'b1;
+                    wr_xregs[XREG_FFLAGS] = 1'b1;
                     case (funct5)
                         5'b00000, // FADD
                         5'b00001, // FSUB
@@ -650,7 +650,7 @@ module VX_decode import
                             // NCP: FSGNJ=0, FSGNJN=1, FSGNJX=2
                             op_type = INST_OP_BITS'(INST_FPU_MISC);
                             op_args.fpu.frm = INST_FRM_BITS'(funct3[1:0]);
-                            wr_xregs[XREG_0] = 1'b0;
+                            wr_xregs[XREG_FFLAGS] = 1'b0;
                             `USED_FREG (rd);
                             `USED_FREG (rs1);
                             `USED_FREG (rs2);
@@ -713,7 +713,7 @@ module VX_decode import
                             // NCP: FCLASS=3, FMV.X.W=4
                             op_type = INST_OP_BITS'(INST_FPU_MISC);
                             op_args.fpu.frm = funct3[0] ? INST_FRM_BITS'(3) : INST_FRM_BITS'(4);
-                            wr_xregs[XREG_0] = 1'b0;
+                            wr_xregs[XREG_FFLAGS] = 1'b0;
                             `USED_IREG (rd);
                             `USED_FREG (rs1);
                         end
@@ -721,7 +721,7 @@ module VX_decode import
                             // NCP: FMV.W.X=5
                             op_type = INST_OP_BITS'(INST_FPU_MISC);
                             op_args.fpu.frm = INST_FRM_BITS'(5);
-                            wr_xregs[XREG_0] = 1'b0;
+                            wr_xregs[XREG_FFLAGS] = 1'b0;
                             `USED_FREG (rd);
                             `USED_IREG (rs1);
                         end

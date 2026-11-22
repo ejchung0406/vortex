@@ -70,7 +70,12 @@ package VX_gpu_pkg;
     // these bits.
     localparam XREG_0      = 0;
     localparam XREG_1      = 1;
-    localparam NUM_XREGS   = 2;
+    // With FFLAGS_ACCUM the FP exception flags take a slot of their own, which
+    // the scoreboard counts for FP operations instead of reserving; otherwise
+    // they share XREG_0.
+    localparam FFLAGS_ACCUM = (`VX_CFG_FFLAGS_ACCUM != 0);
+    localparam XREG_FFLAGS = FFLAGS_ACCUM ? 2 : XREG_0;
+    localparam NUM_XREGS   = FFLAGS_ACCUM ? 3 : 2;
 
     localparam DV_STACK_SIZE = `UP(`VX_CFG_NUM_THREADS-1);
     localparam DV_STACK_SIZEW = `LOG2UP(DV_STACK_SIZE);

@@ -124,6 +124,49 @@ module VX_scoreboard import VX_gpu_pkg::*; #(
             end
         end
 
+        // With FFLAGS_ACCUM an FP operation's exception flags accumulate: it
+        // is counted while outstanding instead of reserving the flags, so FP
+        // operations do not wait for each other. A CSR access of the flags
+        // waits for the count to reach zero and reserves them if it writes,
+        // and an FP operation waits for that reservation; the two are never
+        // outstanding together, so a writeback that names the flags releases
+        // the reservation if there is one and a count otherwise.
+        wire ibf_accum, stg_accum;
+        wire ibf_xflags, stg_xflags;
+        wire [NUM_XREGS-1:0] stg_xrsv;
+        wire accum_busy;
+        if (FFLAGS_ACCUM) begin : g_fflags_accum
+            localparam ACCUM_W = 8; // as the warp's pending counter
+            reg [ACCUM_W-1:0] accum_r;
+            assign ibf_accum  = (ibuffer_if[w].data.ex_type == EX_FPU) && ibuffer_if[w].data.wr_xregs[XREG_FFLAGS];
+            assign stg_accum  = (staging_if[w].data.ex_type == EX_FPU) && staging_if[w].data.wr_xregs[XREG_FFLAGS];
+            assign ibf_xflags = ibf_xregs_mask[XREG_FFLAGS];
+            assign stg_xflags = stg_xregs_mask[XREG_FFLAGS];
+            wire accum_release = writeback_fire && writeback_if.data.wr_xregs[XREG_FFLAGS] && ~inuse_xregs[XREG_FFLAGS];
+            wire accum_reserve = staging_fire && stg_accum;
+            always @(posedge clk) begin
+                if (reset) begin
+                    accum_r <= '0;
+                end else begin
+                    accum_r <= accum_r + ACCUM_W'(accum_reserve) - ACCUM_W'(accum_release);
+                end
+            end
+            assign accum_busy = (accum_r != ACCUM_W'(accum_release));
+            assign stg_xrsv   = staging_if[w].data.wr_xregs & ~(NUM_XREGS'(stg_accum) << XREG_FFLAGS);
+            `RUNTIME_ASSERT(~accum_release || (accum_r != '0),
+                ("invalid writeback of accumulated flags: wid=%0d, PC=0x%0h (#%0d)",
+                    w, to_fullPC(writeback_if.data.PC), writeback_if.data.uuid))
+            `RUNTIME_ASSERT(~accum_reserve || accum_release || (accum_r != '1),
+                ("accumulated flags counter overflow: wid=%0d", w))
+        end else begin : g_fflags_excl
+            assign ibf_accum  = 1'b0;
+            assign stg_accum  = 1'b0;
+            assign ibf_xflags = 1'b0;
+            assign stg_xflags = 1'b0;
+            assign accum_busy = 1'b0;
+            assign stg_xrsv   = staging_if[w].data.wr_xregs;
+        end
+
         // Writeback release feeds wb_inuse_regs; the staging reserve is added on
         // top to form the next state, inuse_regs_n.
         reg [NUM_REGS-1:0]  wb_inuse_regs;
@@ -146,7 +189,7 @@ module VX_scoreboard import VX_gpu_pkg::*; #(
                 if (staging_if[w].data.wb) begin
                     inuse_regs_n |= stg_opd_mask[0]; // reserve rd
                 end
-                inuse_xregs_n |= staging_if[w].data.wr_xregs; // reserve special regs
+                inuse_xregs_n |= stg_xrsv; // reserve special regs
             end
         end
 
@@ -179,8 +222,10 @@ module VX_scoreboard import VX_gpu_pkg::*; #(
         end
         wire ibf_busy  = | ibf_opd_busy;
         wire stg_busy  = | stg_opd_busy;
-        wire ibf_xbusy = | (wb_inuse_xregs & ibf_xregs_mask);
-        wire stg_xbusy = | (wb_inuse_xregs & stg_xregs_mask);
+        // an instruction that reads or writes the flags other than by
+        // accumulating waits for the FP operations outstanding
+        wire ibf_xbusy = (| (wb_inuse_xregs & ibf_xregs_mask)) || (ibf_xflags && ~ibf_accum && accum_busy);
+        wire stg_xbusy = (| (wb_inuse_xregs & stg_xregs_mask)) || (stg_xflags && ~stg_accum && accum_busy);
 
         // On fire the staging instr also reserves its rd and wr_xregs. Its
         // successor sees that reservation only through a register it names,
@@ -190,10 +235,13 @@ module VX_scoreboard import VX_gpu_pkg::*; #(
             assign ibf_reads_rd[i] = ibf_used_rs[i] && (ibf_opds[i] == stg_opds[0]);
         end
         wire stg_rsv_rd = staging_if[w].data.wb;
+        // an accumulating operation holds back its successor only if that
+        // one does not accumulate too
         wire ibf_rsv    = (stg_rsv_rd && (| ibf_reads_rd))
-                       || (| (staging_if[w].data.wr_xregs & ibf_xregs_mask));
+                       || (| (stg_xrsv & ibf_xregs_mask))
+                       || (stg_accum && ibf_xflags && ~ibf_accum);
         wire stg_rsv    = stg_rsv_rd
-                       || (| (staging_if[w].data.wr_xregs & stg_xregs_mask));
+                       || (| (stg_xrsv & stg_xregs_mask));
 
         wire hold_ibf = ibuffer_if[w].valid && ~staging_if[w].valid;
         wire fire_ibf = ibuffer_if[w].valid;
@@ -270,7 +318,7 @@ module VX_scoreboard import VX_gpu_pkg::*; #(
             ("invalid writeback register: wid=%0d, PC=0x%0h, tmask=%b, rd=%0d (#%0d)",
                 w, to_fullPC(writeback_if.data.PC), writeback_if.data.tmask, writeback_if.data.rd, writeback_if.data.uuid))
 
-        `RUNTIME_ASSERT(~writeback_fire || ((writeback_if.data.wr_xregs & ~inuse_xregs) == '0),
+        `RUNTIME_ASSERT(~writeback_fire || ((writeback_if.data.wr_xregs & ~inuse_xregs & ~(NUM_XREGS'(FFLAGS_ACCUM) << XREG_FFLAGS)) == '0),
             ("invalid writeback special register: wid=%0d, PC=0x%0h, tmask=%b, xregs=%b (#%0d)",
                 w, to_fullPC(writeback_if.data.PC), writeback_if.data.tmask, writeback_if.data.wr_xregs, writeback_if.data.uuid))
     `endif

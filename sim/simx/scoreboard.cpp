@@ -65,16 +65,31 @@ void Scoreboard::on_tick() {
 
 bool Scoreboard::fflags_accumulates(const instr_trace_t* trace) {
   return VX_CFG_FFLAGS_ACCUM && trace->fu_type == FUType::FPU
-      && trace->instr_ptr->fcsr_writes() == Instr::FCSR_FFLAGS;
+      && (trace->instr_ptr->fcsr_writes() & Instr::FCSR_FFLAGS);
+}
+
+// With FFLAGS_ACCUM the FP flags have a slot of their own (kFflagsSlot), apart
+// from the TCU metadata slot that shares FCSR_FFLAGS, as XREG_FFLAGS in the RTL.
+uint8_t Scoreboard::fcsr_slots(const instr_trace_t* trace, uint8_t fields) {
+#ifdef VX_CFG_EXT_TCU_ENABLE
+  bool is_tcu = (trace->fu_type == FUType::TCU);
+#else
+  __unused (trace);
+  bool is_tcu = false;
+#endif
+  if (VX_CFG_FFLAGS_ACCUM && !is_tcu && (fields & Instr::FCSR_FFLAGS)) {
+    return (fields & ~Instr::FCSR_FFLAGS) | kFflagsSlot;
+  }
+  return fields;
 }
 
 bool Scoreboard::in_use(instr_trace_t* trace) const {
   auto& instr = *trace->instr_ptr;
-  if (in_use_fcsr_.at(trace->wid) & (instr.fcsr_reads() | instr.fcsr_writes())) {
+  uint8_t slots = fcsr_slots(trace, instr.fcsr_reads() | instr.fcsr_writes());
+  if (in_use_fcsr_.at(trace->wid) & slots) {
     return true;
   }
-  if (VX_CFG_FFLAGS_ACCUM && !fflags_accumulates(trace) && (instr.fcsr_reads() | instr.fcsr_writes())
-   && fflags_accums_.at(trace->wid) != 0) {
+  if ((slots & kFflagsSlot) && !fflags_accumulates(trace) && fflags_accums_.at(trace->wid) != 0) {
     return true;
   }
   if (trace->wb) {
@@ -135,19 +150,23 @@ void Scoreboard::release(instr_trace_t* trace) {
 }
 
 void Scoreboard::reserve_fcsr(instr_trace_t* trace) {
+  uint8_t fields = fcsr_slots(trace, trace->instr_ptr->fcsr_writes());
   if (fflags_accumulates(trace)) {
     ++fflags_accums_.at(trace->wid);
-    return;
+    fields &= ~kFflagsSlot;
   }
-  uint8_t fields = trace->instr_ptr->fcsr_writes();
   assert((in_use_fcsr_.at(trace->wid) & fields) == 0);
   in_use_fcsr_.at(trace->wid) |= fields;
 }
 
 void Scoreboard::release_fcsr(instr_trace_t* trace) {
-  uint8_t fields = trace->instr_ptr->fcsr_writes();
+  uint8_t fields = fcsr_slots(trace, trace->instr_ptr->fcsr_writes());
   bool accum = fflags_accumulates(trace);
-  assert(accum || (in_use_fcsr_.at(trace->wid) & fields) == fields);
+  if (accum) {
+    fields &= ~kFflagsSlot;
+    assert(fields == 0);
+  }
+  assert((in_use_fcsr_.at(trace->wid) & fields) == fields);
   pending_releases_.push_back({trace->wid, {RegType::None, 0}, fields, accum,
                                SimPlatform::instance().cycles() + kReleaseDelay});
   this->tick_wake();
