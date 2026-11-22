@@ -3299,6 +3299,7 @@ protected:
     }
     auto& pending = pending_;
     pending.assign(nb, 0);
+    uint64_t any_pending = 0; // ports some lane still owes
     for (uint32_t b = 0; b < nb; ++b) {
       if (RspIn.at(b).empty()) {
         continue;
@@ -3309,12 +3310,17 @@ protected:
       uint64_t mask = (tag >> lg2_outputs_) & ((1ull << merge_group_) - 1);
       uint64_t targets = (1ull << port) | (mask << ((port / merge_group_) * merge_group_));
       pending.at(b) = targets & ~sent_.at(b);
+      any_pending |= pending.at(b);
     }
     if (idle) {
       this->tick_sleep();
       return;
     }
     for (uint32_t o = 0; o < no; ++o) {
+      // a port no lane owes grants nothing
+      if (!(any_pending & (1ull << o))) {
+        continue;
+      }
       for (uint32_t sl = 0; sl < slices_; ++sl) {
         uint32_t lo = (slices_ > 1) ? sl * kMaxFanout : 0;
         uint32_t hi = (slices_ > 1) ? std::min(lo + kMaxFanout, nb) : nb;
