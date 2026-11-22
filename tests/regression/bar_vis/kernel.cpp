@@ -9,6 +9,16 @@
 // overtaking those reads. The odd CTAs walk a large buffer a line apart, so that
 // the core always has reads to memory outstanding of warps the checking CTAs'
 // barriers do not wait for.
+//
+// Two odd CTAs resident together share lines: thread j + 2 of CTA c + 2 reads
+// in its iteration n - 2 the line thread j of CTA c reads in iteration n.
+// Between the two reads the data cache takes the fills of two iterations, at
+// least a line per thread of CTA c + 2: with 128-thread CTAs, 256 lines, a
+// default 16 KB data cache. Whether the second read hits then turns on how far
+// one CTA runs ahead of the other, and a cycle anywhere can tip the whole run
+// from hitting to missing. A shape that compares timings keeps the two out of
+// each other's way: odd CTAs that never run together, or a cache far from the
+// size of those fills.
 __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   const uint32_t T = blockDim.x;
   const uint32_t t = threadIdx.x;
