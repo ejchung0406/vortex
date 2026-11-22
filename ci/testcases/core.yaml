@@ -554,6 +554,24 @@ tests:
   xlen: [64]
   args: -k12 -w1 -i32
   configs: -DVX_CFG_NUM_WARPS=4 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+# The same stores and unread loads with the LSU's empty cycle removed
+# (VX_CFG_LANE_DISPATCH_GAPLESS bit 1): four packets per op, back to back.
+- id: parity-warp-rate-lsu-lanes-store-gapless
+  check: model_parity
+  tolerance: 0.005
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k11 -w1 -i32
+  configs: -DVX_CFG_NUM_WARPS=4 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1 -DVX_CFG_LANE_DISPATCH_GAPLESS=2
+- id: parity-warp-rate-lsu-lanes-load-gapless
+  check: model_parity
+  tolerance: 0.005
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k12 -w1 -i32
+  configs: -DVX_CFG_NUM_WARPS=4 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1 -DVX_CFG_LANE_DISPATCH_GAPLESS=2
 # SGEMM with local-memory tiling (kernel-managed shared memory).
 - id: parity-sgemmx
   check: model_parity
