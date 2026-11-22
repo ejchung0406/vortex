@@ -24,7 +24,9 @@
 // -M launches on the listed cores only: the others are masked off in the KMU
 // and the grid is sized by the cores left. -T times each CTA and prints each
 // core's bytes over the span from its first CTA's start to its last's end,
-// and each enabled core's CTA count.
+// and each enabled core's CTA count. -R N launches the kernel N times on one
+// device, so the KMU's placement state carries from launch to launch; each
+// launch is checked and timed, and the CTA counts are summed over all.
 //
 // Unwritten memory reads as one value in the simulators, so the host check
 // proves that every load was made, not that it read the right address.
@@ -57,6 +59,7 @@ uint32_t grid    = 0;
 uint32_t pattern = BWSTREAM_COALESCED;
 uint32_t unroll  = 1;
 uint32_t block_warps = 1;
+uint32_t repeats = 1;
 const char* core_list = nullptr;
 bool timing = false;
 
@@ -73,7 +76,7 @@ kernel_arg_t kernel_arg = {};
 static void show_usage() {
   std::cout << "Vortex streaming-read bandwidth probe." << std::endl;
   std::cout << "Usage: [-n steps] [-r rounds] [-g grid] [-p 0:coalesced|1:rows] "
-               "[-u unroll] [-b block warps] [-M cores] [-T] [-k kernel] [-h]" << std::endl;
+               "[-u unroll] [-b block warps] [-M cores] [-T] [-R launches] [-k kernel] [-h]" << std::endl;
   std::cout << "  -b W (with -p 0): W one-warp CTAs read one slice as the warps of a W-warp block do." << std::endl;
   std::cout << "  The streams' layout moves with -n: with -b 1 do not difference two -n runs." << std::endl;
   std::cout << "  -M 0,2,8-11 (or 0+2+8-11): launch only on these cores. -T: per-core rates." << std::endl;
@@ -81,7 +84,7 @@ static void show_usage() {
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "n:r:g:p:u:b:M:Tk:h")) != -1) {
+  while ((c = getopt(argc, argv, "n:r:g:p:u:b:M:TR:k:h")) != -1) {
     switch (c) {
     case 'n': steps   = atoi(optarg); break;
     case 'r': rounds  = atoi(optarg); break;
@@ -91,6 +94,7 @@ static void parse_args(int argc, char **argv) {
     case 'b': block_warps = atoi(optarg); break;
     case 'M': core_list = optarg; break;
     case 'T': timing = true; break;
+    case 'R': repeats = atoi(optarg); break;
     case 'k': kernel_file = optarg; break;
     case 'h': show_usage(); exit(0);
     default:  show_usage(); exit(-1);
@@ -98,9 +102,10 @@ static void parse_args(int argc, char **argv) {
   }
   bool unroll_ok = (unroll == 1 || unroll == 2 || unroll == 4 || unroll == 8);
   bool block_ok = (block_warps != 0) && (pattern == BWSTREAM_COALESCED || block_warps == 1);
-  if (!unroll_ok || steps == 0 || steps % unroll != 0 || rounds == 0 || pattern > BWSTREAM_ROWS || !block_ok) {
+  if (!unroll_ok || steps == 0 || steps % unroll != 0 || rounds == 0 || pattern > BWSTREAM_ROWS || !block_ok
+      || repeats == 0) {
     std::cerr << "unroll must be 1, 2, 4 or 8 and divide steps; rounds nonzero; pattern is 0 or 1; "
-                 "block warps nonzero, and 1 with -p 1" << std::endl;
+                 "block warps nonzero, and 1 with -p 1; launches nonzero" << std::endl;
     exit(-1);
   }
 }
@@ -261,7 +266,6 @@ int main(int argc, char *argv[]) {
     RT_CHECK(vx_module_get_kernel(module_, "main", &kernel));
   }
 
-  vx_event_h launch_ev = nullptr, read_ev = nullptr;
   vx_launch_info_t li = {};
   li.struct_size  = sizeof(li);
   li.kernel       = kernel;
@@ -270,59 +274,6 @@ int main(int argc, char *argv[]) {
   li.ndim         = 1;
   li.grid_dim[0]  = grid;
   li.block_dim[0] = (uint32_t)num_threads;
-  RT_CHECK(vx_enqueue_launch(queue, &li, 0, nullptr, &launch_ev));
-
-  std::vector<float> h_out(total_threads, 0.0f);
-  RT_CHECK(vx_enqueue_read(queue, h_out.data(), out_buffer, 0, out_size, 1, &launch_ev, &read_ev));
-  RT_CHECK(vx_event_wait_value(read_ev, 1, VX_TIMEOUT_INFINITE));
-  vx_event_release(read_ev);
-  vx_event_release(launch_ev);
-
-  // With -M every CTA must report one of the listed cores. Within one wave a
-  // core takes its CTAs without finishing any, so the KMU alone places them
-  // and the enabled cores' counts must differ by one at most; past one wave a
-  // core that drains sooner rightly takes more.
-  uint64_t misplaced = 0;
-  bool uneven = false;
-  if (timing) {
-    std::vector<uint64_t> tm(3 * (uint64_t)grid, 0);
-    vx_event_h tm_ev = nullptr;
-    RT_CHECK(vx_enqueue_read(queue, tm.data(), timing_buffer, 0, tm.size() * sizeof(uint64_t), 0, nullptr, &tm_ev));
-    RT_CHECK(vx_event_wait_value(tm_ev, 1, VX_TIMEOUT_INFINITE));
-    vx_event_release(tm_ev);
-    std::vector<uint64_t> first(num_cores, ~0ull), last(num_cores, 0), bytes(num_cores, 0), ctas(num_cores, 0);
-    for (uint64_t g = 0; g < grid; ++g) {
-      uint64_t c = tm[3 * g];
-      if (c >= num_cores || !cores_on[c]) {
-        if (misplaced < 10) {
-          printf("*** error: CTA %llu ran on core %llu, not in -M\n", (unsigned long long)g,
-                 (unsigned long long)c);
-        }
-        ++misplaced;
-        continue;
-      }
-      first[c] = std::min(first[c], tm[3 * g + 1]);
-      last[c] = std::max(last[c], tm[3 * g + 2]);
-      bytes[c] += (uint64_t)steps * num_threads * sizeof(float);
-      ++ctas[c];
-    }
-    for (uint64_t c = 0; c < num_cores; ++c) {
-      if (bytes[c] != 0) {
-        printf("core_rate: core=%llu bytes=%llu start=%llu end=%llu B_per_cycle=%.2f\n",
-               (unsigned long long)c, (unsigned long long)bytes[c], (unsigned long long)first[c],
-               (unsigned long long)last[c], double(bytes[c]) / double(last[c] - first[c]));
-      }
-    }
-    uint64_t min_ctas = ~0ull, max_ctas = 0;
-    for (uint64_t c = 0; c < num_cores; ++c) {
-      if (cores_on[c]) {
-        printf("core_ctas: core=%llu ctas=%llu\n", (unsigned long long)c, (unsigned long long)ctas[c]);
-        min_ctas = std::min(min_ctas, ctas[c]);
-        max_ctas = std::max(max_ctas, ctas[c]);
-      }
-    }
-    uneven = (grid % active_cores == 0) && (grid <= active_cores * num_warps) && (max_ctas - min_ctas > 1);
-  }
 
   // Every element reads as `fill`: redo the kernel's accumulation in its order.
   volatile float part = 0.0f;
@@ -334,16 +285,86 @@ int main(int argc, char *argv[]) {
     sum = sum + part;
   }
 
+  // With -M every CTA must report one of the listed cores. Within one wave a
+  // core takes its CTAs without finishing any, so the KMU alone places them
+  // and the enabled cores' counts must differ by one at most; past one wave a
+  // core that drains sooner rightly takes more.
+  uint64_t misplaced = 0;
   uint64_t errors = 0;
-  for (uint64_t g = 0; g < total_threads; ++g) {
-    float expected = sum + (float)(g + 1);
-    if (h_out[g] != expected) {
-      if (errors < 10) {
-        printf("*** error: [%llu] expected=%f, actual=%f\n", (unsigned long long)g,
-               expected, h_out[g]);
+  std::vector<uint64_t> ctas(num_cores, 0);
+  std::vector<float> h_out(total_threads, 0.0f);
+  for (uint32_t r = 0; r < repeats; ++r) {
+    vx_event_h launch_ev = nullptr, read_ev = nullptr;
+    RT_CHECK(vx_enqueue_launch(queue, &li, 0, nullptr, &launch_ev));
+    RT_CHECK(vx_enqueue_read(queue, h_out.data(), out_buffer, 0, out_size, 1, &launch_ev, &read_ev));
+    RT_CHECK(vx_event_wait_value(read_ev, 1, VX_TIMEOUT_INFINITE));
+    vx_event_release(read_ev);
+    vx_event_release(launch_ev);
+
+    if (timing) {
+      std::vector<uint64_t> tm(3 * (uint64_t)grid, 0);
+      vx_event_h tm_ev = nullptr;
+      RT_CHECK(vx_enqueue_read(queue, tm.data(), timing_buffer, 0, tm.size() * sizeof(uint64_t), 0, nullptr, &tm_ev));
+      RT_CHECK(vx_event_wait_value(tm_ev, 1, VX_TIMEOUT_INFINITE));
+      vx_event_release(tm_ev);
+      std::vector<uint64_t> first(num_cores, ~0ull), last(num_cores, 0), bytes(num_cores, 0), launch_ctas(num_cores, 0);
+      for (uint64_t g = 0; g < grid; ++g) {
+        uint64_t c = tm[3 * g];
+        if (c >= num_cores || !cores_on[c]) {
+          if (misplaced < 10) {
+            printf("*** error: CTA %llu ran on core %llu, not in -M\n", (unsigned long long)g,
+                   (unsigned long long)c);
+          }
+          ++misplaced;
+          continue;
+        }
+        first[c] = std::min(first[c], tm[3 * g + 1]);
+        last[c] = std::max(last[c], tm[3 * g + 2]);
+        bytes[c] += (uint64_t)steps * num_threads * sizeof(float);
+        ++launch_ctas[c];
+        ++ctas[c];
       }
-      ++errors;
+      for (uint64_t c = 0; c < num_cores; ++c) {
+        if (bytes[c] != 0) {
+          printf("core_rate: core=%llu bytes=%llu start=%llu end=%llu B_per_cycle=%.2f\n",
+                 (unsigned long long)c, (unsigned long long)bytes[c], (unsigned long long)first[c],
+                 (unsigned long long)last[c], double(bytes[c]) / double(last[c] - first[c]));
+        }
+      }
+      if (repeats > 1) {
+        for (uint64_t c = 0; c < num_cores; ++c) {
+          if (cores_on[c]) {
+            printf("launch_ctas: launch=%u core=%llu ctas=%llu\n", r, (unsigned long long)c,
+                   (unsigned long long)launch_ctas[c]);
+          }
+        }
+      }
     }
+
+    for (uint64_t g = 0; g < total_threads; ++g) {
+      float expected = sum + (float)(g + 1);
+      if (h_out[g] != expected) {
+        if (errors < 10) {
+          printf("*** error: launch %u [%llu] expected=%f, actual=%f\n", r, (unsigned long long)g,
+                 expected, h_out[g]);
+        }
+        ++errors;
+      }
+    }
+  }
+
+  bool uneven = false;
+  if (timing) {
+    uint64_t min_ctas = ~0ull, max_ctas = 0;
+    for (uint64_t c = 0; c < num_cores; ++c) {
+      if (cores_on[c]) {
+        printf("core_ctas: core=%llu ctas=%llu\n", (unsigned long long)c, (unsigned long long)ctas[c]);
+        min_ctas = std::min(min_ctas, ctas[c]);
+        max_ctas = std::max(max_ctas, ctas[c]);
+      }
+    }
+    uneven = ((uint64_t)grid * repeats % active_cores == 0) && (grid <= active_cores * num_warps)
+          && (max_ctas - min_ctas > 1);
   }
 
   cleanup();
