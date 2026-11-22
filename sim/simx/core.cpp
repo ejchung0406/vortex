@@ -108,9 +108,7 @@ public:
     , fu_full_(VX_CFG_ISSUE_WIDTH, BitVector<>((uint32_t)FUType::Count, 0))
     , fu_full_seen_(VX_CFG_ISSUE_WIDTH, BitVector<>((uint32_t)FUType::Count, 0))
     , ibuf_inflight_(VX_CFG_NUM_WARPS, 0)
-    , ibuf_full_r_(VX_CFG_NUM_WARPS, false)
     , ibuf_queued_(VX_CFG_NUM_WARPS, 0)
-    , ibuf_queue_full_r_(VX_CFG_NUM_WARPS, false)
     , last_issue_(VX_CFG_NUM_WARPS, 0)
     , staged_since_(VX_CFG_NUM_WARPS, 0)
     , head_staged_(VX_CFG_NUM_WARPS, false)
@@ -126,6 +124,9 @@ public:
       snprintf(sname, 100, "decode_latch%d", f);
       decode_latch_.emplace_back(std::make_unique<TFifo<instr_trace_t*>>(ctx, sname, 1, 2));
       pending_icache_.emplace_back(PER_FETCH_WARPS * VX_CFG_FETCH_INFLIGHT);
+      for (uint32_t w = f; w < VX_CFG_NUM_WARPS; w += VX_CFG_FETCH_WIDTH) {
+        fetch_warps_[f].set(w);
+      }
     }
 
     // create scheduler (SimObject) — also creates the CTA dispatcher.
@@ -479,9 +480,11 @@ public:
     }
 
     std::fill(ibuf_inflight_.begin(), ibuf_inflight_.end(), 0);
-    std::fill(ibuf_full_r_.begin(), ibuf_full_r_.end(), false);
     std::fill(ibuf_queued_.begin(), ibuf_queued_.end(), 0);
-    std::fill(ibuf_queue_full_r_.begin(), ibuf_queue_full_r_.end(), false);
+    ibuf_full_.reset();
+    ibuf_full_r_.reset();
+    ibuf_queue_full_.reset();
+    ibuf_queue_full_r_.reset();
 
     // perf_stats_ deliberately survives: these are the MPM counters, which
     // accumulate from device reset. A kernel launch re-enters reset() here but
@@ -545,23 +548,14 @@ public:
     // buffer is full at exactly IBUF_SIZE entries, a flag registered at the end
     // of the previous cycle. With an L1, once every warp's buffer is full any
     // ready warp may fetch, its instruction waiting at decode.
-    bool all_full = (VX_CFG_ICACHE_ENABLED || VX_CFG_DCACHE_ENABLED);
-    for (uint32_t w = 0; w < VX_CFG_NUM_WARPS && all_full; ++w) {
-      all_full = ibuf_full_r_.at(w);
-    }
+    bool all_full = (VX_CFG_ICACHE_ENABLED || VX_CFG_DCACHE_ENABLED)
+                 && (ibuf_full_r_.count() == VX_CFG_NUM_WARPS);
     // the cycle is idle when no slice has a warp to fetch, its latch free or not
     bool any_cand = false;
     for (uint32_t f = 0; f < VX_CFG_FETCH_WIDTH; ++f) {
       auto& fetch_latch = fetch_latch_.at(f);
-      WarpMask warp_mask, room_mask;
-      for (uint32_t w = f; w < VX_CFG_NUM_WARPS; w += VX_CFG_FETCH_WIDTH) {
-        if (!ibuf_full_r_.at(w)) {
-          room_mask.set(w);
-        }
-        if (all_full || !ibuf_full_r_.at(w)) {
-          warp_mask.set(w);
-        }
-      }
+      WarpMask room_mask = fetch_warps_[f] & ~ibuf_full_r_;
+      WarpMask warp_mask = all_full ? fetch_warps_[f] : room_mask;
 
       if (fetch_latch->full()) {
         any_cand |= scheduler_->has_ready(warp_mask, room_mask);
@@ -582,19 +576,15 @@ public:
         this->pending_add(trace->wid);
       }
       ++ibuf_inflight_.at(trace->wid);
+      this->ibuf_count_changed(trace->wid);
       perf_stats_.issued_warps += 1;
       perf_stats_.issued_threads += trace->tmask.count();
     }
     if (!any_cand) {
       ++perf_stats_.sched_idle;
     }
-    for (uint32_t w = 0; w < VX_CFG_NUM_WARPS; ++w) {
-      // a warp picked once every buffer is full goes past its slots, and with
-      // fetch ahead must read as full there
-      ibuf_full_r_.at(w) = (VX_CFG_FETCH_INFLIGHT > 1) ? (ibuf_inflight_.at(w) >= VX_CFG_IBUF_SIZE)
-                                                       : (ibuf_inflight_.at(w) == VX_CFG_IBUF_SIZE);
-      ibuf_queue_full_r_.at(w) = (ibuf_queued_.at(w) >= VX_CFG_IBUF_SIZE);
-    }
+    ibuf_full_r_ = ibuf_full_;
+    ibuf_queue_full_r_ = ibuf_queue_full_;
 
     scheduler_->schedule_end();
   }
@@ -674,7 +664,7 @@ public:
       // buffer holds it at the icache output, in front of the responses behind
       // it. The buffer's full flag is registered: a slot it frees this cycle
       // takes an instruction from the next.
-      bool ibuf_room = !ibuf_queue_full_r_.at(trace->wid);
+      bool ibuf_room = !ibuf_queue_full_r_.test(trace->wid);
     #ifdef VX_CFG_EXT_C_ENABLE
       // Decompressor classifies the rsp: emit-ready (sets trace->code) or
       // queues a refetch internally for cross-word 32-bit completion.
@@ -702,6 +692,7 @@ public:
         if (emit) {
           trace->log_once(false);
           ++ibuf_queued_.at(trace->wid);
+          this->ibuf_count_changed(trace->wid);
           if (VX_CFG_FETCH_INFLIGHT > 1) {
             auto& fd = fetch_dec_.at(trace->wid);
             fd.head = (trace->fetch_seq + 1) % VX_CFG_FETCH_INFLIGHT;
@@ -790,6 +781,7 @@ public:
       scheduler_->fetch_leave(drop.wid, drop.squash);
       assert(ibuf_inflight_.at(drop.wid) > 0);
       --ibuf_inflight_.at(drop.wid);
+      this->ibuf_count_changed(drop.wid);
       drop.valid = false;
     }
 
@@ -1093,6 +1085,17 @@ public:
     --ibuf_inflight_.at(wid);
     assert(ibuf_queued_.at(wid) > 0);
     --ibuf_queued_.at(wid);
+    this->ibuf_count_changed(wid);
+  }
+
+  // A warp's buffer is full at IBUF_SIZE instructions in flight (exactly that
+  // many without fetch ahead; a warp picked once every buffer is full goes
+  // past its slots, and with fetch ahead must read as full there), its queue
+  // at IBUF_SIZE or more past the icache; schedule() registers both.
+  void ibuf_count_changed(uint32_t wid) {
+    ibuf_full_.set(wid, (VX_CFG_FETCH_INFLIGHT > 1) ? (ibuf_inflight_[wid] >= VX_CFG_IBUF_SIZE)
+                                                    : (ibuf_inflight_[wid] == VX_CFG_IBUF_SIZE));
+    ibuf_queue_full_.set(wid, ibuf_queued_[wid] >= VX_CFG_IBUF_SIZE);
   }
 
   void update_queue_full() {
@@ -1670,9 +1673,12 @@ private:
   std::vector<BitVector<>> fu_full_seen_; // [iw] that flag one cycle later, as issue sees it
 
   std::vector<uint32_t> ibuf_inflight_;
-  std::vector<bool> ibuf_full_r_;
   std::vector<uint32_t> ibuf_queued_;      // [wid] instructions past the icache, not yet staged
-  std::vector<bool>     ibuf_queue_full_r_; // [wid] full flag from ibuf_queued_, registered
+  WarpMask ibuf_full_;          // [wid] full flag from ibuf_inflight_
+  WarpMask ibuf_full_r_;        // ... registered
+  WarpMask ibuf_queue_full_;    // [wid] full flag from ibuf_queued_
+  WarpMask ibuf_queue_full_r_;  // ... registered
+  std::array<WarpMask, VX_CFG_FETCH_WIDTH> fetch_warps_; // [slice] the warps it fetches for
   std::vector<uint64_t> last_issue_;   // [wid] cycle of the warp's last issue
   std::vector<uint64_t> staged_since_; // [wid] cycle the last issued candidate was staged
   std::vector<bool>     head_staged_;  // [wid] the buffer head has left for staging
