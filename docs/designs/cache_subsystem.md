@@ -1144,7 +1144,8 @@ form groups of this many (it must divide the socket count), and each group reach
 the L2 through a `VX_noc_switch` on **`NOC_UPLINK_PORTS`** lanes (a power of two;
 default the next one at or above the group's ports), so the L2 has
 groups × lanes socket inputs instead of sockets × `L1_MEM_PORTS`, and its tag
-carries the port within the group. A socket port crosses **`NOC_SM_LATENCY`**
+carries the port within the group. The L2's bank count keeps following the sockets' memory
+ports, not the lanes, so the group knobs do not change the L2's shape. A socket port crosses **`NOC_SM_LATENCY`**
 cycles to the switch and a lane **`NOC_UPLINK_LATENCY`** cycles to the L2, each
 way; their defaults split `L2_LINK_LATENCY` around the switch's one cycle.
 - A request takes the lane an XOR fold of its line address selects, so requests
