@@ -189,7 +189,7 @@ $(APP): $(SRCS) $(RT_LIB_DIR)/libvortex.so $(CONFIG_STAMP)
 
 # Build the cross-compiled runtime stub for non-native HOST_ARCH.
 ifneq ($(HOST_ARCH),x86_64)
-$(RT_LIB_DIR)/libvortex.so:
+$(RT_LIB_DIR)/libvortex.so: FORCE
 	$(RUNTIME_ARGS) $(MAKE) -C $(VORTEX_RT_SRC)/stub HOST_ARCH=$(HOST_ARCH) DESTDIR=$(VORTEX_RT_LIB)
 endif
 

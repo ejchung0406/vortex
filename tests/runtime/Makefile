@@ -24,9 +24,16 @@ LDFLAGS += -Wl,-rpath,$(RT_DIR) -L$(RT_DIR) -lvortex -pthread
 
 TESTS := test_basic test_async test_timeline_events test_module_kernel test_rect_fill
 
-.PHONY: all run run-simx run-xrt clean
+.PHONY: all run run-simx run-xrt clean FORCE
 
 all: $(TESTS)
+
+# Built for this directory's CONFIGS: the tree's libvortex.so is otherwise the
+# build of whichever app ran last.
+$(RT_DIR)/libvortex.so: FORCE
+	CONFIGS="$(CONFIGS)" $(MAKE) -C $(ROOT_DIR)/sw/runtime/stub DESTDIR=$(RT_DIR)
+
+$(TESTS): $(RT_DIR)/libvortex.so
 
 test_basic: $(VORTEX_HOME)/tests/runtime/test_basic.cpp
 	$(CXX) $(CXXFLAGS) $< $(LDFLAGS) -o $@

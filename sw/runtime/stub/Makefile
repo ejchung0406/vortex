@@ -74,11 +74,27 @@ RT_HDRS := $(wildcard $(SW_COMMON_DIR)/*.h) \
            $(wildcard $(RT_COMMON_DIR)/*.h) \
            $(wildcard $(INC_DIR)/*.h)
 
-$(OUT_DIR)/$(PROJECT): $(SRCS) $(RT_HDRS)
+# The runtime is compiled for one configuration (under VM it reserves the pinned
+# slab, which moves every buffer), so a CONFIGS or profile change rebuilds it.
+CONFIG_FILE := $(OUT_DIR)/stub_config.stamp
+
+$(OUT_DIR)/$(PROJECT): $(SRCS) $(RT_HDRS) $(CONFIG_FILE)
 	@mkdir -p $(OUT_DIR)
-	$(CXX) $(CXXFLAGS) $(filter-out $(RT_HDRS),$^) $(LDFLAGS) -o $@
+	$(CXX) $(CXXFLAGS) $(filter-out $(RT_HDRS) $(CONFIG_FILE),$^) $(LDFLAGS) -o $@.tmp.$$$$ && mv -f $@.tmp.$$$$ $@
+
+# updates the timestamp when flags changed.
+$(CONFIG_FILE): force
+	@mkdir -p $(@D)
+	@TMP=$@.tmp.$$$$ ; \
+	 printf '%s\n' "$(CXXFLAGS)" > $$TMP ; \
+	 if ! cmp -s $$TMP $@ 2>/dev/null; then \
+	   mv -f $$TMP $@ ; \
+	 else \
+	   rm -f $$TMP ; \
+	 fi
 
 clean:
 	rm -f $(DESTDIR)/$(PROJECT) $(DESTDIR)/aarch64/$(PROJECT) $(DESTDIR)/armhf/$(PROJECT)
+	rm -f $(DESTDIR)/stub_config.stamp $(DESTDIR)/aarch64/stub_config.stamp $(DESTDIR)/armhf/stub_config.stamp
 
-.PHONY: all clean
+.PHONY: all clean force

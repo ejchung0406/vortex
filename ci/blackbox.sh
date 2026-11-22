@@ -211,15 +211,10 @@ main() {
     export VCD_FILE=$VCD_FILE
     export SAIF_FILE=$SAIF_FILE
 
-    make -C "$ROOT_DIR/sw/runtime/stub" > /dev/null
-
     if [ $TEMPBUILD -eq 1 ]; then
         # setup temp directory
         TEMPDIR=$(mktemp -d)
         mkdir -p "$TEMPDIR"
-        # build stub driver
-        echo "Running: DESTDIR=$TEMPDIR make -C $ROOT_DIR/sw/runtime/stub"
-        DESTDIR="$TEMPDIR" make -C $ROOT_DIR/sw/runtime/stub > /dev/null
         # stage a per-invocation copy of the app dir so concurrent trials do not
         # race on the shared `config.stamp` / build artifacts. Keep it as a
         # sibling of the original so relative paths (`../../..`, `../common.mk`)
