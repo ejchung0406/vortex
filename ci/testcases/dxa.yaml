@@ -609,6 +609,17 @@ tests:
   configs: -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DWGMMA_NRC=16 -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1
   # Not warp-width swept: a warp-group MMA is defined over a 32-lane warp.
   shape: {threads: 32, warps: 8}
+# The same pipeline with the WGMMA operand reads on the local memory banks'
+# read-only port (VX_CFG_LMEM_TCU_RDPORT=1), which a second LSU block brings.
+- id: model_parity-wgmma-dxa-rdport
+  check: model_parity
+  via: blackbox
+  app: sgemm_tcu_wg_dxa
+  args: -m 128 -n 128 -k 64
+  configs: -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DWGMMA_NRC=16 -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=2 -DVX_CFG_NUM_FPU_BLOCKS=1
+    -DVX_CFG_LMEM_TCU_RDPORT=1
+  # Not warp-width swept: a warp-group MMA is defined over a 32-lane warp.
+  shape: {threads: 32, warps: 8}
 # Sparse WGMMA consumer fed by a DXA producer pipeline.
 - id: model_parity-wgmma-sp-dxa
   check: model_parity
