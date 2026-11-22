@@ -54,10 +54,16 @@ private:
   Core* core_;
   std::vector<OpcUnit::Ptr> opc_units_;
   TraceArbiter::Ptr rsp_arb_;
+  // the collectors' output buffers ahead of an unregistered merge
+  std::vector<SimChannel<instr_trace_t*>> merge_out_;
+  Arbiter merge_arb_;
+  int32_t merge_offer_ = -1;
+  bool merge_withdrawing_ = false;
   bool head_offered_ = false;
 
   void offer_head(instr_trace_t* trace, uint64_t delay);
   void on_head_consumed();
+  void on_merge_taken();
 
   friend class SimObject<Operands>;
 };

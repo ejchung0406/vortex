@@ -88,6 +88,18 @@ VX_CFG_IBUF_SIZE = 4
 # and a fetch that arrives ahead of an older one, and the warp refetches from
 # there once the dropped fetches have all returned. Requires EXT_C off.
 VX_CFG_FETCH_INFLIGHT = 1
+# 1 buffers a fetch pick in the warp scheduler before the fetch unit's
+# request buffer; 0 sends the pick straight to that buffer, so the request
+# reaches the icache one cycle earlier. The fetch unit's buffer still
+# registers the request and gives the pick a registered ready. Requires EXT_C
+# off.
+VX_CFG_FETCH_REQ_BUF = 1
+# 1 registers the first frontend slice's icache requests once more where the
+# core's cache flush is merged into them, a cycle the other slices do not
+# have; 0 merges the flush through a priority mux behind the fetch unit's
+# registered request. The flush leaves in the same order with fetches either
+# way.
+VX_CFG_FLUSH_REQ_BUF = 1
 # 1 treats a floating-point operation's exception flags as an accumulation
 # (sticky OR): the scoreboard counts a warp's FP operations in flight instead
 # of reserving fflags for each, so they no longer issue one at a time. A CSR
@@ -120,6 +132,11 @@ VX_CFG_ISSUE_WIDTH = "expr: pow(2, clog2(up($VX_CFG_NUM_WARPS / 16)))"
 VX_CFG_FETCH_WIDTH = "expr: $VX_CFG_ISSUE_WIDTH & -$VX_CFG_ISSUE_WIDTH"
 VX_CFG_SIMD_WIDTH = "expr: $VX_CFG_NUM_THREADS"
 VX_CFG_NUM_OPCS = "expr: up($VX_CFG_NUM_WARPS / (4 * $VX_CFG_ISSUE_WIDTH))"
+# With more than one operand collector per issue slice, 1 registers their
+# round-robin merge; 0 merges them through a mux into the dispatch queues, so
+# an operation reaches its queue one cycle earlier. No effect with one
+# collector.
+VX_CFG_OPC_MERGE_BUF = 1
 VX_CFG_NUM_GPR_BANKS = 4
 VX_CFG_NUM_VGPR_BANKS = 2
 
