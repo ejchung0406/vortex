@@ -72,8 +72,10 @@ public:
   std::shared_ptr<mem_block_t> read_c(uint64_t line_addr) const;
 #endif
 
-  std::shared_ptr<mem_block_t> read_a(uint32_t b, uint64_t line_addr) const;
-  std::shared_ptr<mem_block_t> read_b(uint64_t line_addr) const;
+  // A buffer's line without taking a reference (null when absent): valid
+  // until the buffer next fills, invalidates or ticks.
+  const mem_block_t* line_a(uint32_t b, uint64_t line_addr) const;
+  const mem_block_t* line_b(uint64_t line_addr) const;
 
   // Drop the buffer's contents and abandon a fill in progress.
   void invalidate_a(uint32_t b);

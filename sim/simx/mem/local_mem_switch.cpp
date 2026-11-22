@@ -111,13 +111,13 @@ void LocalMemSwitch::on_tick() {
       return; // stall
 
     if (send_to_dc) {
-      ReqOutDC.send(out_dc_req, delay_);
       DT(4, this->name() << " dc-req: " << out_dc_req);
+      ReqOutDC.send(std::move(out_dc_req), delay_);
     }
 
     if (send_to_lmem) {
-      ReqOutLmem.send(out_lmem_req, delay_);
       DT(4, this->name() << " lmem-req: " << out_lmem_req);
+      ReqOutLmem.send(std::move(out_lmem_req), delay_);
     }
     ReqIn.pop();
   }

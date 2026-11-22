@@ -239,6 +239,10 @@ bool Scheduler::pickable(uint32_t wid, const WarpMask& warp_mask, const WarpMask
 }
 
 bool Scheduler::has_ready(const WarpMask& warp_mask, const WarpMask& room_mask) const {
+  if (VX_CFG_FETCH_INFLIGHT == 1) {
+    // pickable() is then the intersection of three masks
+    return (active_warps_ & ~stalled_warps_ & warp_mask).any();
+  }
   for (uint32_t wid = 0; wid < VX_CFG_NUM_WARPS; ++wid) {
     if (this->pickable(wid, warp_mask, room_mask)) {
       return true;
@@ -250,11 +254,18 @@ bool Scheduler::has_ready(const WarpMask& warp_mask, const WarpMask& room_mask) 
 instr_trace_t* Scheduler::schedule(const WarpMask& warp_mask, const WarpMask& room_mask) {
   int scheduled_warp = -1;
 
-  // pick next ready warp
-  for (uint32_t wid = 0; wid < VX_CFG_NUM_WARPS; ++wid) {
-    if (this->pickable(wid, warp_mask, room_mask)) {
-      scheduled_warp = wid;
-      break;
+  // pick the lowest pickable warp
+  if (VX_CFG_FETCH_INFLIGHT == 1) {
+    auto ready = active_warps_ & ~stalled_warps_ & warp_mask;
+    if (ready.any()) {
+      scheduled_warp = ready._Find_first();
+    }
+  } else {
+    for (uint32_t wid = 0; wid < VX_CFG_NUM_WARPS; ++wid) {
+      if (this->pickable(wid, warp_mask, room_mask)) {
+        scheduled_warp = wid;
+        break;
+      }
     }
   }
 
@@ -378,6 +389,27 @@ bool Scheduler::running() const {
     || fwd_armed_
 #endif
     ;
+}
+
+bool Scheduler::quiescent() const {
+  if (!(active_warps_.none() && (cta_fire_cnt_ == 0) && cta_dispatcher_->quiescent()
+     && (stalled_warps_ == stalled_warps_next_) && (cta_active_view_ == active_warps_)
+     && (timeout_ctr_ == 0)
+#ifdef VX_CFG_EXT_RASTER_ENABLE
+     && !fwd_armed_ && fwd_waves_.empty()
+#endif
+     )) {
+    return false;
+  }
+  if (VX_CFG_FETCH_INFLIGHT > 1) {
+    // schedule_end() applies decode's fetch events
+    for (auto& warp : warps_) {
+      if (warp.fetch_inflight != 0 || warp.fetch_leave_pending || warp.fetch_squash_pending) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 // suspend()/resume() drive the next-state; schedule() clocks it into the

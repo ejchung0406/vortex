@@ -20,7 +20,6 @@
 #include <VX_config.h>
 #include <deque>
 #include <fstream>
-#include <memory>
 #include <queue>
 #include <stdexcept>
 #include <string>
@@ -99,21 +98,26 @@ private:
   using Type = DramSim::Type;
   using ResponseCallback = DramSim::ResponseCallback;
 
-  // One request (a block); it completes when all its transactions have.
+  struct channel_t;
+
+  // One request (a block); it completes when all its transactions have. Kept
+  // in its channel's requests and reused once nothing refers to it.
   struct request_t {
     ResponseCallback callback;
     void* arg;
     uint32_t pending;
+    channel_t* channel;
+    uint32_t in_dram;  // its reads Ramulator holds, whose callbacks point here
   };
 
   struct mem_tx_t {
     uint64_t addr;
     bool is_write;
-    std::shared_ptr<request_t> request;
+    request_t* request;
   };
 
   struct mem_rsp_t {
-    std::shared_ptr<request_t> request;
+    request_t* request;
     uint64_t ready_cycle;
   };
 
@@ -127,6 +131,8 @@ private:
     std::deque<mem_rsp_t> read_rsps;
     std::deque<mem_rsp_t> write_rsps;
     uint32_t inflight;
+    std::deque<request_t> requests;  // every request made here; stable addresses
+    std::vector<request_t*> free_requests;
   };
 
   static constexpr uint32_t tx_size_ = dram_timing::kBurstSize;
@@ -263,6 +269,7 @@ private:
       }
       if (--request.pending == 0) {
         --channel.inflight;
+        channel.free_requests.push_back(&request);
       }
       rsps.pop_front();
     }
@@ -276,14 +283,18 @@ private:
     auto req_type = tx.is_write ? Ramulator::Request::Type::Write : Ramulator::Request::Type::Read;
     std::function<void(Ramulator::Request&)> callback = nullptr;
     if (!tx.is_write) {
-      callback = [this, &channel, request = tx.request](Ramulator::Request& /*dram_req*/) {
-        channel.read_rsps.push_back({request, this->cycle_ + 1 + this->config_.latency});
+      // Two pointers: held inside the std::function, no allocation.
+      callback = [this, request = tx.request](Ramulator::Request& /*dram_req*/) {
+        --request->in_dram;
+        request->channel->read_rsps.push_back({request, this->cycle_ + 1 + this->config_.latency});
       };
     }
     if (channel.frontend->receive_external_requests(req_type, tx.addr, 0, callback)) {
       // Ramulator does not handle write responses, so we handle the callback ourselves.
       if (tx.is_write) {
         channel.write_rsps.push_back({tx.request, cycle_});
+      } else {
+        ++tx.request->in_dram;
       }
       channel.pending_txs.pop();
     }
@@ -327,6 +338,15 @@ public:
       channel.read_rsps.clear();
       channel.write_rsps.clear();
       channel.inflight = 0;
+      // Ramulator is not reset: a read it still holds answers later into
+      // read_rsps and retires its request as it would have (a request kept
+      // alive by its callback). Only requests nothing refers to are reused.
+      channel.free_requests.clear();
+      for (auto& request : channel.requests) {
+        if (request.in_dram == 0) {
+          channel.free_requests.push_back(&request);
+        }
+      }
     }
   }
 
@@ -354,8 +374,14 @@ public:
     // A block wider than a burst is several transactions.
     uint32_t n = (config_.block_size > tx_size_) ? (config_.block_size / tx_size_) : 1;
     uint64_t base = addr & ~uint64_t(config_.block_size - 1);
-    auto request = std::make_shared<request_t>(request_t{response_cb, arg, n});
     auto& ch = channels_.at(channel);
+    if (ch.free_requests.empty()) {
+      ch.requests.emplace_back();
+      ch.free_requests.push_back(&ch.requests.back());
+    }
+    request_t* request = ch.free_requests.back();
+    ch.free_requests.pop_back();
+    *request = request_t{response_cb, arg, n, &ch, 0};
     for (uint32_t i = 0; i < n; ++i) {
       ch.pending_txs.push({dram_addr(base + i * tx_size_), is_write, request});
     }

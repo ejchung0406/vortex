@@ -13,6 +13,8 @@
 
 #include <VX_types.h>
 #include "mem.h"
+#include <algorithm>
+#include <cstring>
 #include <vector>
 #include <iostream>
 #include <fstream>
@@ -501,9 +503,7 @@ uint8_t *RAM::get(uint64_t address, bool allocate) const {
     if (!allocate)
       return zero_page_ + page_offset;
     page = new uint8_t[page_size];
-    for (uint32_t i = 0; i < page_size; ++i) {
-      page[i] = (0xbaadf00d >> ((i & 0x3) * 8)) & 0xff;
-    }
+    std::memcpy(page, zero_page_, page_size);
     chunk[chunk_offset] = page;
   }
 
@@ -514,9 +514,16 @@ void RAM::read(void* data, uint64_t addr, uint64_t size) {
   if (check_acl_ && acl_mngr_.check(addr, size, 0x1) == false) {
     throw BadAddress();
   }
+  // One lookup per page span; never-written pages read the sentinel page
+  // without being allocated.
   uint8_t* d = (uint8_t*)data;
-  for (uint64_t i = 0; i < size; i++) {
-    d[i] = *this->get(addr + i, false); // read-only — no allocation
+  const uint64_t page_size = uint64_t(1) << page_bits_;
+  while (size != 0) {
+    uint64_t n = std::min<uint64_t>(size, page_size - (addr & (page_size - 1)));
+    std::memcpy(d, this->get(addr, false), n);
+    d += n;
+    addr += n;
+    size -= n;
   }
 }
 
@@ -525,8 +532,13 @@ void RAM::write(const void* data, uint64_t addr, uint64_t size) {
     throw BadAddress();
   }
   const uint8_t* d = (const uint8_t*)data;
-  for (uint64_t i = 0; i < size; i++) {
-    *this->get(addr + i, true) = d[i];
+  const uint64_t page_size = uint64_t(1) << page_bits_;
+  while (size != 0) {
+    uint64_t n = std::min<uint64_t>(size, page_size - (addr & (page_size - 1)));
+    std::memcpy(this->get(addr, true), d, n);
+    d += n;
+    addr += n;
+    size -= n;
   }
 }
 

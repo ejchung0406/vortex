@@ -199,6 +199,11 @@ public:
   const PerfStats& perf_stats() const;
   PerfStats& perf_stats();
 
+  // The counters the pipeline units increment as they run. Unlike
+  // perf_stats(), it does not gather the counters that live in other units
+  // (opds_stalls), which only a reader needs.
+  PerfStats& perf_counters();
+
   int get_exitcode() const;
 
 protected:

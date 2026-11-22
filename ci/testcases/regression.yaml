@@ -188,6 +188,16 @@ tests:
   - 32
   shape:
     threads: 16
+# A warp that exits behind a load whose packets return out of order (fewer LSU
+# lanes than SIMD lanes): the late packet still has to be committed.
+- id: lsu-tail-1
+  via: blackbox
+  drivers:
+  - simx
+  app: lsu_tail
+  configs: -DVX_CFG_NUM_LSU_LANES=4
+  shape:
+    threads: 16
 # One SIMD lane: the dispatcher splits every warp into single-lane packets.
 - id: ldst-wide-4
   via: blackbox

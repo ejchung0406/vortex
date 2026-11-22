@@ -111,7 +111,7 @@ void LsuMemAdapter::on_tick() {
     }
 
     // send memory response
-    RspOut.send(out_rsp, rsp_delay_);
+    RspOut.send(std::move(out_rsp), rsp_delay_);
 
     // remove input
     DT(4, this->name() << "-rsp" << i << ": " << rsp_in);
@@ -149,8 +149,9 @@ void LsuMemAdapter::on_tick() {
         out_req.flags.local = (t == AddrType::Shared);
       }
 
-      if (ReqOut.at(i).try_send(out_req, delay_)) {
+      if (!ReqOut.at(i).full()) {
         DT(4, this->name() << " req" << i << ": " << out_req);
+        ReqOut.at(i).send(std::move(out_req), delay_);
         pending_mask_.reset(i);
       }
     }

@@ -240,6 +240,23 @@ void L2Tlb::on_tick() {
     rr_client_ = c + 1;
     break;
   }
+
+  // Sleep when a tick with no input changes nothing: no fill, response,
+  // lookup or unissued walk held, and nothing queued or in flight toward an
+  // input. Issued walks wait for their fill on PtwRspIn, whose reservation
+  // re-arms the tick, as does a request reserved toward any ReqIn.
+  if (PtwRspIn.size() == 0 && rsp_q_.empty() && pipe_.empty()) {
+    bool idle = true;
+    for (auto& e : mshr_) {
+      idle &= !(e.valid && !e.issued);
+    }
+    for (uint32_t c = 0; idle && c < num_clients_; ++c) {
+      idle = (ReqIn.at(c).size() == 0);
+    }
+    if (idle) {
+      this->tick_sleep();
+    }
+  }
 }
 
 #endif // VX_CFG_VM_ENABLE

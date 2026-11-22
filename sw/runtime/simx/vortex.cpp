@@ -83,11 +83,12 @@ public:
     for (int i = 0; i < 256 && cp_.busy(); ++i) cp_.tick();
     // Still busy after a full burst only when the CP is blocked on a kernel
     // running on the async sim thread; park the host's MMIO poll on the
-    // future (bounded) instead of spinning a full core. Completion unblocks
-    // immediately, and a ready future returns without waiting, so DMA-only
-    // polling is never throttled.
+    // future instead of spinning a core beside the simulation. Completion
+    // unblocks immediately, and a ready future returns without waiting, so
+    // DMA-only polling is never throttled. The bound only keeps the poller's
+    // wall-clock watchdog (warning, VORTEX_CP_POLL_TIMEOUT_S) responsive.
     if (cp_.busy() && future_.valid()) {
-      (void)future_.wait_for(std::chrono::microseconds(50));
+      (void)future_.wait_for(std::chrono::milliseconds(100));
     }
     *value = cp_.mmio_read(off);
     return 0;
@@ -227,9 +228,17 @@ private:
     };
     h.vortex_start = [this]() {
       future_ = std::async(std::launch::async, [&] { processor_.run(); });
+      start_unseen_ = true;
     };
     h.vortex_busy = [this]() -> bool {
       if (!future_.valid()) return false;
+      // The CP waits to see busy before it waits for the drain: report a
+      // launch busy at least once, however soon the kernel finishes, or a
+      // poller descheduled across the whole run would wait forever.
+      if (start_unseen_) {
+        start_unseen_ = false;
+        return true;
+      }
       return future_.wait_for(std::chrono::seconds(0)) != std::future_status::ready;
     };
     // ProcessorImpl decodes the MMU fault-report DCRs.
@@ -240,6 +249,7 @@ private:
   RAM ram_;
   Processor processor_;
   std::future<void> future_;
+  bool start_unseen_ = false;
   vortex::CommandProcessor cp_;
   std::mutex host_mu_;
   std::map<uint64_t, uint64_t> host_regions_;   // base -> size

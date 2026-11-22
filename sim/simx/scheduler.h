@@ -165,6 +165,12 @@ public:
   // whether any warp has a fetch between pick and decode
   bool fetch_pending() const;
 
+  // A schedule_begin()/schedule_end() pair would change nothing: no warp
+  // active or launching, no fetch between pick and decode nor a decode event
+  // still to apply, the CTA dispatcher quiescent, the registered stall state
+  // settled and the stall watchdog idle.
+  bool quiescent() const;
+
   bool wspawn(uint32_t num_warps, Word nextPC);
   bool setTmask(uint32_t wid, const ThreadMask& tmask);
 

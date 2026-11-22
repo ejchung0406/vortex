@@ -91,12 +91,23 @@ protected:
   // its endpoint channels re-arms it before delivery, so a skipped tick never
   // hides work. Objects opt in by calling tick_sleep() from on_tick();
   // tick_wake() re-arms from non-channel entry points (e.g. a flush request).
-  void tick_sleep() { tick_active_ = false; }
-  void tick_wake()  { tick_active_ = true; }
+  void tick_sleep() { *tick_flag_ = 0; }
+  void tick_wake()  { *tick_flag_ = 1; }
+
+  // A copy owns its own tick flag; the source's may sit in a domain's scan.
+  SimObjectBase(const SimObjectBase& other)
+    : name_(other.name_)
+    , domain_(other.domain_)
+    , launch_kept_(other.launch_kept_) {}
+  SimObjectBase& operator=(const SimObjectBase&) = delete;
 
 private:
   std::string name_;
-  bool tick_active_ = true;
+  // The tick flag lives here until the platform moves it next to the flags
+  // of the object's scan neighbours (see SimPlatform::bind_tick_flags), so
+  // the scan reads one dense array instead of every object.
+  uint8_t tick_active_ = 1;
+  uint8_t* tick_flag_ = &tick_active_;
   uint32_t domain_ = 0;
   bool launch_kept_ = false; // built under a LaunchKeepScope
   virtual void do_reset() = 0;
@@ -141,7 +152,7 @@ protected:
 
   // Re-arm a tick-gated module (see SimObjectBase::tick_sleep).
   static void wake_module(SimObjectBase* module) {
-    module->tick_active_ = true;
+    *module->tick_flag_ = 1;
   }
 
   SimObjectBase*  module_;
@@ -190,14 +201,72 @@ protected:
 class SimEventBase {
 public:
   virtual ~SimEventBase() = default;
-  virtual void fire() = 0;
+  // Delivers the event and frees it: one dispatch per delivered event.
+  virtual void fire_and_free() = 0;
   uint64_t cycles() const { return cycles_; }
 
 protected:
   explicit SimEventBase(uint64_t cycles) : cycles_(cycles) {}
   uint64_t cycles_;
-  LinkedListNode<SimEventBase> list_;
+  SimEventBase* next_ = nullptr;
   friend class SimPlatform;
+  friend class SimEventList;
+};
+
+// Intrusive FIFO of events (a wheel bucket or a domain's immediate list):
+// events are appended and leave from the front, so one link suffices.
+class SimEventList {
+public:
+  bool empty() const { return head_ == nullptr; }
+
+  void push_back(SimEventBase* evt) {
+    evt->next_ = nullptr;
+    if (tail_) {
+      tail_->next_ = evt;
+    } else {
+      head_ = evt;
+    }
+    tail_ = evt;
+  }
+
+  SimEventBase* pop_front() {
+    auto* evt = head_;
+    head_ = evt->next_;
+    if (head_ == nullptr) {
+      tail_ = nullptr;
+    }
+    return evt;
+  }
+
+  // Detaches the whole chain (linked through next_) and empties the list.
+  SimEventBase* take_all() {
+    auto* evt = head_;
+    head_ = tail_ = nullptr;
+    return evt;
+  }
+
+  // Moves other's events, in order, in front of this list's.
+  void prepend(SimEventList& other) {
+    if (other.empty()) {
+      return;
+    }
+    other.tail_->next_ = head_;
+    if (tail_ == nullptr) {
+      tail_ = other.tail_;
+    }
+    head_ = other.head_;
+    other.head_ = other.tail_ = nullptr;
+  }
+
+  void clear_and_free() {
+    while (!this->empty()) {
+      delete this->pop_front();
+    }
+  }
+
+private:
+  SimEventBase* head_ = nullptr;
+  SimEventBase* tail_ = nullptr;
 };
 
 // Optimized Event for Channel Transfers
@@ -208,7 +277,7 @@ public:
   SimChannelEvent(SimChannel<Pkt>* channel, P&& pkt, uint64_t cycles)
       : SimEventBase(cycles), channel_(channel), pkt_(std::forward<P>(pkt)) {}
 
-  void fire() override;
+  void fire_and_free() override;
 
   static void* operator new(std::size_t) { return allocator_.allocate(1); }
   static void operator delete(void* ptr, std::size_t) noexcept {
@@ -231,7 +300,10 @@ public:
   SimCallEvent(F&& func, Pkt pkt, uint64_t cycles)
     : SimEventBase(cycles), func_(std::forward<F>(func)), pkt_(std::move(pkt)) {}
 
-  void fire() override { func_(pkt_); }
+  void fire_and_free() override {
+    func_(pkt_);
+    delete this;
+  }
 
   static void* operator new(std::size_t) { return allocator_.allocate(1); }
   static void operator delete(void* ptr, std::size_t) noexcept {
@@ -402,8 +474,9 @@ private:
   // routed to the ENDPOINT's domain at schedule time.
   struct Domain {
     std::vector<SimObjectBase*> scan;   // creation order within the domain
-    std::vector<LinkedList<SimEventBase, &SimEventBase::list_>> wheel;
-    LinkedList<SimEventBase, &SimEventBase::list_> imm;
+    std::vector<uint8_t> active;        // tick flag of each scan entry
+    std::vector<SimEventList> wheel;
+    SimEventList imm;
     // Packets in flight toward this domain's endpoints (see SimChannelBase).
     alignas(64) int64_t inflight = 0;
     uint32_t delta = 0;
@@ -444,6 +517,7 @@ private:
 
   void cleanup();
   void tick_domain(Domain& dom);
+  void bind_tick_flags(Domain& dom);
   void fire_immediate_events(Domain& dom);
 
   template <typename Pkt>
@@ -696,16 +770,21 @@ private:
     // Delivery callbacks execute in the endpoint's domain context.
     tl_exec_domain_ = dom.id;
     tl_exec_object_ = nullptr;
-    for (auto it = bucket.begin(); it != bucket.end();) {
-      auto evt = &*it;
+    // Walk the detached chain. An event scheduled meanwhile is due at least
+    // a cycle later, so it never fires in this walk; the future wraparound
+    // collisions go back in front of it, in their order.
+    SimEventList kept;
+    auto* evt = bucket.take_all();
+    while (evt != nullptr) {
+      auto* next = evt->next_;
       if (evt->cycles() <= cycle) {
-        evt->fire();
-        it = bucket.erase(it);
-        delete evt;
+        evt->fire_and_free();
       } else {
-        ++it; // future wraparound collision in this wheel slot
+        kept.push_back(evt); // future wraparound collision in this wheel slot
       }
+      evt = next;
     }
+    bucket.prepend(kept);
   }
 
   void init_mt(uint32_t num_workers) {
@@ -780,7 +859,7 @@ private:
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename Pkt>
-class SimChannel : public SimChannelBase {
+class SimChannel final : public SimChannelBase {
 public:
   static_assert(std::is_copy_constructible_v<Pkt>, "Packet must be copy constructible");
   using TxCallback = SmallFunction<void(const Pkt&, uint64_t), 48>;
@@ -861,50 +940,23 @@ public:
   void set_registered_ready(bool enable) { reg_ready_ = enable; }
 
   void send(const Pkt& pkt, uint64_t delay = 1) {
-    auto& platform = SimPlatform::instance();
-    // A send whose endpoint lives in another domain is handed to that
-    // domain's owner as a deferred call: it re-issues the send locally next
-    // cycle with one less delay, landing on the same absolute cycle. All
-    // channel state is thereby touched only by its owning thread. Capacity
-    // needs no check here — cross-domain producers are credit-gated at the
-    // boundary, so a deferred send always finds space.
-    if (platform.is_cross_exec(this->endpoint()->module_)) {
-      __assert(delay >= 1, "cross-domain send requires a registered delay");
-      this->cross_send(Pkt(pkt), delay);
-      return;
-    }
-    __assert(!this->full(), "channel is full");
-    if (platform.audit_enabled()) {
-      platform.audit_send(this, delay);
-    }
-    this->reserve();
-    platform.schedule(this, pkt, delay);
+    this->send_impl<true>(pkt, delay);
   }
 
   void send(Pkt&& pkt, uint64_t delay = 1) {
-    auto& platform = SimPlatform::instance();
-    if (platform.is_cross_exec(this->endpoint()->module_)) {
-      __assert(delay >= 1, "cross-domain send requires a registered delay");
-      this->cross_send(std::move(pkt), delay);
-      return;
-    }
-    __assert(!this->full(), "channel is full");
-    if (platform.audit_enabled()) {
-      platform.audit_send(this, delay);
-    }
-    this->reserve();
-    platform.schedule(this, std::move(pkt), delay);
+    this->send_impl<true>(std::move(pkt), delay);
   }
 
+  // The capacity was just checked: the send does not check it again.
   [[nodiscard]] bool try_send(const Pkt& pkt, uint64_t delay = 1) {
     if (this->full()) return false;
-    this->send(pkt, delay);
+    this->send_impl<false>(pkt, delay);
     return true;
   }
 
   [[nodiscard]] bool try_send(Pkt&& pkt, uint64_t delay = 1) {
     if (this->full()) return false;
-    this->send(std::move(pkt), delay);
+    this->send_impl<false>(std::move(pkt), delay);
     return true;
   }
 
@@ -926,6 +978,33 @@ public:
   }
 
   static constexpr size_t kInlineCrossPkt = 128;
+
+private:
+  template <bool kCheckFull, typename P>
+  void send_impl(P&& pkt, uint64_t delay) {
+    auto& platform = SimPlatform::instance();
+    // A send whose endpoint lives in another domain is handed to that
+    // domain's owner as a deferred call: it re-issues the send locally next
+    // cycle with one less delay, landing on the same absolute cycle. All
+    // channel state is thereby touched only by its owning thread. Capacity
+    // needs no check here — cross-domain producers are credit-gated at the
+    // boundary, so a deferred send always finds space.
+    if (platform.is_cross_exec(this->endpoint()->module_)) {
+      __assert(delay >= 1, "cross-domain send requires a registered delay");
+      this->cross_send(Pkt(std::forward<P>(pkt)), delay);
+      return;
+    }
+    if constexpr (kCheckFull) {
+      __assert(!this->full(), "channel is full");
+    }
+    if (platform.audit_enabled()) {
+      platform.audit_send(this, delay);
+    }
+    this->reserve();
+    platform.schedule(this, std::forward<P>(pkt), delay);
+  }
+
+public:
 
   bool empty() const override {
     this->assert_endpoint();
@@ -994,6 +1073,26 @@ protected:
     __assert(pending_count_ > 0, "pending count underflow");
     --pending_count_;
     this->queue_push(pkt);
+  }
+
+  // Delivery of an event's own packet: the event dies right after firing, so
+  // the endpoint queue takes the packet over instead of copying it.
+  void receive_packet(Pkt&& pkt) {
+    if (tx_cb_) {
+      tx_cb_(pkt, SimPlatform::instance().cycles());
+    }
+    if (sink_) {
+      if (convert_fn_) {
+        convert_fn_(pkt);
+      } else {
+        auto* sink = static_cast<SimChannel<Pkt>*>(sink_);
+        sink->receive_packet(std::move(pkt));
+      }
+      return;
+    }
+    __assert(pending_count_ > 0, "pending count underflow");
+    --pending_count_;
+    storage_.push(std::move(pkt));
   }
 
 private:
@@ -1349,7 +1448,7 @@ inline void SimPlatform::reset_launch() {
   }
   launch_resetting_ = false;
   for (auto& object : objects_) {
-    object->tick_active_ = true;
+    *object->tick_flag_ = 1;
   }
 }
 
@@ -1361,19 +1460,9 @@ inline void SimPlatform::reset() {
   // callers reset only from quiescence (see idle()).
   for (auto& dom : domains_) {
     for (auto& bucket : dom->wheel) {
-      while (!bucket.empty()) {
-        auto it = bucket.begin();
-        auto evt = &*it;
-        bucket.erase(it);
-        delete evt;
-      }
+      bucket.clear_and_free();
     }
-    while (!dom->imm.empty()) {
-      auto it = dom->imm.begin();
-      auto evt = &*it;
-      dom->imm.erase(it);
-      delete evt;
-    }
+    dom->imm.clear_and_free();
     dom->delta = 0;
   }
 
@@ -1384,7 +1473,7 @@ inline void SimPlatform::reset() {
 
   // Re-arm every tick-gated object for the new run.
   for (auto& object : objects_) {
-    object->tick_active_ = true;
+    *object->tick_flag_ = 1;
   }
 
   // Drop undelivered cross-domain calls from the previous run. The lanes
@@ -1457,17 +1546,51 @@ inline void SimPlatform::tick_domain(Domain& dom) {
   // execution domain set above holds for the whole scan. The current object
   // is tracked only for the boundary audit, its sole reader.
   const bool track_object = audit_enabled_;
-  for (auto* object : dom.scan) {
-    if (!object->tick_active_) {
-      continue;
+  if (__builtin_expect(dom.active.size() != dom.scan.size(), 0)) {
+    this->bind_tick_flags(dom);
+  }
+  // Objects are not created while ticking: the list stays put for the scan.
+  SimObjectBase* const* scan = dom.scan.data();
+  const uint8_t* active = dom.active.data();
+  const size_t count = dom.scan.size();
+  for (size_t base = 0; base < count; base += 8) {
+    const size_t end = std::min(base + 8, count);
+    // Eight sleeping objects are passed over at once: a flag changes only
+    // from a tick or a delivery, and none runs before the next active one.
+    if (end - base == 8) {
+      uint64_t flags8;
+      std::memcpy(&flags8, active + base, sizeof(flags8));
+      if (flags8 == 0) {
+        continue;
+      }
     }
-    if (track_object) {
-      tl_exec_object_ = object;
+    for (size_t i = base; i < end; ++i) {
+      if (!active[i]) {
+        continue;
+      }
+      auto* object = scan[i];
+      if (track_object) {
+        tl_exec_object_ = object;
+      }
+      object->do_tick();
+      if (dom.delta != 0) {
+        fire_immediate_events(dom);
+      }
     }
-    object->do_tick();
-    if (dom.delta != 0) {
-      fire_immediate_events(dom);
-    }
+  }
+}
+
+// Gathers a domain's tick flags, in scan order, into one array and points
+// each object at its slot. Runs in the domain's own context before its scan
+// (the scan list is complete after elaboration, so this happens once).
+inline void SimPlatform::bind_tick_flags(Domain& dom) {
+  std::vector<uint8_t> active(dom.scan.size());
+  for (size_t i = 0; i < dom.scan.size(); ++i) {
+    active[i] = *dom.scan[i]->tick_flag_;
+  }
+  dom.active.swap(active);
+  for (size_t i = 0; i < dom.scan.size(); ++i) {
+    dom.scan[i]->tick_flag_ = &dom.active[i];
   }
 }
 
@@ -1478,23 +1601,19 @@ inline void SimPlatform::cleanup() {
     audit_hist_.clear();
   }
   active_reset_.clear();
+  // Objects may outlive the platform's reference: give each its flag back
+  // before the domains holding the flag arrays go away.
+  for (auto& object : objects_) {
+    object->tick_active_ = *object->tick_flag_;
+    object->tick_flag_ = &object->tick_active_;
+  }
   objects_.clear();
 
   for (auto& dom : domains_) {
     for (auto& bucket : dom->wheel) {
-      while (!bucket.empty()) {
-        auto it = bucket.begin();
-        auto evt = &*it;
-        bucket.erase(it);
-        delete evt;
-      }
+      bucket.clear_and_free();
     }
-    while (!dom->imm.empty()) {
-      auto it = dom->imm.begin();
-      auto evt = &*it;
-      dom->imm.erase(it);
-      delete evt;
-    }
+    dom->imm.clear_and_free();
   }
   domains_.clear();
   mail_.clear();
@@ -1513,18 +1632,15 @@ inline void SimPlatform::fire_immediate_events(Domain& dom) {
   // appended mid-firing, which receive a delta above all queued ones. Firing
   // front-to-back is therefore identical to draining delta levels in order.
   while (!dom.imm.empty()) {
-    auto it = dom.imm.begin();
-    auto evt = &*it;
-    evt->fire();
-    dom.imm.erase(it);
-    delete evt;
+    dom.imm.pop_front()->fire_and_free();
   }
   dom.delta = 0;
 }
 
 template <typename Pkt>
-void SimChannelEvent<Pkt>::fire() {
-  channel_->receive_packet(pkt_);
+void SimChannelEvent<Pkt>::fire_and_free() {
+  channel_->receive_packet(std::move(pkt_));
+  delete this;
 }
 
 inline SimObjectBase::SimObjectBase(const SimContext&, const std::string& name)

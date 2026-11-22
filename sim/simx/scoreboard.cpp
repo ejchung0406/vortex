@@ -20,7 +20,10 @@ Scoreboard::Scoreboard(const SimContext& ctx, const char* name)
   : SimObject<Scoreboard>(ctx, name)
   , in_use_regs_(VX_CFG_NUM_WARPS)
   , in_use_fcsr_(VX_CFG_NUM_WARPS, 0)
-  , fflags_accums_(VX_CFG_NUM_WARPS, 0) {
+  , fflags_accums_(VX_CFG_NUM_WARPS, 0)
+  , release_gen_(VX_CFG_NUM_WARPS, 0)
+  , owners_(VX_CFG_NUM_WARPS << RegOpd::ID_BITS, nullptr)
+  , commit_counts_(VX_CFG_NUM_WARPS << RegOpd::ID_BITS, 0) {
   for (auto& in_use_reg : in_use_regs_) {
     in_use_reg.resize((int)RegType::Count);
   }
@@ -38,8 +41,11 @@ void Scoreboard::on_reset() {
   }
   std::fill(in_use_fcsr_.begin(), in_use_fcsr_.end(), 0);
   std::fill(fflags_accums_.begin(), fflags_accums_.end(), 0);
-  owners_.clear();
-  commit_counts_.clear();
+  for (auto& gen : release_gen_) {
+    ++gen;
+  }
+  std::fill(owners_.begin(), owners_.end(), nullptr);
+  std::fill(commit_counts_.begin(), commit_counts_.end(), 0);
   pending_releases_.clear();
 }
 
@@ -47,13 +53,14 @@ void Scoreboard::on_tick() {
   uint64_t now = SimPlatform::instance().cycles();
   while (!pending_releases_.empty() && pending_releases_.front().due <= now) {
     auto& r = pending_releases_.front();
+    ++release_gen_.at(r.wid);
     if (r.accum) {
       assert(fflags_accums_.at(r.wid) > 0);
       --fflags_accums_.at(r.wid);
     } else if (r.fcsr != 0) {
       in_use_fcsr_.at(r.wid) &= ~r.fcsr;
     } else {
-      owners_.erase(get_reg_id(r.reg, r.wid));
+      owners_[get_reg_id(r.reg, r.wid)] = nullptr;
       in_use_regs_.at(r.wid).at((int)r.reg.type).reset(r.reg.idx);
     }
     pending_releases_.pop_front();
@@ -92,15 +99,17 @@ bool Scoreboard::in_use(instr_trace_t* trace) const {
   if ((slots & kFflagsSlot) && !fflags_accumulates(trace) && fflags_accums_.at(trace->wid) != 0) {
     return true;
   }
+  // in range: the wid was checked above and a type is a decoded RegType
+  auto& regs = in_use_regs_[trace->wid];
   if (trace->wb) {
     assert(trace->dst_reg.type != RegType::None);
-    if (in_use_regs_.at(trace->wid).at((int)trace->dst_reg.type).test(trace->dst_reg.idx)) {
+    if (regs[(int)trace->dst_reg.type].test(trace->dst_reg.idx)) {
       return true;
     }
   }
   for (uint32_t i = 0; i < trace->src_regs.size(); ++i) {
     if (trace->src_regs[i].type != RegType::None) {
-      if (in_use_regs_.at(trace->wid).at((int)trace->src_regs[i].type).test(trace->src_regs[i].idx)) {
+      if (regs[(int)trace->src_regs[i].type].test(trace->src_regs[i].idx)) {
         return true;
       }
     }
@@ -114,7 +123,7 @@ std::vector<Scoreboard::reg_use_t> Scoreboard::get_uses(instr_trace_t* trace) co
     assert(trace->dst_reg.type != RegType::None);
     if (in_use_regs_.at(trace->wid).at((int)trace->dst_reg.type).test(trace->dst_reg.idx)) {
       uint32_t reg_id = get_reg_id(trace->dst_reg, trace->wid);
-      auto owner = owners_.at(reg_id);
+      auto owner = owners_[reg_id];
       out.push_back({trace->dst_reg.type, trace->dst_reg.idx, owner->fu_type, owner->op_type, owner->uuid});
     }
   }
@@ -122,7 +131,7 @@ std::vector<Scoreboard::reg_use_t> Scoreboard::get_uses(instr_trace_t* trace) co
     if (trace->src_regs[i].type != RegType::None) {
       if (in_use_regs_.at(trace->wid).at((int)trace->src_regs[i].type).test(trace->src_regs[i].idx)) {
         uint32_t reg_id = get_reg_id(trace->src_regs[i], trace->wid);
-        auto owner = owners_.at(reg_id);
+        auto owner = owners_[reg_id];
         out.push_back({trace->src_regs[i].type, trace->src_regs[i].idx, owner->fu_type, owner->op_type, owner->uuid});
       }
     }
@@ -134,7 +143,7 @@ void Scoreboard::reserve(instr_trace_t* trace) {
   uint32_t reg_id = get_reg_id(trace->dst_reg, trace->wid);
   assert(trace->wb);
   in_use_regs_.at(trace->wid).at((int)trace->dst_reg.type).set(trace->dst_reg.idx);
-  assert(owners_.count(reg_id) == 0);
+  assert(owners_[reg_id] == nullptr);
   owners_[reg_id] = trace;
 }
 
@@ -142,8 +151,8 @@ void Scoreboard::release(instr_trace_t* trace) {
   uint32_t reg_id = get_reg_id(trace->dst_reg, trace->wid);
   assert(trace->wb);
   assert(in_use_regs_.at(trace->wid).at((int)trace->dst_reg.type).test(trace->dst_reg.idx));
-  assert(owners_.count(reg_id) != 0);
-  commit_counts_.erase(reg_id);
+  assert(owners_[reg_id] != nullptr);
+  commit_counts_[reg_id] = 0;
   pending_releases_.push_back({trace->wid, trace->dst_reg, 0, false,
                                SimPlatform::instance().cycles() + kReleaseDelay});
   this->tick_wake();

@@ -37,6 +37,12 @@ public:
 
   bool in_use(instr_trace_t* trace) const;
 
+  // Advances whenever a register, an fcsr field or an accumulating FP
+  // operation of the warp is released (or the scoreboard resets): while it
+  // holds, an instruction in_use() found blocked stays blocked, the warp's
+  // in-use set and FP count having only grown.
+  uint32_t release_gen(uint32_t wid) const { return release_gen_[wid]; }
+
   std::vector<reg_use_t> get_uses(instr_trace_t* trace) const;
 
   void reserve(instr_trace_t* trace);
@@ -91,9 +97,12 @@ private:
   std::vector<std::vector<RegMask>> in_use_regs_;
   std::vector<uint8_t> in_use_fcsr_;
   std::vector<uint32_t> fflags_accums_;
+  std::vector<uint32_t> release_gen_;
   std::deque<pending_release_t> pending_releases_;
-  std::unordered_map<uint32_t, instr_trace_t*> owners_;
-  std::unordered_map<uint32_t, uint32_t> commit_counts_;
+  // [get_reg_id()] the instruction holding the register, and its packets
+  // committed so far
+  std::vector<instr_trace_t*> owners_;
+  std::vector<uint32_t> commit_counts_;
 
   friend class SimObject<Scoreboard>;
 };
