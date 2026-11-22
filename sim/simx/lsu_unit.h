@@ -176,7 +176,7 @@ private:
 		FenceController           fence;
 		// the engaged fence's flush token is still to be sent
 		bool                      fence_token = false;
-		std::vector<mem_addr_size_t> addr_list;
+		FixedVector<mem_addr_size_t, VX_CFG_NUM_THREADS> addr_list;
 		uint32_t                  remain_addrs = 0;
 
 		void reset() {
