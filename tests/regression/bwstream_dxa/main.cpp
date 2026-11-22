@@ -42,6 +42,7 @@
    } while (false)
 
 const char* kernel_file = "kernel.vxbin";
+const char* timed_file  = "kernel_timed.vxbin";
 uint32_t tile_elems = 64;
 uint32_t tiles   = 4;
 uint32_t rounds  = 1;
@@ -268,7 +269,7 @@ int main(int argc, char *argv[]) {
   RT_CHECK(vortex::dxa::program_1d(device, 0, src_addr, (uint32_t)total_elems, tile_elems,
                                    sizeof(float)));
 
-  RT_CHECK(vx_module_load_file(device, kernel_file, &module_));
+  RT_CHECK(vx_module_load_file(device, (timing || latency) ? timed_file : kernel_file, &module_));
   timed_arg_t timed_arg = {};
   latency_arg_t latency_arg = {};
   const void* args = &kernel_arg;

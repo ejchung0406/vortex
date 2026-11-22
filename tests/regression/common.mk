@@ -226,6 +226,29 @@ kernel.elf: vx_start.o $(VX_SRCS) $(VX_HDRS) $(VORTEX_KN_PATH)/lib$(KERNEL_LIB).
 	$(VX_CXX) $(VX_CFLAGS) vx_start.o $(VX_APP_OBJS) $(VX_LDFLAGS) -o $@
 endif
 
+# Kernels kept out of kernel.vxbin: each name in VX_EXTRA_KERNELS is built from
+# $(SRC_DIR)/<name>.cpp into <name>.vxbin with a startup object of its own, so
+# a host loads it only when it needs it and kernel.vxbin does not change.
+ifneq ($(VX_EXTRA_KERNELS),)
+VX_EXTRA_BINS := $(addsuffix .vxbin,$(VX_EXTRA_KERNELS))
+
+$(addsuffix .o,$(VX_EXTRA_KERNELS)): %.o: $(SRC_DIR)/%.cpp $(VX_HDRS) $(VORTEX_KN_PATH)/lib$(KERNEL_LIB).a $(CONFIG_STAMP)
+	$(VX_CXX) $(VX_CFLAGS) -c $< -o $@
+
+$(addprefix vx_start_,$(addsuffix .o,$(VX_EXTRA_KERNELS))): vx_start_%.o: %.o
+	$(VX_CXX) $(VX_CFLAGS) -DNEED_GP -DNEED_TLS -DNEED_INITFINI $(VX_KMU_FLAG) -c $(VX_STARTUP_SRC) -o $@
+	$(VX_CXX) $(VX_CFLAGS) $@ $< $(VX_LDFLAGS) -o $@.elf
+	$(VX_CXX) $(VX_CFLAGS) $$($(KERNEL_STARTUP) $(VX_DP) $@.elf) $(VX_KMU_FLAG) -c $(VX_STARTUP_SRC) -o $@ && rm -f $@.elf
+
+$(addsuffix .elf,$(VX_EXTRA_KERNELS)): %.elf: vx_start_%.o %.o
+	$(VX_CXX) $(VX_CFLAGS) $^ $(VX_LDFLAGS) -o $@
+
+$(VX_EXTRA_BINS): %.vxbin: %.elf
+	OBJCOPY=$(VX_CP) $(VORTEX_HOME)/sw/kernel/scripts/vxbin.py $< $@
+
+all run-simx run-rtlsim run-firesim run-foldsim run-opae run-xrt run-aved: $(VX_EXTRA_BINS)
+endif
+
 $(APP): $(SRCS) $(HDRS) $(RT_LIB_DIR)/libvortex.so $(CONFIG_STAMP)
 	$(CXX) $(CXXFLAGS) $(filter-out $(CONFIG_STAMP) $(HDRS),$^) $(LDFLAGS) -o $@
 

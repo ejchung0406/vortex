@@ -1,7 +1,8 @@
 #include "stream.h"
 
-// A separate entry, so the untimed kernel carries no timing code; in a file of
-// its own, so it does not move kernel_main's helpers in the image.
+// A separate entry in a binary of its own (kernel_timed.vxbin), so the untimed
+// run's kernel.vxbin, and with it everything laid out after it in device
+// memory, is the same with or without it.
 __kernel void kernel_timed(timed_arg_t* __UNIFORM__ arg) {
   const uint64_t c0 = vx_rdcycle();
   stream(&arg->stream);

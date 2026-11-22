@@ -53,6 +53,7 @@
    } while (false)
 
 const char* kernel_file = "kernel.vxbin";
+const char* timed_file  = "kernel_timed.vxbin";
 uint32_t steps   = 64;
 uint32_t rounds  = 1;
 uint32_t grid    = 0;
@@ -255,7 +256,7 @@ int main(int argc, char *argv[]) {
     vx_event_release(fill_ev);
   }
 
-  RT_CHECK(vx_module_load_file(device, kernel_file, &module_));
+  RT_CHECK(vx_module_load_file(device, timing ? timed_file : kernel_file, &module_));
   timed_arg_t timed_arg = {};
   if (timing) {
     RT_CHECK(vx_module_get_kernel(module_, "kernel_timed", &kernel));
