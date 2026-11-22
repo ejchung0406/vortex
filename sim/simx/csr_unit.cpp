@@ -48,7 +48,9 @@ using namespace vortex;
 Word CsrUnit::get_csr(uint32_t addr, uint32_t wid, uint32_t tid) {
   auto& sched     = core_->scheduler();
   auto& warp      = sched.warp(wid);
-  auto core_perf  = core_->perf_stats();
+  // opds_stalls, the one counter gathered from other units, is read through
+  // perf_stats() below
+  auto& core_perf = core_->perf_counters();
   switch (addr) {
   case VX_CSR_PMPCFG0:
   case VX_CSR_PMPADDR0:
@@ -143,7 +145,7 @@ Word CsrUnit::get_csr(uint32_t addr, uint32_t wid, uint32_t tid) {
         CSR_READ_64(VX_CSR_MPM_STALL_FETCH, core_perf.fetch_stalls);
         CSR_READ_64(VX_CSR_MPM_STALL_IBUF, core_perf.ibuf_stalls);
         CSR_READ_64(VX_CSR_MPM_STALL_SCRB, core_perf.scrb_stalls);
-        CSR_READ_64(VX_CSR_MPM_STALL_OPDS, core_perf.opds_stalls);
+        CSR_READ_64(VX_CSR_MPM_STALL_OPDS, core_->perf_stats().opds_stalls);
         CSR_READ_64(VX_CSR_MPM_STALL_ALU, core_perf.alu_stalls);
         CSR_READ_64(VX_CSR_MPM_STALL_FPU, core_perf.fpu_stalls);
         CSR_READ_64(VX_CSR_MPM_STALL_LSU, core_perf.lsu_stalls);
@@ -395,14 +397,19 @@ void CsrUnit::set_csr(uint32_t addr, Word value, uint32_t wid, uint32_t tid) {
   }
 }
 
+// The FPU's per-thread accesses to the warp's fcsr, as get_csr/set_csr of
+// FRM, FCSR and FFLAGS do them.
 uint32_t CsrUnit::get_fpu_rm(uint32_t funct3, uint32_t wid, uint32_t tid) {
-  return (funct3 == 0x7) ? this->get_csr(VX_CSR_FRM, wid, tid) : funct3;
+  __unused(tid);
+  return (funct3 == 0x7) ? Word(core_->scheduler().warp(wid).fcsr >> 5) : funct3;
 }
 
 void CsrUnit::update_fcrs(uint32_t fflags, uint32_t wid, uint32_t tid) {
+  __unused(tid);
   if (fflags) {
-    this->set_csr(VX_CSR_FCSR, this->get_csr(VX_CSR_FCSR, wid, tid) | fflags, wid, tid);
-    this->set_csr(VX_CSR_FFLAGS, this->get_csr(VX_CSR_FFLAGS, wid, tid) | fflags, wid, tid);
+    auto& fcsr = core_->scheduler().warp(wid).fcsr;
+    fcsr = (Word(fcsr) | fflags) & 0xff;
+    fcsr = (fcsr & ~0x1F) | ((Word(fcsr & 0x1F) | fflags) & 0x1F);
   }
 }
 

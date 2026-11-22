@@ -294,6 +294,10 @@ void Mmu::on_tick() {
   // warps waiting on them cannot drain until they land.
   uint64_t rsp_delay = rsp_reg_ ? 1 : 0;
   for (uint32_t p = 0; p < num_ports_; ++p) {
+    // a port with nothing to answer is skipped before its (chained) full test
+    if (fault_rsp_.at(p).empty() && !pf_slot_.at(p) && RspIn.at(p).empty()) {
+      continue;
+    }
     if (RspOut.at(p).full()) {
       continue;
     }
@@ -412,7 +416,8 @@ void Mmu::on_tick() {
     if (ReqIn.at(p).empty()) {
       continue;
     }
-    MemReq req = ReqIn.at(p).peek();
+    // the port's head stays in place until its pop, the last use of req
+    const MemReq& req = ReqIn.at(p).peek();
 
     if (!needs_translation(req)) {
       // A flush token reaches the cache behind its port's parked requests
@@ -458,7 +463,7 @@ void Mmu::on_tick() {
       MemReq translated = req;
       translated.addr = (res.ppn << VX_VM_PAGE_LOG2_SIZE) |
                         (req.addr & ((1ULL << VX_VM_PAGE_LOG2_SIZE) - 1));
-      if (!replaying && ReqOut.at(p).try_send(translated)) {
+      if (!replaying && ReqOut.at(p).try_send(std::move(translated))) {
         ReqIn.at(p).pop();
       }
     } else {
@@ -502,6 +507,23 @@ void Mmu::on_tick() {
   if (reserve) {
     reserved_port_ = selected;
   }
+
+  // Sleep when a tick with no input changes nothing: no packet queued or in
+  // flight toward an input, no miss, park, replay, fault answer or report
+  // held, and the miss reservation settled on "none". A packet reserved
+  // toward any input re-arms the tick.
+  if (reserved_port_ == num_ports_ && this->idle()) {
+    this->tick_sleep();
+  }
+}
+
+bool Mmu::idle() const {
+  for (uint32_t p = 0; p < num_ports_; ++p) {
+    if (ReqIn.at(p).size() != 0 || RspIn.at(p).size() != 0) {
+      return false;
+    }
+  }
+  return TlbFillIn.size() == 0 && this->empty();
 }
 
 #endif // VX_CFG_VM_ENABLE

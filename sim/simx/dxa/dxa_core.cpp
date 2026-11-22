@@ -98,15 +98,40 @@ public:
   };
 
   // ── Inflight slot for a GMEM read ──────────────────────────────────
+  // Its state flags live in the worker's SlotSets (allocated, rsp_arrived,
+  // oob_pending, deferred), so the per-cycle scans read a few words.
   struct InflightSlot {
-    bool      allocated = false;
-    bool      rsp_arrived = false;
-    bool      oob_pending = false;  // OOB line waiting for its turn into smem_wr
-    bool      deferred = false;     // last line parked until the others drain
     uint64_t  ready_cycle = 0;  // first cycle the line can be written to SMEM
     uint64_t  free_cycle = 0;   // first cycle the slot can carry a new read
     LineWork  work;            // captured at allocation
     std::shared_ptr<mem_block_t> rsp_data;
+  };
+
+  // ── A set of in-flight slots, walked in slot order ──────────────────
+  struct SlotSet {
+    static constexpr uint32_t kSlots = VX_CFG_DXA_MAX_INFLIGHT;
+    static constexpr uint32_t kWords = (kSlots + 63) / 64;
+    // the bits of word i that name slots
+    static constexpr uint64_t valid(uint32_t i) {
+      return (kSlots - 64 * i >= 64) ? ~uint64_t(0) : ((uint64_t(1) << (kSlots - 64 * i)) - 1);
+    }
+    std::array<uint64_t, kWords> bits = {};
+
+    bool test(uint32_t i) const { return (bits[i / 64] >> (i % 64)) & 1; }
+    void set(uint32_t i)        { bits[i / 64] |= uint64_t(1) << (i % 64); }
+    void clear(uint32_t i)      { bits[i / 64] &= ~(uint64_t(1) << (i % 64)); }
+    void reset()                { bits.fill(0); }
+    bool any() const {
+      for (auto b : bits) { if (b) return true; }
+      return false;
+    }
+    // lowest slot in the set, or UINT32_MAX
+    uint32_t first() const {
+      for (uint32_t i = 0; i < kWords; ++i) {
+        if (bits[i]) return 64 * i + __builtin_ctzll(bits[i]);
+      }
+      return UINT32_MAX;
+    }
   };
 
   // ── Worker (one per slice) ───────────────────────────────────────────
@@ -135,8 +160,20 @@ public:
 
     // gmem_req → smem_wr inflight bookkeeping.
     std::array<InflightSlot, VX_CFG_DXA_MAX_INFLIGHT> inflight;
-    std::deque<uint32_t>    issued_order;        // outstanding tags in issue order
+    SlotSet                 allocated;           // outstanding slots
+    SlotSet                 rsp_arrived;         // line captured into smem_wr
+    SlotSet                 oob_pending;         // OOB line waiting for its turn into smem_wr
+    SlotSet                 deferred;            // last line parked until the others drain
+    uint32_t                num_issued = 0;      // outstanding slots (allocated's size)
     uint32_t                drain_slot = UINT32_MAX; // slot currently draining
+
+    void clear_slots() {
+      allocated.reset();
+      rsp_arrived.reset();
+      oob_pending.reset();
+      deferred.reset();
+      num_issued = 0;
+    }
 
     // smem_wr multicast replay state.
     uint32_t                mc_cta_idx = 0;      // 0..cta_indices.size()
@@ -163,7 +200,7 @@ public:
       w.state = WState::IDLE;
       w.work_list.clear();
       w.cta_indices.clear();
-      w.issued_order.clear();
+      w.clear_slots();
       w.drain_slot = UINT32_MAX;
       for (auto& s : w.inflight) { s = InflightSlot(); }
       w.staged = false;
@@ -372,9 +409,9 @@ private:
     w.issue_cycle = cycle_;
     w.work_list.clear();
     w.ag_idx = 0;
-    w.issued_order.clear();
+    w.clear_slots();
     w.drain_slot = UINT32_MAX;
-    for (auto& s : w.inflight) { s.allocated = false; s.rsp_arrived = false; s.rsp_data.reset(); }
+    for (auto& s : w.inflight) { s.rsp_data.reset(); }
     w.mc_cta_idx = 0;
     w.km_elem_idx = 0;
     w.writes_emitted = 0;
@@ -571,23 +608,28 @@ private:
   // while others are outstanding. A response it cannot take stays on the
   // memory response path and holds the responses queued behind it.
   void capture_line(Worker& w, SimChannel<MemRsp>& ch) {
+    // No response and no slot in flight (an OOB line holds an allocated
+    // slot): nothing to take.
+    if (ch.empty() && w.num_issued == 0) {
+      return;
+    }
+    // Captured lines other than the one draining, by kind.
     bool pend_busy  = false;
     bool defer_busy = false;
-    uint32_t oob_slot = UINT32_MAX;
-    for (uint32_t i = 0; i < w.inflight.size(); ++i) {
-      const auto& s = w.inflight[i];
-      if (s.rsp_arrived && i != w.drain_slot) {
-        (s.deferred ? defer_busy : pend_busy) = true;
+    for (uint32_t k = 0; k < SlotSet::kWords; ++k) {
+      uint64_t arrived = w.rsp_arrived.bits[k];
+      if (w.drain_slot != UINT32_MAX && w.drain_slot / 64 == k) {
+        arrived &= ~(uint64_t(1) << (w.drain_slot % 64));
       }
-      if (s.oob_pending && oob_slot == UINT32_MAX) {
-        oob_slot = i;
-      }
+      pend_busy  |= (arrived & ~w.deferred.bits[k]) != 0;
+      defer_busy |= (arrived & w.deferred.bits[k]) != 0;
     }
+    uint32_t oob_slot = w.oob_pending.first();
 
     uint32_t slot = oob_slot;
     if (!ch.empty()) {
       slot = uint32_t(ch.peek().tag) & (VX_CFG_DXA_MAX_INFLIGHT - 1);
-      if (!w.inflight[slot].allocated) {
+      if (!w.allocated.test(slot)) {
         ch.pop();
         return;
       }
@@ -597,7 +639,7 @@ private:
     }
 
     auto& s = w.inflight[slot];
-    bool defer = s.work.last && (w.issued_order.size() > 1);
+    bool defer = s.work.last && (w.num_issued > 1);
     if (defer ? defer_busy : pend_busy) {
       return;
     }
@@ -605,9 +647,13 @@ private:
       s.rsp_data = ch.peek().data;
       ch.pop();
     }
-    s.oob_pending = false;
-    s.rsp_arrived = true;
-    s.deferred    = defer;
+    w.oob_pending.clear(slot);
+    w.rsp_arrived.set(slot);
+    if (defer) {
+      w.deferred.set(slot);
+    } else {
+      w.deferred.clear(slot);
+    }
     s.ready_cycle = cycle_ + kSmemWrLatency;
   }
 
@@ -619,12 +665,15 @@ private:
     if (w.ag_idx >= w.work_list.size())
       return;
 
-    // Find a free slot.
+    // Find a free slot: the lowest unallocated one past its free cycle.
     uint32_t slot = UINT32_MAX;
-    for (uint32_t s = 0; s < w.inflight.size(); ++s) {
-      if (!w.inflight[s].allocated && cycle_ >= w.inflight[s].free_cycle) {
-        slot = s;
-        break;
+    for (uint32_t k = 0; k < SlotSet::kWords && slot == UINT32_MAX; ++k) {
+      for (uint64_t m = ~w.allocated.bits[k] & SlotSet::valid(k); m != 0; m &= m - 1) {
+        uint32_t s = 64 * k + __builtin_ctzll(m);
+        if (cycle_ >= w.inflight[s].free_cycle) {
+          slot = s;
+          break;
+        }
       }
     }
 
@@ -642,13 +691,13 @@ private:
     // OOB lines skip the GMEM request entirely; smem_wr takes them in a cycle
     // with no GMEM response (rsp data left null — smem_wr will use cfill).
     if (lw.oob) {
-      w.inflight[slot].allocated   = true;
-      w.inflight[slot].rsp_arrived = false;
-      w.inflight[slot].oob_pending = true;
-      w.inflight[slot].deferred    = false;
+      w.allocated.set(slot);
+      w.rsp_arrived.clear(slot);
+      w.oob_pending.set(slot);
+      w.deferred.clear(slot);
       w.inflight[slot].rsp_data.reset();
       w.inflight[slot].work        = lw;
-      w.issued_order.push_back(slot);
+      ++w.num_issued;
       ++w.ag_idx;
       return;
     }
@@ -665,19 +714,19 @@ private:
     auto& ch = gmem_arb_->ReqIn.at(w.worker_id);
     if (!ch.try_send(mreq)) return; // arb backpressure
 
-    w.inflight[slot].allocated   = true;
-    w.inflight[slot].rsp_arrived = false;
-    w.inflight[slot].oob_pending = false;
-    w.inflight[slot].deferred    = false;
+    w.allocated.set(slot);
+    w.rsp_arrived.clear(slot);
+    w.oob_pending.clear(slot);
+    w.deferred.clear(slot);
     w.inflight[slot].rsp_data.reset();
     w.inflight[slot].work        = lw;
-    w.issued_order.push_back(slot);
+    ++w.num_issued;
     ++w.ag_idx;
   }
 
   // ── smem_wr: drain ready slots, build LMEM MemReqs ───────────────────
   void tick_worker_smem_wr(Worker& w) {
-    if (w.issued_order.empty()) {
+    if (w.num_issued == 0) {
       // Nothing in flight — if all addr_gen done, transfer is finished.
       if (w.ag_idx == w.work_list.size()) finish_worker(w);
       return;
@@ -690,19 +739,21 @@ private:
     // it is the only outstanding slot.
     uint32_t slot = w.drain_slot;
     if (slot == UINT32_MAX) {
-      for (uint32_t i = 0; i < w.inflight.size(); ++i) {
-        const auto& candidate = w.inflight[i];
-        if (candidate.allocated && candidate.rsp_arrived && !candidate.work.last
-         && cycle_ >= candidate.ready_cycle) {
-          slot = i;
-          break;
+      for (uint32_t k = 0; k < SlotSet::kWords && slot == UINT32_MAX; ++k) {
+        for (uint64_t m = w.allocated.bits[k] & w.rsp_arrived.bits[k]; m != 0; m &= m - 1) {
+          uint32_t i = 64 * k + __builtin_ctzll(m);
+          const auto& candidate = w.inflight[i];
+          if (!candidate.work.last && cycle_ >= candidate.ready_cycle) {
+            slot = i;
+            break;
+          }
         }
       }
 
-      if (slot == UINT32_MAX && w.issued_order.size() == 1) {
-        uint32_t last_slot = w.issued_order.front();
+      if (slot == UINT32_MAX && w.num_issued == 1) {
+        uint32_t last_slot = w.allocated.first();
         const auto& candidate = w.inflight[last_slot];
-        if (candidate.allocated && candidate.rsp_arrived && cycle_ >= candidate.ready_cycle)
+        if (w.rsp_arrived.test(last_slot) && cycle_ >= candidate.ready_cycle)
           slot = last_slot;
       }
 
@@ -864,13 +915,12 @@ private:
         } else {
           w.mc_cta_idx = 0;
           // Slot done — release.
-          s.allocated = false;
-          s.rsp_arrived = false;
-          s.deferred = false;
+          w.allocated.clear(slot);
+          w.rsp_arrived.clear(slot);
+          w.deferred.clear(slot);
           s.free_cycle = cycle_ + 1;
           s.rsp_data.reset();
-          auto it = std::find(w.issued_order.begin(), w.issued_order.end(), slot);
-          if (it != w.issued_order.end()) w.issued_order.erase(it);
+          --w.num_issued;
           w.drain_slot = UINT32_MAX;
         }
       }
@@ -905,7 +955,7 @@ private:
     w.state = WState::IDLE;
     w.work_list.clear();
     w.cta_indices.clear();
-    w.issued_order.clear();
+    w.clear_slots();
     w.drain_slot = UINT32_MAX;
     w.ag_idx = 0;
     w.mc_cta_idx = 0;

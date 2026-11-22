@@ -99,6 +99,8 @@ private:
     std::vector<std::pair<uint32_t, MemReq>> parked;  // (port, request)
   };
 
+  // No input pending and nothing held: a tick would change no state.
+  bool idle() const;
   bool needs_translation(const MemReq& req) const;
   bool port_parked(uint32_t port) const;
   bool needs_kill_rsp(const MemReq& req) const;

@@ -108,9 +108,7 @@ public:
     , fu_full_(VX_CFG_ISSUE_WIDTH, BitVector<>((uint32_t)FUType::Count, 0))
     , fu_full_seen_(VX_CFG_ISSUE_WIDTH, BitVector<>((uint32_t)FUType::Count, 0))
     , ibuf_inflight_(VX_CFG_NUM_WARPS, 0)
-    , ibuf_full_r_(VX_CFG_NUM_WARPS, false)
     , ibuf_queued_(VX_CFG_NUM_WARPS, 0)
-    , ibuf_queue_full_r_(VX_CFG_NUM_WARPS, false)
     , last_issue_(VX_CFG_NUM_WARPS, 0)
     , staged_since_(VX_CFG_NUM_WARPS, 0)
     , head_staged_(VX_CFG_NUM_WARPS, false)
@@ -126,6 +124,9 @@ public:
       snprintf(sname, 100, "decode_latch%d", f);
       decode_latch_.emplace_back(std::make_unique<TFifo<instr_trace_t*>>(ctx, sname, 1, 2));
       pending_icache_.emplace_back(PER_FETCH_WARPS * VX_CFG_FETCH_INFLIGHT);
+      for (uint32_t w = f; w < VX_CFG_NUM_WARPS; w += VX_CFG_FETCH_WIDTH) {
+        fetch_warps_[f].set(w);
+      }
     }
 
     // create scheduler (SimObject) — also creates the CTA dispatcher.
@@ -450,10 +451,36 @@ public:
   #endif
     gather_holds_.resize(VX_CFG_ISSUE_WIDTH, std::vector<GatherHold>((uint32_t)FUType::Count));
 
+    // The channels the core polls but other units own wake a quiescent core
+    // as a packet reaches them: a unit's result can come after its
+    // instruction has left the pending count, as a split LSU instruction's
+    // last response can arrive after its end-of-packet beat retired.
+    for (uint32_t fu = 0; fu < (uint32_t)FUType::Count; ++fu) {
+      auto& func_unit = func_units_.at(fu);
+      for (uint32_t b = 0; b < func_unit->num_blocks(); ++b) {
+        func_unit->output(b).tx_callback([this](instr_trace_t* const&, uint64_t) {
+          this->wake();
+        });
+      }
+      dispatchers_.at(fu)->ReleaseOut.tx_callback([this](instr_trace_t* const&, uint64_t) {
+        this->wake();
+      });
+    }
+    for (auto& operand : operands_) {
+      operand->Output.tx_callback([this](instr_trace_t* const&, uint64_t) {
+        this->wake();
+      });
+    }
+
     this->reset();
   }
 
   void reset() {
+    // a reset re-arms every object; the ticks skipped up to it are counted
+    if (asleep_) {
+      this->account_sleep(SimPlatform::instance().cycles());
+    }
+    asleep_ = false;
     for (auto& arb : ibuffer_arbs_) {
       arb.reset();
     }
@@ -469,6 +496,7 @@ public:
     std::fill(last_issue_.begin(), last_issue_.end(), 0);
     std::fill(staged_since_.begin(), staged_since_.end(), 0);
     std::fill(head_staged_.begin(), head_staged_.end(), false);
+    std::fill(scrb_waits_.begin(), scrb_waits_.end(), ScrbWait());
 
     std::fill(pending_instrs_.begin(), pending_instrs_.end(), 0);
     pending_total_ = 0;
@@ -479,9 +507,14 @@ public:
     }
 
     std::fill(ibuf_inflight_.begin(), ibuf_inflight_.end(), 0);
-    std::fill(ibuf_full_r_.begin(), ibuf_full_r_.end(), false);
     std::fill(ibuf_queued_.begin(), ibuf_queued_.end(), 0);
-    std::fill(ibuf_queue_full_r_.begin(), ibuf_queue_full_r_.end(), false);
+    ibuf_full_.reset();
+    ibuf_full_r_.reset();
+    ibuf_queue_full_.reset();
+    ibuf_queue_full_r_.reset();
+    for (uint32_t w = 0; w < VX_CFG_NUM_WARPS; ++w) {
+      ibuf_held_.set(w, ibuffers_.at(w)->size() != 0);
+    }
 
     // perf_stats_ deliberately survives: these are the MPM counters, which
     // accumulate from device reset. A kernel launch re-enters reset() here but
@@ -491,6 +524,10 @@ public:
   }
 
   void tick() {
+    if (asleep_) {
+      this->account_sleep(SimPlatform::instance().cycles());
+      asleep_ = false;
+    }
     this->commit();
     this->return_dispatch_credits();
     this->issue();
@@ -507,16 +544,111 @@ public:
       ++perf_stats_.cycles;
     }
     DPN(2, std::flush);
+
+    if (this->quiescent()) {
+      asleep_ = true;
+      asleep_after_ = SimPlatform::instance().cycles();
+      asleep_active_ = scheduler_->active_warps().count();
+      asleep_stalled_ = scheduler_->stalled_warps().count();
+      simobject_->tick_sleep();
+    }
+  }
+
+  // ----- Quiescence -----
+  //
+  // A core with no warp, no CTA on its way and nothing in its pipeline sleeps:
+  // each tick it skips would only count an idle scheduler cycle and its
+  // (inactive) stalled warps, which the next tick, a reset or a counter read
+  // adds in at once. Anything that can give it work wakes it: a packet sent
+  // toward one of its channels (its CTA launch lane among them), a packet
+  // reaching a unit output, credit return or collector output it polls, or a
+  // call that changes its warps' state.
+
+  // The next tick would change nothing but those counters.
+  bool quiescent() const {
+    if (pending_total_ != 0 || pending_ifetches_ != 0 || ibuf_held_.any()) {
+      return false;
+    }
+    if (!scheduler_->quiescent()) {
+      return false;
+    }
+    if (simobject_->branch_ctl_in.size() != 0
+     || simobject_->warp_ctl_in.size() != 0
+     || simobject_->bar_unlock_in.size() != 0) {
+      return false;
+    }
+    for (uint32_t f = 0; f < VX_CFG_FETCH_WIDTH; ++f) {
+      if (fetch_latch_.at(f)->size() != 0 || decode_latch_.at(f)->size() != 0
+       || fetch_drop_.at(f).valid) {
+        return false;
+      }
+    #ifdef VX_CFG_VM_ENABLE
+      if (icache_mmu_->RspOut.at(f).size() != 0) {
+        return false;
+      }
+    #else
+      if (simobject_->icache_rsp_in.at(f).size() != 0) {
+        return false;
+      }
+    #endif
+    #ifdef VX_CFG_EXT_C_ENABLE
+      if (!decompressors_.at(f)->quiescent()) {
+        return false;
+      }
+    #endif
+    }
+    for (uint32_t iw = 0; iw < VX_CFG_ISSUE_WIDTH; ++iw) {
+      if (operands_.at(iw)->Output.size() != 0
+       || issue_yield_.at(iw) != kNoYield
+       || fu_full_seen_.at(iw) != fu_full_.at(iw)) {
+        return false;
+      }
+      for (auto& queue : commit_queues_.at(iw)) {
+        if (queue->size() != 0) {
+          return false;
+        }
+      }
+    }
+    for (uint32_t fu = 0; fu < (uint32_t)FUType::Count; ++fu) {
+      if (dispatchers_.at(fu)->ReleaseOut.size() != 0) {
+        return false;
+      }
+      auto& func_unit = func_units_.at(fu);
+      for (uint32_t b = 0, nb = func_unit->num_blocks(); b < nb; ++b) {
+        if (func_unit->output(b).size() != 0) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  // Count the ticks skipped since the core fell asleep, those of the cycles
+  // before `now`, as the scheduler would have: idle, with the warp counts it
+  // had then (a launch resets the scheduler before the core).
+  void account_sleep(uint64_t now) {
+    if (now <= asleep_after_ + 1) {
+      return; // read in the cycle the core fell asleep, or the one after
+    }
+    uint64_t skipped = now - 1 - asleep_after_;
+    perf_stats_.sched_idle    += skipped;
+    perf_stats_.active_warps  += skipped * asleep_active_;
+    perf_stats_.stalled_warps += skipped * asleep_stalled_;
+    asleep_after_ = now - 1;
+  }
+
+  void wake() {
+    simobject_->tick_wake();
   }
 
   // ----- Pipeline stages (private) -----
 
   // Abort when a warp's staged instruction has not issued for STALL_TIMEOUT
   // cycles, naming the registers it still waits on.
-  void check_issue_timeout(uint32_t iw, uint32_t wid, instr_trace_t* trace, instr_trace_t* uop_trace) {
-    uint64_t staged = std::max(last_issue_.at(wid), trace->ibuf_time);
-    uint64_t stall_cycles = SimPlatform::instance().cycles() - staged;
-    if (stall_cycles < VX_DBG_STALL_TIMEOUT) {
+  void check_issue_timeout(uint64_t now, uint32_t iw, uint32_t wid, instr_trace_t* trace, instr_trace_t* uop_trace) {
+    uint64_t staged = std::max(last_issue_[wid], trace->ibuf_time);
+    uint64_t stall_cycles = now - staged;
+    if (__builtin_expect(stall_cycles < VX_DBG_STALL_TIMEOUT, 1)) {
       return;
     }
     std::cerr << "*** " << simobject_->name() << " issue timeout: wid=" << wid
@@ -545,23 +677,14 @@ public:
     // buffer is full at exactly IBUF_SIZE entries, a flag registered at the end
     // of the previous cycle. With an L1, once every warp's buffer is full any
     // ready warp may fetch, its instruction waiting at decode.
-    bool all_full = (VX_CFG_ICACHE_ENABLED || VX_CFG_DCACHE_ENABLED);
-    for (uint32_t w = 0; w < VX_CFG_NUM_WARPS && all_full; ++w) {
-      all_full = ibuf_full_r_.at(w);
-    }
+    bool all_full = (VX_CFG_ICACHE_ENABLED || VX_CFG_DCACHE_ENABLED)
+                 && (ibuf_full_r_.count() == VX_CFG_NUM_WARPS);
     // the cycle is idle when no slice has a warp to fetch, its latch free or not
     bool any_cand = false;
     for (uint32_t f = 0; f < VX_CFG_FETCH_WIDTH; ++f) {
       auto& fetch_latch = fetch_latch_.at(f);
-      WarpMask warp_mask, room_mask;
-      for (uint32_t w = f; w < VX_CFG_NUM_WARPS; w += VX_CFG_FETCH_WIDTH) {
-        if (!ibuf_full_r_.at(w)) {
-          room_mask.set(w);
-        }
-        if (all_full || !ibuf_full_r_.at(w)) {
-          warp_mask.set(w);
-        }
-      }
+      WarpMask room_mask = fetch_warps_[f] & ~ibuf_full_r_;
+      WarpMask warp_mask = all_full ? fetch_warps_[f] : room_mask;
 
       if (fetch_latch->full()) {
         any_cand |= scheduler_->has_ready(warp_mask, room_mask);
@@ -582,19 +705,15 @@ public:
         this->pending_add(trace->wid);
       }
       ++ibuf_inflight_.at(trace->wid);
+      this->ibuf_count_changed(trace->wid);
       perf_stats_.issued_warps += 1;
       perf_stats_.issued_threads += trace->tmask.count();
     }
     if (!any_cand) {
       ++perf_stats_.sched_idle;
     }
-    for (uint32_t w = 0; w < VX_CFG_NUM_WARPS; ++w) {
-      // a warp picked once every buffer is full goes past its slots, and with
-      // fetch ahead must read as full there
-      ibuf_full_r_.at(w) = (VX_CFG_FETCH_INFLIGHT > 1) ? (ibuf_inflight_.at(w) >= VX_CFG_IBUF_SIZE)
-                                                       : (ibuf_inflight_.at(w) == VX_CFG_IBUF_SIZE);
-      ibuf_queue_full_r_.at(w) = (ibuf_queued_.at(w) >= VX_CFG_IBUF_SIZE);
-    }
+    ibuf_full_r_ = ibuf_full_;
+    ibuf_queue_full_r_ = ibuf_queue_full_;
 
     scheduler_->schedule_end();
   }
@@ -674,7 +793,7 @@ public:
       // buffer holds it at the icache output, in front of the responses behind
       // it. The buffer's full flag is registered: a slot it frees this cycle
       // takes an instruction from the next.
-      bool ibuf_room = !ibuf_queue_full_r_.at(trace->wid);
+      bool ibuf_room = !ibuf_queue_full_r_.test(trace->wid);
     #ifdef VX_CFG_EXT_C_ENABLE
       // Decompressor classifies the rsp: emit-ready (sets trace->code) or
       // queues a refetch internally for cross-word 32-bit completion.
@@ -702,6 +821,7 @@ public:
         if (emit) {
           trace->log_once(false);
           ++ibuf_queued_.at(trace->wid);
+          this->ibuf_count_changed(trace->wid);
           if (VX_CFG_FETCH_INFLIGHT > 1) {
             auto& fd = fetch_dec_.at(trace->wid);
             fd.head = (trace->fetch_seq + 1) % VX_CFG_FETCH_INFLIGHT;
@@ -790,6 +910,7 @@ public:
       scheduler_->fetch_leave(drop.wid, drop.squash);
       assert(ibuf_inflight_.at(drop.wid) > 0);
       --ibuf_inflight_.at(drop.wid);
+      this->ibuf_count_changed(drop.wid);
       drop.valid = false;
     }
 
@@ -857,6 +978,7 @@ public:
     // insert to ibuffer
     trace->ibuf_time = SimPlatform::instance().cycles();
     ibuffer->push(trace);
+    ibuf_held_.set(trace->wid);
 
     // An instruction that arrives with the warp's buffer and staging register
     // both empty moves into the register at once, and its buffer slot frees
@@ -869,7 +991,23 @@ public:
     decode_latch.pop();
   }
 
+  // Whether the scoreboard blocks the warp's staged micro-op. A micro-op found
+  // blocked stays blocked until the scoreboard frees one of the warp's
+  // registers, so the answer is kept until then.
+  bool scrb_blocked(uint32_t wid, instr_trace_t* uop_trace) {
+    auto& wait = scrb_waits_[wid];
+    uint32_t gen = scoreboard_->release_gen(wid);
+    if (wait.uop == uop_trace && wait.gen == gen) {
+      return true;
+    }
+    bool blocked = scoreboard_->in_use(uop_trace);
+    wait.uop = blocked ? uop_trace : nullptr;
+    wait.gen = gen;
+    return blocked;
+  }
+
   void issue() {
+    const uint64_t now = SimPlatform::instance().cycles();
     // dispatch operands
     for (uint32_t iw = 0; iw < VX_CFG_ISSUE_WIDTH; ++iw) {
       auto& operand = operands_.at(iw);
@@ -902,14 +1040,16 @@ public:
       issue_yield_.at(iw) = kNoYield;
       for (uint32_t w = 0; w < PER_ISSUE_WARPS; ++w) {
         uint32_t wid = w * VX_CFG_ISSUE_WIDTH + iw;
-        auto& ibuffer = ibuffers_.at(wid);
+        if (!ibuf_held_.test(wid))
+          continue;
+        auto& ibuffer = ibuffers_[wid];
         if (ibuffer->empty())
           continue;
 
         // check scoreboard against sequencer micro-op (handles uop WAW/RAW)
         auto trace = ibuffer->peek();
 
-        auto seq = sequencers_.at(wid);
+        auto& seq = sequencers_[wid];
         auto uop_trace = seq->get(trace);  // returns cached uop or generates next
 
         // The head moves into the warp's staging register, freeing its buffer
@@ -918,7 +1058,7 @@ public:
         // scheduler sees the freed slot the cycle after.
         if (!head_staged_.at(wid)
          && (!trace->instr_ptr->is_macro_op() || seq->last())
-         && SimPlatform::instance().cycles() > std::max(last_issue_.at(wid), trace->ibuf_time)) {
+         && now > std::max(last_issue_.at(wid), trace->ibuf_time)) {
           head_staged_.at(wid) = true;
           this->ibuf_release(wid);
         }
@@ -930,14 +1070,16 @@ public:
         bool seq_starting = false;
         if (seq->starting()) {
           uint64_t ready = std::max(staged_since_.at(wid), trace->ibuf_time) + 2;
-          seq_starting = (SimPlatform::instance().cycles() < ready);
+          seq_starting = (now < ready);
         }
 
-        this->check_issue_timeout(iw, wid, trace, uop_trace);
+        this->check_issue_timeout(now, iw, wid, trace, uop_trace);
 
-        if (scoreboard_->in_use(uop_trace)) {
-          auto uses = scoreboard_->get_uses(uop_trace);
+        if (this->scrb_blocked(wid, uop_trace)) {
           if (!uop_trace->log_once(true)) {
+          #ifndef NDEBUG
+            // the dependents are listed only for the trace
+            auto uses = scoreboard_->get_uses(uop_trace);
             DTH(4, "*** scoreboard-stall: dependents={");
             for (uint32_t j = 0, n = uses.size(); j < n; ++j) {
               auto& use = uses.at(j);
@@ -946,6 +1088,7 @@ public:
               DTN(4, use.reg_type << use.reg_id << " (#" << use.uuid << ")");
             }
             DTN(4, "}, " << *uop_trace << std::endl);
+          #endif
           }
           // Count once per cycle per issue slice regardless of how many
           // warps are blocked.
@@ -997,7 +1140,7 @@ public:
         auto trace = ibuffer->peek();
 
         // Retrieve the (already-generated) micro-op from the sequencer
-        auto seq = sequencers_.at(wid);
+        auto& seq = sequencers_.at(wid);
         auto uop_trace = seq->get(trace);
 
         // to operand stage
@@ -1015,7 +1158,7 @@ public:
           // An issue candidate is staged from the cycle after both the warp's
           // previous issue and its own arrival in the buffer.
           staged_since_.at(wid) = std::max(last_issue_.at(wid), trace->ibuf_time) + 1;
-          last_issue_.at(wid) = SimPlatform::instance().cycles();
+          last_issue_.at(wid) = now;
           DT(3, simobject_->name() << "-pipeline issue: " << *uop_trace);
           if (uop_trace->wb) {
             // update scoreboard
@@ -1055,6 +1198,9 @@ public:
               trace_pool_.deallocate(trace, 1);
             }
             ibuffer->pop();
+            if (ibuffer->size() == 0) {
+              ibuf_held_.reset(wid);
+            }
             if (!head_staged_.at(wid)) {
               this->ibuf_release(wid);
             }
@@ -1064,7 +1210,7 @@ public:
             if (!ibuffer->empty()) {
               auto next = ibuffer->peek();
               if (!next->instr_ptr->is_macro_op()
-               && SimPlatform::instance().cycles() > next->ibuf_time) {
+               && now > next->ibuf_time) {
                 head_staged_.at(wid) = true;
                 this->ibuf_release(wid);
               }
@@ -1090,6 +1236,17 @@ public:
     --ibuf_inflight_.at(wid);
     assert(ibuf_queued_.at(wid) > 0);
     --ibuf_queued_.at(wid);
+    this->ibuf_count_changed(wid);
+  }
+
+  // A warp's buffer is full at IBUF_SIZE instructions in flight (exactly that
+  // many without fetch ahead; a warp picked once every buffer is full goes
+  // past its slots, and with fetch ahead must read as full there), its queue
+  // at IBUF_SIZE or more past the icache; schedule() registers both.
+  void ibuf_count_changed(uint32_t wid) {
+    ibuf_full_.set(wid, (VX_CFG_FETCH_INFLIGHT > 1) ? (ibuf_inflight_[wid] >= VX_CFG_IBUF_SIZE)
+                                                    : (ibuf_inflight_[wid] == VX_CFG_IBUF_SIZE));
+    ibuf_queue_full_.set(wid, ibuf_queued_[wid] >= VX_CFG_IBUF_SIZE);
   }
 
   void update_queue_full() {
@@ -1369,11 +1526,11 @@ public:
   }
 
   bool lsu_drained() const {
-    return std::static_pointer_cast<LsuUnit>(func_units_.at((int)FUType::LSU))->drained();
+    return static_cast<const LsuUnit*>(func_units_.at((int)FUType::LSU).get())->drained();
   }
 
   bool lsu_sent() const {
-    return std::static_pointer_cast<LsuUnit>(func_units_.at((int)FUType::LSU))->sent();
+    return static_cast<const LsuUnit*>(func_units_.at((int)FUType::LSU).get())->sent();
   }
 
   // No request is in flight past the LSU blocks' request queues: the local
@@ -1444,6 +1601,10 @@ public:
       bool     is_hi       = (mpm_tag_idx >> 5) & 1;
       uint32_t idx         = mpm_tag_idx & 0x1f;
       uint32_t csr_addr    = is_hi ? (VX_CSR_MPM_BASE_H + idx) : (VX_CSR_MPM_BASE + idx);
+      // the counters a quiescent core has skipped are counted first
+      if (asleep_) {
+        this->account_sleep(SimPlatform::instance().cycles());
+      }
       auto saved_class = mpm_class_;
       mpm_class_ = mpm_class;
       *value = static_cast<uint32_t>(this->csr_unit().get_csr(csr_addr, 0, 0));
@@ -1457,10 +1618,17 @@ public:
   }
 
   PerfStats& perf_stats() {
+    if (asleep_) {
+      this->account_sleep(SimPlatform::instance().cycles());
+    }
     perf_stats_.opds_stalls = 0;
     for (uint32_t iw = 0; iw < VX_CFG_ISSUE_WIDTH; ++iw) {
       perf_stats_.opds_stalls += operands_.at(iw)->total_stalls();
     }
+    return perf_stats_;
+  }
+
+  PerfStats& perf_counters() {
     return perf_stats_;
   }
 
@@ -1493,7 +1661,7 @@ public:
   Scheduler*    scheduler() { return scheduler_.get(); }
   Scoreboard*   scoreboard() { return scoreboard_.get(); }
   // CSR is a sub-unit of SFU; reach it through SfuUnit.
-  CsrUnit&      csr_unit()  { return this->sfu_unit()->csr_unit(); }
+  CsrUnit&      csr_unit()  { return static_cast<SfuUnit*>(func_units_.at((int)FUType::SFU).get())->csr_unit(); }
   uint32_t      mpm_class() const { return mpm_class_; }
 #ifdef VX_CFG_EXT_TCU_ENABLE
   std::shared_ptr<TcuUnit>& tcu_unit() { return tcu_unit_; }
@@ -1663,14 +1831,31 @@ private:
   std::vector<BitVector<>> fu_full_seen_; // [iw] that flag one cycle later, as issue sees it
 
   std::vector<uint32_t> ibuf_inflight_;
-  std::vector<bool> ibuf_full_r_;
   std::vector<uint32_t> ibuf_queued_;      // [wid] instructions past the icache, not yet staged
-  std::vector<bool>     ibuf_queue_full_r_; // [wid] full flag from ibuf_queued_, registered
+  WarpMask ibuf_full_;          // [wid] full flag from ibuf_inflight_
+  WarpMask ibuf_full_r_;        // ... registered
+  WarpMask ibuf_queue_full_;    // [wid] full flag from ibuf_queued_
+  WarpMask ibuf_queue_full_r_;  // ... registered
+  WarpMask ibuf_held_;          // [wid] the buffer holds an instruction or one on its way in
+  std::array<WarpMask, VX_CFG_FETCH_WIDTH> fetch_warps_; // [slice] the warps it fetches for
   std::vector<uint64_t> last_issue_;   // [wid] cycle of the warp's last issue
   std::vector<uint64_t> staged_since_; // [wid] cycle the last issued candidate was staged
   std::vector<bool>     head_staged_;  // [wid] the buffer head has left for staging
+  // [wid] the micro-op the scoreboard last blocked, and the warp's release
+  // generation then
+  struct ScrbWait {
+    const instr_trace_t* uop = nullptr;
+    uint32_t gen = 0;
+  };
+  std::vector<ScrbWait> scrb_waits_ = std::vector<ScrbWait>(VX_CFG_NUM_WARPS);
 
   PoolAllocator<instr_trace_t, 64> trace_pool_;
+
+  // asleep since the end of the tick of cycle asleep_after_ (see quiescent())
+  bool     asleep_ = false;
+  uint64_t asleep_after_ = 0;
+  uint64_t asleep_active_ = 0;
+  uint64_t asleep_stalled_ = 0;
 
 #ifdef VX_CFG_EXT_C_ENABLE
   // RVC fetch SimObject per frontend slice (per-warp halfword buffer + refetch
@@ -1751,18 +1936,22 @@ bool Core::lsu_stores_landed() const {
 }
 
 void Core::resume(uint32_t wid) {
+  impl_->wake();
   impl_->scheduler()->resume(wid);
 }
 
 void Core::barrier_arrive(uint32_t bar_id, uint32_t count, uint32_t wid, bool is_sync_bar) {
+  impl_->wake();
   impl_->scheduler()->barrier_unit().arrive(bar_id, count, wid, is_sync_bar);
 }
 
 void Core::barrier_wait(uint32_t bar_id, uint32_t phase, uint32_t wid) {
+  impl_->wake();
   impl_->scheduler()->barrier_unit().wait(bar_id, phase, wid);
 }
 
 void Core::global_barrier_resume(uint32_t bar_id) {
+  impl_->wake();
   impl_->scheduler()->barrier_unit().global_resume(bar_id);
 }
 
@@ -1772,23 +1961,28 @@ void Core::on_gbar_resume(const GbarResume& msg) {
 
 #ifdef VX_CFG_EXT_RASTER_ENABLE
 void Core::on_fwd_arm(const FwdArm& msg) {
+  impl_->wake();
   impl_->scheduler()->fwd_arm(msg.frag_entry, msg.frag_param);
 }
 #endif
 
 void Core::barrier_event_attach(uint32_t bar_id, uint32_t count) {
+  impl_->wake();
   impl_->scheduler()->barrier_unit().event_attach(bar_id, count);
 }
 
 void Core::barrier_event_release(uint32_t bar_id) {
+  impl_->wake();
   impl_->scheduler()->barrier_unit().event_release(bar_id);
 }
 
 bool Core::wspawn(uint32_t num_warps, Word nextPC) {
+  impl_->wake();
   return impl_->scheduler()->wspawn(num_warps, nextPC);
 }
 
 bool Core::setTmask(uint32_t wid, const ThreadMask& tmask) {
+  impl_->wake();
   return impl_->scheduler()->setTmask(wid, tmask);
 }
 
@@ -1815,6 +2009,10 @@ const Core::PerfStats& Core::perf_stats() const {
   return impl_->perf_stats();
 }
 
+Core::PerfStats& Core::perf_counters() {
+  return impl_->perf_counters();
+}
+
 int Core::get_exitcode() const {
   return impl_->get_exitcode();
 }
@@ -1825,9 +2023,9 @@ CsrUnit& Core::csr_unit() { return impl_->csr_unit(); }
 uint32_t Core::mpm_class() const { return impl_->mpm_class(); }
 
 Word Core::dtm_get_pc(uint32_t wid) const         { return impl_->dtm_get_pc(wid); }
-void Core::dtm_set_pc(uint32_t wid, Word pc)      { impl_->dtm_set_pc(wid, pc); }
+void Core::dtm_set_pc(uint32_t wid, Word pc)      { impl_->wake(); impl_->dtm_set_pc(wid, pc); }
 Word Core::dtm_get_ireg(uint32_t wid, uint32_t reg)            { return impl_->dtm_get_ireg(wid, reg); }
-void Core::dtm_set_ireg(uint32_t wid, uint32_t reg, Word val)  { impl_->dtm_set_ireg(wid, reg, val); }
+void Core::dtm_set_ireg(uint32_t wid, uint32_t reg, Word val)  { impl_->wake(); impl_->dtm_set_ireg(wid, reg, val); }
 
 #ifdef VX_CFG_EXT_TCU_ENABLE
 std::shared_ptr<TcuUnit>& Core::tcu_unit() {

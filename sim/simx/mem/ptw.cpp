@@ -240,6 +240,19 @@ void Ptw::on_tick() {
       break;
     }
   }
+
+  // Sleep when a tick with no input changes nothing: every walker idle or
+  // waiting for its PTE on MemRspIn, and nothing queued or in flight toward
+  // MemRspIn or ReqIn, whose reservations re-arm the tick.
+  if (MemRspIn.size() == 0 && ReqIn.size() == 0) {
+    bool idle = true;
+    for (auto& w : walkers_) {
+      idle &= (w.state == W_IDLE || w.state == W_WAIT);
+    }
+    if (idle) {
+      this->tick_sleep();
+    }
+  }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -288,6 +301,16 @@ void PtwMux::on_tick() {
     ReqIn.at(g).pop();
     grant_rr_ = g + 1;
     break;
+  }
+
+  // Sleep when nothing is queued or in flight toward an input: a tick then
+  // routes nothing and grants nothing, and a reservation re-arms it.
+  bool idle = (RspIn.size() == 0);
+  for (uint32_t i = 0; idle && i < num_inputs_; ++i) {
+    idle = (ReqIn.at(i).size() == 0);
+  }
+  if (idle) {
+    this->tick_sleep();
   }
 }
 

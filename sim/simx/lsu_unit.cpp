@@ -535,7 +535,7 @@ void LsuUnit::send_fence_token(uint32_t b) {
 	lsu_req.op = MemOp::LD;
 	lsu_req.flags.flush = 1;
 	lsu_req.flags.fence_op = std::get<IntrLsuArgs>(trace->instr_ptr->get_args()).fence_op;
-	std::vector<mem_addr_size_t> lane_entries(VX_CFG_NUM_LSU_LANES);
+	lane_list_t lane_entries{};
 	for (uint32_t t = base; t < VX_CFG_NUM_THREADS; ++t) {
 		if (trace->tmask.test(t)) {
 			lsu_req.mask.set(t - base);
@@ -597,7 +597,7 @@ void LsuUnit::process_request_step(uint32_t b) {
 		if (!state.pending_reqs.full() && core_->lmem_switch(b)->req_ready(to_dc, to_lmem)) {
 			LsuReq lsu_req = meta_req;
 			uint32_t count = lsu_req.mask.count();
-			std::vector<mem_addr_size_t> lane_entries(VX_CFG_NUM_LSU_LANES);
+			lane_list_t lane_entries{};
 			for (uint32_t i = 0; i < VX_CFG_NUM_LSU_LANES; ++i) {
 				if (!lsu_req.mask.test(i)) {
 					continue;
@@ -746,7 +746,7 @@ void LsuUnit::process_request_step(uint32_t b) {
 		}
 		uint32_t t0 = state.addr_list.size() - state.remain_addrs;
 		uint32_t beat_n = std::min<uint32_t>(VX_CFG_NUM_LSU_LANES, state.remain_addrs);
-		std::vector<mem_addr_size_t> lane_entries(VX_CFG_NUM_LSU_LANES);
+		lane_list_t lane_entries{};
 		for (uint32_t i = 0; i < beat_n; ++i) {
 			auto& entry = state.addr_list.at(t0 + i);
 			if (entry.size == 0)
@@ -823,9 +823,9 @@ void LsuUnit::process_request_step(uint32_t b) {
 
 		// update stats
 		if (is_write) {
-			core_->perf_stats().stores += count;
+			core_->perf_counters().stores += count;
 		} else {
-			core_->perf_stats().loads += count;
+			core_->perf_counters().loads += count;
 			pending_loads_ += count;
 		}
 	}
@@ -848,7 +848,7 @@ void LsuUnit::process_request_step(uint32_t b) {
 }
 
 void LsuUnit::on_tick() {
-	core_->perf_stats().load_latency += pending_loads_;
+	core_->perf_counters().load_latency += pending_loads_;
 
 	for (uint32_t b = 0; b < VX_CFG_NUM_LSU_BLOCKS; ++b) {
 		// Drain-before-fill ordering: consume responses, dispatch from req_queue
@@ -865,4 +865,27 @@ void LsuUnit::on_tick() {
 		this->process_request_step(b);
 		this->ingest_inputs(b, queue_room, reads_held);
 	}
+
+	// Sleep when no block holds a request, a result or a fence and nothing is
+	// on its way in: the next tick would change nothing. A response can only
+	// answer an entry of the pending tables, so none can arrive.
+	if (pending_loads_ != 0)
+		return;
+#ifdef TCU_META_ENABLE
+	for (uint32_t p = 0; p < TCU_AGU_PORTS; ++p) {
+		if (TcuReqIn.at(p).size() != 0)
+			return;
+	}
+#endif
+	for (uint32_t b = 0; b < VX_CFG_NUM_LSU_BLOCKS; ++b) {
+		auto& state = states_.at(b);
+		if (!state.req_queue.empty() || !state.pending_reqs.empty()
+		 || state.staged_reads != 0 || !state.meta_reqs.empty()
+		 || state.fence.locked() || state.fence_token || state.remain_addrs != 0
+		 || Inputs.at(b).size() != 0
+		 || rsp_bufs_.at(b).size() != 0 || no_rsp_bufs_.at(b).size() != 0
+		 || core_->lmem_switch(b)->RspOut.size() != 0)
+			return;
+	}
+	this->tick_sleep();
 }

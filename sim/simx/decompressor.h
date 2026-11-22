@@ -80,6 +80,9 @@ public:
     // latch, which frees the warp's half-word buffer.
     void on_emit(const instr_trace_t* trace);
 
+    // No refetch waits to be picked.
+    bool quiescent() const { return refetch_queue_.empty(); }
+
 protected:
     void on_reset();
     friend class SimObject<Decompressor>;

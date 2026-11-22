@@ -12,6 +12,7 @@
 #ifdef VX_CFG_VM_ENABLE
 
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 namespace vortex {
@@ -60,6 +61,16 @@ private:
   // Linear flat array; small enough (typ. 32 entries) for a per-cycle
   // linear scan to model CAM lookup behavior.
   std::vector<Entry> entries_;
+  // The valid entries indexed by level, then by the vpn bits above the
+  // level's page offset (the bits a lookup compares), each key listing its
+  // entries in ascending index order: a lookup probes one key per level.
+  struct level_index_t {
+    uint32_t count = 0;  // valid entries at this level
+    std::unordered_map<uint64_t, std::vector<uint32_t>> keys;
+  };
+  std::vector<level_index_t> index_;
+  void index_insert(uint32_t id);
+  void index_erase(uint32_t id);
 
   uint64_t reads_     = 0;
   uint64_t hits_      = 0;

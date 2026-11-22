@@ -192,4 +192,18 @@ void Dispatcher::on_tick() {
       bp = 0;
     }
   }
+
+  // With every slot queue empty, nothing on its way to one and no packet
+  // held, the tick above has cleared the lane iterators and the next one
+  // would change nothing: sleep until an op is sent toward a queue.
+  bool idle = true;
+  for (auto& input : Inputs) {
+    idle &= (input.size() == 0);
+  }
+  for (auto held : held_input_) {
+    idle &= (held < 0);
+  }
+  if (idle) {
+    this->tick_sleep();
+  }
 };

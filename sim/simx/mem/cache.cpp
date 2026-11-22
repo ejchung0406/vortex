@@ -249,20 +249,39 @@ static inline bool sector_written(const sector_t& sec) {
 
 struct line_t {
   uint64_t tag;
-  uint32_t lru_ctr;
+  // PLRU age, kept as the set's access clock at the line's last reset: the
+  // age is lru_clock - lru_stamp (see set_t::lru_age)
+  uint32_t lru_stamp;
   std::vector<sector_t> sectors;       // sectors_per_line (1 when no sectoring)
+  // Sectors whose valid bit is set: a sector becomes valid only through
+  // validate() and invalid only through reset_sector() or reset().
+  uint32_t num_valid = 0;
 
   bool any_valid() const {
-    for (const auto &s : sectors) if (s.valid) return true;
-    return false;
+    return num_valid != 0;
   }
   bool any_dirty() const {
     for (const auto &s : sectors) if (s.valid && s.dirty) return true;
     return false;
   }
+  void validate(uint32_t sector_id) {
+    auto &sec = sectors.at(sector_id);
+    if (!sec.valid) {
+      sec.valid = true;
+      ++num_valid;
+    }
+  }
+  void reset_sector(uint32_t sector_id) {
+    auto &sec = sectors.at(sector_id);
+    if (sec.valid) {
+      --num_valid;
+    }
+    sec.reset();
+  }
   void reset() {
-    lru_ctr = 0;
+    lru_stamp = 0;
     for (auto &s : sectors) s.reset();
+    num_valid = 0;
   }
 };
 
@@ -291,9 +310,14 @@ static inline void sector_merge(sector_t& sec, const std::shared_ptr<mem_block_t
 struct set_t {
   std::vector<line_t> lines;
   uint32_t fifo_ptr;    // next victim for FIFO policy
+  // PLRU: committed accesses to the set. A valid line ages by one on every
+  // access but its own hits, which zero its age; an invalid line's age is
+  // never read, and a fill zeroes it. So the age is the number of accesses
+  // since the line's last zeroing, modulo 2^32 as a per-line counter wraps.
+  uint32_t lru_clock;
 
   set_t(uint32_t num_ways, uint32_t sectors_per_line)
-      : lines(num_ways), fifo_ptr(0) {
+      : lines(num_ways), fifo_ptr(0), lru_clock(0) {
     for (auto &line : lines)
       line.sectors.resize(sectors_per_line);
   }
@@ -303,6 +327,16 @@ struct set_t {
       line.reset();
     }
     fifo_ptr = 0;
+    lru_clock = 0;
+  }
+
+  uint32_t lru_age(const line_t &line) const {
+    return lru_clock - line.lru_stamp;
+  }
+
+  // Zero a line's PLRU age.
+  void lru_zero(line_t &line) const {
+    line.lru_stamp = lru_clock;
   }
 
   // Pure tag lookup: returns the line-resident way (tag match with any sector
@@ -334,8 +368,9 @@ struct set_t {
         hit_line_id = i;
 
       if (policy == Cache::PLRU) {
-        if (!plru_chosen || line.lru_ctr >= max_cnt) {
-          max_cnt = line.lru_ctr;
+        uint32_t age = this->lru_age(line);
+        if (!plru_chosen || age >= max_cnt) {
+          max_cnt = age;
           *repl_line_id = i;
           plru_chosen = true;
         }
@@ -363,15 +398,9 @@ struct set_t {
   // Apply PLRU age update for a tag access. Pass hit_line_id == -1 for a miss
   // (all valid lines age, no reset). Call once per *committed* access.
   void update_lru(int hit_line_id) {
-    for (uint32_t i = 0, n = lines.size(); i < n; ++i) {
-      auto &line = lines.at(i);
-      if (!line.any_valid())
-        continue;
-      if ((int)i == hit_line_id) {
-        line.lru_ctr = 0;
-      } else {
-        ++line.lru_ctr;
-      }
+    ++lru_clock;
+    if (hit_line_id >= 0) {
+      this->lru_zero(lines.at(hit_line_id));
     }
   }
 
@@ -393,8 +422,9 @@ struct set_t {
       }
       has_valid = true;
       if (policy == Cache::PLRU) {
-        if (line.lru_ctr >= max_cnt) {
-          max_cnt = line.lru_ctr;
+        uint32_t age = this->lru_age(line);
+        if (age >= max_cnt) {
+          max_cnt = age;
           *repl_line_id = i;
         }
       }
@@ -557,10 +587,22 @@ struct mshr_entry_t {
   }
 };
 
+// The MSHR keeps its entries in a fixed table, as the hardware does, and
+// indexes them for the simulator's queries: every query of the bank is about
+// one (set,tag,sector) chain or about the oldest ready replay, so the
+// entries of each chain are listed by index under the chain's key, the free
+// slots are a bit set searched lowest-first, and the ready replays are a heap
+// ordered by (seq, index). Each query returns what a scan of the table in
+// index order returns.
 class MSHR {
 public:
   MSHR(uint32_t size)
-      : entries_(size), ready_reqs_(0), size_(0) {}
+      : entries_(size), free_((size + 63) / 64, 0), heap_pos_(size, -1),
+        ready_reqs_(0), size_(0) {
+    heap_.reserve(size);
+    chain_map_.reserve(2 * size);
+    this->reset_index();
+  }
 
   uint32_t capacity() const {
     return entries_.size();
@@ -590,17 +632,17 @@ public:
   // Returns true if there is an active pending request for the given
   // set/tag/sector. Coalescing is per-sector: a fill installs one sector, so
   // only same-sector misses share it (different-sector misses to the same line
-  // each get their own fill). If true, optionally returns the root entry id.
+  // each get their own fill). If true, optionally returns the root entry id
+  // (the chain's lowest entry index).
   bool lookup(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id, uint32_t *root_id = nullptr) const {
-    for (uint32_t i = 0, n = entries_.size(); i < n; ++i) {
-      const auto &entry = entries_.at(i);
-      if (entry.bank_req.type != bank_req_t::None && entry.set_id == set_id && entry.addr_tag == addr_tag && entry.sector_id == sector_id) {
-        if (root_id)
-          *root_id = i;
-        return true;
-      }
+    const chain_t *chain = this->find_chain(set_id, addr_tag, sector_id);
+    if (chain == nullptr) {
+      return false;
     }
-    return false;
+    if (root_id) {
+      *root_id = chain->ids.front();
+    }
+    return true;
   }
 
   // True if any matching entry OTHER than exclude_id is still Core-typed,
@@ -608,16 +650,19 @@ public:
   // fill-pending chain (a plain enqueue will be marked by the fill) from a
   // draining chain (a new entry must be marked ready via defer_to_replay).
   bool has_pending_fill(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id, int exclude_id) const {
-    for (int i = 0, n = (int)entries_.size(); i < n; ++i) {
-      if (i == exclude_id) {
-        continue;
-      }
-      const auto &entry = entries_.at(i);
-      if (entry.bank_req.type == bank_req_t::Core && entry.set_id == set_id && entry.addr_tag == addr_tag && entry.sector_id == sector_id) {
-        return true;
+    const chain_t *chain = this->find_chain(set_id, addr_tag, sector_id);
+    if (chain == nullptr) {
+      return false;
+    }
+    uint32_t num_core = chain->num_core;
+    if (exclude_id >= 0 && exclude_id < (int)entries_.size()) {
+      const auto &entry = entries_.at(exclude_id);
+      if (entry.bank_req.type == bank_req_t::Core && entry.set_id == set_id
+       && entry.addr_tag == addr_tag && entry.sector_id == sector_id) {
+        --num_core;
       }
     }
-    return false;
+    return num_core != 0;
   }
 
   // True if any matching entry carries ordering weight for a later plain
@@ -625,32 +670,20 @@ public:
   // an atomic needs its whole round-trip ordered. Pure-load chains carry no
   // such constraint — a younger access may complete ahead of their drain.
   bool has_ordered_reqs(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id) const {
-    for (const auto &entry : entries_) {
-      if (entry.bank_req.type == bank_req_t::None) {
-        continue;
-      }
-      if (entry.set_id != set_id || entry.addr_tag != addr_tag || entry.sector_id != sector_id) {
-        continue;
-      }
-      if (entry.bank_req.write || memop_is_atomic(entry.bank_req.op)) {
-        return true;
-      }
-    }
-    return false;
+    const chain_t *chain = this->find_chain(set_id, addr_tag, sector_id);
+    return (chain != nullptr) && (chain->num_ordered != 0);
   }
 
   // True if an undrained entry of the (set,tag,sector) chain touches the
   // word of `addr` (2^word_log2 bytes).
   bool has_word_reqs(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id,
                      uint64_t addr, uint32_t word_log2) const {
-    for (const auto &entry : entries_) {
-      if (entry.bank_req.type == bank_req_t::None) {
-        continue;
-      }
-      if (entry.set_id != set_id || entry.addr_tag != addr_tag || entry.sector_id != sector_id) {
-        continue;
-      }
-      if ((entry.bank_req.addr >> word_log2) == (addr >> word_log2)) {
+    const chain_t *chain = this->find_chain(set_id, addr_tag, sector_id);
+    if (chain == nullptr) {
+      return false;
+    }
+    for (uint32_t id : chain->ids) {
+      if ((entries_[id].bank_req.addr >> word_log2) == (addr >> word_log2)) {
         return true;
       }
     }
@@ -661,41 +694,50 @@ public:
   // of `addr` (2^word_log2 bytes).
   bool has_word_write(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id,
                       uint64_t addr, uint32_t word_log2) const {
-    for (const auto &entry : entries_) {
-      if (entry.bank_req.type == bank_req_t::None || !entry.bank_req.write) {
-        continue;
-      }
-      if (entry.set_id != set_id || entry.addr_tag != addr_tag || entry.sector_id != sector_id) {
-        continue;
-      }
-      if ((entry.bank_req.addr >> word_log2) == (addr >> word_log2)) {
+    const chain_t *chain = this->find_chain(set_id, addr_tag, sector_id);
+    if (chain == nullptr || chain->num_write == 0) {
+      return false;
+    }
+    for (uint32_t id : chain->ids) {
+      const auto &req = entries_[id].bank_req;
+      if (req.write && (req.addr >> word_log2) == (addr >> word_log2)) {
         return true;
       }
     }
     return false;
   }
 
-  // Enqueue a new core request and return the allocated entry id.
+  // Enqueue a new core request into the lowest free slot and return its id.
   int enqueue(const bank_req_t &bank_req, uint32_t set_id, uint64_t addr_tag, uint32_t sector_id,
               bool refetch = false) {
     assert(bank_req.type == bank_req_t::Core);
-    for (uint32_t i = 0, n = entries_.size(); i < n; ++i) {
-      auto &entry = entries_.at(i);
-      if (entry.bank_req.type == bank_req_t::None) {
-        entry.bank_req = bank_req;
-        entry.set_id = set_id;
-        entry.addr_tag = addr_tag;
-        entry.sector_id = sector_id;
-        entry.line_id = 0; // victim is selected at Fill time
-        entry.seq = bank_req.adm_seq;
-        entry.refetch = refetch;
-        entry.refetch_retry = false;
-        ++size_;
-        return i;
+    uint32_t i = 0;
+    for (uint32_t w = 0, n = free_.size(); ; ++w) {
+      if (w == n) {
+        std::abort(); // no free slot found!
+      }
+      if (free_[w] != 0) {
+        i = w * 64 + __builtin_ctzll(free_[w]);
+        free_[w] &= free_[w] - 1;
+        break;
       }
     }
-    std::abort(); // no free slot found!
-    return -1;
+    auto &entry = entries_.at(i);
+    entry.bank_req = bank_req;
+    entry.set_id = set_id;
+    entry.addr_tag = addr_tag;
+    entry.sector_id = sector_id;
+    entry.line_id = 0; // victim is selected at Fill time
+    entry.seq = bank_req.adm_seq;
+    entry.refetch = refetch;
+    entry.refetch_retry = false;
+    ++size_;
+    auto &chain = this->get_chain(set_id, addr_tag, sector_id);
+    chain.ids.insert(std::lower_bound(chain.ids.begin(), chain.ids.end(), i), i);
+    ++chain.num_core;
+    chain.num_ordered += is_ordered(entry);
+    chain.num_write += entry.bank_req.write;
+    return i;
   }
 
   // Mark all pending requests matching the entry's (set,tag,sector) for replay.
@@ -710,10 +752,16 @@ public:
     // accumulated ready_reqs_ stays correct and dequeue drains oldest-first, so
     // each line's waiters still replay in program order. Double-replaying the
     // same fill is caught by the Core-type assert above.
-    for (auto &entry : entries_) {
-      if (entry.bank_req.type == bank_req_t::Core && entry.set_id == root_entry.set_id && entry.addr_tag == root_entry.addr_tag && entry.sector_id == root_entry.sector_id) {
+    auto *chain_ptr = this->find_chain(root_entry.set_id, root_entry.addr_tag, root_entry.sector_id);
+    assert(chain_ptr != nullptr);
+    auto &chain = *chain_ptr;
+    for (uint32_t i : chain.ids) {
+      auto &entry = entries_[i];
+      if (entry.bank_req.type == bank_req_t::Core) {
         entry.bank_req.type = bank_req_t::Replay;
         ++ready_reqs_;
+        --chain.num_core;
+        this->heap_push(i);
       }
     }
     return root_entry;
@@ -728,29 +776,29 @@ public:
     assert(entry.bank_req.type == bank_req_t::Core);
     entry.bank_req.type = bank_req_t::Replay;
     ++ready_reqs_;
+    auto *chain = this->find_chain(entry.set_id, entry.addr_tag, entry.sector_id);
+    assert(chain != nullptr);
+    --chain->num_core;
+    this->heap_push(id);
   }
 
   // Park the chain at its head: the oldest ready replay and the rest of its
   // (set,tag,sector) chain return to waiting for a fill, which the head now
   // roots as a refetch. Returns the head's id.
   uint32_t park_next_replay(bool retry) {
-    int head = -1;
-    for (int i = 0, n = (int)entries_.size(); i < n; ++i) {
-      const auto &entry = entries_.at(i);
-      if (entry.bank_req.type != bank_req_t::Replay) {
-        continue;
-      }
-      if (head == -1 || entry.seq < entries_.at(head).seq) {
-        head = i;
-      }
-    }
-    assert(head != -1);
+    assert(!heap_.empty());
+    uint32_t head = heap_.front();
     auto &root = entries_.at(head);
-    for (auto &entry : entries_) {
-      if (entry.bank_req.type == bank_req_t::Replay && entry.set_id == root.set_id
-       && entry.addr_tag == root.addr_tag && entry.sector_id == root.sector_id) {
+    auto *chain_ptr = this->find_chain(root.set_id, root.addr_tag, root.sector_id);
+    assert(chain_ptr != nullptr);
+    auto &chain = *chain_ptr;
+    for (uint32_t i : chain.ids) {
+      auto &entry = entries_[i];
+      if (entry.bank_req.type == bank_req_t::Replay) {
         entry.bank_req.type = bank_req_t::Core;
         --ready_reqs_;
+        ++chain.num_core;
+        this->heap_erase(i);
       }
     }
     root.refetch = true;
@@ -762,14 +810,7 @@ public:
   // nullptr. Lets the fill-forward drain inspect the chain head without
   // consuming it.
   const mshr_entry_t* peek_next_replay() const {
-    const mshr_entry_t *picked = nullptr;
-    for (auto &entry : entries_) {
-      if (entry.bank_req.type != bank_req_t::Replay)
-        continue;
-      if (picked == nullptr || entry.seq < picked->seq)
-        picked = &entry;
-    }
-    return picked;
+    return heap_.empty() ? nullptr : &entries_[heap_.front()];
   }
 
   // Dequeue the next ready replay request in program order (oldest enqueue
@@ -782,17 +823,26 @@ public:
   // what installs the new value.
   void dequeue(bank_req_t *out) {
     assert(ready_reqs_ > 0);
-    mshr_entry_t *picked = nullptr;
-    for (auto &entry : entries_) {
-      if (entry.bank_req.type != bank_req_t::Replay)
-        continue;
-      if (picked == nullptr || entry.seq < picked->seq)
-        picked = &entry;
-    }
-    *out = picked->bank_req;
-    picked->bank_req.type = bank_req_t::None;
+    uint32_t id = heap_.front();
+    this->heap_erase(id);
+    auto &picked = entries_[id];
+    // the slot is dead once dequeued: its payload moves out
+    *out = std::move(picked.bank_req);
+    picked.bank_req.type = bank_req_t::None;
     --ready_reqs_;
     --size_;
+    free_[id / 64] |= 1ull << (id % 64);
+    auto it = chain_map_.find(key_t{picked.addr_tag, picked.set_id, picked.sector_id});
+    assert(it != chain_map_.end());
+    auto &chain = chains_[it->second];
+    chain.ids.erase(std::lower_bound(chain.ids.begin(), chain.ids.end(), id));
+    chain.num_ordered -= is_ordered(*out);
+    chain.num_write -= out->write;
+    if (chain.ids.empty()) {
+      assert(chain.num_core == 0 && chain.num_ordered == 0 && chain.num_write == 0);
+      free_chains_.push_back(it->second);
+      chain_map_.erase(it);
+    }
   }
 
   void reset() {
@@ -801,10 +851,158 @@ public:
     }
     ready_reqs_ = 0;
     size_ = 0;
+    this->reset_index();
   }
 
 private:
+  struct key_t {
+    uint64_t addr_tag;
+    uint32_t set_id;
+    uint32_t sector_id;
+    bool operator==(const key_t &other) const {
+      return addr_tag == other.addr_tag && set_id == other.set_id && sector_id == other.sector_id;
+    }
+  };
+
+  struct key_hash_t {
+    size_t operator()(const key_t &key) const {
+      uint64_t h = key.addr_tag * 0x9e3779b97f4a7c15ull;
+      h ^= (uint64_t(key.set_id) << 32 | key.sector_id) + 0x632be59bd9b4e019ull + (h << 6) + (h >> 2);
+      return size_t(h ^ (h >> 29));
+    }
+  };
+
+  // One (set,tag,sector) chain: its entries by index, how many still wait
+  // for the fill (Core), and how many are writes or atomics.
+  struct chain_t {
+    std::vector<uint32_t> ids;
+    uint32_t num_core = 0;
+    uint32_t num_ordered = 0;
+    uint32_t num_write = 0;
+  };
+
+  static uint32_t is_ordered(const mshr_entry_t &entry) {
+    return is_ordered(entry.bank_req);
+  }
+
+  static uint32_t is_ordered(const bank_req_t &req) {
+    return (req.write || memop_is_atomic(req.op)) ? 1 : 0;
+  }
+
+  const chain_t *find_chain(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id) const {
+    if (size_ == 0) {
+      return nullptr;
+    }
+    auto it = chain_map_.find(key_t{addr_tag, set_id, sector_id});
+    return (it == chain_map_.end()) ? nullptr : &chains_[it->second];
+  }
+
+  chain_t *find_chain(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id) {
+    return const_cast<chain_t *>(static_cast<const MSHR *>(this)->find_chain(set_id, addr_tag, sector_id));
+  }
+
+  chain_t &get_chain(uint32_t set_id, uint64_t addr_tag, uint32_t sector_id) {
+    auto it = chain_map_.find(key_t{addr_tag, set_id, sector_id});
+    if (it != chain_map_.end()) {
+      return chains_[it->second];
+    }
+    uint32_t idx;
+    if (!free_chains_.empty()) {
+      idx = free_chains_.back();
+      free_chains_.pop_back();
+    } else {
+      idx = chains_.size();
+      chains_.emplace_back();
+    }
+    chain_map_.emplace(key_t{addr_tag, set_id, sector_id}, idx);
+    return chains_[idx];
+  }
+
+  void reset_index() {
+    for (uint32_t w = 0, n = free_.size(); w < n; ++w) {
+      uint32_t bits = std::min<uint32_t>(64, entries_.size() - w * 64);
+      free_[w] = (bits == 64) ? ~0ull : ((1ull << bits) - 1);
+    }
+    chain_map_.clear();
+    chains_.clear();
+    free_chains_.clear();
+    heap_.clear();
+    std::fill(heap_pos_.begin(), heap_pos_.end(), -1);
+  }
+
+  // Ready-replay heap: a min-heap of entry ids by (seq, id), with each
+  // entry's heap position, so a parked chain leaves it in place.
+  bool heap_less(uint32_t a, uint32_t b) const {
+    uint64_t sa = entries_[a].seq, sb = entries_[b].seq;
+    return (sa < sb) || (sa == sb && a < b);
+  }
+
+  void heap_set(uint32_t pos, uint32_t id) {
+    heap_[pos] = id;
+    heap_pos_[id] = (int32_t)pos;
+  }
+
+  void heap_up(uint32_t pos) {
+    uint32_t id = heap_[pos];
+    while (pos != 0) {
+      uint32_t parent = (pos - 1) / 2;
+      if (!this->heap_less(id, heap_[parent])) {
+        break;
+      }
+      this->heap_set(pos, heap_[parent]);
+      pos = parent;
+    }
+    this->heap_set(pos, id);
+  }
+
+  void heap_down(uint32_t pos) {
+    uint32_t n = heap_.size();
+    uint32_t id = heap_[pos];
+    for (;;) {
+      uint32_t child = 2 * pos + 1;
+      if (child >= n) {
+        break;
+      }
+      if (child + 1 < n && this->heap_less(heap_[child + 1], heap_[child])) {
+        ++child;
+      }
+      if (!this->heap_less(heap_[child], id)) {
+        break;
+      }
+      this->heap_set(pos, heap_[child]);
+      pos = child;
+    }
+    this->heap_set(pos, id);
+  }
+
+  void heap_push(uint32_t id) {
+    assert(heap_pos_[id] == -1);
+    heap_.push_back(id);
+    this->heap_up(heap_.size() - 1);
+  }
+
+  void heap_erase(uint32_t id) {
+    int32_t pos = heap_pos_[id];
+    assert(pos != -1);
+    heap_pos_[id] = -1;
+    uint32_t last = heap_.back();
+    heap_.pop_back();
+    if ((uint32_t)pos == heap_.size()) {
+      return;
+    }
+    heap_[pos] = last;
+    heap_pos_[last] = pos;
+    this->heap_up(pos);
+    this->heap_down(heap_pos_[last]);
+  }
+
   std::vector<mshr_entry_t> entries_;
+  std::vector<uint64_t> free_;        // free slots, one bit per entry
+  std::vector<int32_t> heap_pos_;     // [entry] position in heap_, -1 if not ready
+  std::vector<uint32_t> heap_;        // ready replays
+  std::unordered_map<key_t, uint32_t, key_hash_t> chain_map_;
+  std::vector<chain_t> chains_;
+  std::vector<uint32_t> free_chains_;
   uint32_t ready_reqs_;
   uint32_t size_;
 };
@@ -1068,8 +1266,8 @@ private:
       }
       bank_req_t bank_req;
       mshr_.dequeue(&bank_req);
-      pipe_req_->push(bank_req);
       DT(3, this->name() << " replay-deq: " << bank_req);
+      pipe_req_->push(std::move(bank_req));
       return;
     }
 
@@ -1400,7 +1598,7 @@ private:
         bank_req.merge_queued = true;
         ++perf_stats_.write_misses;
       }
-      pipe_req_->push(bank_req);
+      pipe_req_->push(std::move(bank_req));
       DT(3, this->name() << " core-req: " << core_req);
       // pending_mshr_size_ tracks Core-typed in-flight requests so the
       // MSHR pre-reservation in processInputs is conservative. AmoProbe
@@ -1524,16 +1722,16 @@ private:
 
     auto &line = set.lines.at(line_id);
     line.tag     = addr_tag;
-    line.lru_ctr = 0;
+    set.lru_zero(line);
     auto &sec    = line.sectors.at(sector_id);
     if (bank_req.nodata) {
-      sec.valid      = true;
+      line.validate(sector_id);
       sec.dirty      = false;
       sec.partial    = true;
       sec.dirty_mask = 0;
       sec.data.reset();
     } else {
-      sec.valid      = true;
+      line.validate(sector_id);
       sec.dirty      = false;
       sec.partial    = false;
       sec.dirty_mask = 0;
@@ -1604,9 +1802,9 @@ private:
     mshr_.dequeue(&req);
     MemRsp rsp{req.req_tag, req.hart_id, req.uuid};
     rsp.data = fwd_data_;
-    rsp.merged_tags = req.merged_tags;
-    this->core_rsp_out.send(rsp);
+    rsp.merged_tags = std::move(req.merged_tags);
     DT(3, this->name() << " fwd-rsp: " << rsp);
+    this->core_rsp_out.send(std::move(rsp));
     return true;
   }
 
@@ -1719,7 +1917,7 @@ private:
   // Debug: a write-through cache holds each write at the head of bank 0's
   // queue for a fixed delay, the requests behind it included, so requests
   // through the other banks overtake it unless something orders them.
-  void send_mem_req(const MemReq& req) {
+  void send_mem_req(MemReq req) {
   #ifdef DBG_MEM_BANK0_WDELAY
     if (bank_id_ == 0 && !config_.write_back) {
       constexpr uint64_t DBG_WDELAY = 2048;
@@ -1727,11 +1925,11 @@ private:
       uint64_t head = std::max(now, dbg_mem_req_free_);
       uint64_t leave = head + (req.is_write() ? DBG_WDELAY : 0);
       dbg_mem_req_free_ = leave + 1;
-      this->mem_req_out.send(req, mem_req_delay_ + (leave - now));
+      this->mem_req_out.send(std::move(req), mem_req_delay_ + (leave - now));
       return;
     }
   #endif
-    this->mem_req_out.send(req, mem_req_delay_);
+    this->mem_req_out.send(std::move(req), mem_req_delay_);
   }
 
   // Emit a write-through store downstream, with the optional core response.
@@ -1766,9 +1964,9 @@ private:
 #endif
     if (need_rsp) {
       MemRsp rsp{rsp_tag, hart_id, uuid};
-      this->core_rsp_out.send(rsp);
-      crsp_sent_ = true;
       DT(3, this->name() << " core-rsp: " << rsp);
+      this->core_rsp_out.send(std::move(rsp));
+      crsp_sent_ = true;
     }
     return true;
   }
@@ -1840,7 +2038,7 @@ private:
         ++perf_stats_.evictions;
       }
       if (hit) {
-        set.lines.at(hit_id).sectors.at(sector_id).reset();
+        set.lines.at(hit_id).reset_sector(sector_id);
       }
 
       // Forward AMO downstream. Tag is rewritten so the response
@@ -2003,9 +2201,9 @@ private:
         if (!bank_req.write)
           rsp.data = hit_sec.data;
         rsp.merged_tags = bank_req.merged_tags;
-        this->core_rsp_out.send(rsp);
-        crsp_sent_ = true;
         DT(3, this->name() << " replay-rsp: " << rsp);
+        this->core_rsp_out.send(std::move(rsp));
+        crsp_sent_ = true;
       }
       if (config_.repl_policy == Cache::PLRU)
         set.update_lru(hit_id);
@@ -2149,9 +2347,9 @@ private:
           if (!bank_req.write)
             rsp.data = hit_sec.data;
           rsp.merged_tags = bank_req.merged_tags;
-          this->core_rsp_out.send(rsp);
-          crsp_sent_ = true;
           DT(3, this->name() << " core-rsp: " << rsp);
+          this->core_rsp_out.send(std::move(rsp));
+          crsp_sent_ = true;
         }
       } else {
         // Cache miss.
@@ -2224,8 +2422,8 @@ private:
             fill.tag   = mshr_id; // routes the fill response back here
             fill.hart_id   = bank_req.hart_id;
             fill.uuid  = bank_req.uuid;
-            this->send_mem_req(fill);
             DT(3, this->name() << " fill-req: " << fill);
+            this->send_mem_req(std::move(fill));
             ++pending_fill_reqs_;
           }
         }
@@ -2585,6 +2783,11 @@ public:
     return req;
   }
 
+  // Requests sent toward IoOut and not yet taken by the cache: with none,
+  // every IoOut is empty. The cache reports each one it pops.
+  uint64_t io_pending() const { return io_pending_; }
+  void io_taken() { --io_pending_; }
+
   // The cache's line initialization holds the core ports for these cycles.
   void set_init_cycles(uint32_t cycles) { init_cycles_ = cycles; }
 
@@ -2683,7 +2886,16 @@ protected:
       }
     }
     uint32_t n = ReqIn.size();
-    const bool hold = this->any_token();
+    // the port heads, read once: nothing below pops a port before its last
+    // use of the head
+    auto& heads = heads_;
+    heads.resize(n);
+    bool hold = false;
+    for (uint32_t i = 0; i < n; ++i) {
+      auto& in = ReqIn[i];
+      heads[i] = in.empty() ? nullptr : &in.peek();
+      hold |= (heads[i] != nullptr) && heads[i]->flags.flush;
+    }
     this->update_realign();
     // merged ports riding each leader's bank access, by offset in its group
     auto& followers = followers_;
@@ -2692,16 +2904,16 @@ protected:
     merged.assign(n, 0);
     if (merge_group_ > 1 && !hold) {
       for (uint32_t i = 0; i < n; ++i) {
-        if (!this->is_plain_read(i) || this->realign_hold(i)) {
+        if (!plain_read(heads[i]) || this->realign_hold(i)) {
           continue;
         }
-        auto& req_i = ReqIn.at(i).peek();
+        auto& req_i = *heads[i];
         uint32_t base = (i / merge_group_) * merge_group_;
         for (uint32_t j = base; j < i; ++j) {
-          if (followers.at(j) || !this->is_plain_read(j) || this->realign_hold(j)) {
+          if (followers.at(j) || !plain_read(heads[j]) || this->realign_hold(j)) {
             continue;
           }
-          auto& req_j = ReqIn.at(j).peek();
+          auto& req_j = *heads[j];
           bool same = merge_line_
             ? ((req_j.addr >> params_.bank_select_addr_start) == (req_i.addr >> params_.bank_select_addr_start))
             : ((req_j.addr >> params_.word_select_addr_start) == (req_i.addr >> params_.word_select_addr_start)
@@ -2723,17 +2935,18 @@ protected:
     want.assign(nb * slices, 0);
     wants.assign(nb, 0);
     for (uint32_t i = 0; i < n; ++i) {
-      auto& in = ReqIn.at(i);
-      if (in.empty() || followers.at(i)) {
+      if (heads[i] == nullptr || followers.at(i)) {
         continue;
       }
-      auto& req = in.peek();
+      auto& in = ReqIn[i];
+      auto& req = *heads[i];
       if (req.flags.flush) {
         continue;
       }
       if (req.flags.io) {
         if (IoOut.at(i).try_send(req, 0)) {
           in.pop();
+          ++io_pending_;
         }
         continue;
       }
@@ -2868,21 +3081,22 @@ protected:
   }
 
   // A load or store with no flush, IO or local attribute.
+  // (on this tick's port heads, heads_)
   bool is_regular(uint32_t i) const {
-    if (ReqIn.at(i).empty()) {
+    auto* req = heads_[i];
+    if (req == nullptr) {
       return false;
     }
-    auto& req = ReqIn.at(i).peek();
-    return (req.op == MemOp::LD || req.op == MemOp::ST) && !req.flags.flush && !req.flags.io && !req.flags.local;
+    return (req->op == MemOp::LD || req->op == MemOp::ST) && !req->flags.flush && !req->flags.io && !req->flags.local;
   }
 
   // Whether port j holds a regular request with this tag in this line.
   bool owes(uint32_t j, uint32_t tag, uint64_t line) const {
-    return this->is_regular(j) && ReqIn.at(j).peek().tag == tag && this->line_of(j) == line;
+    return this->is_regular(j) && heads_[j]->tag == tag && this->line_of(j) == line;
   }
 
   uint64_t line_of(uint32_t i) const {
-    return ReqIn.at(i).peek().addr >> params_.bank_select_addr_start;
+    return heads_[i]->addr >> params_.bank_select_addr_start;
   }
 
   // The ports of a same-word pair carry the two parts of one request in
@@ -2892,6 +3106,7 @@ protected:
   // same cycle. The wait is decided from the last cycle's heads. Stores can
   // share a tag, so the line tells a part from a later store, and a pair that
   // waited on each other is released.
+  // Reads the port heads through heads_, which on_tick fills just before.
   void update_realign() {
     if (!this->realigns()) {
       return;
@@ -2903,10 +3118,10 @@ protected:
     owes_head.assign(n, 0);
     for (uint32_t i = 0; i < n; ++i) {
       auto& r = realign_.at(i);
-      auto& in = ReqIn.at(i);
+      auto* head = heads_[i];
       uint32_t p = i ^ 1;
       start.at(i) = r.shared && r.head_valid
-                 && !(!in.empty() && in.peek().tag == r.head_tag && this->line_of(i) == r.head_line);
+                 && !(head != nullptr && head->tag == r.head_tag && this->line_of(i) == r.head_line);
       owes_head.at(i) = this->owes(p, r.head_tag, r.head_line);
       r.waits = (start.at(i) && owes_head.at(i)) || (r.ahead && this->owes(p, r.ahead_tag, r.ahead_line));
       r.hold = r.waits && !r.mutual;
@@ -2914,7 +3129,7 @@ protected:
     // the registers, from this cycle's heads
     for (uint32_t i = 0; i < n; ++i) {
       auto& r = realign_.at(i);
-      auto& in = ReqIn.at(i);
+      auto* head = heads_[i];
       uint32_t p = i ^ 1;
       if (start.at(i) && owes_head.at(i)) {
         r.ahead_tag  = r.head_tag;
@@ -2922,9 +3137,9 @@ protected:
       }
       r.ahead  = r.waits;
       r.mutual = r.waits && realign_.at(p).waits;
-      r.head_valid = !in.empty();
+      r.head_valid = (head != nullptr);
       if (r.head_valid) {
-        r.head_tag  = in.peek().tag;
+        r.head_tag  = head->tag;
         r.head_line = this->line_of(i);
       }
       r.shared = this->is_regular(i) && this->owes(p, r.head_tag, r.head_line);
@@ -2959,12 +3174,8 @@ protected:
   }
 
   // A plain read: no write, flush, IO, local or atomic attribute.
-  bool is_plain_read(uint32_t i) const {
-    if (ReqIn.at(i).empty()) {
-      return false;
-    }
-    auto& req = ReqIn.at(i).peek();
-    return req.op == MemOp::LD && !req.flags.flush && !req.flags.io && !req.flags.local;
+  static bool plain_read(const MemReq* req) {
+    return (req != nullptr) && req->op == MemOp::LD && !req->flags.flush && !req->flags.io && !req->flags.local;
   }
 
 private:
@@ -2995,6 +3206,7 @@ private:
   };
   std::vector<realign_t> realign_;
   // per-tick scratch, kept to avoid an allocation per cycle
+  std::vector<const MemReq*> heads_; // [port] head request, nullptr when empty
   std::vector<uint8_t>  followers_;
   std::vector<uint64_t> merged_;
   std::vector<uint32_t> want_;
@@ -3002,6 +3214,7 @@ private:
   std::vector<uint8_t>  start_;
   std::vector<uint8_t>  owes_head_;
   uint32_t idle_ticks_ = 0;
+  uint64_t io_pending_ = 0; // see io_pending()
   struct offer_t {
     SimChannel<MemReq>* bank_in = nullptr;
     bool     valid       = false;
@@ -3092,7 +3305,9 @@ protected:
     for (auto& stage : tree_stage_) {
       idle &= (stage.size() == 0);
     }
-    std::vector<uint64_t> pending(nb, 0);
+    auto& pending = pending_;
+    pending.assign(nb, 0);
+    uint64_t any_pending = 0; // ports some lane still owes
     for (uint32_t b = 0; b < nb; ++b) {
       if (RspIn.at(b).empty()) {
         continue;
@@ -3103,12 +3318,17 @@ protected:
       uint64_t mask = (tag >> lg2_outputs_) & ((1ull << merge_group_) - 1);
       uint64_t targets = (1ull << port) | (mask << ((port / merge_group_) * merge_group_));
       pending.at(b) = targets & ~sent_.at(b);
+      any_pending |= pending.at(b);
     }
     if (idle) {
       this->tick_sleep();
       return;
     }
     for (uint32_t o = 0; o < no; ++o) {
+      // a port no lane owes grants nothing
+      if (!(any_pending & (1ull << o))) {
+        continue;
+      }
       for (uint32_t sl = 0; sl < slices_; ++sl) {
         uint32_t lo = (slices_ > 1) ? sl * kMaxFanout : 0;
         uint32_t hi = (slices_ > 1) ? std::min(lo + kMaxFanout, nb) : nb;
@@ -3156,6 +3376,7 @@ private:
   std::vector<uint32_t> last_grant_; // [port][slice] round-robin pointer
   std::vector<uint32_t> join_rr_;    // [port]
   std::vector<SimChannel<MemRsp>> tree_stage_; // [port][slice]
+  std::vector<uint64_t> pending_;    // per-tick scratch: [bank] ports still owed the lane's response
 
   friend class SimObject<CacheRspMcast>;
 };
@@ -3426,10 +3647,11 @@ public:
     }
 
     // non-cacheable core requests split off by the port arbiter
-    for (uint32_t req_id = 0, n = config_.num_inputs; req_id < n; ++req_id) {
+    for (uint32_t req_id = 0, n = port_arb_->io_pending() ? config_.num_inputs : 0; req_id < n; ++req_id) {
       auto &io_req = port_arb_->IoOut.at(req_id);
       if (!io_req.empty() && this->processBypassRequest(io_req.peek(), req_id)) {
         io_req.pop();
+        port_arb_->io_taken();
       }
     }
   }

@@ -28,18 +28,15 @@ $(RAMULATOR_EXT_DIR)/gddr6.o: ramulator/src/dram/impl/GDDR6.cpp | ramulator/libr
 	$(CXX) $(RAMULATOR_EXT_CXXFLAGS) -c $< -o $@
 
 # Ramulator's generic controller with its read and write buffer sizes as
-# parameters (they are constants there): the same source under another name,
-# registered as "Windowed". The build stops if the source no longer has the
-# lines this rewrites.
-$(RAMULATOR_EXT_DIR)/windowed_controller.cpp: ramulator/src/dram_controller/impl/generic_dram_controller.cpp
+# parameters (they are constants there), registered as "Windowed", making the
+# same FRFCFS choices with less work (see the source). The copy and its
+# shortcuts follow the pinned submodule's generic controller, FRFCFS, DRAM
+# node, action and prerequisite lambdas and the HBM2/HBM3/GDDR6 devices: the
+# build stops if any of them differs from the version recorded in
+# upstream.sha256, so a submodule update is reconciled with the copy first.
+$(RAMULATOR_EXT_DIR)/windowed_controller.o: ramulator_vortex/windowed_controller.cpp ramulator_vortex/upstream.sha256 | ramulator/libramulator.so
+	@sha256sum --quiet -c ramulator_vortex/upstream.sha256 || { echo "ramulator_vortex: upstream Ramulator sources changed; reconcile windowed_controller.cpp, then update upstream.sha256"; exit 1; }
 	mkdir -p $(RAMULATOR_EXT_DIR)
-	sed -e 's/GenericDRAMController/WindowedDRAMController/g' \
-	    -e 's/"Generic", "A generic DRAM controller."/"Windowed", "The generic DRAM controller with sized request buffers."/' \
-	    -e '/m_wr_high_watermark = param/a\      m_read_buffer.max_size = param<int>("read_buffer_size").desc("Read requests the scheduler chooses among.").default_val(32);\n      m_write_buffer.max_size = param<int>("write_buffer_size").desc("Write requests the scheduler chooses among.").default_val(32);' \
-	    $< > $@
-	grep -q '"Windowed"' $@ && grep -q 'read_buffer_size' $@ && grep -q 'write_buffer_size' $@
-
-$(RAMULATOR_EXT_DIR)/windowed_controller.o: $(RAMULATOR_EXT_DIR)/windowed_controller.cpp | ramulator/libramulator.so
 	$(CXX) $(RAMULATOR_EXT_CXXFLAGS) -c $< -o $@
 
 # Written beside and renamed, so a simulator that has the library loaded keeps
