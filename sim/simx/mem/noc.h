@@ -49,6 +49,10 @@ public:
     , cap_(uint64_t(bytes_per_cycle) + uint64_t(streams) * line_size)
     , charged_(charged) {
     __assert(bytes_per_cycle != 0, "a rate gate needs a rate");
+    // each input is its producer's registered buffer
+    for (auto& in : In) {
+      in.set_registered_ready(true);
+    }
     __assert(ispow2(line_size), "a rate gate counts power-of-two lines");
   }
 
@@ -151,6 +155,13 @@ public:
     , token_out_(ports, false)
     , at_l2_(lanes) {
     __assert(ispow2(lanes), "the lanes of an SM group are a power of two");
+    // each input is its producer's registered buffer
+    for (auto& in : ReqIn) {
+      in.set_registered_ready(true);
+    }
+    for (auto& in : RspIn) {
+      in.set_registered_ready(true);
+    }
     for (uint32_t l = 0; l < lanes; ++l) {
       ReqDeliver.at(l).tx_callback([this, l](const MemReq& req, uint64_t) {
         at_l2_.at(l).push_back({uint32_t(req.tag) & ((1u << port_bits_) - 1), req.flags.flush != 0});
