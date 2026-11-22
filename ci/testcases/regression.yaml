@@ -660,6 +660,73 @@ tests:
   shape:
     cores: 2
     l2cache: true
+# The same orders through SM groups: two groups of two cores, two lanes each
+# and a return gate. A port's requests take different lanes by address, and
+# its fence token must still reach the L2 behind every earlier one and ahead
+# of every later one; atomics and same-word order ride one lane.
+- id: fence-noc
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: fence
+  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  shape:
+    cores: 4
+    l2cache: true
+- id: fence_mp-noc-1
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: fence_mp
+  args: -n64 -m1
+  configs: -DVX_CFG_EXT_A_ENABLE -DDBG_MEM_BANK0_WDELAY -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  shape:
+    cores: 4
+    l2cache: true
+- id: fence_mp-noc-2
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: fence_mp
+  args: -n64 -m2
+  configs: -DVX_CFG_EXT_A_ENABLE -DDBG_MEM_BANK0_WDELAY -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  shape:
+    cores: 4
+    l2cache: true
+- id: flush_coherence-noc
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: flush_coherence
+  args: -n2048 -r16 -c
+  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  shape:
+    cores: 4
+    l2cache: true
+- id: amo-noc
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: amo
+  configs: -DVX_CFG_EXT_A_ENABLE -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  shape:
+    cores: 4
+    l2cache: true
+- id: war_order-noc
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: war_order
+  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  shape:
+    cores: 4
+    l2cache: true
 # Kernel to kernel with no host transfer between (one command batch): the
 # launch flushes are device-scope, so the last-level cache alone carries each
 # round's writes to the next round, and the system-scope flush runs before

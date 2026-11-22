@@ -567,6 +567,17 @@ tests:
   configs: -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_LMEM_NUM_BANKS=16 -DVX_CFG_DCACHE_NUM_BANKS=2 -DVX_CFG_NUM_DXA_CORES=4
     -DVX_CFG_DXA_GMEM_PORTS=2 -DVX_CFG_DXA_LMEM_ROW=1 -DVX_CFG_DXA_LINE_PER_CYCLE=1
 
+# The engine on two of the socket's memory ports, below the dcache bank that
+# owns each, and the socket's issue limit over both: DXA reads and the
+# kernel's own loads share the limit.
+- id: model_parity-bwstream-dxa-ports
+  check: model_parity
+  via: blackbox
+  app: bwstream_dxa
+  args: -e256 -n16 -d4 -c0
+  configs: -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_DCACHE_NUM_BANKS=2 -DVX_CFG_NUM_DXA_CORES=2 -DVX_CFG_DXA_GMEM_PORTS=2 -DVX_CFG_SM_INGRESS_BYTES=112
+  shape: {l2cache: true}
+
 # Perf-regression twin of the model_parity-copy benchmark (same run, cycles-vs-baseline).
 - id: perf_gate-copy
   check: perf_gate
