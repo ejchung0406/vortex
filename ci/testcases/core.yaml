@@ -329,6 +329,19 @@ tests:
   shape:
     cores: 4
     l2cache: true
+# Three launches of ten CTAs on cores 0, 1 and 2: a launch ends part-way into
+# a credit window, and the next resumes it, as the round-robin pointers and
+# credits are device state. Summed over the launches each core gets ten; a
+# model that reset them per launch would give 9, 9, 12, which -T fails.
+- id: parity-bwstream-coremask-relaunch
+  check: model_parity
+  via: blackbox
+  app: bwstream
+  args: -n256 -g10 -R3 -M0,1,2 -T
+  configs: -DVX_CFG_SOCKET_SIZE=2
+  shape:
+    cores: 4
+    l2cache: true
 # Two clusters of two two-core sockets, cores 0, 1, 2 and 4: the device level
 # is weighted 3:1 and cluster 0's 2:1, so both weighted levels must agree for
 # each enabled core to get four CTAs.
