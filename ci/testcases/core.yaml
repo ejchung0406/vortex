@@ -534,6 +534,26 @@ tests:
   xlen: [64]
   args: -k2 -w16 -i16
   configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_ALU_LANES=16 -DVX_CFG_LANE_DISPATCH_GAPLESS=1
+# 32-thread warps on a 16-lane ALU, each op split into two passes through the
+# lane dispatch's packet register: independent integer adds, one warp per issue
+# slice fetching ahead, and four warps per slice, whose ALU blocks take their
+# next op independently of each other.
+- id: parity-warp-rate-alu-lanes
+  check: model_parity
+  tolerance: 0.002
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k2 -w4 -i32
+  configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_ALU_LANES=16 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+- id: parity-warp-rate-alu-lanes-shared
+  check: model_parity
+  tolerance: 0.01
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k2 -w16 -i16
+  configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_ALU_LANES=16
 # 32-thread warps on an 8-lane LSU, each op split into passes through the lane
 # dispatch's packet register: stores and unread loads to shared memory, one
 # warp fetching ahead, one packet per cycle into the unit. Tighter than the
