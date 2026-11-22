@@ -1,5 +1,10 @@
 # sim: HBM3E DRAM type and HBM bank groups per pseudo-channel
 
+Status (wind-down, 2026-11-21): complete; committed as 243b3d81e, worktree clean,
+nothing pushed. Verified at XLEN 64 only (XLEN 32 out of scope; the AXI
+bank-model runs used the foldsim.yaml configuration at XLEN 64). Review
+findings: none open.
+
 ## Summary
 
 Adds a DRAM type `HBM3E` that models one JESD238 (HBM3) channel as the
@@ -31,7 +36,21 @@ tCCDL itself moved results by under 2% there.
 
 Measured on this branch (upstream tests and a build-copy-only `bwstream`):
 
-@@MEAS@@
+SimX, `--profile=h100 --cores=4` with the memory overridden to 204.8 GB/s
+in both cases (2 HBM3 channels at 6,400 MT/s, or 4 HBM3E channels at 6,400
+MT/s), `bwstream -n256 -r1 -p0 -u4 -b32` (8 MB read; the test is copied into
+the build copy only, from sibling branch `pr/tests-bwstream`):
+
+| memory | cycles | GB/s |
+|---|---|---|
+| HBM3, 2 channels (stock merged shape) | 342,346 | 48.5 |
+| HBM3E, 4 channels, 4 bank groups | 205,431 | 80.9 |
+| HBM3E, 4 channels, 8 bank groups | 198,122 | 83.8 |
+
+(results/pr_dram-hbm3e_v2_simx, cases bw_hbm3, bw_hbm3e, bw_hbm3e_bg8.)
+Unit test on one channel: an HBM3E channel at 6,400 MT/s streams 24.8 B per
+core cycle, 96% of its computed peak; 64 streams 1 MB apart go 1.3x faster
+with 8 bank groups than with 4.
 
 ## What changed
 
@@ -84,7 +103,42 @@ Measured on this branch (upstream tests and a build-copy-only `bwstream`):
 
 ## How verified
 
-@@VERIFIED@@
+Build copy `src_pr_dram-hbm3e` = branch tree at 8230e48a6, whose code is
+the final commit's (the final commit adds only the CHANGELOG entry and the
+parity case's configs/comment, and those configs are what was run as
+`pa_on`). Base `src_pr_dram_base` = upstream/master ccf811e11. The
+third_party extension library was rebuilt in each copy by its own
+`third_party/Makefile`.
+
+| what | driver | config | branch | upstream | result dir |
+|---|---|---|---|---|---|
+| unit dram_sim / dram_bank_model | host | - | PASS / PASS | - | pr_dram-hbm3e_v2_simx |
+| sgemm MEM_BLOCK_SIZE=8 (cache.yaml sgemm-11 shape) | simx | default | 817,602 | 817,602 | pr_dram-hbm3e_v2_simx, pr_dram_base_v2_simx |
+| sgemm -n32 | simx | default | 113,990 | 113,990 | same |
+| vecadd -n16384 | simx | default | 381,938 | 381,938 | same |
+| sgemm -n32 --l2cache --cores=2 | simx | default | 57,246 | 57,246 | same |
+| vecadd HBM3 x4 6545, --l2cache --cores=2 | simx | HBM3 | 188,562 | 188,562 | same |
+| AXI bank model demo / sgemm -n16 (AXI_BUS=1 AXI_MEM_MODEL=bank) | rtlsim | foldsim.yaml shape | 17,150 / 200,012 | 17,150 / 200,012 | pr_dram-hbm3e_v2_rtlsim, pr_dram_base_axi |
+| parity-vecadd-hbm3e (`pa_on`) | simx / rtlsim | HBM3E x2, 8 groups | 188,574 / 188,064 (0.27%) | - | v2 dirs |
+| same with 4 groups (`pa_off`) | simx / rtlsim | | 188,627 / 188,117 | - | v2 dirs |
+| bwstream (above) | simx | h100 x4 | see Motivation | - | pr_dram-hbm3e_v2_simx |
+
+First round, on commit eac8c869e (before the review fixes, which touched
+only the AXI refusal, `hbm3e_ccdl()`'s floor and a test threshold):
+identical to upstream on SimX and rtlsim for sgemm -n32, sgemv -m128 -n128,
+vecadd -n16384, dxa_copy -d2, the two-core L2 sgemm, the HBM3 shape and a
+GDDR6 x8 sgemv; on SimX also the p100 (HBM2), gtx1080 (GDDR6) and h100
+(HBM3) profiles at 4 cores (results/pr_dram-hbm3e_simx,
+pr_dram-hbm3e_rtlsim vs pr_dram_base_simx, pr_dram_base_rtlsim).
+
+Not run: Foldsim runtime build (needs the Foldsim install), xrt, opaesim,
+xrtsim; the a100 profile, because upstream/master's SimX does not build with
+it (`sim/simx/tcu/tcu_unit.cpp:1239` calls `decode_descs()`, defined only
+under `VX_CFG_TCU_WGMMA_ENABLE`; a100 has the TCU without wgmma; not this
+branch's doing).
+
+The parity case is too light to be bound by the memory (8 bank groups move it
+by 0.03%); it shows that SimX and rtlsim agree with the type and the knob on.
 
 ## Change class
 
@@ -124,3 +178,13 @@ anchors. Send order: this one, then `pr/dram-interleave`, then
 4. Does the Foldsim image support more than 4 bank groups? Its geometry
    register has a 2-bit field for them; this branch refuses anything but 4
    rather than guess.
+
+## Notes for the sender
+
+- Review findings (independent reviewer, via the lead): rtlsim's AXI bank
+  model honoured bank groups while the Foldsim runtime refused them: fixed
+  (both refuse anything but 4). The bank-group unit check had no margin:
+  fixed (now over 1.15x; measured 1.3x). nCCDL 8 in `hbm3e_bus_timing` was
+  dead: fixed (`hbm3e_ccdl()` now takes its 4 nCK floor from that entry).
+  JESD238 values not verified by the reviewer: provenance listed above.
+- Commit 243b3d81e. `pr/dram-interleave` (109181e08) sits on it.

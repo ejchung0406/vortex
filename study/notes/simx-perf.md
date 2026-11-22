@@ -221,3 +221,81 @@ before/after numbers are taken interleaved in one job.
 | d_tcu | 3 | 0.35 | 0.35 | 83506 | 238589 | 13 |
 | d_dogfood | 3 | 0.63 | 0.63 | 233631 | 370843 | 13 |
 | d_sgemm4 | 3 | 18.31 | 18.34 | 1453274 | 79371 | 15 |
+
+## Interim: trial integration 1 (perf/int-try 49b3204cf, serial, no build-flag or MT change)
+
+Merge of the agents' branches as of 19:10 (kernel, cache, core, dram, tcu: 28 commits). One Slurm job
+(`perf_ab_int1`, 8 cores, Xeon Gold 6226, node shared with other users), base and new alternating, 1 rep
+(job ended at its limit; a second rep ran for the short cases), wall seconds, every new log IDENTICAL to
+the base log (`perf/identical.sh`):
+
+| case | base | new | speedup |
+|---|---|---|---|
+| roof1 | 21.39 | 5.13 | 4.17x |
+| gb1 | 42.81 | 20.81 | 2.06x |
+| bw1 | 8.47 | 4.29 | 1.97x |
+| bw4 | 46.01 | 24.82 | 1.85x |
+| bw11 | 193.37 | 93.48 | 2.07x |
+| bw22 | 867.46 | 363.60 | 2.39x |
+| dxa4 | 14.54 | 5.96 | 2.44x |
+| dxa11 | 19.36 | 8.72 | 2.22x |
+| dxa22 | 27.10 | 12.46 | 2.17x |
+| d_sgemm | 2.40 | 2.14 | 1.12x |
+| d_tcu | 0.35 | 0.28 | 1.25x |
+| d_dogfood | 0.64 | 0.57 | 1.12x |
+| d_sgemm4 | 18.37 | 16.42 | 1.12x |
+
+Slurm accounts: every job of this work runs on `gts-hkim358` (the paid account is reserved for H200 jobs).
+
+## 3. How the work is organized (2026-11-21)
+
+One agent per area, each on its own branch `perf/<area>` and worktree
+`vortex-exp/wt_perf_<area>` off `feature/simx-perf`, each with an independent
+reviewer (static review against `perf/REVIEW.md`): `mt` (the multi-threaded
+executor), `kernel` (SimObject kernel, host runtime, RAM), `cache` (sim/simx/mem),
+`core` (pipeline), `dram` (Ramulator wrapper and the Windowed controller), `tcu`
+(tensor core, DXA), `build` (flags, LTO, PGO, allocator). The lead merges
+reviewed branches into `feature/simx-perf`.
+
+Constraints met on the way:
+- Billing: the charge account ran out during the work, so no Slurm jobs are
+  used for development. Everything runs in the one 8-CPU interactive
+  allocation, which is on a node at load 60-90: single timings there are
+  useless, only interleaved A/B ratios are quoted, and the 22-SM before/after is
+  taken once per integrated round in a single right-sized job.
+- Baseline logs for the identity check: `results/perf_base/<case>/run1.log` for
+  all cases but bw22 and gb22 (too slow on the loaded node; taken in the final
+  job together with the optimized runs).
+
+## 4. Round 1 integration (2026-11-21, late)
+
+`feature/simx-perf` was moved to the new head of `feature/dxa-borrowing`
+(18deea5da, 17 commits later than the first base) and the five areas that were
+verified identical on their own were cherry-picked in this order, as staging
+branches `int/<area>` (cumulative): tcu, dram, kernel, cache, core (49 commits).
+The MT executor and build flags are round 2. `perf/core`'s HashTable commit was
+dropped: `perf/cache` had made the same change (lowest free index from a bit
+set, same allocation order).
+
+Files touched per area (for the later merges with `feature/warp-rate` and `feature/noc`):
+
+| area | commits | files |
+|---|---|---|
+| tcu | 4 | sim/simx/dxa/dxa_core.cpp, sim/simx/tcu/tcu_tbuf.{cpp,h}, sim/simx/tcu/tcu_unit.cpp, sw/common/fedp.h |
+| dram | 5 | sim/common/dram_sim.cpp, third_party/Makefile, third_party/ramulator_vortex/windowed_controller.cpp |
+| kernel | 8 | sim/common/simobject.h, sim/common/mem.cpp, sim/simx/regslice.h, sw/runtime/simx/vortex.cpp |
+| cache | 17 | sim/simx/mem/{cache,local_mem_switch,lsu_mem_adapter,mem_coalescer,mmu,mmu_tlb,ptw,tlb_l2}.cpp, mmu.h, mmu_tlb.h, sim/simx/types.h (crossbars, HashTable) |
+| core | 15 | sim/simx/{core,scheduler,scoreboard,dispatcher,opc_unit,lsu_unit,sfu_unit,alu_unit,csr_unit,wctl_unit}.cpp, core.h, scheduler.h, scoreboard.h, lsu_unit.h, cta_dispatcher.h, decompressor.h |
+
+Overlap with `feature/warp-rate` (scheduler, fetch, decode, scoreboard, ibuffer
+timing) is the core area: scheduler.cpp/.h, scoreboard.cpp/.h and the
+frontend/issue parts of core.cpp. Overlap with `feature/noc` (socket-to-L2
+path, DXA ports): dxa_core.cpp (worker slot bitmaps) and types.h crossbars.
+
+Earlier evidence on the first base (540b3dad2), kernel+cache+dram+tcu merged,
+serial, default flags: IDENTICAL on d_sgemm, d_tcu, d_dogfood, d_sgemm4, bw1,
+roof1, gb1, dxa4, bw4. Interleaved A/B on the loaded node (3 rounds, wall s,
+base/merged): roof1 70.7/15.0, 115.3/13.4, 54.1/8.9; dxa4 87.4/21.8, 68.5/15.8,
+46.2/9.9; gb1 151.6/83.2, 169.7/92.7, 103.2/53.8; bw1 30.5/25.1, 47.3/26.2,
+16.7/17.4; d_sgemm too short to read at that load. The measurement that counts
+is the single job `perf_measure` (results/perf_measure_r1).

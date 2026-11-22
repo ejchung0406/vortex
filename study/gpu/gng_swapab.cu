@@ -154,26 +154,36 @@ __global__ void __launch_bounds__(512, 1) k_swap(const __grid_constant__ P p) {
     asm volatile("setmaxnreg.dec.sync.aligned.u32 40;\n" ::: "memory");
     if constexpr (ring_mode) {
       if (wl == 0 && lane == 0) {
+        // incremental counters: a 64-bit runtime % or / per stage cost ~600 ns and capped the ring at one stage in flight
         const uint64_t total = p.nb * spb * p.nwg;
+        const uint8_t* srcbase = (MODE == SS ? p.canon : p.frag) + base_blk * BLK_BYTES;
+        uint32_t slot = 0, ephase = 0, w = 0, jsp = 0;   // jsp = stage within block of warpgroup w
+        uint32_t blkw[4] = {0, 1, 2, 3};                 // current block of each warpgroup (< sb)
         for (uint64_t j = 0; j < total; ++j) {
-          const int slot = (int)(j % p.S);
-          if (j >= (uint64_t)p.S) mbar_wait(su32(&empty[slot]), (uint32_t)((j / p.S - 1) & 1));
-          const int w = (int)(j % p.nwg); const uint64_t js = j / p.nwg;
-          const uint64_t blk = (w + p.nwg * (js / spb)) % sb;
-          const uint8_t* src = (MODE == SS ? p.canon : p.frag) + (base_blk + blk) * BLK_BYTES + (js % spb) * p.stage_bytes;
+          if (j >= (uint64_t)p.S) mbar_wait(su32(&empty[slot]), ephase);
+          const uint8_t* src = srcbase + (uint64_t)blkw[w] * BLK_BYTES + (uint64_t)jsp * p.stage_bytes;
           mbar_expect(su32(&full[slot]), p.stage_bytes);
           bulk(su32(ring + (size_t)slot * p.stage_bytes), src, p.stage_bytes, su32(&full[slot]));
+          if (++slot == (uint32_t)p.S) { slot = 0; if (j >= (uint64_t)p.S) ephase ^= 1; }
+          if (j + 1 == (uint64_t)p.S) ephase = 0;
+          if (++w == (uint32_t)p.nwg) {
+            w = 0;
+            if (++jsp == (uint32_t)spb) { jsp = 0; for (int q = 0; q < p.nwg; ++q) { blkw[q] += p.nwg; if (blkw[q] >= sb) blkw[q] -= sb; } }
+          }
         }
       } else if (wl >= 1 && wl <= p.nwg) {
         // notifier: the consumers never spin on an mbarrier (a data-dependent loop before a wgmma made
         // ptxas serialise every wgmma, C7518); they meet this warp at a named barrier instead
         const int w = wl - 1;
         const uint64_t stages = p.nb * spb;
+        uint32_t j = w, slot = w, ph = 0;  // j = js * nwg + w, kept as slot / phase incrementally
+        while (slot >= (uint32_t)p.S) { slot -= p.S; ph ^= 1; }
         for (uint64_t js = 0; js < stages; ++js) {
-          const uint64_t j = js * p.nwg + w;
-          mbar_wait(su32(&full[(int)(j % p.S)]), (uint32_t)((j / p.S) & 1));
+          mbar_wait(su32(&full[slot]), ph);
           asm volatile("bar.sync %0, 160;" :: "r"(1 + w) : "memory");
+          slot += p.nwg; while (slot >= (uint32_t)p.S) { slot -= p.S; ph ^= 1; }
         }
+        (void)j;
       }
     }
   } else {
@@ -191,11 +201,13 @@ __global__ void __launch_bounds__(512, 1) k_swap(const __grid_constant__ P p) {
     if constexpr (ring_mode) {
       const uint64_t stages = p.nb * spb;
       int pend = -1;  // ring slot whose wgmmas may still be in flight (ss)
+      uint32_t cslot = wg, sib = 0, cblk = wg;  // ring slot, stage within block, block (< sb): incremental, no 64-bit % or /
+      while (cslot >= (uint32_t)p.S) cslot -= p.S;
       for (uint64_t js = 0; js < stages; ++js) {
-        const uint64_t j = js * p.nwg + wg; const int slot = (int)(j % p.S);
+        const int slot = (int)cslot;
         asm volatile("bar.sync %0, 160;" :: "r"(1 + wg) : "memory");  // stage js is full (see the notifier)
         const uint32_t st = su32(ring + (size_t)slot * p.stage_bytes);
-        const int s0 = (int)(js % spb) * kps;  // first k-step of this stage within its block
+        const int s0 = (int)sib * kps;  // first k-step of this stage within its block
         if constexpr (MODE == SS) {
           fence_acc(acc); wg_fence();
 #pragma unroll
@@ -205,10 +217,10 @@ __global__ void __launch_bounds__(512, 1) k_swap(const __grid_constant__ P p) {
           wg_wait<1>(); fence_acc(acc);
           if (pend >= 0) { __syncwarp(); if (lane == 0) mbar_arrive(su32(&empty[pend])); }
           pend = slot;
-          if (js % spb == (uint64_t)spb - 1) {
+          if (sib == (uint32_t)spb - 1) {
             wg_wait<0>(); fence_acc(acc);
             __syncwarp(); if (lane == 0) mbar_arrive(su32(&empty[pend])); pend = -1;
-            write_out((wg + p.nwg * (js / spb)) % sb);
+            write_out(cblk);
           }
         } else if constexpr (MODE == RS_SMEM) {
           // two named register buffers, k-steps in pairs; 16 KB stages (8 k-steps, compile-time, fully unrolled)
@@ -228,25 +240,33 @@ __global__ void __launch_bounds__(512, 1) k_swap(const __grid_constant__ P p) {
             if (s + 2 < KPS) a0 = lds16(st + (s + 2) * 2048 + wl * 512 + lane * 16);
           }
           __syncwarp(); if (lane == 0) mbar_arrive(su32(&empty[slot]));
-          if (js % spb == (uint64_t)spb - 1) { wg_wait<0>(); fence_acc(acc); write_out((wg + p.nwg * (js / spb)) % sb); }
+          if (sib == (uint32_t)spb - 1) { wg_wait<0>(); fence_acc(acc); write_out(cblk); }
         } else if constexpr (MODE == SMEM_READ) {
           for (int s = 0; s < kps; ++s) { const uint4 v = lds16(st + s * 2048 + wl * 512 + lane * 16); sink ^= v.x ^ v.y ^ v.z ^ v.w; }
           __syncwarp(); if (lane == 0) mbar_arrive(su32(&empty[slot]));
         } else {  // TMA_ONLY
           __syncwarp(); if (lane == 0) mbar_arrive(su32(&empty[slot]));
         }
+        cslot += p.nwg; while (cslot >= (uint32_t)p.S) cslot -= p.S;
+        if (++sib == (uint32_t)spb) { sib = 0; cblk += p.nwg; if (cblk >= sb) cblk -= sb; }
       }
     } else {  // RS_GMEM / LD_ONLY: k-step t of this warpgroup = block t / 64, k-step t % 64
-      const uint8_t* fb = p.frag + wl * 512 + lane * 16;
-      auto addr = [&](uint64_t t) { return fb + (base_blk + (wg + p.nwg * (t / KSTEPS)) % sb) * BLK_BYTES + (t % KSTEPS) * 2048; };
+      // load cursor kept incrementally (a 64-bit runtime % per load made these loops instruction-bound)
+      const uint8_t* fb = p.frag + base_blk * BLK_BYTES + wl * 512 + lane * 16;
+      uint32_t lblk = wg, ls = 0, cblk = wg;
+      auto next_addr = [&]() {
+        const uint8_t* q = fb + (uint64_t)lblk * BLK_BYTES + ls * 2048;
+        if (++ls == KSTEPS) { ls = 0; lblk += p.nwg; if (lblk >= sb) lblk -= sb; }
+        return q;
+      };
       const uint64_t T = p.nb * KSTEPS;
       uint4 a[PF];
 #pragma unroll
-      for (int j = 0; j < PF; ++j) a[j] = ldg16(addr(j));
+      for (int j = 0; j < PF; ++j) a[j] = ldg16(next_addr());
       for (uint64_t t0b = 0; t0b < T; t0b += PF) {
 #pragma unroll
         for (int j = 0; j < PF; ++j) {
-          const uint64_t t = t0b + j; const int s = (int)(t % KSTEPS);
+          const uint64_t t = t0b + j; const int s = (int)(t & (KSTEPS - 1));
           if constexpr (MODE == RS_GMEM) {
             fence_acc(acc); wg_fence();
             wgmma_rs(acc, a[j], desc(xbase + s * 512, 128, 256), s != 0);
@@ -254,11 +274,11 @@ __global__ void __launch_bounds__(512, 1) k_swap(const __grid_constant__ P p) {
             wg_wait<1>(); fence_acc(acc);
             // wgmma t-1 is done: its registers take k-step t-1+PF
             const int jp = (j + PF - 1) % PF;
-            if (t > 0 && t - 1 + PF < T) a[jp] = ldg16(addr(t - 1 + PF));
-            if (s == KSTEPS - 1) { wg_wait<0>(); fence_acc(acc); write_out((wg + p.nwg * (t / KSTEPS)) % sb); }
+            if (t > 0 && t - 1 + PF < T) a[jp] = ldg16(next_addr());
+            if (s == KSTEPS - 1) { wg_wait<0>(); fence_acc(acc); write_out(cblk); cblk += p.nwg; if (cblk >= sb) cblk -= sb; }
           } else {
             sink ^= a[j].x ^ a[j].y ^ a[j].z ^ a[j].w;
-            if (t + PF < T) a[j] = ldg16(addr(t + PF));
+            if (t + PF < T) a[j] = ldg16(next_addr());
           }
         }
       }

@@ -1,0 +1,54 @@
+base r1 d_sgemm wall_s=2.81 user_s=2.65 sys_s=0.00 rss_kb=13376 
+core r1 d_sgemm wall_s=2.47 user_s=2.33 sys_s=0.00 rss_kb=13384 
+base r1 d_tcu wall_s=0.40 user_s=0.38 sys_s=0.00 rss_kb=13796 
+core r1 d_tcu wall_s=0.37 user_s=0.35 sys_s=0.00 rss_kb=13796 
+base r1 d_dogfood Command exited with non-zero status 1 wall_s=0.72 user_s=0.70 sys_s=0.00 rss_kb=13916 rc=1 
+core r1 d_dogfood Command exited with non-zero status 1 wall_s=0.64 user_s=0.61 sys_s=0.00 rss_kb=13916 rc=1 
+base r1 d_sgemm4 wall_s=20.79 user_s=20.60 sys_s=0.01 rss_kb=16444 
+core r1 d_sgemm4 wall_s=17.32 user_s=17.73 sys_s=0.01 rss_kb=16444 
+base r1 bw1 wall_s=9.34 user_s=9.72 sys_s=0.11 rss_kb=51812 
+core r1 bw1 wall_s=6.63 user_s=6.98 sys_s=0.04 rss_kb=52196 
+base r1 dxa4 wall_s=16.10 user_s=16.03 sys_s=0.37 rss_kb=70820 
+core r1 dxa4 wall_s=14.29 user_s=15.01 sys_s=0.08 rss_kb=73316 
+base r1 roof1 wall_s=23.39 user_s=23.32 sys_s=0.02 rss_kb=43656 
+core r1 roof1 wall_s=21.63 user_s=22.81 sys_s=0.02 rss_kb=44232 
+base r1 gb1 wall_s=47.01 user_s=49.35 sys_s=0.10 rss_kb=84780 
+core r1 gb1 wall_s=42.84 user_s=46.22 sys_s=0.17 rss_kb=85380 
+base r1 bw4 wall_s=56.18 user_s=59.05 sys_s=0.31 rss_kb=79268 
+core r1 bw4 wall_s=44.57 user_s=42.65 sys_s=2.17 rss_kb=80804 
+base r2 d_sgemm wall_s=2.50 user_s=2.54 sys_s=0.01 rss_kb=13192 
+core r2 d_sgemm wall_s=2.38 user_s=2.32 sys_s=0.00 rss_kb=13540 
+base r2 d_tcu wall_s=0.40 user_s=0.38 sys_s=0.00 rss_kb=13796 
+core r2 d_tcu wall_s=0.37 user_s=0.36 sys_s=0.00 rss_kb=13800 
+base r2 d_dogfood Command exited with non-zero status 1 wall_s=0.72 user_s=0.69 sys_s=0.01 rss_kb=13916 rc=1 
+core r2 d_dogfood Command exited with non-zero status 1 wall_s=0.64 user_s=0.61 sys_s=0.00 rss_kb=13920 rc=1 
+base r2 d_sgemm4 wall_s=20.92 user_s=20.51 sys_s=0.01 rss_kb=16636 
+core r2 d_sgemm4 wall_s=17.82 user_s=17.79 sys_s=0.01 rss_kb=16624 
+base r2 bw1 wall_s=8.29 user_s=8.73 sys_s=0.05 rss_kb=51812 
+core r2 bw1 wall_s=7.56 user_s=7.86 sys_s=0.09 rss_kb=52196 
+base r2 dxa4 wall_s=14.18 user_s=14.94 sys_s=0.07 rss_kb=70828 
+core r2 dxa4 wall_s=13.77 user_s=14.50 sys_s=0.08 rss_kb=73508 
+base r2 roof1 wall_s=21.53 user_s=22.77 sys_s=0.02 rss_kb=43328 
+core r2 roof1 wall_s=22.89 user_s=23.08 sys_s=0.02 rss_kb=44232 
+base r2 gb1 wall_s=42.92 user_s=46.48 sys_s=0.09 rss_kb=85104 
+core r2 gb1 wall_s=44.58 user_s=46.26 sys_s=0.26 rss_kb=85440 
+base r2 bw4 wall_s=49.51 user_s=52.30 sys_s=0.10 rss_kb=79268 
+core r2 bw4 wall_s=43.11 user_s=45.55 sys_s=0.10 rss_kb=80612 
+base r3 d_sgemm wall_s=2.70 user_s=2.65 sys_s=0.00 rss_kb=13528 
+core r3 d_sgemm wall_s=2.37 user_s=2.32 sys_s=0.00 rss_kb=13540 
+base r3 d_tcu wall_s=0.40 user_s=0.42 sys_s=0.00 rss_kb=13412 
+core r3 d_tcu wall_s=0.37 user_s=0.36 sys_s=0.00 rss_kb=13800 
+base r3 d_dogfood Command exited with non-zero status 1 wall_s=0.72 user_s=0.69 sys_s=0.00 rss_kb=13924 rc=1 
+core r3 d_dogfood Command exited with non-zero status 1 wall_s=0.63 user_s=0.61 sys_s=0.00 rss_kb=13920 rc=1 
+base r3 d_sgemm4 wall_s=18.52 user_s=19.62 sys_s=0.00 rss_kb=16436 
+core r3 d_sgemm4 wall_s=16.72 user_s=17.67 sys_s=0.01 rss_kb=16624 
+base r3 bw1 wall_s=9.30 user_s=9.70 sys_s=0.10 rss_kb=51816 
+core r3 bw1 wall_s=7.56 user_s=7.89 sys_s=0.06 rss_kb=52196 
+base r3 dxa4 wall_s=14.51 user_s=15.28 sys_s=0.08 rss_kb=70824 
+core r3 dxa4 wall_s=14.98 user_s=14.41 sys_s=0.53 rss_kb=73508 
+base r3 roof1 wall_s=21.67 user_s=22.99 sys_s=0.02 rss_kb=43660 
+core r3 roof1 wall_s=22.06 user_s=22.85 sys_s=0.02 rss_kb=44232 
+base r3 gb1 wall_s=42.82 user_s=46.35 sys_s=0.08 rss_kb=85012 
+core r3 gb1 wall_s=42.19 user_s=44.23 sys_s=0.08 rss_kb=85280 
+base r3 bw4 wall_s=50.02 user_s=52.89 sys_s=0.08 rss_kb=79272 
+core r3 bw4 wall_s=39.95 user_s=42.20 sys_s=0.09 rss_kb=80612 

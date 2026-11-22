@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 #SBATCH -J perf_dram_ab
-#SBATCH --account=gts-hkim358-paid
+#SBATCH --account=gts-hkim358
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 #SBATCH --time=4:00:00

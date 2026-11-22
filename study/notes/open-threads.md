@@ -161,7 +161,7 @@ Pushed to the fork up to 348263623 (role split, dcache hold knob, tcu_roof, co-r
 - wmma is capped at 256 FMA per block (all three register sources used); `sgemm_tcu_wg` is not sped up by this (bound by staging).
 
 ## Real H200, the two models — see `corun-workloads.md`
-DiT 1.7% of memory bandwidth, proportional to SMs; decode matmul kernels 65-68%, 72% of speed on 20% of SMs, ~95-125 GB/s per SM with few SMs. Decode wall-clock in HF transformers is host-bound.
+DiT 1.7% of memory bandwidth, proportional to SMs; decode matmul kernels 65-68%, 72% of speed on 20% of SMs, ~95-125 GB/s per SM with few SMs. **[corr. 2026-11-21]** "1.7%" counted weights only (measured 25-29% of the roof); the 20% point was under MPS, where cuBLAS computed NaN, and is invalid (`h200-go-nogo.md` §3; 21:10 below). Decode wall-clock in HF transformers is host-bound.
 
 ## gemm_block co-run (9167e8e3e, 69e11596b)
 - `-r` rounds, `-o` solo role, `-R` compute-role weight reuse, `rate_*` and `rate_steady_*` lines; memory role has its own one-tile walk (`-DBW_TILES`).
@@ -248,7 +248,8 @@ Corrections to earlier statements
   memory keeps 0.63-0.78 and the GEMM drops to 0.25 at 132 memory blocks; the
   two alternate on SMs.
 - Qwen decode printed `'!!!!…'` in 4 MPS runs and 2 co-runs; those timings come
-  from wrong output. Cause unknown.
+  from wrong output. Cause unknown. **[corr. 2026-11-21]** Cause found (21:10 below): cuBLAS NaN under MPS
+  percentages; those runs are invalid.
 - Two packed GPCs give 2.27-2.28 TB/s, not 2 x 1.28.
 - "cuBLAS FP16 small M: 16-20 GB/s per SM" is an all-SM, chip-limited figure;
   on 8-14 SMs it is ~52.
@@ -257,6 +258,7 @@ Corrections to earlier statements
 - Barrier scope 1 (h200s): review found a store stage the RTL condition does
   not see (the dcache flush arbiter's buffer), no parity run with VM on, and a
   description narrower than the code. The "15.8 -> 22.2 GB/s per SM" figure is
+  (**[corr. 2026-11-21]** 15.08 -> 21.06, 21.03 after the fix; 22:40 below)
   unconfirmed until the fix branch `feature/bar-drain-fix` reports.
 - DXA worker count: 1 at 1-15 cores, 2 at 16-23, 16 at 132 (the findings list
   says 1 at 1-8; to be corrected in both languages).
@@ -369,3 +371,69 @@ Still owed
   verified and merged (item 18).
 - Real H200: the go/no-go experiments A, B, C (`h200-go-nogo.md`, in progress) and the bystander characterisation (`h200-bystander.md`, draft) are
   running.
+
+## Update 2026-11-21 (21:10): go/no-go results on the H200 (`h200-go-nogo.md`)
+
+- A (SM sharing): a lane-sized decode kernel (1 warp, 32 registers, 33 KB shared
+  memory) never co-resides with a production tensor-core GEMM (cuBLASLt and
+  CUTLASS, BF16/FP8, M=4096, K=3840, N=3840/15360). Lane first on all SMs: the
+  GEMM makes no progress (0.1-0.3 TFLOP/s against 600-1220). GEMM first: whole
+  SMs alternate; lane 0.09-0.34 of solo on 12-48 SMs, GEMM 0.59-0.79. CUTLASS
+  with one fewer stage still does not co-reside (inference, unverified:
+  registers are allocated per sub-partition). Where SMs are shared, the lane
+  starves: 0.051 beside an elementwise kernel (stall is not "not selected"),
+  0.002 beside FMA ILP 4 (90% "not selected"). Decision rule outcome: go,
+  residency direction. Caveat: the lane itself reached only 8.7-10.2 GB/s per
+  SM with its consumer (30.5 TMA-only).
+- B (shared-memory bypass): not decided. The test kernels reached 52.6-66.2
+  GB/s per SM, below cuBLAS on the same SMs (119-125), so they do not probe
+  the hardware limit.
+- C: cuBLAS 13.4 (PyTorch 2.15+cu132) returns NaN or wrong values for BF16
+  GEMMs under an MPS active-thread percentage (NaN at 104/92/52/26 SMs, correct
+  at 132/78/12; 18 of 30 standalone shapes bad at 80%). With TPC masks the
+  output is correct. CORRECTION: every Qwen number taken under MPS 80/70/40/20%
+  and the co-runs at LLM 20/40% came from runs computing NaN; do not quote them.
+- CORRECTION: "the DiT step uses 1.7% of memory bandwidth" counted weights only.
+  Measured with ncu: 178-209 GB per forward = 1.16-1.36 TB/s, 25-29% of the roof.
+- Branches on the H200 (`results_gpu/h200_warprate_nottaken.txt`): a not-taken
+  conditional branch costs about what a taken one does (11-12 cycles), no
+  history effect. The part stops fetching at a branch; no prediction.
+- Per-warp rate in Vortex: pipelined sequential fetch chosen (variant C);
+  one-fetch-in-flight (A) saves only 1 cycle. With it the next per-warp limit
+  is the issue path (~3.8 cycles per instruction against the part's 1.2).
+- DXA timing patch: the rtlsim reference for h200s `-e4096 -n32` is 201,583
+  cycles; SimX today 182,421 (-9.5%), with the patch 219,161 (+8.7%). Not
+  applied; a second, depth-dependent difference remains.
+
+## Update 2026-11-21 (22:40): bystander effect, cause (`h200-bystander.md`)
+
+Measured on a second die (atl1-1-02-014-9-0), 1,178 trials, 1 s windows.
+- Trigger is backlog, not bytes: one GPC delivering the same 1.27-1.28 TB/s
+  leaves same-half bystanders at 168 GB/s (aggressor depth 3 x 32 KB per SM)
+  or 88 GB/s (depth 6); 196 alone. 8 vs 16 aggressor SMs: 174 vs 88.
+- Not DRAM (an L2-resident aggressor cuts bystanders to 0.45x), not the fabric,
+  not clock or power (1980 MHz, 372 W of 560 W).
+- Harm follows the L2 slices serving the aggressor's data (local pages hurt
+  that half's local readers 0.57x, other half 1.00x; and the reverse).
+- A shared-buffer aggressor (few unique lines) pushes 2.30 TB/s out of its GPC
+  and bystanders stay at 0.99x.
+- Isolated same-half near hit: 292 -> 1444 cycles (p50).
+- Software mitigation works: an in-flight cap of 3 x 32 KB per SM costs the
+  aggressor 0.5% and restores bystanders to 0.86/0.92x; spreading the same
+  rate over 2-4 GPCs costs nothing and gives ~0.90x.
+- Practical size: a decode-like lane beside one packed memory-heavy tenant
+  runs at 0.31x; the chip moves 2.15 TB/s against an ideal 4.39.
+- Inference (not observable): credit or head-of-line blocking from the
+  congested GPC's port back into those slices.
+- Die variation: this die's L2 halves are {0,2,6,7} / {1,3,4,5}; one "GPC"
+  group delivered 1.47 TB/s.
+- For the simulator: slices need a shared response buffer across destinations,
+  the GPC port returns credits at 1.28 TB/s, SMs need full in-flight windows,
+  and same-line merging inside the GPC must exist.
+
+Merged today: `feature/bar-drain-fix` into `feature/dxa-borrowing` (18deea5da,
+pushed). Scope 2 was not built: the scope-1 starvation did not reproduce on the
+work branch (it came from changes in the load-calibration copy). Decode figure
+corrected: scope 0 -> 1 is 15.08 -> 21.06 GB/s per SM (21.03 after the fix),
+not 15.8 -> 22.2. Started: `feature/noc` (steps 0-1), `feature/warp-rate`
+(pipelined fetch in RTL and SimX, 49 of 52 parity rows cycle-exact).

@@ -7,7 +7,7 @@ set -o pipefail
 G=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu
 R=/storage/project/r-hkim358-0/echung67/vortex-exp/results_gpu
 B=/tmp/$USER/bys
-MAPS="--map $R/h200_l2s_map.txt --gpc $R/h200_l2s_gpc.txt"
+MAPS="--map $R/h200_l2s_map.txt --gpc $R/h200_l2s_gpc.txt --warm-a 0 --read-b ${BYS_READB:-2}"
 ph=$1; shift
 case $ph in
 build) $G/bys_build.sh && python3 $G/bys_plan.py $B/plans && cat $B/plans/*.plan > $R/h200_bys_plans.txt ;;

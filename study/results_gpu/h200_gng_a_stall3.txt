@@ -1,0 +1,30 @@
+... Initialize injection ...
+host=atl1-1-02-014-16-0.pace.gatech.edu gpu=NVIDIA H200 sms=132 roles=lane,lender mps_pipe=none pid=3990259
+lane_kernel regs=32 static_smem=1024 local=56 (G=2)
+lane_kernel regs=32 static_smem=1024 local=64 (G=1)
+setup_done host_ns=1795311064672685162 t0=1795311093324732852 margin_ms=28652 gt_offset=-1692247121
+slot=0 tag=co|L16u|fma4|lender trial=0 first=lender mode=lane,lender lane_spec=M=16:r=0:t=16:d=2 lender_spec=fma4 lane_consume=1 lane_M=16 lane_rate_target=0 tile_kb=16 depth=2 spin=0 lane_workers=132 lane_sms_bitmap=000000000000000fffffffffffffffffffffffffffffffff lane_gbs=1.5 lane_gbs_per_sm=0.01 lane_per_sm_min=0.01 lane_per_sm_max=0.01 lane_bin10ms_p5=1.5 lane_bin10ms_min=1.5 lane_late_ms=0.43 lane_useful_tflops=0.024 lane_check=ok(2 blocks,0 bad) lane_late_start_ms=-28951.8 lender=fma4 lender_workers=132 lender_sms_bitmap=000000000000000fffffffffffffffffffffffffffffffff lender_tflops=54.526 lender_rate=54.5265 lender_rate_unit=TFLOP/s sms_shared_with_lane=132 lender_check=n/a win_ms=1400 nvml_n=139 clk_min=1980 clk_med=1980 pwr_med=340 pwr_max=358 reasons_or=0x0
+done mask_callbacks=0 mask_applied=0
+exit=0 slot=0
+_Z5k_fma4FmaP                                                samples= 8781439 not_selected=69.6% selected=12.5% math_pipe_throttle=6.0% barrier=6.0% wait=2.7% branch_resolving=2.0% no_instructions=1.3%
+_Z6k_laneILi2ELi32EEv5LaneP                                  samples=  182604 not_selected=90.0% math_pipe_throttle=9.8% wait=0.1% selected=0.0% short_scoreboard=0.0% branch_resolving=0.0% long_scoreboard=0.0%
+... Initialize injection ...
+host=atl1-1-02-014-16-0.pace.gatech.edu gpu=NVIDIA H200 sms=132 roles=lane,lender mps_pipe=none pid=3990548
+lane_kernel regs=32 static_smem=1024 local=56 (G=2)
+lane_kernel regs=32 static_smem=1024 local=64 (G=1)
+setup_done host_ns=1795311097150480540 t0=1795311123471318322 margin_ms=26321 gt_offset=-1692331464
+slot=1 tag=co|Lt|fma4|lane trial=0 first=lane mode=lane,lender lane_spec=M=16:r=0:t=16:d=2:c=0 lender_spec=fma4 lane_consume=0 lane_M=16 lane_rate_target=0 tile_kb=16 depth=2 spin=0 lane_workers=132 lane_sms_bitmap=000000000000000fffffffffffffffffffffffffffffffff lane_gbs=865.0 lane_gbs_per_sm=6.55 lane_per_sm_min=6.50 lane_per_sm_max=6.59 lane_bin10ms_p5=865.0 lane_bin10ms_min=865.0 lane_late_ms=-0.09 lane_useful_tflops=13.840 lane_check=none(0 blocks,0 bad) lane_late_start_ms=-28920.6 lender=fma4 lender_workers=132 lender_sms_bitmap=000000000000000fffffffffffffffffffffffffffffffff lender_tflops=56.262 lender_rate=56.2619 lender_rate_unit=TFLOP/s sms_shared_with_lane=132 lender_check=n/a win_ms=1400 nvml_n=139 clk_min=1980 clk_med=1980 pwr_med=365 pwr_max=423 reasons_or=0x0
+done mask_callbacks=0 mask_applied=0
+exit=0 slot=1
+_Z5k_fma4FmaP                                                samples= 6591603 not_selected=69.1% selected=12.5% math_pipe_throttle=6.4% barrier=5.9% wait=2.7% branch_resolving=2.0% no_instructions=1.3%
+_Z6k_laneILi2ELi32EEv5LaneP                                  samples= 2580532 long_scoreboard=37.7% wait=24.6% branch_resolving=10.8% selected=9.9% short_scoreboard=8.0% not_selected=6.2% no_instructions=1.4%
+... Initialize injection ...
+host=atl1-1-02-014-16-0.pace.gatech.edu gpu=NVIDIA H200 sms=132 roles=lane,lender mps_pipe=none pid=3991382
+lane_kernel regs=32 static_smem=1024 local=56 (G=2)
+lane_kernel regs=32 static_smem=1024 local=64 (G=1)
+setup_done host_ns=1795311129892450371 t0=1795311153605658235 margin_ms=23713 gt_offset=-1692430890
+slot=2 tag=co|L16u|fma2|lane trial=0 first=lane mode=lane,lender lane_spec=M=16:r=0:t=16:d=2 lender_spec=fma2 lane_consume=1 lane_M=16 lane_rate_target=0 tile_kb=16 depth=2 spin=0 lane_workers=132 lane_sms_bitmap=000000000000000fffffffffffffffffffffffffffffffff lane_gbs=768.2 lane_gbs_per_sm=5.82 lane_per_sm_min=5.81 lane_per_sm_max=5.83 lane_bin10ms_p5=699.8 lane_bin10ms_min=699.7 lane_late_ms=-0.10 lane_useful_tflops=12.292 lane_check=ok(2 blocks,0 bad) lane_late_start_ms=-28913.0 lender=fma2 lender_workers=132 lender_sms_bitmap=000000000000000fffffffffffffffffffffffffffffffff lender_tflops=36.408 lender_rate=36.4077 lender_rate_unit=TFLOP/s sms_shared_with_lane=132 lender_check=n/a win_ms=1400 nvml_n=139 clk_min=1980 clk_med=1980 pwr_med=415 pwr_max=440 reasons_or=0x0
+done mask_callbacks=0 mask_applied=0
+exit=0 slot=2
+_Z5k_fma4FmaP                                                samples= 5992058 not_selected=54.1% barrier=14.6% dispatch_stall=10.5% wait=8.9% selected=8.9% no_instructions=1.5% branch_resolving=1.4%
+_Z6k_laneILi2ELi32EEv5LaneP                                  samples= 2345090 wait=44.3% selected=21.6% short_scoreboard=16.9% long_scoreboard=9.7% branch_resolving=4.1% not_selected=1.7% dispatch_stall=0.7%

@@ -9,7 +9,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 RES = os.path.join(HERE, '..', 'results_gpu')
 MAP = os.environ.get('BYS_MAP', os.path.join(RES, 'h200_l2s_map.txt'))
 GPCF = os.environ.get('BYS_GPC', os.path.join(RES, 'h200_l2s_gpc.txt'))
-SIDEF = os.environ.get('BYS_SIDES', os.path.join(RES, 'h200_l2s_sides.txt'))
+SIDEF = os.environ.get('BYS_SIDES', os.path.join(RES, 'h200_bys_sides.txt'))  # this die's sides
 
 
 def load():
@@ -33,7 +33,10 @@ def load():
 
 G, SIDES = load()
 SIDE_OF = {g: s for s, gs in SIDES.items() for g in gs}
-AGG = 6  # aggressor GPC (side B), as in E-1
+AGG = 6  # aggressor GPC, as in E-1
+SAME = [g for g in SIDES[SIDE_OF[AGG]] if g != AGG]            # other GPCs in the aggressor's half
+OTHER = [g for s, gs in SIDES.items() if s != SIDE_OF[AGG] for g in gs]  # GPCs of the other half
+SAMEP = [g for g in SAME if g != 0] + [0]                         # GPC 0 (lone TPCs) last
 
 
 def sms(g, n=None, step=1, skip=0):
@@ -118,6 +121,18 @@ def q1(P):
         P.S('q1_by_agg_duty%d_ld' % on, bin=50); P.bys(spec=LD); P.G('agg', agg16(), TMA + ' duty=%d/1000' % on)
 
 
+def q1b(P):
+    """low-duty aggressor without the timeline (1 s bins keep the bystanders on the fast path): if the effect
+    is instantaneous, the window average falls linearly with the aggressor's on-fraction"""
+    for mn, m in [('tma', TMA), ('ld', LD)]:
+        P.S('q1b_by_%s' % mn); P.bys(spec=m)
+        P.S('q1b_by_agg_%s' % mn); P.bys(spec=m); P.G('agg', agg16(), TMA)
+        for on, per in [(100, 1000), (250, 1000), (500, 1000), (750, 1000), (1000, 10000), (5000, 10000)]:
+            P.S('q1b_by_agg_duty%d_%d_%s' % (on, per, mn)); P.bys(spec=m); P.G('agg', agg16(), TMA + ' duty=%d/%d' % (on, per))
+    for on, per in [(100, 1000), (500, 1000)]:
+        P.S('q1b_agg_duty%d_%d_only' % (on, per)); P.G('agg', agg16(), TMA + ' duty=%d/%d' % (on, per))
+
+
 def q2(P):
     """dose-response"""
     P.S('q2_by'); P.bys()
@@ -137,7 +152,9 @@ def q2(P):
     for pct in [90, 95, 100]:
         P.S('q2_n8_p%d' % pct); P.bys(); P.G('agg', sms(AGG, 8), TMA + ' pace=%.2f' % (1.6 * pct))
     # number of saturated GPCs (16 SMs each); bystanders in the other GPCs
-    sets = {'g6': [6], 'g6g2': [6, 2], 'g6g1': [6, 1], 'g6g2g3': [6, 2, 3], 'g6g1g5': [6, 1, 5], 'g6g2g1': [6, 2, 1], 'g6g1g2g5': [6, 1, 2, 5]}
+    a, b = SAMEP, OTHER
+    sets = {'g6': [AGG], 'same2': [AGG, a[0]], 'cross2': [AGG, b[0]], 'same3': [AGG, a[0], a[1]], 'cross3': [AGG, b[0], b[1]],
+            'mix3': [AGG, a[0], b[0]], 'bal4': [AGG, a[0], b[0], b[1]]}
     for nm, gs in sets.items():
         P.S('q2_sat_%s_byonly' % nm); P.bys(exclude=gs)
         P.S('q2_sat_%s' % nm); P.bys(exclude=gs)
@@ -191,10 +208,28 @@ def q3(P):
         P.S('q3_sl_%s_agg0only' % fn); P.G('agg', agg16(), agg)
 
 
+def q3b(P):
+    """slice-set test with a deep aggressor (32 warps x 4 KB in flight per SM) and deep bystanders, one 2 MB page,
+    L2-resident; aggressor fn = 0 & PA9 = 0, bystanders fn = 0 (same slices) / 1 (other slices) & PA9 = 1"""
+    F0, S0, B9 = 0x151100, 0x030100, 0x200
+    L32 = 'mode=ld warps=32 mb=0.03125'
+    for fn, mask in [('f0', F0), ('s0', S0)]:
+        agg = L32 + ' data=gran:0:%x:0:%x:0' % (mask, B9)
+        for bv in [0, 1]:
+            byd = 'gran:0:%x:%d:%x:1' % (mask, bv, B9)
+            P.S('q3b_sl_%s_agg0_by%d' % (fn, bv)); P.bys(spec=L32, data=byd); P.G('agg', agg16(), agg)
+            P.S('q3b_sl_%s_by%donly' % (fn, bv)); P.bys(spec=L32, data=byd)
+        P.S('q3b_sl_%s_agg0only' % fn); P.G('agg', agg16(), agg)
+    # same page, no slice filter (control for the gran path): aggressor and bystanders split the page by PA9 only
+    P.S('q3b_sl_none_agg'); P.bys(spec=L32, data='gran:0:%x:1' % B9); P.G('agg', agg16(), L32 + ' data=gran:0:%x:0' % B9)
+    P.S('q3b_sl_none_byonly'); P.bys(spec=L32, data='gran:0:%x:1' % B9)
+
+
 def q4(P):
     """latency of a one-load-at-a-time probe, near / far, hit / miss"""
-    pa, pb = sms(0, 1), sms(2, 1)          # probe SMs: GPC0 (side A), GPC2 (side B)
-    wa, wb = sms(1, 1), sms(3, 1)          # warmers for far lines: a side-A SM warms lines homed on A (far for pb)
+    sA = [g for g in SIDES['A'] if g != AGG]; sB = [g for g in SIDES['B'] if g != AGG]
+    pa, pb = sms(sA[0], 1), sms(sB[0], 1)  # probe SMs: first GPC of each side (not the aggressor)
+    wa, wb = sms(sA[-1], 1), sms(sB[-1], 1)  # warmers for far lines: a side-A SM warms lines homed on A (far for pb)
     aggs = {'none': None, 'agg': TMA, 'aggL2': TMA + ' mb=0.25', 'aggp95': TMA + ' pace=76', 'aggp90': TMA + ' pace=72'}
     for an, am in aggs.items():
         for lt in ['hit', 'miss', 'far']:
@@ -220,10 +255,12 @@ def q5(P):
 def q6(P):
     """software avoidance: spread the aggressor at the same total (pace = per-SM GB/s)"""
     # 8 SMs of GPC6 + 8 SMs of GPC2 outside the bystander TPCs (TPCs 2-5 of GPC2)
-    g2 = sms(2, 8, 1, 4)
+    g2 = sms(SAMEP[0], 8, 1, 4)
     for nm, aggs in [('16in1_p80', [(agg16(), 80)]), ('16in1', [(agg16(), 0)]),
                      ('8in2_p80', [(sms(AGG, 8), 80), (g2, 80)]), ('8in2', [(sms(AGG, 8), 0), (g2, 0)]),
-                     ('4in4_p80', [(sms(g, 4, 1, 4), 80) for g in [6, 2, 3, 4]]), ('4in4', [(sms(g, 4, 1, 4), 0) for g in [6, 2, 3, 4]])]:
+                     ('8in2x_p80', [(sms(AGG, 8), 80), (sms(OTHER[0], 8, 1, 4), 80)]), ('8in2x', [(sms(AGG, 8), 0), (sms(OTHER[0], 8, 1, 4), 0)]),
+                     ('4in4same_p80', [(sms(g, 4, 1, 4), 80) for g in [AGG] + SAMEP[:3]]), ('4in4same', [(sms(g, 4, 1, 4), 0) for g in [AGG] + SAMEP[:3]]),
+                     ('4in4bal_p80', [(sms(g, 4, 1, 4), 80) for g in [AGG, SAMEP[0]] + OTHER[:2]]), ('4in4bal', [(sms(g, 4, 1, 4), 0) for g in [AGG, SAMEP[0]] + OTHER[:2]])]:
         P.S('q6_%s' % nm); P.bys()
         for i, (s, pace) in enumerate(aggs):
             P.G('agg%d' % i, s, TMA + (' pace=%d' % pace if pace else ''))
@@ -236,7 +273,7 @@ def q7(P):
     """decode-like lane (2 SMs per GPC, 16 B loads) beside a packed memory-heavy tenant"""
     lane = [x for g in range(len(G)) for x in sms(g, 2, 2)]
     P.S('q7_lane'); P.G('lane', lane, LD)
-    packs = {'k1': [6], 'k2': [6, 2], 'k4half': [6, 2, 3, 4], 'k4bal': [6, 1, 2, 5]}
+    packs = {'k1': [AGG], 'k2': [AGG, SAMEP[0]], 'k4half': [AGG] + SAMEP[:3], 'k4bal': [AGG, SAMEP[0]] + OTHER[:2]}
     for nm, gs in packs.items():
         ten = [x for g in gs for x in G[g] if x not in lane]
         n = len(ten)
@@ -263,7 +300,7 @@ def ncu(P):
     P.S('ncu_by_aggL2', trials=1, dur=300); P.bys(); P.G('agg', agg16(), TMA + ' mb=0.25')
 
 
-PHASES = ['sanity', 'q1', 'q2', 'q3', 'q4', 'q5', 'q6', 'q7', 'ncu']
+PHASES = ['sanity', 'q1', 'q1b', 'q2', 'q3', 'q3b', 'q4', 'q5', 'q6', 'q7', 'ncu']
 if __name__ == '__main__':
     out = sys.argv[1]
     os.makedirs(out, exist_ok=True)

@@ -138,8 +138,8 @@ loaded by the user's .bashrc.
 **Run on an H200: not yet (2026-11-21 19:40).** `gpu_check_ice.sbatch` is
 1 H200, 4 cpus, 20 min, `-q coc-ice --nice=200`, so it only backfills and
 never jumps ahead of the user's own E13 jobs (priority 999900; ours 583133).
-It is job **7232556** with `--deadline=2026-11-21T23:00`, so Slurm drops it
-if it has not run by then. All 48 ICE H200 GPUs were allocated the whole
+It was job **7232556** with `--deadline=2026-11-21T23:00`. It never started,
+and Slurm dropped it at 22:40 (state DEADLINE, no node assigned). All 48 ICE H200 GPUs were allocated the whole
 evening (`AllocTRES gres/gpu:h200=8` on every node), and the user's nine
 3-GPU jobs are waiting ahead of it. If it runs, the whole answer is in
 `ice:~/scratch/vortex-ice/slurm/gpucheck_7232556.out`, with the TPC map in

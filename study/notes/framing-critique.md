@@ -18,7 +18,9 @@ the raw logs). The hardware thesis is not supported yet.
    - 16 memory blocks: memory keeps 0.66-0.71, GEMM 0.89-0.99.
 2. [checked] The Qwen decode printed `'!!!!…'` in 4 of the MPS runs
    (`h200_qwen_mps.txt`) and 2 co-runs (`h200_models_corun.txt`). Those timings
-   come from a run that produced wrong output. Cause unknown.
+   come from a run that produced wrong output. Cause unknown. **[corr. 2026-11-21]** Cause found: cuBLAS 13.4
+   returns NaN for BF16 GEMMs under an MPS active-thread percentage; every Qwen number at MPS 80/70/40/20% and
+   the co-runs at LLM 20/40% are invalid (`h200-go-nogo.md` §3).
 3. The launch-order x ILP table in `tpc-placement-and-borrowing.md` §C.2 has no
    `ilp=1` run in the raw files; some entries do not match `h200_tpc_coresid2.txt`.
 4. Two packed GPCs give 2.27-2.28 TB/s, not 2 x 1.28: a second limit above the
@@ -28,7 +30,8 @@ the raw logs). The hardware thesis is not supported yet.
 6. Bandwidth windows are 3.6-6.7 ms; the clock was read at idle, not during runs.
 7. Deployment: HF decode is host-bound (20 of 27 ms per step), so the measured
    user-visible loss under MPS is 2-3%. "DiT uses 1.7% of bandwidth" counts
-   weights only. At batch 64 decode needs ~39 SMs of tensor throughput, so it
+   weights only (**[corr. 2026-11-21]** measured: 178-209 GB per forward = 1.16-1.36 TB/s, 25-29% of the roof,
+   `h200-go-nogo.md` §3). At batch 64 decode needs ~39 SMs of tensor throughput, so it
    is no longer bandwidth-only.
 8. Prior art missing from our survey: intra-SM QoS (Wang et al. ISCA'17,
    Simultaneous Multikernel HPCA'16, Warped-Slicer ISCA'16), Mascar HPCA'15,

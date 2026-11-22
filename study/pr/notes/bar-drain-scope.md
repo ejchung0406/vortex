@@ -61,8 +61,9 @@ schedule. The full table is under "How verified".
 Fork measurements (from a research fork that uses this knob with fork-only
 tests and a private H200-like profile; not reproducible from this branch):
 
-- A load-staged decode kernel went from 15.8 to 22.2 GB/s per SM.
-- One kernel's walk went from 1,395,242 to 816,228 cycles.
+- A load-staged decode kernel went from ~~15.8 to 22.2~~ **[corr. 2026-11-21]** 15.08 to 21.06 GB/s per SM
+  (21.03 after the later scope-1 fixes, merged on the fork as 18deea5da).
+- One kernel's walk went from 1,395,242 to 816,228 cycles (~827 K after those fixes).
 - At scope 0, runs switched on their own between two states: CTAs in
   lockstep, or staggered and slower. At scope 1 this stopped.
 - On a real H200, 16 CTAs per SM staging with loads took 2,503-2,536 cycles

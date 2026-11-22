@@ -1,0 +1,13 @@
+name=wrr_ldl64_k4f
+src_rev=
+src_dirty=
+src_phoenix=/storage/project/r-hkim358-0/echung67/vortex-exp/src_wr_b
+src_pushed=2026-11-21T21:34:39-05:00
+host=atl1-1-01-002-36-0.pace.gatech.edu
+cpu=Intel(R) Xeon(R) 6972P
+cluster=ice
+xconf=-DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1  -DVX_DBG_STALL_TIMEOUT=20000000
+blackbox=--driver=simx --app=ldstream --perf=4 --profile=h200s --cores=1 --args=-t2048 -b8 -u8 -m16 -a -l
+rc=0
+wall_s=153
+ran_on=ice (fetched 2026-11-21T22:20:47-05:00 from ice:~/scratch/vortex-ice/results/wrr_ldl64_k4f)

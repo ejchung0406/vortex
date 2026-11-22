@@ -1,0 +1,13 @@
+name=wrr_bw_k4
+src_rev=
+src_dirty=
+src_phoenix=/storage/project/r-hkim358-0/echung67/vortex-exp/src_wr_b
+src_pushed=2026-11-21T22:06:24-05:00
+host=atl1-1-02-010-3-1.pace.gatech.edu
+cpu=Intel(R) Xeon(R) Gold 6226 CPU @ 2.70GHz
+cluster=ice
+xconf=-DVX_CFG_FETCH_INFLIGHT=4  -DVX_DBG_STALL_TIMEOUT=20000000
+blackbox=--driver=simx --app=bwstream --perf=4 --profile=h200s --cores=1 --args=-n64 -b32
+rc=0
+wall_s=212
+ran_on=ice (fetched 2026-11-21T22:18:31-05:00 from ice:~/scratch/vortex-ice/results/wrr_bw_k4)

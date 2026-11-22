@@ -1,6 +1,13 @@
 name=barfix_pre_solo2_s1
 src_rev=
-src_dirty=0
-host=atl1-1-02-002-25-2.pace.gatech.edu
+src_dirty=
+src_phoenix=/storage/project/r-hkim358-0/echung67/vortex-exp/src_barfix_base
+src_pushed=2026-11-21T19:13:05-05:00
+host=atl1-1-03-004-5-1.pace.gatech.edu
+cpu=Intel(R) Xeon(R) Gold 6226 CPU @ 2.70GHz
+cluster=ice
 xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DMTILES=4 -DPROFILE_ENABLE -DVX_CFG_BAR_DRAIN_SCOPE=1
 blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=2 --args=-m64 -n8192 -k1024 -b1 -t1 -r4 -s0 -R256 -o2
+rc=0
+wall_s=2655
+ran_on=ice (fetched 2026-11-21T20:01:50-05:00 from ice:~/scratch/vortex-ice/results/barfix_pre_solo2_s1)

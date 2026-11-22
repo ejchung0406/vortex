@@ -80,6 +80,12 @@ an SM-level proposal, plus one measurement that could reopen it.
        "dedicated GPCs" premise.
      - The hardware question becomes "contain a saturated GPC's backlog" (M8, admission
        at the GPC by return credits: cheap), not "lift C".
+   - **[corr. 2026-11-21] Measured since:** `h200-bystander.md` (second die, 1,178 trials). G1 is real and its
+     trigger is the backlog of unique-line requests, not bytes. Its three headline numbers: (1) at the same
+     delivered 1.27-1.28 TB/s, same-half bystanders get 168 GB/s at aggressor depth 3 vs 88 at depth 6 (174 vs 88
+     for 8 vs 16 aggressor SMs); (2) a DRAM-free (L2-resident) aggressor still cuts them to 89 GB/s (0.45x);
+     (3) a shared-buffer aggressor delivering 2.30 TB/s leaves them at 0.99x. An in-flight cap of 3 x 32 KB per
+     SM (1.5 MB per GPC) costs the aggressor 0.5% and restores bystanders to 0.86/0.92x: M8 in software form.
 5. **Mechanisms (§3) ranked by value on our numbers.**
    - **Cross-GPC lending over short side links (M2)** and **finer GPCs (M6)** recover
      1.8-2.0× in the confined regimes. Lending costs linear wire area; M6 doubles the
@@ -320,6 +326,14 @@ Critical ratios per part [inf.; C assumed H200-class unless stated]:
 
 Source: `h200_tpc_network.txt`. W kernel, per-unit averages; [inf.]: the run was not
 designed for this.
+
+**[corr. 2026-11-21]** Now measured by a dedicated experiment: `h200-bystander.md`. G1 is real; the
+trigger is a backlog of unique-line requests from an over-subscribed GPC, and the shared queue sits at
+the L2 slices serving the aggressor's data. Headline numbers: (1) same delivered 1.27-1.28 TB/s,
+same-half bystanders 168 GB/s at aggressor depth 3 vs 88 at depth 6; (2) a DRAM-free aggressor still
+cuts them to 89 GB/s (0.45x); (3) a shared-buffer aggressor delivering 2.30 TB/s leaves them at 0.99x.
+The M8 budget estimate below (470 KB per GPC) is too small: 1.5 MB per GPC (3 x 32 KB per SM) is the
+working in-flight cap measured.
 
 | Run | GPCs (SMs) | Slowest unit (GB/s) → that GPC's rate | Fastest unit | Estimated total while all run | Σ min(cap, demand) | Same SM count spread |
 |---|---|---|---|---|---|---|
@@ -588,6 +602,11 @@ Only if E-1 confirms G1.
   - the GPC switch admits a read request onto the crossbar only while the bytes it has
     outstanding stay below a credit budget B_cr;
   - B_cr ≈ C × the unloaded round trip, ≈ 1.28 TB/s × ≈ 0.37 µs ≈ 470 KB per GPC;
+    **[corr. 2026-11-21]** too small: the working in-flight cap measured on the H200 is 3 x 32 KB per SM =
+    1.5 MB per GPC (≈ C × 1.2 µs), which costs the aggressor 0.5% and restores bystanders to 0.86/0.92x
+    (`h200-bystander.md` §0, §7). Headline numbers there: same delivered 1.27-1.28 TB/s, bystanders 168 GB/s
+    at depth 3 vs 88 at depth 6; a DRAM-free aggressor still cuts them to 89 GB/s (0.45x); a shared-buffer
+    aggressor at 2.30 TB/s leaves them at 0.99x;
   - excess requests wait **inside the GPC** (in the SMs' own queues), not at the shared
     slices.
 - **Hardware:** a byte counter and a comparator per GPC port (charge at issue, refund on

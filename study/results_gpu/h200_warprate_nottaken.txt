@@ -1,0 +1,204 @@
+# Cost of not-taken / taken conditional branches, one warp alone on an idle SM (H200, atl1-1-02-014-16-0.pace.gatech.edu, job 15985032)
+# Source: gpu/warprate_nt_gen.py (generates warprate_nt.cu; built in /tmp/$USER/wnt). 1 CTA x 32 threads on SM 0 (TPC mask bit 0),
+# clock64 around a 20000-iteration loop, 1 warm-up + 5 reps (median/min/max identical to 0.01 cycle), clock = 1.980 GHz from %globaltimer in every run.
+# Body: 128 integer ops on 8 independent chains (add/xor alternating, = warprate int_ind8).
+
+## Raw runs
+kernel=base pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=144.01 min=144.01 max=144.02 ghz_from_globaltimer=1.980
+kernel=nt1 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=1597.01 min=1597.01 max=1597.02 ghz_from_globaltimer=1.980
+kernel=nt2 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=920.01 min=920.01 max=920.01 ghz_from_globaltimer=1.980
+kernel=nt4 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=511.01 min=511.01 max=511.01 ghz_from_globaltimer=1.980
+kernel=nt16 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=275.01 min=275.01 max=275.01 ghz_from_globaltimer=1.980
+kernel=ft1 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=1597.01 min=1597.01 max=1597.01 ghz_from_globaltimer=1.980
+kernel=ft4 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=511.01 min=511.01 max=511.01 ghz_from_globaltimer=1.980
+kernel=ft16 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=275.01 min=275.01 max=275.01 ghz_from_globaltimer=1.980
+kernel=bt4 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=939.01 min=939.01 max=939.01 ghz_from_globaltimer=1.980
+kernel=bt16 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=300.01 min=300.01 max=300.01 ghz_from_globaltimer=1.980
+kernel=pat pattern=never iters=20000 reps=5 smid=0 cyc_per_iter_med=857.01 min=857.01 max=857.01 ghz_from_globaltimer=1.980
+kernel=pat pattern=always iters=20000 reps=5 smid=0 cyc_per_iter_med=1896.01 min=1896.01 max=1896.01 ghz_from_globaltimer=1.980
+kernel=pat pattern=alternate iters=20000 reps=5 smid=0 cyc_per_iter_med=1369.01 min=1369.01 max=1369.01 ghz_from_globaltimer=1.980
+kernel=pat pattern=lfsr iters=20000 reps=5 smid=0 cyc_per_iter_med=1373.24 min=1373.24 max=1373.24 ghz_from_globaltimer=1.980
+kernel=pat_nobr pattern=never iters=20000 reps=5 smid=0 cyc_per_iter_med=463.01 min=463.01 max=463.01 ghz_from_globaltimer=1.980
+kernel=pat_nobr pattern=always iters=20000 reps=5 smid=0 cyc_per_iter_med=462.01 min=462.01 max=462.01 ghz_from_globaltimer=1.980
+kernel=pat_nobr pattern=alternate iters=20000 reps=5 smid=0 cyc_per_iter_med=462.01 min=462.01 max=462.01 ghz_from_globaltimer=1.980
+kernel=pat_nobr pattern=lfsr iters=20000 reps=5 smid=0 cyc_per_iter_med=462.51 min=462.51 max=462.51 ghz_from_globaltimer=1.980
+kernel=base pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=144.01 min=144.01 max=144.02 ghz_from_globaltimer=1.980
+kernel=nt1 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=1597.01 min=1597.01 max=1597.02 ghz_from_globaltimer=1.980
+kernel=nt2 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=920.01 min=920.01 max=920.01 ghz_from_globaltimer=1.980
+kernel=nt4 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=511.01 min=511.01 max=511.01 ghz_from_globaltimer=1.980
+kernel=nt16 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=275.01 min=275.01 max=275.01 ghz_from_globaltimer=1.980
+kernel=ft1 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=1597.01 min=1597.01 max=1597.01 ghz_from_globaltimer=1.980
+kernel=ft4 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=511.01 min=511.01 max=511.01 ghz_from_globaltimer=1.980
+kernel=ft16 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=275.01 min=275.01 max=275.01 ghz_from_globaltimer=1.980
+kernel=bt4 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=939.01 min=939.01 max=939.01 ghz_from_globaltimer=1.980
+kernel=bt16 pattern=- iters=20000 reps=5 smid=0 cyc_per_iter_med=300.01 min=300.01 max=300.01 ghz_from_globaltimer=1.980
+kernel=lt4 pattern=trip1 iters=20000 reps=5 smid=0 cyc_per_iter_med=987.01 min=987.01 max=987.01 ghz_from_globaltimer=1.980
+kernel=lt4 pattern=trip2 iters=20000 reps=5 smid=0 cyc_per_iter_med=1931.01 min=1931.01 max=1931.01 ghz_from_globaltimer=1.980
+kernel=lt4 pattern=trip4 iters=20000 reps=5 smid=0 cyc_per_iter_med=3819.01 min=3819.01 max=3819.01 ghz_from_globaltimer=1.980
+kernel=lt4 pattern=trip8 iters=20000 reps=5 smid=0 cyc_per_iter_med=7595.01 min=7595.01 max=7595.01 ghz_from_globaltimer=1.980
+kernel=lt16 pattern=trip1 iters=20000 reps=5 smid=0 cyc_per_iter_med=315.01 min=315.01 max=315.01 ghz_from_globaltimer=1.980
+kernel=lt16 pattern=trip2 iters=20000 reps=5 smid=0 cyc_per_iter_med=579.01 min=579.01 max=579.01 ghz_from_globaltimer=1.980
+kernel=lt16 pattern=trip4 iters=20000 reps=5 smid=0 cyc_per_iter_med=1107.01 min=1107.01 max=1107.01 ghz_from_globaltimer=1.980
+kernel=lt16 pattern=trip8 iters=20000 reps=5 smid=0 cyc_per_iter_med=2163.01 min=2163.01 max=2163.01 ghz_from_globaltimer=1.980
+kernel=pat pattern=never iters=20000 reps=5 smid=0 cyc_per_iter_med=857.01 min=857.01 max=857.01 ghz_from_globaltimer=1.980
+kernel=pat pattern=always iters=20000 reps=5 smid=0 cyc_per_iter_med=1896.01 min=1896.01 max=1896.01 ghz_from_globaltimer=1.980
+kernel=pat pattern=alternate iters=20000 reps=5 smid=0 cyc_per_iter_med=1369.01 min=1369.01 max=1369.01 ghz_from_globaltimer=1.980
+kernel=pat pattern=lfsr iters=20000 reps=5 smid=0 cyc_per_iter_med=1373.24 min=1373.24 max=1373.24 ghz_from_globaltimer=1.980
+kernel=pat_nobr pattern=never iters=20000 reps=5 smid=0 cyc_per_iter_med=463.01 min=463.01 max=463.01 ghz_from_globaltimer=1.980
+kernel=pat_nobr pattern=always iters=20000 reps=5 smid=0 cyc_per_iter_med=462.01 min=462.01 max=462.01 ghz_from_globaltimer=1.980
+kernel=pat_nobr pattern=alternate iters=20000 reps=5 smid=0 cyc_per_iter_med=462.01 min=462.01 max=462.01 ghz_from_globaltimer=1.980
+kernel=pat_nobr pattern=lfsr iters=20000 reps=5 smid=0 cyc_per_iter_med=462.51 min=462.51 max=462.51 ghz_from_globaltimer=1.980
+
+## SASS of the timed loops (cuobjdump; executed counts per outer iteration)
+--- nt4: one branch group inside the timed loop
+  /*0520*/ LOP3.LUT R14, R14, UR5, RZ, 0x3c, !PT
+  /*0530*/ LOP3.LUT R12, R12, UR5, RZ, 0x3c, !PT
+  /*0540*/ LOP3.LUT R8, R8, UR5, RZ, 0x3c, !PT
+  /*0550*/ LOP3.LUT R18, R18, UR5, RZ, 0x3c, !PT
+  /*0560*/ @!P1 BRA 0x5c0
+  /*0570*/ BSSY B0, 0x5c0
+  /*0580*/ VIADD R17, R17, UR5
+  /*0590*/ ISETP.NE.U32.AND P2, PT, R17, RZ, PT
+  /*05a0*/ @P2 BRA 0x580
+  /*05b0*/ BSYNC B0
+  /*05c0*/ @!P1 BRA 0x620
+  /*05d0*/ BSSY B0, 0x620
+  /*05e0*/ VIADD R17, R17, UR5
+  ... branch target 0x580:
+  /*0580*/ VIADD R17, R17, UR5
+  /*0590*/ ISETP.NE.U32.AND P2, PT, R17, RZ, PT
+  /*05a0*/ @P2 BRA 0x580
+  /*05b0*/ BSYNC B0
+  /*05c0*/ @!P1 BRA 0x620
+--- ft4: one branch group inside the timed loop
+  /*0520*/ LOP3.LUT R14, R14, UR5, RZ, 0x3c, !PT
+  /*0530*/ LOP3.LUT R12, R12, UR5, RZ, 0x3c, !PT
+  /*0540*/ LOP3.LUT R8, R8, UR5, RZ, 0x3c, !PT
+  /*0550*/ LOP3.LUT R18, R18, UR5, RZ, 0x3c, !PT
+  /*0560*/ @P1 BRA 0x5c0
+  /*0570*/ BSSY B0, 0x5c0
+  /*0580*/ VIADD R17, R17, UR5
+  /*0590*/ ISETP.NE.U32.AND P2, PT, R17, RZ, PT
+  /*05a0*/ @P2 BRA 0x580
+  /*05b0*/ BSYNC B0
+  /*05c0*/ @P1 BRA 0x620
+  /*05d0*/ BSSY B0, 0x620
+  /*05e0*/ VIADD R17, R17, UR5
+  ... branch target 0x580:
+  /*0580*/ VIADD R17, R17, UR5
+  /*0590*/ ISETP.NE.U32.AND P2, PT, R17, RZ, PT
+  /*05a0*/ @P2 BRA 0x580
+  /*05b0*/ BSYNC B0
+  /*05c0*/ @P1 BRA 0x620
+--- nt1: one branch group inside the timed loop
+  /*0580*/ VIADD R15, R15, UR5
+  /*0590*/ ISETP.NE.U32.AND P2, PT, R15, RZ, PT
+  /*05a0*/ @P2 BRA 0x580
+  /*05b0*/ BSYNC B0
+  /*05c0*/ @!P1 BRA 0x620
+  /*05d0*/ BSSY B0, 0x620
+  /*05e0*/ VIADD R15, R15, UR5
+  /*05f0*/ ISETP.NE.U32.AND P2, PT, R15, RZ, PT
+  /*0600*/ @P2 BRA 0x5e0
+  /*0610*/ BSYNC B0
+  /*0620*/ @!P1 BRA 0x680
+  /*0630*/ BSSY B0, 0x680
+  /*0640*/ VIADD R15, R15, UR5
+  ... branch target 0x5e0:
+  /*05e0*/ VIADD R15, R15, UR5
+  /*05f0*/ ISETP.NE.U32.AND P2, PT, R15, RZ, PT
+  /*0600*/ @P2 BRA 0x5e0
+  /*0610*/ BSYNC B0
+  /*0620*/ @!P1 BRA 0x680
+--- bt4: inner loop (backward-taken back-edge)
+  /*02e0*/ @!P0 STG.E.64 desc[UR4][R6.64+0x8], R10
+  /*02f0*/ @!P0 STG.E.64 desc[UR4][R6.64+0x10], R2
+  /*0300*/ @!P0 STG.E.64 desc[UR4][R6.64+0x18], R8
+  /*0310*/ @!P0 STG.E desc[UR4][R6.64+0x20], R19
+  /*0320*/ @P1 EXIT
+  /*0330*/ LDC.64 R2, c[0x0][0x228]
+  /*0340*/ STG.E desc[UR4][R2.64], R0
+  /*0350*/ EXIT
+  /*0360*/ BRA 0x360
+  /*0370*/ NOP
+--- pat: pattern loop: LFSR step, then the data-dependent branch
+  /*0370*/ @P5 BRA 0x350
+  /*0380*/ BSYNC B0
+  /*0390*/ LOP3.LUT P5, R15, R19, 0x1, RZ, 0xc0, !PT
+  /*03a0*/ IMAD.IADD R18, R10, 0x1, R17
+  /*03b0*/ SHF.R.U32.HI R19, RZ, 0x1, R19
+  /*03c0*/ IMAD.MOV R15, RZ, RZ, -R15
+  /*03d0*/ LOP3.LUT R15, R19, R15, R14, 0x78, !PT
+  /*03e0*/ @!P4 BRA 0x440
+  /*03f0*/ BSSY B0, 0x440
+  /*0400*/ VIADD R18, R18, UR5
+  /*0410*/ ISETP.EQ.U32.AND P4, PT, R18, R17, PT
+  /*0420*/ @P4 BRA 0x400
+  /*0430*/ BSYNC B0
+  /*0440*/ LOP3.LUT P4, R10, R15, 0x1, RZ, 0xc0, !PT
+  ... branch target 0x400 (executes once when taken):
+  /*0400*/ VIADD R18, R18, UR5
+  /*0410*/ ISETP.EQ.U32.AND P4, PT, R18, R17, PT
+  /*0420*/ @P4 BRA 0x400
+  /*0430*/ BSYNC B0
+  /*0440*/ LOP3.LUT P4, R10, R15, 0x1, RZ, 0xc0, !PT
+  /*0450*/ SHF.R.U32.HI R15, RZ, 0x1, R15
+--- lt4: one group (runtime trip count T in R6; counter in UR4)
+  /*0190*/ UMOV UR4, URZ
+  /*01a0*/ ULDC UR7, c[0x0][0x214]
+  /*01b0*/ LDC R6, c[0x0][0x218]
+  /*01c0*/ ISETP.LE.AND P0, PT, R7, UR5, PT
+  /*01d0*/ UIADD3 UR4, UR4, 0x1, URZ
+  /*01e0*/ VIADD R0, R0, UR7
+  /*01f0*/ VIADD R13, R13, UR7
+  /*0200*/ VIADD R12, R12, UR7
+  /*0210*/ ISETP.GT.U32.AND P1, PT, R6, UR4, PT
+  /*0220*/ VIADD R14, R14, UR7
+  /*0230*/ @P1 BRA 0x1d0
+  /*0240*/ UMOV UR4, URZ
+
+## Reading (cycles at 1.98 GHz; executed SASS per outer iteration in brackets)
+
+1. "Never-taken branch every N" as written in PTX does NOT give a not-taken branch in SASS. ptxas moves the
+   out-of-line target block inline and inverts the predicate: `@!P1 BRA skip; BSSY; <loop>; BSYNC; skip:`. The
+   branch is then taken every time, and nt1/nt2/nt4/nt16 compile to the same code as the always-taken forward
+   variants ft1/ft4/ft16 (predicate inverted only). Their times are identical: these rows measure a TAKEN forward
+   branch.
+   | variant | cyc/iter | executed SASS | cyc/instr | cyc per branch over base |
+   |---|---|---|---|---|
+   | base, no branch | 144.0 | 128 ALU + 3 loop = 131 | 1.10 | - |
+   | taken fwd every 1 (ft1 = "nt1") | 1597.0 | 128 + 128 BRA + 3 = 259 | 6.17 | (1597-144)/128 = 11.4 |
+   | every 2 ("nt2") | 920.0 | 128 + 64 + 3 = 195 | 4.72 | 12.1 |
+   | every 4 (ft4 = "nt4") | 511.0 | 128 + 32 + 3 = 163 | 3.13 | 11.5 |
+   | every 16 (ft16 = "nt16") | 275.0 | 128 + 8 + 3 = 139 | 1.98 | 16.4 |
+   (the taken branch skips its BSSY/BSYNC, so only the BRA executes; consistent with the earlier
+   br_every1/4/16 = 11.2 cycles per branch / 3.88 / 2.13 cycles per instruction)
+
+2. A real not-taken branch: loops with a run-time trip count T (lt4: 4 ALU per inner iteration, lt16: 16 ALU).
+   Each inner iteration = N ALU + UIADD3 (uniform counter) + ISETP + BRA backward. The back-edge is taken T-1
+   times and NOT taken once per entry; entry adds one UMOV. Per group:
+   | kernel | T=1 | T=2 | T=4 | T=8 | slope (cycles per taken iteration) | T=1 minus slope (= not-taken minus taken, + UMOV) |
+   |---|---|---|---|---|---|---|
+   | lt4 (32 groups/iter) | 30.8 | 60.3 | 119.3 | 237.3 | 29.5 (exactly linear) | 1.3 |
+   | lt16 (8 groups/iter) | 39.4 | 72.4 | 138.4 | 270.4 | 33.0 (exactly linear) | 6.4 |
+   - A not-taken back-edge iteration costs the same as a taken one within 1-6 cycles. There is no large
+     not-taken discount and no taken penalty beyond it.
+   - These loops are latency-bound, not issue-bound. 12 more ALU ops per iteration (lt4 -> lt16) add only
+     3.5 cycles: about 26-29 cycles per iteration are the counter -> ISETP -> BRA dependence plus branch
+     resolution. That is not a pure per-branch issue cost.
+
+3. History dependence (kernel pat): every 4 ALU ops a Galois-LFSR step (4 SASS: LOP3 with predicate out, SHF,
+   IMAD.MOV, LOP3) sets P from the low bit, then `@!P BRA skip` over an inlined block (BSSY, VIADD, ISETP,
+   @P BRA [not taken], BSYNC). Same code for every pattern; the pattern only changes the data:
+   | pattern | cyc/iter (32 branches) | per branch vs pat_nobr (462-463) |
+   |---|---|---|
+   | P never true -> BRA taken every time (block skipped) | 857.0 | 12.3 |
+   | P always true -> BRA not taken, block runs | 1896.0 | 44.8 (includes the block: 2 ALU + a second not-taken BRA + BSSY/BSYNC) |
+   | alternate | 1369.0 | mean of the two = 1376.5 (-0.5%) |
+   | LFSR pseudo-random (~50%) | 1373.2 | -0.3% from the mean |
+   - The cost is a linear mix of the two outcomes; alternating and random sequences cost the same.
+     **No sign of a branch predictor or of any history effect.**
+   - pat_nobr = the same LFSR work with P consumed by SELP+IADD instead of a branch: 462-463 for all patterns.
+
+Not done: a not-taken forward branch with an empty fall-through (ptxas always inverts or if-converts it);
+backward-taken in isolation beyond the loop form above.

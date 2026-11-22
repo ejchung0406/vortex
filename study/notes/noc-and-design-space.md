@@ -454,7 +454,7 @@ placement changes a cap. Per mechanism (numbering as in Part 2):
 | 1a remote engine writes into borrower's LMEM | **Yes, decisively.** It needs an SM-to-SM path. Its bandwidth, and **whether it shares the borrower's ingress with L2 responses**, set the gain. On NVIDIA the path exists only inside a GPC (cluster ≤ 8/16). | group membership; SM-to-SM path width; an ingress knob (shared / separate) |
 | 1b lender prefetches into L2, borrower pulls | Little: data comes back over the borrower's normal port. Near/far L2 partition latency changes the in-flight need. | L2 hit latency; optionally near/far |
 | 1c/2 cluster pool of engines/MSHRs/ports | Yes. The pool sits at a group level, so the group uplink width is the cap. ~~(H100 GPC ≈ 8 SMs' worth)~~ **[corr. 2026-11-21]** H200 GPC ≈ 1.28 TB/s ≈ 6 SMs at 210 GB/s (measured, DRAM) | group uplink bandwidth cap |
-| 3 priority/ports for designated SMs | Priority only matters under contention. In our scenario the compute job uses 1.7% of the memory, so the network is not contended and priority gains ~0. Extra ports matter only if the SM port is the cap. | per-SM port count/width (exists) |
+| 3 priority/ports for designated SMs | Priority only matters under contention. In our scenario the compute job uses 1.7% of the memory, so the network is not contended and priority gains ~0 (**[corr. 2026-11-21]** 1.7% counted weights only; the DiT moves 1.16-1.36 TB/s, 25-29% of the roof, `h200-go-nogo.md` §3). Extra ports matter only if the SM port is the cap. | per-SM port count/width (exists) |
 | 4 relay through a neighbour's L1/LMEM | As 1a, plus the lender's own port. | as 1a |
 | 5 L2/memory-side push | Needs a delivery path from L2 to the SM's LMEM. The per-SM ingress is the cap. | ingress knob |
 | 6 co-residency / scheduling | No: each SM uses its own port. | nothing new |
@@ -598,7 +598,7 @@ tag growth, Fmax, and the size of the `gpu` beacon/synthesis runs.
 - 1.98 GHz, so 101 GB/s = **51 B/clock** and 107 GB/s = 54 B/clock.
 - Real H200: 4.8 TB/s over 132 SMs = 36 GB/s fair share per SM.
 - `h200s`: 800 GB/s = 404 B/clock peak; streaming reaches 714–734 GB/s.
-- The compute job uses ~1.7% of the memory, which is ~14 GB/s on `h200s`.
+- The compute job uses ~1.7% of the memory, which is ~14 GB/s on `h200s`. **[corr. 2026-11-21]** That counted weights only: the DiT moves 178-209 GB per forward = 1.16-1.36 TB/s, 25-29% of the roof (`h200-go-nogo.md` §3).
   So the memory job can have about **P ≈ 716 GB/s**.
 
 ### Real H200 (measured by us; the causes are inferred)
@@ -918,7 +918,7 @@ latency (+L_g) for every SM. That costs the compute job's misses a few cycles.
 - (3c) A bypass from memory partitions to an SM, as a dedicated return path.
 
 **Limit removed.** 3a removes contention, which is not our limit: the compute job uses
-1.7% of the memory. 3b/3c remove the per-SM port/ingress, if that is the limit.
+1.7% of the memory (**[corr. 2026-11-21]** weights only; measured 25-29% of the roof, `h200-go-nogo.md` §3). 3b/3c remove the per-SM port/ingress, if that is the limit.
 
 **Hardware.** 3a: arbiter weights. 3b: per-SM extra ports (Vortex: the DXA on all 4
 socket ports, the existing SimX knob). 3c: new wires.

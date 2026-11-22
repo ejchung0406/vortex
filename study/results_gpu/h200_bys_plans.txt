@@ -1,0 +1,746 @@
+S name=ncu_by trials=1 dur=300 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=ncu_agg trials=1 dur=300 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=ncu_by_agg trials=1 dur=300 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=ncu_by_aggp95 trials=1 dur=300 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=76
+S name=ncu_by_aggL2 trials=1 dur=300 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 mb=0.25
+S name=q1_by_tma trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q1_by_agg_tma trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q1_by_ld trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32
+S name=q1_by_agg_ld trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q1_by_fma16 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=fma sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=fma warps=32
+S name=q1_fma16 trials=5 dur=1000 bin=1000
+G name=fma sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=fma warps=32
+S name=q1_agg trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q1_by_fmaall trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=fma sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117,1,3,5,7,9,11,15,17,19,21,23,25,27,31,32,33,34,35,36,37,38,39,40,41,42,43,46,47,48,49,50,51,52,53,54,55,56,57,58,59,62,63,64,65,66,67,68,69,70,71,72,73,76,77,78,79,80,81,82,83,84,85,86,87,90,91,92,93,94,95,96,97,98,99,100,101,104,105,106,107,108,109,110,111,112,113,114,115,118,119,120,121,122,123,124,125,126,127,128,129,130,131 mode=fma warps=32
+S name=q1_by_agg_fmaoth trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+G name=fma sms=1,3,5,7,9,11,15,17,19,21,23,25,27,31,32,33,34,35,36,37,38,39,40,41,42,43,46,47,48,49,50,51,52,53,54,55,56,57,58,59,62,63,64,65,66,67,68,69,70,71,72,73,76,77,78,79,80,81,82,83,84,85,86,87,90,91,92,93,94,95,96,97,98,99,100,101,104,105,106,107,108,109,110,111,112,113,114,115,118,119,120,121,122,123,124,125,126,127,128,129,130,131 mode=fma warps=32
+S name=q1_by_agg_duty100 trials=5 dur=1000 bin=50
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 duty=100/1000
+S name=q1_by_agg_duty100_ld trials=5 dur=1000 bin=50
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 duty=100/1000
+S name=q1_by_agg_duty250 trials=5 dur=1000 bin=50
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 duty=250/1000
+S name=q1_by_agg_duty250_ld trials=5 dur=1000 bin=50
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 duty=250/1000
+S name=q1_by_agg_duty500 trials=5 dur=1000 bin=50
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 duty=500/1000
+S name=q1_by_agg_duty500_ld trials=5 dur=1000 bin=50
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 duty=500/1000
+S name=q2_by trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q2_n1 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12 mode=tma depth=6 tile=32
+S name=q2_n2 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13 mode=tma depth=6 tile=32
+S name=q2_n3 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28 mode=tma depth=6 tile=32
+S name=q2_n4 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29 mode=tma depth=6 tile=32
+S name=q2_n5 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44 mode=tma depth=6 tile=32
+S name=q2_n6 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45 mode=tma depth=6 tile=32
+S name=q2_n7 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60 mode=tma depth=6 tile=32
+S name=q2_n8 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32
+S name=q2_n10 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75 mode=tma depth=6 tile=32
+S name=q2_n12 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89 mode=tma depth=6 tile=32
+S name=q2_n14 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103 mode=tma depth=6 tile=32
+S name=q2_n16 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q2_aggonly_n4 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29 mode=tma depth=6 tile=32
+S name=q2_aggonly_n6 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45 mode=tma depth=6 tile=32
+S name=q2_aggonly_n7 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60 mode=tma depth=6 tile=32
+S name=q2_aggonly_n8 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32
+S name=q2_aggonly_n12 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89 mode=tma depth=6 tile=32
+S name=q2_aggonly_n16 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q2_d1 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma tile=32 depth=1
+S name=q2_aggonly_d1 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma tile=32 depth=1
+S name=q2_d2 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma tile=32 depth=2
+S name=q2_aggonly_d2 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma tile=32 depth=2
+S name=q2_d3 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma tile=32 depth=3
+S name=q2_aggonly_d3 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma tile=32 depth=3
+S name=q2_d4 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma tile=32 depth=4
+S name=q2_aggonly_d4 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma tile=32 depth=4
+S name=q2_d6 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma tile=32 depth=6
+S name=q2_aggonly_d6 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma tile=32 depth=6
+S name=q2_p25 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=20.00
+S name=q2_p50 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=40.00
+S name=q2_p75 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=60.00
+S name=q2_p85 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=68.00
+S name=q2_p90 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=72.00
+S name=q2_p95 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=76.00
+S name=q2_p100 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=80.00
+S name=q2_p105 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=84.00
+S name=q2_p110 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=88.00
+S name=q2_p125 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=100.00
+S name=q2_p150 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=120.00
+S name=q2_aggonly_p90 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=72.00
+S name=q2_aggonly_p95 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=76.00
+S name=q2_aggonly_p100 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=80.00
+S name=q2_aggonly_p150 trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=120.00
+S name=q2_n8_p90 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32 pace=144.00
+S name=q2_n8_p95 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32 pace=152.00
+S name=q2_n8_p100 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32 pace=160.00
+S name=q2_sat_g6_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q2_sat_g6 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg6 sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q2_sat_same2_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q2_sat_same2 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg6 sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+G name=agg2 sms=4,5,20,21,36,37,52,53,66,67,80,81,94,95,108,109 mode=tma depth=6 tile=32
+S name=q2_sat_cross2_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q2_sat_cross2 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg6 sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+G name=agg1 sms=2,3,18,19,34,35,50,51,64,65,78,79,92,93,106,107 mode=tma depth=6 tile=32
+S name=q2_sat_same3_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q2_sat_same3 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg6 sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+G name=agg2 sms=4,5,20,21,36,37,52,53,66,67,80,81,94,95,108,109 mode=tma depth=6 tile=32
+G name=agg7 sms=14,15,30,31,46,47,62,63,76,77,90,91,104,105,118,119 mode=tma depth=6 tile=32
+S name=q2_sat_cross3_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=8,24,10,26 mode=tma depth=6 tile=32
+S name=q2_sat_cross3 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=8,24,10,26 mode=tma depth=6 tile=32
+G name=agg6 sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+G name=agg1 sms=2,3,18,19,34,35,50,51,64,65,78,79,92,93,106,107 mode=tma depth=6 tile=32
+G name=agg3 sms=6,7,22,23,38,39,54,55,68,69,82,83,96,97,110,111 mode=tma depth=6 tile=32
+S name=q2_sat_mix3_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,14,30 mode=tma depth=6 tile=32
+G name=byB sms=6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q2_sat_mix3 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,14,30 mode=tma depth=6 tile=32
+G name=byB sms=6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg6 sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+G name=agg2 sms=4,5,20,21,36,37,52,53,66,67,80,81,94,95,108,109 mode=tma depth=6 tile=32
+G name=agg1 sms=2,3,18,19,34,35,50,51,64,65,78,79,92,93,106,107 mode=tma depth=6 tile=32
+S name=q2_sat_bal4_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,14,30 mode=tma depth=6 tile=32
+G name=byB sms=8,24,10,26 mode=tma depth=6 tile=32
+S name=q2_sat_bal4 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,14,30 mode=tma depth=6 tile=32
+G name=byB sms=8,24,10,26 mode=tma depth=6 tile=32
+G name=agg6 sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+G name=agg2 sms=4,5,20,21,36,37,52,53,66,67,80,81,94,95,108,109 mode=tma depth=6 tile=32
+G name=agg1 sms=2,3,18,19,34,35,50,51,64,65,78,79,92,93,106,107 mode=tma depth=6 tile=32
+G name=agg3 sms=6,7,22,23,38,39,54,55,68,69,82,83,96,97,110,111 mode=tma depth=6 tile=32
+S name=q3_aggL2_tma trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 mb=0.25
+S name=q3_aggL2only_tma trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 mb=0.25
+S name=q3_aggL2_ld trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 mb=0.25
+S name=q3_aggL2only_ld trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 mb=0.25
+S name=q3_byL2 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32 mb=0.25
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32 mb=0.25
+S name=q3_byL2_agg trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32 mb=0.25
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32 mb=0.25
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q3_byL2_aggL2 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32 mb=0.25
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32 mb=0.25
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 mb=0.25
+S name=q3_byLDL2 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 mb=0.25
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 mb=0.25
+S name=q3_byLDL2_agg trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 mb=0.25
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 mb=0.25
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q3_aggsh0.25 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=shared mb=0.25
+S name=q3_aggsh0.25only trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=shared mb=0.25
+S name=q3_aggsh4 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=shared mb=4
+S name=q3_aggsh4only trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=shared mb=4
+S name=q3_aggw_st trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=st warps=32
+S name=q3_aggw_stonly trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=st warps=32
+S name=q3_aggw_tmast trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tmast tile=32 depth=4
+S name=q3_aggw_tmastonly trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tmast tile=32 depth=4
+S name=q3_pg_byloc trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 data=home:A
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 data=home:B
+S name=q3_pg_byloc_aggloc trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 data=home:A
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 data=home:B
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=home:B
+S name=q3_pg_byloc_aggrem trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 data=home:A
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 data=home:B
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=home:A
+S name=q3_pg_byloc_aggmix trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 data=home:A
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 data=home:B
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=contig
+S name=q3_pg_byrem trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 data=home:B
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 data=home:A
+S name=q3_pg_byrem_aggloc trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 data=home:B
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 data=home:A
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=home:B
+S name=q3_pg_byrem_aggrem trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 data=home:B
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 data=home:A
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=home:A
+S name=q3_pg_byrem_aggmix trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 data=home:B
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 data=home:A
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=contig
+S name=q3_pg_bymix trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 data=contig
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 data=contig
+S name=q3_pg_bymix_aggloc trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 data=contig
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 data=contig
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=home:B
+S name=q3_pg_bymix_aggrem trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 data=contig
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 data=contig
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=home:A
+S name=q3_pg_bymix_aggmix trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32 data=contig
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32 data=contig
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=contig
+S name=q3_pg_aggloconly trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=home:B
+S name=q3_pg_aggremonly trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=home:A
+S name=q3_pg_aggmixonly trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32 data=contig
+S name=q3_sl_f0_agg0_by0 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=8 mb=0.03125 data=gran:0:151100:0:200:1
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=8 mb=0.03125 data=gran:0:151100:0:200:1
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=8 mb=0.03125 data=gran:0:151100:0:200:0
+S name=q3_sl_f0_by0only trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=8 mb=0.03125 data=gran:0:151100:0:200:1
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=8 mb=0.03125 data=gran:0:151100:0:200:1
+S name=q3_sl_f0_agg0_by1 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=8 mb=0.03125 data=gran:0:151100:1:200:1
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=8 mb=0.03125 data=gran:0:151100:1:200:1
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=8 mb=0.03125 data=gran:0:151100:0:200:0
+S name=q3_sl_f0_by1only trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=8 mb=0.03125 data=gran:0:151100:1:200:1
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=8 mb=0.03125 data=gran:0:151100:1:200:1
+S name=q3_sl_f0_agg0only trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=8 mb=0.03125 data=gran:0:151100:0:200:0
+S name=q3_sl_s0_agg0_by0 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=8 mb=0.03125 data=gran:0:30100:0:200:1
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=8 mb=0.03125 data=gran:0:30100:0:200:1
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=8 mb=0.03125 data=gran:0:30100:0:200:0
+S name=q3_sl_s0_by0only trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=8 mb=0.03125 data=gran:0:30100:0:200:1
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=8 mb=0.03125 data=gran:0:30100:0:200:1
+S name=q3_sl_s0_agg0_by1 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=8 mb=0.03125 data=gran:0:30100:1:200:1
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=8 mb=0.03125 data=gran:0:30100:1:200:1
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=8 mb=0.03125 data=gran:0:30100:0:200:0
+S name=q3_sl_s0_by1only trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=8 mb=0.03125 data=gran:0:30100:1:200:1
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=8 mb=0.03125 data=gran:0:30100:1:200:1
+S name=q3_sl_s0_agg0only trials=5 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=8 mb=0.03125 data=gran:0:30100:0:200:0
+S name=q4_hit_none trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=hit side=A mb=0.25
+G name=probeB sms=2 mode=lat lat=hit side=B mb=0.25
+S name=q4_miss_none trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=miss side=A mb=1024
+G name=probeB sms=2 mode=lat lat=miss side=B mb=1024
+S name=q4_far_none trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=far side=A warm=10
+G name=probeB sms=2 mode=lat lat=far side=B warm=14
+S name=q4_hit_agg trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=hit side=A mb=0.25
+G name=probeB sms=2 mode=lat lat=hit side=B mb=0.25
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q4_miss_agg trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=miss side=A mb=1024
+G name=probeB sms=2 mode=lat lat=miss side=B mb=1024
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q4_far_agg trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=far side=A warm=10
+G name=probeB sms=2 mode=lat lat=far side=B warm=14
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q4_hit_aggL2 trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=hit side=A mb=0.25
+G name=probeB sms=2 mode=lat lat=hit side=B mb=0.25
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 mb=0.25
+S name=q4_miss_aggL2 trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=miss side=A mb=1024
+G name=probeB sms=2 mode=lat lat=miss side=B mb=1024
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 mb=0.25
+S name=q4_far_aggL2 trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=far side=A warm=10
+G name=probeB sms=2 mode=lat lat=far side=B warm=14
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 mb=0.25
+S name=q4_hit_aggp95 trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=hit side=A mb=0.25
+G name=probeB sms=2 mode=lat lat=hit side=B mb=0.25
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=76
+S name=q4_miss_aggp95 trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=miss side=A mb=1024
+G name=probeB sms=2 mode=lat lat=miss side=B mb=1024
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=76
+S name=q4_far_aggp95 trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=far side=A warm=10
+G name=probeB sms=2 mode=lat lat=far side=B warm=14
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=76
+S name=q4_hit_aggp90 trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=hit side=A mb=0.25
+G name=probeB sms=2 mode=lat lat=hit side=B mb=0.25
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=72
+S name=q4_miss_aggp90 trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=miss side=A mb=1024
+G name=probeB sms=2 mode=lat lat=miss side=B mb=1024
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=72
+S name=q4_far_aggp90 trials=5 dur=1000 bin=1000
+G name=probeA sms=0 mode=lat lat=far side=A warm=10
+G name=probeB sms=2 mode=lat lat=far side=B warm=14
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=72
+S name=q5_by_tmad6 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q5_by_tmad6_agg trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q5_by_tmad1 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma tile=32 depth=1
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma tile=32 depth=1
+S name=q5_by_tmad1_agg trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma tile=32 depth=1
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma tile=32 depth=1
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q5_by_ld32 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32
+S name=q5_by_ld32_agg trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q5_by_ld4 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=4
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=4
+S name=q5_by_ld4_agg trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=4
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=4
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q5_by_ld1 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=1
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=1
+S name=q5_by_ld1_agg trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=1
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=1
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q5_rot0_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=4,20,12,28,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q5_rot0 trials=5 dur=1000 bin=1000
+G name=byA sms=4,20,12,28,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=0,1,16,17,32,33,48,49,124,125,126,127,128,129,130,131 mode=tma depth=6 tile=32
+S name=q5_rot1_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,12,28,14,30 mode=tma depth=6 tile=32
+G name=byB sms=6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q5_rot1 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,12,28,14,30 mode=tma depth=6 tile=32
+G name=byB sms=6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=2,3,18,19,34,35,50,51,64,65,78,79,92,93,106,107 mode=tma depth=6 tile=32
+S name=q5_rot2_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,12,28,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q5_rot2 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,12,28,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=4,5,20,21,36,37,52,53,66,67,80,81,94,95,108,109 mode=tma depth=6 tile=32
+S name=q5_rot3_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,12,28,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,8,24,10,26 mode=tma depth=6 tile=32
+S name=q5_rot3 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,12,28,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=6,7,22,23,38,39,54,55,68,69,82,83,96,97,110,111 mode=tma depth=6 tile=32
+S name=q5_rot4_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,12,28,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,10,26 mode=tma depth=6 tile=32
+S name=q5_rot4 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,12,28,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,10,26 mode=tma depth=6 tile=32
+G name=agg sms=8,9,24,25,40,41,56,57,70,71,84,85,98,99,112,113 mode=tma depth=6 tile=32
+S name=q5_rot5_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,12,28,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24 mode=tma depth=6 tile=32
+S name=q5_rot5 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,12,28,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24 mode=tma depth=6 tile=32
+G name=agg sms=10,11,26,27,42,43,58,59,72,73,86,87,100,101,114,115 mode=tma depth=6 tile=32
+S name=q5_rot6_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q5_rot6 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q5_rot7_byonly trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,12,28 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=q5_rot7 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,12,28 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=14,15,30,31,46,47,62,63,76,77,90,91,104,105,118,119 mode=tma depth=6 tile=32
+S name=q6_16in1_p80 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg0 sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=80
+S name=q6_16in1_p80_aggonly trials=5 dur=1000 bin=1000
+G name=agg0 sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32 pace=80
+S name=q6_16in1 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg0 sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q6_16in1_aggonly trials=5 dur=1000 bin=1000
+G name=agg0 sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=q6_8in2_p80 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg0 sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32 pace=80
+G name=agg1 sms=36,37,52,53,66,67,80,81 mode=tma depth=6 tile=32 pace=80
+S name=q6_8in2_p80_aggonly trials=5 dur=1000 bin=1000
+G name=agg0 sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32 pace=80
+G name=agg1 sms=36,37,52,53,66,67,80,81 mode=tma depth=6 tile=32 pace=80
+S name=q6_8in2 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg0 sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32
+G name=agg1 sms=36,37,52,53,66,67,80,81 mode=tma depth=6 tile=32
+S name=q6_8in2_aggonly trials=5 dur=1000 bin=1000
+G name=agg0 sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32
+G name=agg1 sms=36,37,52,53,66,67,80,81 mode=tma depth=6 tile=32
+S name=q6_8in2x_p80 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg0 sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32 pace=80
+G name=agg1 sms=34,35,50,51,64,65,78,79 mode=tma depth=6 tile=32 pace=80
+S name=q6_8in2x_p80_aggonly trials=5 dur=1000 bin=1000
+G name=agg0 sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32 pace=80
+G name=agg1 sms=34,35,50,51,64,65,78,79 mode=tma depth=6 tile=32 pace=80
+S name=q6_8in2x trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg0 sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32
+G name=agg1 sms=34,35,50,51,64,65,78,79 mode=tma depth=6 tile=32
+S name=q6_8in2x_aggonly trials=5 dur=1000 bin=1000
+G name=agg0 sms=12,13,28,29,44,45,60,61 mode=tma depth=6 tile=32
+G name=agg1 sms=34,35,50,51,64,65,78,79 mode=tma depth=6 tile=32
+S name=q6_4in4same_p80 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg0 sms=44,45,60,61 mode=tma depth=6 tile=32 pace=80
+G name=agg1 sms=36,37,52,53 mode=tma depth=6 tile=32 pace=80
+G name=agg2 sms=46,47,62,63 mode=tma depth=6 tile=32 pace=80
+G name=agg3 sms=32,33,48,49 mode=tma depth=6 tile=32 pace=80
+S name=q6_4in4same_p80_aggonly trials=5 dur=1000 bin=1000
+G name=agg0 sms=44,45,60,61 mode=tma depth=6 tile=32 pace=80
+G name=agg1 sms=36,37,52,53 mode=tma depth=6 tile=32 pace=80
+G name=agg2 sms=46,47,62,63 mode=tma depth=6 tile=32 pace=80
+G name=agg3 sms=32,33,48,49 mode=tma depth=6 tile=32 pace=80
+S name=q6_4in4same trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg0 sms=44,45,60,61 mode=tma depth=6 tile=32
+G name=agg1 sms=36,37,52,53 mode=tma depth=6 tile=32
+G name=agg2 sms=46,47,62,63 mode=tma depth=6 tile=32
+G name=agg3 sms=32,33,48,49 mode=tma depth=6 tile=32
+S name=q6_4in4same_aggonly trials=5 dur=1000 bin=1000
+G name=agg0 sms=44,45,60,61 mode=tma depth=6 tile=32
+G name=agg1 sms=36,37,52,53 mode=tma depth=6 tile=32
+G name=agg2 sms=46,47,62,63 mode=tma depth=6 tile=32
+G name=agg3 sms=32,33,48,49 mode=tma depth=6 tile=32
+S name=q6_4in4bal_p80 trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg0 sms=44,45,60,61 mode=tma depth=6 tile=32 pace=80
+G name=agg1 sms=36,37,52,53 mode=tma depth=6 tile=32 pace=80
+G name=agg2 sms=34,35,50,51 mode=tma depth=6 tile=32 pace=80
+G name=agg3 sms=38,39,54,55 mode=tma depth=6 tile=32 pace=80
+S name=q6_4in4bal_p80_aggonly trials=5 dur=1000 bin=1000
+G name=agg0 sms=44,45,60,61 mode=tma depth=6 tile=32 pace=80
+G name=agg1 sms=36,37,52,53 mode=tma depth=6 tile=32 pace=80
+G name=agg2 sms=34,35,50,51 mode=tma depth=6 tile=32 pace=80
+G name=agg3 sms=38,39,54,55 mode=tma depth=6 tile=32 pace=80
+S name=q6_4in4bal trials=5 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg0 sms=44,45,60,61 mode=tma depth=6 tile=32
+G name=agg1 sms=36,37,52,53 mode=tma depth=6 tile=32
+G name=agg2 sms=34,35,50,51 mode=tma depth=6 tile=32
+G name=agg3 sms=38,39,54,55 mode=tma depth=6 tile=32
+S name=q6_4in4bal_aggonly trials=5 dur=1000 bin=1000
+G name=agg0 sms=44,45,60,61 mode=tma depth=6 tile=32
+G name=agg1 sms=36,37,52,53 mode=tma depth=6 tile=32
+G name=agg2 sms=34,35,50,51 mode=tma depth=6 tile=32
+G name=agg3 sms=38,39,54,55 mode=tma depth=6 tile=32
+S name=q7_lane trials=5 dur=1000 bin=1000
+G name=lane sms=0,16,2,18,4,20,6,22,8,24,10,26,12,28,14,30 mode=ld warps=32
+S name=q7_k1_packed_only trials=5 dur=1000 bin=1000
+G name=tenant sms=13,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121 mode=tma depth=6 tile=32 mb=32
+S name=q7_k1_packed trials=5 dur=1000 bin=1000
+G name=lane sms=0,16,2,18,4,20,6,22,8,24,10,26,12,28,14,30 mode=ld warps=32
+G name=tenant sms=13,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121 mode=tma depth=6 tile=32 mb=32
+S name=q7_k1_spread_only trials=5 dur=1000 bin=1000
+G name=tenant sms=1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31 mode=tma depth=6 tile=32 mb=32
+S name=q7_k1_spread trials=5 dur=1000 bin=1000
+G name=lane sms=0,16,2,18,4,20,6,22,8,24,10,26,12,28,14,30 mode=ld warps=32
+G name=tenant sms=1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31 mode=tma depth=6 tile=32 mb=32
+S name=q7_k2_packed_only trials=5 dur=1000 bin=1000
+G name=tenant sms=13,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121,5,21,36,37,52,53,66,67,80,81,94,95,108,109 mode=tma depth=6 tile=32 mb=32
+S name=q7_k2_packed trials=5 dur=1000 bin=1000
+G name=lane sms=0,16,2,18,4,20,6,22,8,24,10,26,12,28,14,30 mode=ld warps=32
+G name=tenant sms=13,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121,5,21,36,37,52,53,66,67,80,81,94,95,108,109 mode=tma depth=6 tile=32 mb=32
+S name=q7_k2_spread_only trials=5 dur=1000 bin=1000
+G name=tenant sms=1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,32,34,36,38,40,42,44,46,33,35,37,39,41,43 mode=tma depth=6 tile=32 mb=32
+S name=q7_k2_spread trials=5 dur=1000 bin=1000
+G name=lane sms=0,16,2,18,4,20,6,22,8,24,10,26,12,28,14,30 mode=ld warps=32
+G name=tenant sms=1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,32,34,36,38,40,42,44,46,33,35,37,39,41,43 mode=tma depth=6 tile=32 mb=32
+S name=q7_k4half_packed_only trials=5 dur=1000 bin=1000
+G name=tenant sms=13,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121,5,21,36,37,52,53,66,67,80,81,94,95,108,109,15,31,46,47,62,63,76,77,90,91,104,105,118,119,122,123,1,17,32,33,48,49,124,125,126,127,128,129,130,131 mode=tma depth=6 tile=32 mb=32
+S name=q7_k4half_packed trials=5 dur=1000 bin=1000
+G name=lane sms=0,16,2,18,4,20,6,22,8,24,10,26,12,28,14,30 mode=ld warps=32
+G name=tenant sms=13,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121,5,21,36,37,52,53,66,67,80,81,94,95,108,109,15,31,46,47,62,63,76,77,90,91,104,105,118,119,122,123,1,17,32,33,48,49,124,125,126,127,128,129,130,131 mode=tma depth=6 tile=32 mb=32
+S name=q7_k4half_spread_only trials=5 dur=1000 bin=1000
+G name=tenant sms=1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,32,34,36,38,40,42,44,46,33,35,37,39,41,43,45,47,48,50,52,54,56,58,60,62,49,51,53,55,57,59,61,63,124,64,66,68,70,72,74,76,125,65,67,69 mode=tma depth=6 tile=32 mb=32
+S name=q7_k4half_spread trials=5 dur=1000 bin=1000
+G name=lane sms=0,16,2,18,4,20,6,22,8,24,10,26,12,28,14,30 mode=ld warps=32
+G name=tenant sms=1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,32,34,36,38,40,42,44,46,33,35,37,39,41,43,45,47,48,50,52,54,56,58,60,62,49,51,53,55,57,59,61,63,124,64,66,68,70,72,74,76,125,65,67,69 mode=tma depth=6 tile=32 mb=32
+S name=q7_k4bal_packed_only trials=5 dur=1000 bin=1000
+G name=tenant sms=13,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121,5,21,36,37,52,53,66,67,80,81,94,95,108,109,3,19,34,35,50,51,64,65,78,79,92,93,106,107,7,23,38,39,54,55,68,69,82,83,96,97,110,111 mode=tma depth=6 tile=32 mb=32
+S name=q7_k4bal_packed trials=5 dur=1000 bin=1000
+G name=lane sms=0,16,2,18,4,20,6,22,8,24,10,26,12,28,14,30 mode=ld warps=32
+G name=tenant sms=13,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121,5,21,36,37,52,53,66,67,80,81,94,95,108,109,3,19,34,35,50,51,64,65,78,79,92,93,106,107,7,23,38,39,54,55,68,69,82,83,96,97,110,111 mode=tma depth=6 tile=32 mb=32
+S name=q7_k4bal_spread_only trials=5 dur=1000 bin=1000
+G name=tenant sms=1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,32,34,36,38,40,42,44,46,33,35,37,39,41,43,45,47,48,50,52,54,56,58,60,62,49,51,53,55,57,59,61,63,124,64,66,68,70,72,74,76,125,65 mode=tma depth=6 tile=32 mb=32
+S name=q7_k4bal_spread trials=5 dur=1000 bin=1000
+G name=lane sms=0,16,2,18,4,20,6,22,8,24,10,26,12,28,14,30 mode=ld warps=32
+G name=tenant sms=1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,32,34,36,38,40,42,44,46,33,35,37,39,41,43,45,47,48,50,52,54,56,58,60,62,49,51,53,55,57,59,61,63,124,64,66,68,70,72,74,76,125,65 mode=tma depth=6 tile=32 mb=32
+S name=san_by_tma trials=3 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+S name=san_by_agg_tma trials=3 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=tma depth=6 tile=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=tma depth=6 tile=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=san_agg_tma trials=3 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=san_by_ld trials=3 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32
+S name=san_by_agg_ld trials=3 dur=1000 bin=1000
+G name=byA sms=0,16,4,20,14,30 mode=ld warps=32
+G name=byB sms=2,18,6,22,8,24,10,26 mode=ld warps=32
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32
+S name=san_agg_ld trials=3 dur=1000 bin=1000
+G name=agg sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=ld warps=32
+S name=san_sideA_homeA trials=3 dur=1000 bin=1000
+G name=sideA sms=0,1,16,17,32,33,48,49,124,125,126,127,128,129,130,131,4,5,20,21,36,37,52,53,66,67,80,81,94,95,108,109,12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121,14,15,30,31,46,47,62,63,76,77,90,91,104,105,118,119,122,123 mode=ld warps=32 mb=16 data=home:A
+S name=san_sideA_homeB trials=3 dur=1000 bin=1000
+G name=sideA sms=0,1,16,17,32,33,48,49,124,125,126,127,128,129,130,131,4,5,20,21,36,37,52,53,66,67,80,81,94,95,108,109,12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121,14,15,30,31,46,47,62,63,76,77,90,91,104,105,118,119,122,123 mode=ld warps=32 mb=16 data=home:B
+S name=san_gpc0_16 trials=3 dur=1000 bin=1000
+G name=gpc0 sms=0,1,16,17,32,33,48,49,124,125,126,127,128,129,130,131 mode=tma depth=6 tile=32
+S name=san_gpc1_16 trials=3 dur=1000 bin=1000
+G name=gpc1 sms=2,3,18,19,34,35,50,51,64,65,78,79,92,93,106,107 mode=tma depth=6 tile=32
+S name=san_gpc2_16 trials=3 dur=1000 bin=1000
+G name=gpc2 sms=4,5,20,21,36,37,52,53,66,67,80,81,94,95,108,109 mode=tma depth=6 tile=32
+S name=san_gpc3_16 trials=3 dur=1000 bin=1000
+G name=gpc3 sms=6,7,22,23,38,39,54,55,68,69,82,83,96,97,110,111 mode=tma depth=6 tile=32
+S name=san_gpc4_16 trials=3 dur=1000 bin=1000
+G name=gpc4 sms=8,9,24,25,40,41,56,57,70,71,84,85,98,99,112,113 mode=tma depth=6 tile=32
+S name=san_gpc5_16 trials=3 dur=1000 bin=1000
+G name=gpc5 sms=10,11,26,27,42,43,58,59,72,73,86,87,100,101,114,115 mode=tma depth=6 tile=32
+S name=san_gpc6_16 trials=3 dur=1000 bin=1000
+G name=gpc6 sms=12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117 mode=tma depth=6 tile=32
+S name=san_gpc7_16 trials=3 dur=1000 bin=1000
+G name=gpc7 sms=14,15,30,31,46,47,62,63,76,77,90,91,104,105,118,119 mode=tma depth=6 tile=32

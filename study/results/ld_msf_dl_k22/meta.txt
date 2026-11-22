@@ -4,3 +4,5 @@ src_dirty=0
 host=atl1-1-02-009-27-1.pace.gatech.edu
 xconf=-DPATH_STATS -DVX_CFG_DCACHE_READ_MERGE_LINE=1 -DVX_CFG_BAR_DRAIN_SCOPE=2 -DSTAGE_LOAD=1 -DLOAD_WARPS=16 -DKSTEPS=2 -DPIPE=6
 blackbox=--driver=simx --app=gemm_tmem_decode --perf=7 --profile=h200s --cores=22 --args=-m16 -n45056 -k4096 -a
+rc=0
+wall_s=5958

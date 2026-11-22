@@ -99,6 +99,9 @@ static void setup() {
 }  // namespace gngm
 // enabled TPC set for every later launch from this host thread; 0 = unmasked
 static inline void gng_mask(u128 enabled) {
+  // install the driver callback only when a mask is first needed, so that unmasked runs can use
+  // CUPTI (which takes the same callback subscriber slot)
+  if (enabled == 0 && !gngm::t_on) return;
   gngm::setup();
   gngm::t_on = enabled != 0;
   gngm::t_disable = ~enabled;

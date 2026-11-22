@@ -1,0 +1,9 @@
+name=pr_tcu-bbuf-geometry_v2_f2kdpi_b16_simx
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_tcu-bbuf-geometry_v2
+src_rev=6e20ef775a62542ad47505b1273e67732f44c55f
+host=atl1-1-02-002-21-1.pace.gatech.edu
+xlen=64
+xconf=-DVX_CFG_NUM_THREADS=32 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_LMEM_NUM_BANKS=16 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1 -DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_TYPE_DPI -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=8 -DWGMMA_RS
+blackbox=--driver=simx --app=sgemm_tcu_wg --perf=7 --args=-m 128 -n 128 -k 128
+rc=0
+wall_s=175

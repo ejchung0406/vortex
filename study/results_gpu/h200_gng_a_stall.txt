@@ -1,0 +1,9 @@
+... Initialize injection ...
+host=atl1-1-02-014-16-0.pace.gatech.edu gpu=NVIDIA H200 sms=132 roles=lane,lender mps_pipe=none pid=3957480
+lane_kernel regs=32 static_smem=1024 local=56 (G=2)
+lane_kernel regs=32 static_smem=1024 local=64 (G=1)
+setup_done host_ns=1795310318294799139 t0=1795310346774960337 margin_ms=28480 gt_offset=-1690159458
+gng mask: callback setup failed
+terminate called without an active exception
+exit=134
+-rw-r--r--. 1 echung67 pace-hkim358 51280 Nov 21 20:18 /tmp/echung67/gng/1_pcs.dat

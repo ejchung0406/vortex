@@ -68,19 +68,23 @@ Software: torch 2.15, transformers and diffusers from git main; Z-Image-Turbo BF
 | weights touched | 12.31 GB | 15.87 GB (17.91 GB minus the 2.03 GB input embedding) |
 | weight traffic | 80 GB/s = 1.7% of 4.8 TB/s | over matmul kernel time: 3.1-3.2 TB/s = 65-68% |
 
+**[corr. 2026-11-21]** The DiT's "1.7%" is weight traffic only, not its memory bandwidth. Measured with ncu (`h200-go-nogo.md` §3, `results_gpu/h200_gng_dit_dram*.csv`): 178-209 GB of DRAM traffic per forward (14-17x the weights) = 1.16-1.36 TB/s over the 153.6 ms forward, 25-29% of the 4.63 TB/s roof. The DiT is not a bandwidth-free lender.
+
 Decode wall-clock in HF transformers is host-bound (about 20 of 27 ms per step is not GPU time); only the kernel-time view shows the GPU.
+
+**[corr. 2026-11-21] Invalid points below.** cuBLAS 13.4 (PyTorch 2.15+cu132) returns NaN or wrong values for BF16 GEMMs under an MPS active-thread percentage (`h200-go-nogo.md` §3). The Qwen decode runs at 80/70/40/20% computed NaN (their output was `!!!!`), so the decode columns 80, 70, 40 and 20 of the table and the co-runs at LLM 20% and 40% (the paragraph "Both at once", including "2300 -> 1741 GB/s") are invalid; do not quote them. The 100/60/10/5% decode runs gave correct output (60% by luck of shapes). The DiT columns under MPS were not checked for correctness (UNV). Re-measured with TPC masks: output correct at 26-132 SMs, kernel times not obtained cleanly (`h200-go-nogo.md` §3).
 
 Share of SMs (MPS active-thread percentage), each alone:
 
 | % of SMs | 100 | 80 | 70 | 60 | 40 | 20 | 10 | 5 |
 |---|---|---|---|---|---|---|---|---|
 | DiT throughput, relative | 1.00 | 1.01 | 0.90 | 0.81 | 0.57 | 0.30 | 0.14 | 0.095 |
-| decode matmul weight traffic, GB/s (batch 1) | 3184 | 3184 | 3216 | 3100 | 2842 | 2300 | 1233 | 831 |
-| decode matmul throughput, relative | 1.00 | 1.00 | 1.01 | 0.97 | 0.89 | 0.72 | 0.39 | 0.26 |
+| decode matmul weight traffic, GB/s (batch 1) | 3184 | ~~3184~~ invalid | ~~3216~~ invalid | 3100 | ~~2842~~ invalid | ~~2300~~ invalid | 1233 | 831 |
+| decode matmul throughput, relative | 1.00 | ~~1.00~~ invalid | ~~1.01~~ invalid | 0.97 | ~~0.89~~ invalid | ~~0.72~~ invalid | 0.39 | 0.26 |
 
-So the image step is compute-bound (proportional to SMs below ~70%) and the decode kernels are bandwidth-bound (72% of full speed on a fifth of the SMs), and with few SMs decode falls to roughly 88-104 GB/s per SM, the per-SM limit. Correction (2026-11-21): MPS percentages do not map linearly to SMs; the streaming sweep under MPS landed on 8, 14, 22, 32, 46, 66, 132 SMs, so "10%" is most likely 14 SMs (1233 / 14 = 88 GB/s per SM) and "5%" 8 SMs (831 / 8 = 104), not 13 and 6-7 as first written. The SM count was not read back in these runs.
+So the image step is compute-bound (proportional to SMs below ~70%) and the decode kernels are bandwidth-bound (~~72% of full speed on a fifth of the SMs~~ **[corr. 2026-11-21]** the 20% point is invalid, see above), and with few SMs decode falls to roughly 88-104 GB/s per SM, the per-SM limit. Correction (2026-11-21): MPS percentages do not map linearly to SMs; the streaming sweep under MPS landed on 8, 14, 22, 32, 46, 66, 132 SMs, so "10%" is most likely 14 SMs (1233 / 14 = 88 GB/s per SM) and "5%" 8 SMs (831 / 8 = 104), not 13 and 6-7 as first written. The SM count was not read back in these runs.
 
-Both at once (MPS, complementary shares; ratio to solo at the same share): DiT 0.93-0.96; decode wall-clock 0.97-0.98, decode GPU kernel time 0.71-0.82 (matmul traffic at an 80/20 split: 2300 -> 1741 GB/s). MPS shares do not pin the two clients to disjoint SMs, so this includes any SM sharing; single 30 s windows per point.
+Both at once (**[corr. 2026-11-21]** the LLM 20% and 40% co-runs computed NaN and are invalid, `h200-go-nogo.md` §3) (MPS, complementary shares; ratio to solo at the same share): DiT 0.93-0.96; decode wall-clock 0.97-0.98, decode GPU kernel time 0.71-0.82 (matmul traffic at an 80/20 split: 2300 -> 1741 GB/s). MPS shares do not pin the two clients to disjoint SMs, so this includes any SM sharing; single 30 s windows per point.
 
 Operator mix (CUDA time): DiT linear/matmul 45%, elementwise 26%, attention 12%; decode linear/matmul 55-68%.
 

@@ -149,27 +149,28 @@ struct KP {
   const uint8_t* home;                // per 4 KB block: 0 = side A, 1 = side B, 2 = unknown
   int* claim; unsigned long long* start; unsigned long long dur_ns;
   unsigned long long* ob; long long* ocyc; unsigned* oerr; int* osm; unsigned long long* ot;
-  unsigned long long* tl; int nbins; unsigned long long bin_ns;
+  unsigned long long* tl; int nbins; unsigned long long bin_ns; float inv_bin;  // inv_bin = 1 / bin_ns
   unsigned* hist; unsigned long long* lsum;   // hist [u][2][NB]; lsum [u][4]: sum0, n0, sum1, n1
 };
 
 __device__ __forceinline__ void tl_add(const KP& p, int u, unsigned long long now, unsigned long long t0, int& cb, unsigned long long& cbytes, unsigned long long add) {
-  int b = (int)((now - t0) / p.bin_ns); if (b >= p.nbins) b = p.nbins - 1;
+  if (!p.tl) return;
+  int b = (int)((float)(uint32_t)(now - t0) * p.inv_bin); if (b >= p.nbins) b = p.nbins - 1;  // no 64-bit divide on the issue path
   if (b != cb) { if (cb >= 0 && cbytes) atomicAdd(&p.tl[(size_t)u * p.nbins + cb], cbytes); cb = b; cbytes = 0; }
   cbytes += add;
 }
 __device__ __forceinline__ void tl_flush(const KP& p, int u, int cb, unsigned long long cbytes) {
-  if (cb >= 0 && cbytes) atomicAdd(&p.tl[(size_t)u * p.nbins + cb], cbytes);
+  if (p.tl && cb >= 0 && cbytes) atomicAdd(&p.tl[(size_t)u * p.nbins + cb], cbytes);
 }
-// wait until issue k is allowed (pacing and duty); returns false if the window ended
-__device__ __forceinline__ bool gate(const GP& g, unsigned long long t0, unsigned long long tend, unsigned long long k) {
-  if (!g.pace_q && !g.per_ns) return gtimer() < tend;
-  for (;;) {
-    const unsigned long long now = gtimer();
+// wait until issue k is allowed (pacing and duty); returns false if the window ended. `now` is a time the
+// caller has just read: unpaced, no extra globaltimer read (a single-thread read costs ~100+ ns on the issue path)
+__device__ __forceinline__ bool gate(const GP& g, unsigned long long t0, unsigned long long tend, unsigned long long k, unsigned long long now) {
+  if (!g.pace_q && !g.per_ns) return now < tend;
+  for (;; now = gtimer()) {
     if (now >= tend) return false;
     bool ok = true;
     if (g.pace_q && now < t0 + k * g.pace_q) ok = false;
-    if (g.per_ns && (now - t0) % g.per_ns >= g.on_ns) ok = false;
+    if (g.per_ns && (uint32_t)(now - t0) % (uint32_t)g.per_ns >= (uint32_t)g.on_ns) ok = false;  // window < 4.29 s
     if (ok) return true;
     __nanosleep(200);
   }
@@ -178,7 +179,9 @@ __device__ __forceinline__ bool gate(const GP& g, unsigned long long t0, unsigne
 __global__ void __launch_bounds__(1024, 1) k_bys(KP p) {
   extern __shared__ __align__(1024) unsigned char smem[];
   __shared__ int s_u; __shared__ unsigned long long s_t0;
-  __shared__ unsigned s_hist[2 * NB];
+  // the latency histogram lives in dynamic smem (lat scenarios request 8 KB): a static 8 KB array in every CTA
+  // made the driver pick a large smem carveout for load scenarios and the small L1 capped 16 B loads
+  unsigned* s_hist = reinterpret_cast<unsigned*>(smem);
   if (threadIdx.x == 0) {
     const int sm = (int)sm_id();
     int u = p.sm2unit[sm];
@@ -201,6 +204,103 @@ __global__ void __launch_bounds__(1024, 1) k_bys(KP p) {
   const unsigned long long base = p.ubase[u], ubytes = p.ubytes[u];
   const uint32_t* L = p.list + p.uloff[u];
 
+  // Fast paths (contiguous data, unpaced, no timeline) = the E-1 kernel's loops (l2s_lab k_tw). The general
+  // loops below cost issue time per tile / iteration (timeline, gate, list arithmetic, local arrays) and
+  // capped one SM at 105 GB/s (TMA) / 115 GB/s (16 B loads) instead of 196 / 219 (2026-11-21, bys_h200).
+  __shared__ uint32_t s_ex[16];
+  if (g.mode == M_TMA && g.contig && !g.pace_q && !g.per_ns && !p.tl) {
+    if (threadIdx.x != 0) return;
+    const uint32_t bars = smem_u32(smem), slots = bars + 1024;
+    const int D = g.depth; const uint32_t tile = (uint32_t)g.tile;
+    for (int q = 0; q < D; ++q) mbar_init(bars + 8 * q, 1);
+    asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
+    const unsigned long long ntiles = ubytes / tile;
+    unsigned long long tix = 0, nb = 0; unsigned e = 0;
+    auto issue = [&](int slot) {
+      const unsigned long long off = base + tix * tile; if (++tix == ntiles) tix = 0;
+      s_ex[slot] = (uint32_t)(off / 4);
+      mbar_arrive_expect_tx(bars + 8 * slot, tile);
+      bulk_g2s(slots + (uint32_t)slot * tile, buf + off, tile, bars + 8 * slot);
+    };
+    while (gtimer() < t0) {}
+    const long long c0 = clk();
+    for (int q = 0; q < D; ++q) issue(q);
+    int sl = 0, inflight = D; uint32_t ph = 0;
+    while (inflight) {
+      mbar_wait(bars + 8 * sl, ph);
+      const unsigned long long now = gtimer();
+      const uint32_t* t = reinterpret_cast<const uint32_t*>(smem + 1024 + (size_t)sl * tile);
+      const uint32_t f = s_ex[sl];
+      e += (t[0] != f) + (t[tile / 4 - 1] != f + tile / 4 - 1);
+      --inflight;
+      if (now <= tend) nb += tile;
+      if (now < tend) { issue(sl); ++inflight; }
+      if (++sl == D) { sl = 0; ph ^= 1; }
+    }
+    p.ob[u] = nb; p.oerr[u] = e; p.ocyc[u] = clk() - c0; p.ot[2 * u] = t0; p.ot[2 * u + 1] = gtimer();
+    return;
+  }
+  if (g.mode == M_LD && g.contig && !g.pace_q && !g.per_ns && !p.tl) {
+    const int W = g.warps;
+    if (warp >= W) return;
+    const uint32_t nch = (uint32_t)(ubytes / 4096);
+    const uint4* B0 = reinterpret_cast<const uint4*>(buf + base);
+    const uint32_t wbase = (uint32_t)(base / 4);
+    uint32_t c = (uint32_t)warp % nch; uint32_t s = 0; unsigned err = 0; unsigned long long nb = 0;
+    while (gtimer() < t0) {}
+    const long long c0 = clk();
+    for (;;) {
+      const uint4* q = B0 + (size_t)c * 256 + lane;
+      uint4 v[8];
+#pragma unroll
+      for (int k = 0; k < 8; ++k) v[k] = __ldcg(q + k * 32);
+      const uint32_t w0 = wbase + c * 1024 + lane * 4;
+      c += W; while (c >= nch) c -= nch;
+#pragma unroll
+      for (int k = 0; k < 8; ++k) { s += v[k].y; err += v[k].x != w0 + k * 128; }
+      const unsigned long long now = gtimer();
+      if (now > tend) break;
+      nb += 4096;
+    }
+    if (s == 0x31415u) p.oerr[MAXSM - 1] = s;
+    if (lane == 0) atomicAdd(&p.ob[u], nb);
+    if (err) atomicAdd(&p.oerr[u], err);
+    if (warp == 0 && lane == 0) { p.ocyc[u] = clk() - c0; p.ot[2 * u] = t0; p.ot[2 * u + 1] = gtimer(); }
+    return;
+  }
+  if (g.mode == M_LD && !g.contig && !g.pace_q && !g.per_ns && !p.tl) {
+    // list fast path (home:/gran: data): the next chunk's block lookups are issued while this chunk's loads fly
+    const int W = g.warps;
+    if (warp >= W) return;
+    const uint32_t nch = (uint32_t)(ubytes / 4096), B = (uint32_t)g.B, per = 4096 / B, bsh = __ffs(B) - 1;
+    uint32_t c = (uint32_t)warp % nch; uint32_t s = 0; unsigned err = 0; unsigned long long nb = 0;
+    const char* a[8];
+    auto fill = [&](uint32_t ch) {
+#pragma unroll
+      for (int k = 0; k < 8; ++k) { const uint32_t o = k * 512 + lane * 16; a[k] = buf + ((uint64_t)__ldg(L + ch * per + (o >> bsh)) << bsh) + (o & (B - 1)); }
+    };
+    fill(c);
+    while (gtimer() < t0) {}
+    const long long c0 = clk();
+    for (;;) {
+      uint4 v[8]; uint32_t ex[8];
+#pragma unroll
+      for (int k = 0; k < 8; ++k) { v[k] = __ldcg(reinterpret_cast<const uint4*>(a[k])); ex[k] = (uint32_t)((a[k] - buf) >> 2); }
+      c += W; while (c >= nch) c -= nch;
+      fill(c);
+#pragma unroll
+      for (int k = 0; k < 8; ++k) { s += v[k].y; err += v[k].x != ex[k]; }
+      const unsigned long long now = gtimer();
+      if (now > tend) break;
+      nb += 4096;
+    }
+    if (s == 0x31415u) p.oerr[MAXSM - 1] = s;
+    if (lane == 0) atomicAdd(&p.ob[u], nb);
+    if (err) atomicAdd(&p.oerr[u], err);
+    if (warp == 0 && lane == 0) { p.ocyc[u] = clk() - c0; p.ot[2 * u] = t0; p.ot[2 * u + 1] = gtimer(); }
+    return;
+  }
+
   if (g.mode == M_TMA) {
     if (threadIdx.x != 0) return;
     const uint32_t bars = smem_u32(smem), slots = bars + 1024;
@@ -209,13 +309,13 @@ __global__ void __launch_bounds__(1024, 1) k_bys(KP p) {
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
     const unsigned long long ntiles = ubytes / tile;
     uint32_t ex0[8], ex1[8];
-    unsigned long long k = 0, nb = 0; unsigned e = 0; int cb = -1; unsigned long long cby = 0;
+    unsigned long long k = 0, nb = 0, tix = 0; unsigned e = 0; int cb = -1; unsigned long long cby = 0;
     while (gtimer() < t0) {}
     const long long c0 = clk();
-    auto issue = [&](int slot) -> bool {
-      if (!gate(g, t0, tend, k)) return false;
+    auto issue = [&](int slot, unsigned long long now) -> bool {
+      if (!gate(g, t0, tend, k, now)) return false;
       const uint32_t b = bars + 8 * slot, dst = slots + (uint32_t)slot * tile;
-      const unsigned long long ti = k % ntiles;
+      const unsigned long long ti = tix; if (++tix == ntiles) tix = 0;  // no 64-bit modulo on the issue path
       mbar_arrive_expect_tx(b, tile);
       if (g.contig) {
         const unsigned long long off = base + ti * tile;
@@ -231,7 +331,7 @@ __global__ void __launch_bounds__(1024, 1) k_bys(KP p) {
     };
     int inflight = 0;
     bool live[8];
-    for (int n = 0; n < D; ++n) { live[n] = issue(n); inflight += live[n]; }
+    { const unsigned long long n0 = gtimer(); for (int n = 0; n < D; ++n) { live[n] = issue(n, n0); inflight += live[n]; } }
     int sl = 0; uint32_t ph = 0;
     while (inflight) {
       if (live[sl]) {
@@ -242,7 +342,7 @@ __global__ void __launch_bounds__(1024, 1) k_bys(KP p) {
         e += (t[0] != ex0[sl]) + (t[tile / 4 - 1] != ex1[sl]);
         --inflight;
         if (now <= tend) { nb += tile; tl_add(p, u, now, t0, cb, cby, tile); }
-        live[sl] = issue(sl);
+        live[sl] = issue(sl, now);
         inflight += live[sl];
       }
       if (++sl == D) { sl = 0; ph ^= 1; }
@@ -258,17 +358,19 @@ __global__ void __launch_bounds__(1024, 1) k_bys(KP p) {
     for (uint32_t i = 0; i < tile / 4; ++i) reinterpret_cast<uint32_t*>(smem + 1024)[i] = i;
     asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
     const unsigned long long ntiles = ubytes / tile;
-    unsigned long long k = 0, done = 0, nb = 0; int cb = -1; unsigned long long cby = 0;
+    unsigned long long k = 0, done = 0, nb = 0, tix = 0; int cb = -1; unsigned long long cby = 0;
     while (gtimer() < t0) {}
     const long long c0 = clk();
+    unsigned long long tnow = gtimer();
     for (;;) {
-      if (!gate(g, t0, tend, k)) break;
-      bulk_s2g(buf + base + (k % ntiles) * tile, src, tile); ++k;
+      if (!gate(g, t0, tend, k, tnow)) break;
+      bulk_s2g(buf + base + tix * tile, src, tile); ++k; if (++tix == ntiles) tix = 0;
       bulk_wait(D - 1);
       const unsigned long long now = gtimer();
       const unsigned long long c = k >= (unsigned long long)(D - 1) ? k - (D - 1) : 0;
       if (now <= tend && c > done) { nb += (c - done) * tile; tl_add(p, u, now, t0, cb, cby, (c - done) * tile); }
       done = c > done ? c : done;
+      tnow = now;
     }
     bulk_wait(0);
     tl_flush(p, u, cb, cby);
@@ -289,8 +391,9 @@ __global__ void __launch_bounds__(1024, 1) k_bys(KP p) {
     };
     while (gtimer() < t0) {}
     const long long c0 = clk();
+    unsigned long long now = gtimer();
     for (;;) {
-      if (!gate(g, t0, tend, it)) break;
+      if (!gate(g, t0, tend, it, now)) break;
       uint32_t a[8];  // byte offset / 16 of each lane's 16 B (fits 32 bits for buffers < 64 GiB); words compare mod 2^32
 #pragma unroll
       for (int k = 0; k < 8; ++k) a[k] = (uint32_t)(addr(c, k) >> 4);
@@ -305,7 +408,7 @@ __global__ void __launch_bounds__(1024, 1) k_bys(KP p) {
       c += W; while (c >= nch) c -= nch;
 #pragma unroll
       for (int k = 0; k < 8; ++k) { s += v[k].y; err += v[k].x != a[k] * 4; }
-      const unsigned long long now = gtimer();
+      now = gtimer();
       if (now > tend) break;
       ++it; nb += 4096;
       if (lane == 0) tl_add(p, u, now, t0, cb, cby, 4096);
@@ -677,6 +780,7 @@ static void build(const Scen& s, Setup& S) {
     }
     if (g.mode == M_TMA) { S.smem = std::max(S.smem, (size_t)1024 + (size_t)g.depth * P.tile); S.threads = std::max(S.threads, 32); }
     if (g.mode == M_TMAST) { S.smem = std::max(S.smem, (size_t)1024 + (size_t)P.tile); }
+    if (g.mode == M_LAT) S.smem = std::max(S.smem, (size_t)2 * NB * 4);
     if (g.mode == M_LD || g.mode == M_ST || g.mode == M_FMA) S.threads = std::max(S.threads, 32 * g.warps);
     const size_t q = g.mode == M_TMA ? (size_t)P.tile : 4096;  // unit data multiple
     size_t ub = (size_t)(g.mb * MB); ub = std::max(q, ub / q * q);
@@ -748,8 +852,8 @@ static void build(const Scen& s, Setup& S) {
   KP& k = S.kp;
   k.buf = (const char*)g_buf; k.sm2unit = S.d_sm2unit; k.ugrp = S.d_ugrp; k.ubase = S.d_ubase; k.ubytes = S.d_ubytes; k.uloff = S.d_uloff;
   k.list = S.d_list; k.home = d_home; k.claim = S.d_claim; k.start = S.d_start; k.dur_ns = (unsigned long long)(s.dur * 1e6);
-  k.ob = S.d_ob; k.ocyc = S.d_ocyc; k.oerr = S.d_oerr; k.osm = S.d_osm; k.ot = S.d_ot; k.tl = S.d_tl; k.nbins = S.nbins;
-  k.bin_ns = (unsigned long long)(s.bin * 1e3); k.hist = S.d_hist; k.lsum = S.d_lsum;
+  k.ob = S.d_ob; k.ocyc = S.d_ocyc; k.oerr = S.d_oerr; k.osm = S.d_osm; k.ot = S.d_ot; k.tl = s.bin < 1000 ? S.d_tl : nullptr; k.nbins = S.nbins;  /* timeline only where asked for: it costs issue time */
+  k.bin_ns = (unsigned long long)(s.bin * 1e3); k.inv_bin = (float)(1.0 / (s.bin * 1e3)); k.hist = S.d_hist; k.lsum = S.d_lsum;
 }
 static void release(Setup& S) {
   cudaFree(S.d_sm2unit); cudaFree(S.d_ugrp); cudaFree(S.d_ubase); cudaFree(S.d_ubytes); cudaFree(S.d_uloff); cudaFree(S.d_list);

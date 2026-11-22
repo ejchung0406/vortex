@@ -28,10 +28,10 @@ download destination buffer
 wait for completion
 [VXDRV] Warning: CP has not retired a command in 10s.
 [VXDRV]   Q_SEQNUM=48 target=49 CP_CTRL=0x00000001 CP_STATUS=0x00000001 Q_ERROR=0x00000000
-[VXDRV]   RING_BASE=0x40000000020bb740 HEAD_ADDR=0x40000000020cb800 CMPL_ADDR=0x40000000020cb900
+[VXDRV]   RING_BASE=0x40000000020bbac0 HEAD_ADDR=0x40000000020cbb80 CMPL_ADDR=0x40000000020cbc80
 [VXDRV]   RING_SIZE_LOG2=16 Q_CONTROL=0x00000001 Q_TAIL=0x0000000000000c40
 [VXDRV]   The ring was accepted but nothing is executing. Set VORTEX_CP_POLL_TIMEOUT_S=<sec> to abort instead of spinning.
-Elapsed time: 37271 ms
+Elapsed time: 37043 ms
 TCU_CYCLES: max=642071 (across 16 blocks)
 verify result
 cleanup

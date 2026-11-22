@@ -1,0 +1,39 @@
+... Initialize injection ...
+host=atl1-1-02-014-16-0.pace.gatech.edu gpu=NVIDIA H200 sms=132 roles=lane,lender mps_pipe=none pid=3979196
+lane_kernel regs=32 static_smem=1024 local=56 (G=2)
+lane_kernel regs=32 static_smem=1024 local=64 (G=1)
+setup_done host_ns=1795310796216194479 t0=1795310825058049929 margin_ms=28842 gt_offset=-1691469039
+slot=0 tag=co|L16u|ew|lane trial=0 first=lane mode=lane,lender lane_spec=M=16:r=0:t=16:d=2 lender_spec=ew lane_consume=1 lane_M=16 lane_rate_target=0 tile_kb=16 depth=2 spin=0 lane_workers=132 lane_sms_bitmap=000000000000000fffffffffffffffffffffffffffffffff lane_gbs=58.1 lane_gbs_per_sm=0.44 lane_per_sm_min=0.42 lane_per_sm_max=0.46 lane_bin10ms_p5=54.4 lane_bin10ms_min=52.8 lane_late_ms=-0.08 lane_useful_tflops=0.929 lane_check=ok(2 blocks,0 bad) lane_late_start_ms=-28841.6 lender=ew lender_launches=10331 launches_in_window=8455.3 launch_ms_med=0.1606 lender_rate=3.0398 lender_rate_unit=TB/s lender_check=ok lender_late_start_ms=-29141.6 win_ms=1400 nvml_n=138 clk_min=735 clk_med=1485 pwr_med=548 pwr_max=564 reasons_or=0x4
+done mask_callbacks=0 mask_applied=0
+exit=0 slot=0
+_Z4k_ewPK5uint4S1_S1_PS_m                                    samples=28215701 long_scoreboard=49.9% drain=14.4% not_selected=7.5% short_scoreboard=6.4% selected=5.9% mio_throttle=5.3% lg_throttle=3.6%
+_Z6k_laneILi2ELi32EEv5LaneP                                  samples=18984765 wait=42.9% selected=21.1% short_scoreboard=16.6% long_scoreboard=14.3% branch_resolving=4.0% no_instructions=0.5% dispatch_stall=0.2%
+... Initialize injection ...
+host=atl1-1-02-014-16-0.pace.gatech.edu gpu=NVIDIA H200 sms=132 roles=lane,lender mps_pipe=none pid=3981382
+lane_kernel regs=32 static_smem=1024 local=56 (G=2)
+lane_kernel regs=32 static_smem=1024 local=64 (G=1)
+setup_done host_ns=1795310828672255817 t0=1795310855103992877 margin_ms=26432 gt_offset=-1691555815
+slot=1 tag=co|L16u|fma4|lender trial=0 first=lender mode=lane,lender lane_spec=M=16:r=0:t=16:d=2 lender_spec=fma4 lane_consume=1 lane_M=16 lane_rate_target=0 tile_kb=16 depth=2 spin=0 lane_workers=132 lane_sms_bitmap=000000000000000fffffffffffffffffffffffffffffffff lane_gbs=1.5 lane_gbs_per_sm=0.01 lane_per_sm_min=0.01 lane_per_sm_max=0.01 lane_bin10ms_p5=1.5 lane_bin10ms_min=1.5 lane_late_ms=0.39 lane_useful_tflops=0.024 lane_check=ok(2 blocks,0 bad) lane_late_start_ms=-29331.5 lender=fma4 lender_workers=132 lender_sms_bitmap=000000000000000fffffffffffffffffffffffffffffffff lender_tflops=54.523 lender_rate=54.5226 lender_rate_unit=TFLOP/s sms_shared_with_lane=132 lender_check=n/a win_ms=1400 nvml_n=139 clk_min=1980 clk_med=1980 pwr_med=341 pwr_max=359 reasons_or=0x0
+done mask_callbacks=0 mask_applied=0
+ERROR!! hardware buffer is full, need to increase hardware buffer size or frequency of pc sample data decoding
+Error: NoFailed to get pc sampling data from Cupti
+exit=1 slot=1
+... Initialize injection ...
+host=atl1-1-02-014-16-0.pace.gatech.edu gpu=NVIDIA H200 sms=132 roles=lane,lender mps_pipe=none pid=3982603
+lane_kernel regs=32 static_smem=1024 local=56 (G=2)
+lane_kernel regs=32 static_smem=1024 local=64 (G=1)
+setup_done host_ns=1795310861359866002 t0=1795310885192728480 margin_ms=23833 gt_offset=-1691658028
+slot=2 tag=co|Lt|ew|lane trial=0 first=lane mode=lane,lender lane_spec=M=16:r=0:t=16:d=2:c=0 lender_spec=ew lane_consume=0 lane_M=16 lane_rate_target=0 tile_kb=16 depth=2 spin=0 lane_workers=132 lane_sms_bitmap=000000000000000fffffffffffffffffffffffffffffffff lane_gbs=1124.0 lane_gbs_per_sm=8.51 lane_per_sm_min=8.39 lane_per_sm_max=8.60 lane_bin10ms_p5=1124.0 lane_bin10ms_min=1124.0 lane_late_ms=-0.10 lane_useful_tflops=17.983 lane_check=none(0 blocks,0 bad) lane_late_start_ms=-29032.6 lender=ew lender_launches=9809 launches_in_window=8095.7 launch_ms_med=0.1635 lender_rate=2.9105 lender_rate_unit=TB/s lender_check=ok lender_late_start_ms=-29332.6 win_ms=1400 nvml_n=139 clk_min=675 clk_med=1485 pwr_med=558 pwr_max=563 reasons_or=0x4
+done mask_callbacks=0 mask_applied=0
+exit=0 slot=2
+_Z4k_ewPK5uint4S1_S1_PS_m                                    samples=38116675 long_scoreboard=49.5% drain=14.6% not_selected=7.7% short_scoreboard=6.9% selected=5.5% mio_throttle=4.5% lg_throttle=4.3%
+_Z6k_laneILi2ELi32EEv5LaneP                                  samples=21418029 long_scoreboard=40.5% wait=26.4% branch_resolving=11.6% selected=10.6% short_scoreboard=8.6% no_instructions=1.5% misc=0.4%
+... Initialize injection ...
+host=atl1-1-02-014-16-0.pace.gatech.edu gpu=NVIDIA H200 sms=132 roles=lane,lender mps_pipe=none pid=3983618
+lane_kernel regs=32 static_smem=1024 local=56 (G=2)
+lane_kernel regs=32 static_smem=1024 local=64 (G=1)
+setup_done host_ns=1795310894592732787 t0=1795310915841869909 margin_ms=21249 gt_offset=-1691768867
+slot=3 tag=solo_lane|L16u trial=0 first=lane mode=lane,lender lane_spec=M=16:r=0:t=16:d=2 lender_spec=- lane_consume=1 lane_M=16 lane_rate_target=0 tile_kb=16 depth=2 spin=0 lane_workers=132 lane_sms_bitmap=000000000000000fffffffffffffffffffffffffffffffff lane_gbs=1133.1 lane_gbs_per_sm=8.58 lane_per_sm_min=8.53 lane_per_sm_max=8.61 lane_bin10ms_p5=1133.2 lane_bin10ms_min=1128.2 lane_late_ms=-0.11 lane_useful_tflops=18.129 lane_check=ok(2 blocks,0 bad) lane_late_start_ms=-29048.9  win_ms=1400 nvml_n=138 clk_min=1980 clk_med=1980 pwr_med=332 pwr_max=333 reasons_or=0x0
+done mask_callbacks=0 mask_applied=0
+exit=0 slot=3
+_Z6k_laneILi2ELi32EEv5LaneP                                  samples=51530479 wait=45.1% selected=22.2% short_scoreboard=17.6% long_scoreboard=10.1% branch_resolving=4.2% no_instructions=0.5% dispatch_stall=0.2%

@@ -1,0 +1,7 @@
+name=pr_simx-lmem-wake_base_dxa_copy_16x16
+src_rev=
+src_dirty=0
+host=atl1-1-02-008-8-1.pace.gatech.edu
+xconf=-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16
+blackbox=--driver=simx --app=dxa_copy --perf=6 --cores=1 --args=-d2 -s0 128 -s1 128 -t0 8 -t1 8
+rc=cancelled-by-agent: job ran 37 min wall with no completion (fix side: 162 s); see diag_dxa_copy_16x16

@@ -1,0 +1,5 @@
+side=br
+xlen=64
+xconf=-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_DXA_CORES=8
+app=dxa_copy args=-d1 -t0 4 appconf=0
+rc=0

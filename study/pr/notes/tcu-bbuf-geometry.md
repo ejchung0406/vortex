@@ -99,33 +99,44 @@ Storage (two slots of `B_BUF_WORDS` 32-bit words, LUTRAM, `VX_dp_ram`
 
 ## How verified
 
-All runs at XLEN 64: this host has no RV32 toolchain, so no XLEN-32 run was
-made (`not run`). Builds from a clean copy of the branch and of
-upstream/master; `results/<name>` is
+Status: complete for the agreed scope, verified at XLEN 64 only (XLEN 32 is
+out of scope for this effort; no XLEN-32 run was made, `not run`). The bug
+reproduces on upstream/master. Open: independent `rtl-review`, Beacon on
+`tcu`, the TFR-FEDP FEDP2K rtlsim run on the branch. Builds from clean copies of upstream/master (`base_*`) and
+of the branch; `results/<name>` is
 `/storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_tcu-bbuf-geometry_<name>`.
+`v2_*` runs are the final commit. `br_*` runs are an earlier revision of it
+that also changed one SimX constant (dropped since: it moved nothing);
+its `hw/`, `sim/rtlsim/` and `sw/` trees are byte-identical to the final
+commit (`diff -r`), so its rtlsim results are the final commit's.
 
 **The failing shape passes, and SimX tracks rtlsim** (cycles, rtlsim / SimX,
 instructions equal on both drivers):
 
 | test | config | master rtlsim | branch rtlsim | branch SimX | gap | results |
 |---|---|---|---|---|---|---|
-| `sgemm_tcu_wg` fp16 SS NRC8 (CI case shape) | 32T, 16 banks | assertion at 0 | 4,177 PASS | 4,170 PASS | -0.2% | `base_ss_b16_x64_rtlsim`, `br_ss_b16_x64_*` |
-| `sgemm_tcu_wg_sp` NRC8 (CI case shape) | 32T, 16 banks | assertion at 0 | 13,283 PASS | 13,212 PASS | -0.5% | `base_sp_b16_x64_rtlsim`, `br_sp_b16_x64_*` |
-| `sgemm_tcu_wg` fp16 SS NRC32, -m128 -n128 -k128 | 32T, 16 banks, 8 LSU lanes, DXA | assertion at 0 | 92,712 PASS | 92,470 PASS | -0.3% | `base_ss_b16_rtlsim`, `br_ss_b16_*` |
-| `sgemm_tcu_wg_sp` NRC32, -m128 | same | assertion at 0 | 66,916 PASS | 66,492 PASS | -0.6% | `base_sp_b16_rtlsim`, `br_sp_b16_*` |
-| `sgemm_tcu_wg` FEDP2K RS NRC8, -m128 | same | FEDP2K_BASE | FEDP2K_BR | 201,187 PASS | FEDP2K_GAP | `*_f2k_b16_*` |
-| `sgemm_tcu_wg_sp` NRC8 | 16T, 8 banks | assertion (line 94) at 0 | 31,801 PASS | 31,817 PASS | +0.1% | `base_sp_t16b8_rtlsim`, `br_sp_t16b8_*` |
-| `sgemm_tcu_wg_sp` NRC8, -m128 | 16T, 8 banks | not run | 241,454 PASS | 238,865 PASS | -1.1% | `br_sp_t16b8_m128_*` |
-| `sgemm_tcu_wg` fp16 SS NRC8 | 16T, 8 banks | not run | 4,626 PASS | 4,621 PASS | -0.1% | `br_ss_t16b8_*` |
+| `sgemm_tcu_wg` fp16 SS NRC8 (CI case shape) | 32T, 16 banks | assertion at 0 | 4,177 PASS | 4,170 PASS | -0.2% | `base_ss_b16_x64_rtlsim`, `br_ss_b16_x64_rtlsim`, `v2_ss_b16_x64_simx` |
+| `sgemm_tcu_wg_sp` NRC8 (CI case shape) | 32T, 16 banks | assertion at 0 | 13,283 PASS | 13,212 PASS | -0.5% | `base_sp_b16_x64_rtlsim`, `br_sp_b16_x64_rtlsim`, `v2_sp_b16_x64_simx` |
+| `sgemm_tcu_wg` fp16 SS NRC32, -m128 -n128 -k128 | 32T, 16 banks, 8 LSU lanes, DXA | assertion at 0 | 92,712 PASS | 92,470 PASS | -0.3% | `base_ss_b16_rtlsim`, `br_ss_b16_rtlsim`, `v2_ss_b16_simx` |
+| `sgemm_tcu_wg_sp` NRC32, -m128 | same | assertion at 0 | 66,916 PASS | 66,492 PASS | -0.6% | `base_sp_b16_rtlsim`, `br_sp_b16_rtlsim`, `v2_sp_b16_simx` |
+| `sgemm_tcu_wg` FEDP2K RS NRC8, -m128, DPI FEDP | same | assertion at 0 (TFR FEDP) | 199,345 PASS | 201,187 PASS | +0.9% | `base_f2k_b16_rtlsim`, `v2_f2kdpi_b16_*` |
+| `sgemm_tcu_wg_sp` NRC8 | 16T, 8 banks | assertion (line 94) at 0 | 31,801 PASS | 31,817 PASS | +0.1% | `base_sp_t16b8_rtlsim`, `br_sp_t16b8_rtlsim`, `v2_sp_t16b8_simx` |
+| `sgemm_tcu_wg_sp` NRC8, -m128 | 16T, 8 banks | not run | 241,454 PASS | 238,865 PASS | -1.1% | `br_sp_t16b8_m128_rtlsim`, `v2_sp_t16b8_m128_simx` |
+| `sgemm_tcu_wg` fp16 SS NRC8 | 16T, 8 banks | not run | 4,626 PASS | 4,621 PASS | -0.1% | `br_ss_t16b8_rtlsim`, `v2_ss_t16b8_simx` |
 
 The 32-thread -m128 rows use the fork's measurement shape; the research fork
 this came from measured 92,712 / 92,470, 66,916 / 66,492 and 199,345 /
 201,187 (fork measurements, on a build that also has the unmerged
 `feature/tmem-dataflow` branch). This branch reproduces the dense and sparse
-numbers exactly.
+numbers exactly, and the FEDP2K numbers with the DPI FEDP. The FEDP2K row
+with the default TFR FEDP was not completed on the branch: its 32-thread
+Verilator build needs about 115 GB and more than an hour (killed at 64 GB,
+`br_f2k_b16_rtlsim_oom64g`; cut by a job time limit,
+`br_f2k_b16_rtlsim_timeout`, `v2_f2k_b16_rtlsim`). SimX gives 201,187 with
+either FEDP type. The bbuf does not depend on the FEDP type.
 
-SimX columns come from the final branch, whose SimX sources are
-upstream/master's (`v2_*_simx`; equal to `base_*_simx` where both ran). TCU
+The final commit's SimX sources are upstream/master's; its SimX numbers equal
+master's wherever both ran (`base_*_simx`). TCU
 counters (`--perf=11`) at 16 threads / 8 banks sparse: rtlsim
 `tbuf_stalls=2964, tbuf_cache_hits=450, lmem_reads=912`; SimX
 `2964, 451, 912` (`br_sp_t16b8_p11_rtlsim`, `v2_sp_t16b8_p11_simx`).
@@ -148,6 +159,9 @@ upstream/master on both drivers, instructions equal, all PASS.
 
 Results: `{base,br}_eq_{pint8,pf2k,pldm,sp4,sp6,wg7,boff}_{rtlsim,simx}`,
 `{base,br}_def_{sgemm_tcu,vecadd}_{rtlsim,simx}`.
+
+`python3 ci/testcase.py lint`: OK (967 cases, 28 categories); the two new
+cases plan as XLEN-64 simx and rtlsim cells.
 
 Not run:
 - XLEN 32 anything (no RV32 toolchain on this host). The `model_parity` gate
@@ -173,7 +187,8 @@ evidence check sees RTL without SimX: the parity table above is the answer
 shapes).
 Still required by the policy: a review of every hunk with `rtl-review` by
 someone other than the author (an agent review was started and returned no
-report; not done), Beacon on `tcu`, and maintainer approval. No baseline moves (`ci/baselines/**` untouched).
+report; not done), Beacon on `tcu`, and maintainer approval. No baseline
+moves (`ci/baselines/**` untouched).
 
 ## Dependencies
 
@@ -205,15 +220,19 @@ was made on top of that branch, and this one is re-implemented on master's
 
 ## Notes for the sender
 
-- Branch `pr/tcu-bbuf-geometry`, one commit on upstream/master ccf811e11.
-- Build copies: `vortex-exp/src_pr_tcu-bbuf-geometry` (branch) and
+- Branch `pr/tcu-bbuf-geometry`, one commit 2280916cc on upstream/master
+  ccf811e11 (its tree is 6e20ef775's, the revision `v2_*` ran; only the
+  message changed).
+- Build copies: `vortex-exp/src_pr_tcu-bbuf-geometry_v2` (final commit),
+  `src_pr_tcu-bbuf-geometry` (earlier revision, see "How verified") and
   `src_pr_tcu-bbuf-geometry_base` (upstream/master), each with a `.pr_rev`
   file naming the source revision. Run script:
   `vortex-exp/pr/scripts/bbuf_point.sbatch` (run_point.sbatch plus an XLEN
   choice); table: `vortex-exp/pr/scripts/bbuf_collect.sh`.
-- The FEDP2K rtlsim build at 32 threads needs more than 64 GB to verilate
-  (first attempts killed by the OOM killer: `*_f2k_b16_rtlsim_oom64g`); the
-  rerun used `--mem=180G`.
+- The TFR-FEDP FEDP2K rtlsim build at 32 threads needs about 115 GB and over
+  an hour to verilate. Two branch attempts were killed (OOM at 64 GB; then
+  job time limits that were shortened after submission, 8 h requested,
+  1 h applied). The DPI-FEDP run took 6 minutes and gives the fork's number.
 - Commit trailers follow the effort brief (Claude Fable 5.2), not the session
   default.
 - Before sending: run the two new CI cases and the XLEN-32 `tensor_wg` cells on

@@ -47,6 +47,7 @@ Companion file: `sm-sharing-figures.md`, one diagram specification per mechanism
 **3. Residency (A) is the precondition, and production GEMMs leave almost none.**
 - The cuBLAS FP16 GEMM uses 64,512 of 65,536 registers and 189 KB of shared memory. That leaves 1,024 registers (one warp at 32 registers) and ~38 KB.
 - A one-warp lane with a ring of 32 KB or less would fit *today*. Nobody has run it.
+- **[corr. 2026-11-21] Measured: it does not.** A 1-warp, 32-register, 33 KB lane never co-resides with any tensor-core GEMM tested (cuBLASLt and CUTLASS, BF16 and FP8), not even a 181 KB CUTLASS variant that fits by every per-SM total; lane first, the GEMM makes no progress; GEMM first, whole SMs alternate. INF: registers are allocated per sub-partition. See `h200-go-nogo.md` §0 and §1.2 (experiment A).
 
 **4. Little's law sets what the memory job needs per SM.** A memory job on every SM needs 4.63 TB/s / 132 = **35.1 GB/s = 17.7 B/clock per SM**. Per SM (INF, §3.0):
 - issue: ~0.7% (TMA producer, 32 KB transfers), ~3% with a decode consumer;
@@ -204,7 +205,7 @@ The lender in all of the following is the FP32 FMA kernel: register-only, 1024 t
 
     - These rows say **nothing** about warp starvation beside a tensor-core kernel: there was never a shared SM.
     - They do show that today's block scheduler, given two kernels that cannot co-reside, makes the *compute* job the victim (0.25). That is a placement or residency failure in the other direction, and a carve-out (b) or masks avoid it.
-11. **Hardware already admits a stream of the right size into a production GEMM's leftovers** (INF): 1,024 registers = 1 warp × 32 registers; ~38 KB shared memory ≥ a 2 × 16 KB ring.
+11. **Hardware already admits a stream of the right size into a production GEMM's leftovers** (INF): 1,024 registers = 1 warp × 32 registers; ~38 KB shared memory ≥ a 2 × 16 KB ring. **[corr. 2026-11-21]** Wrong in practice: measured, the lane never co-resides with any tensor-core GEMM (`h200-go-nogo.md` §1.2, experiment A).
 
 **Verdict.**
 - R1 is established for issue-saturating (FMA) lenders only.
@@ -930,11 +931,11 @@ The prototypes are meaningless unless the Vortex baseline reproduces the H200 co
    - The DiT's CUDA time is 45% matmul, 26% elementwise and 12% attention (`corun-workloads.md`). The elementwise and softmax parts are issue-heavy.
    - If tensor-core lenders do not starve the lane, the claim narrows to residency + buffering + elementwise phases. Say so honestly.
 2. *"Production kernels leave no room."*
-   - The arithmetic of §3.0: 1,024 registers and 38 KB are left, enough for a one-warp producer with a 2 × 16 KB ring only with two-stage fetch.
+   - The arithmetic of §3.0: 1,024 registers and 38 KB are left, enough for a one-warp producer with a 2 × 16 KB ring only with two-stage fetch. **[corr. 2026-11-21]** Measured: such a lane never co-resides with any tensor-core GEMM tested (`h200-go-nogo.md` §1.2, experiment A).
    - X4 gives the price of a larger carve-out; (c1) avoids it.
 3. *"Just use disjoint SMs and good placement."* At equal memory bandwidth the lane returns up to ~+19-21 points of compute share for type-P lenders (0.76 → ~0.95-0.97); +10-12 if the unexplained ~10% persists; nothing for type-D lenders (§3.0b). Measured so far: +8-9. Show it as the Pareto gap.
 4. *"The memory system is the shared resource anyway."*
-   - The DiT uses 1.7% of memory bandwidth.
+   - The DiT uses 1.7% of memory bandwidth. **[corr. 2026-11-21]** That counted weights only: the DiT moves 178-209 GB per forward = 1.16-1.36 TB/s, 25-29% of the roof (`h200-go-nogo.md` §3).
    - But the CUTLASS GEMM's own traffic cut the stream from 4.49 to 3.7 TB/s: report R8 separately. It affects disjoint and shared equally, so it is not an argument for either.
 5. *"Stream priorities, MPS or Green Contexts already do this."*
    - X8 shows stream priority acts at CTA dispatch, not issue.
@@ -976,5 +977,5 @@ The prototypes are meaningless unless the Vortex baseline reproduces the H200 co
 - Literature items tagged "memory" in §2.
 - The order × ILP table of `tpc-placement-and-borrowing.md` §C.2 does not match the raw files (no ILP-1 run; two cells differ). §1.3 uses the raw values; fix the source note.
 - Whether the DiT is really type D: the MPS-percentage sweep did not read back SM counts. Repeat with TPC masks and `%smid`.
-- The Qwen decode under MPS printed `'!!!!…'` in some runs (`framing-critique.md` item 2), so those deployment timings are suspect.
+- The Qwen decode under MPS printed `'!!!!…'` in some runs (`framing-critique.md` item 2), so those deployment timings are suspect. **[corr. 2026-11-21]** Cause found: cuBLAS 13.4 computes NaN under MPS percentages; the Qwen runs at 80/70/40/20% and the co-runs at LLM 20/40% are invalid (`h200-go-nogo.md` §3).
 - How the cuBLAS co-run's GEMM fell to 0.25: wave quantisation plus memory blocks holding SMs is INF. A GEMM CTA trace with `%smid` would confirm it.

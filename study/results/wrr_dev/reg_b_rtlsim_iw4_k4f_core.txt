@@ -1,0 +1,35 @@
+fetch_squash_w1 rc=0 passed=1 instrs=482, cycles=4909
+fetch_squash_w4 rc=0 passed=1 instrs=1928, cycles=7123
+diverge rc=0 passed=1 instrs=248779, cycles=740943
+diverge_w8t8 rc=0 passed=1 instrs=1924718, cycles=3733349
+diverge_large rc=0 passed=1 instrs=17104, cycles=53539
+diverge_loop rc=0 passed=1 instrs=8096, cycles=25115
+wsync rc=0 passed=1 instrs=33853, cycles=266912
+bar_vis rc=0 passed=1 instrs=16392, cycles=39939
+bar_vis_scope1 rc=0 passed=1 instrs=16392, cycles=39795
+bar_slot_phase rc=0 passed=1 instrs=13548, cycles=64520
+async_barrier rc=0 passed=1 instrs=30144, cycles=112320
+gbar_phase_c2 rc=0 passed=1 instrs=290, cycles=536
+async_gbarrier_c2 rc=0 passed=1 instrs=49762, cycles=67174
+dogfood rc=0 passed=22 instrs=75006, cycles=219587
+dogfood_bar rc=0 passed=1 instrs=354, cycles=2089
+dogfood_gbar_c2 rc=0 passed=1 instrs=616, cycles=2965
+demo rc=0 passed=1 instrs=2468, cycles=6309
+basic rc=0 passed=1 instrs=672, cycles=6076
+printf rc=0 passed=1 instrs=88630, cycles=253106
+fence rc=0 passed=1 instrs=2444, cycles=6317
+single_cta rc=0 passed=1 instrs=182, cycles=1724
+cta_cluster rc=0 passed=1 
+occupancy_t32 rc=0 passed=1 instrs=327812, cycles=1131309
+multikernel rc=0 passed=1 instrs=13104, cycles=38594
+sort rc=0 passed=1 instrs=182176, cycles=448074
+bfs rc=0 passed=1 instrs=3781, cycles=20303
+war_order rc=0 passed=1 instrs=2687292, cycles=6963895
+raw_order rc=0 passed=1 instrs=5008, cycles=12975
+vecadd rc=0 passed=1 instrs=512, cycles=1575
+sgemm rc=0 passed=1 instrs=334880, cycles=787087
+mstress rc=0 passed=1 instrs=14980, cycles=34538
+arith rc=0 passed=1 instrs=1501, cycles=5845
+mixfu rc=0 passed=1 instrs=137376, cycles=346329
+lmem_access rc=0 passed=1 instrs=51086, cycles=126965
+done

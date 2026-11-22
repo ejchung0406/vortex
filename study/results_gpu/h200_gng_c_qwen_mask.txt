@@ -3,3 +3,46 @@ gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 smid_distinct=26 att
 model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
 sample: 'A GPU executes matrix multiplication by leveraging its massive parallelism, which is fundamentally different from the sequential processing of a CPU. Instead of calculating the result row-by-row'
 ### ntpc=26 bits=0,1,2,3,75,78,81,83,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28 Sat Nov 21 07:23:12 PM EST 2026
+### no MPS, mask ntpc=13 packed bits=0,1,2,3,75,78,81,83,9,10,11,12,13 Sat Nov 21 08:03:01 PM EST 2026 
+exit=124
+### no MPS, mask ntpc=26 packed bits=0,1,2,3,75,78,81,83,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28 Sat Nov 21 08:06:21 PM EST 2026 
+exit=124
+### no MPS, mask ntpc=52 packed bits=0,1,2,3,75,78,81,83,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28,29,30,31,32,33,34,36,37,38,39,40,41,42,43,45,46,47,48,49,50,51,52,54,55,56,57 Sat Nov 21 08:09:42 PM EST 2026 
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 smid_distinct=104 attr_sms=132 tpc_enable_bits=0,1,2,3,75,78,81,83,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28,29,30,31,32,33,34,36,37,38,39,40,41,42,43,45,46,47,48,49,50,51,52,54,55,56,57 mps_pct=none tag=nomps_mask_tpc52
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: 'A GPU executes matrix multiplication by leveraging its massive parallelism, which is fundamentally different from the sequential processing of a CPU. Instead of calculating the result row-by-row'
+### no MPS, mask ntpc=13 packed bits=0,1,2,3,75,78,81,83,9,10,11,12,13 Sat Nov 21 08:18:38 PM EST 2026 
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 smid_distinct=26 attr_sms=132 tpc_enable_bits=0,1,2,3,75,78,81,83,9,10,11,12,13 mps_pct=none tag=nomps_mask_tpc13
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: 'A GPU executes matrix multiplication by leveraging its massive parallelism, which is fundamentally different from the sequential processing of a CPU. Instead of calculating the result row-by-row'
+segment=0 batch=1 window_s=5.0 steps=82 step_ms_median=68.732 tok_per_s_wall=16.3 tok_per_s_median=14.5 kernel_ms_per_step=44.723 matmul_kernel_ms_per_step=14.207 matmul_kernel_weight_gbs=1117
+segment=1 batch=16 window_s=5.0 steps=79 step_ms_median=69.564 tok_per_s_wall=252.1 tok_per_s_median=230.0 kernel_ms_per_step=38.097 matmul_kernel_ms_per_step=14.390 matmul_kernel_weight_gbs=1103
+exit=0
+### no MPS, mask ntpc=26 packed bits=0,1,2,3,75,78,81,83,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28 Sat Nov 21 08:20:34 PM EST 2026 
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 smid_distinct=52 attr_sms=132 tpc_enable_bits=0,1,2,3,75,78,81,83,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28 mps_pct=none tag=nomps_mask_tpc26
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: 'A GPU executes matrix multiplication by leveraging its massive parallelism, which is fundamentally different from the sequential processing of a CPU. Instead of calculating the result row-by-row'
+segment=0 batch=1 window_s=5.0 steps=86 step_ms_median=68.774 tok_per_s_wall=17.1 tok_per_s_median=14.5 kernel_ms_per_step=43.516 matmul_kernel_ms_per_step=11.535 matmul_kernel_weight_gbs=1376
+segment=1 batch=16 window_s=5.0 steps=79 step_ms_median=70.359 tok_per_s_wall=251.0 tok_per_s_median=227.4 kernel_ms_per_step=37.537 matmul_kernel_ms_per_step=11.674 matmul_kernel_weight_gbs=1360
+exit=0
+### no MPS, mask ntpc=39 packed bits=0,1,2,3,75,78,81,83,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28,29,30,31,32,33,34,36,37,38,39,40,41,42 Sat Nov 21 08:21:09 PM EST 2026 
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 smid_distinct=78 attr_sms=132 tpc_enable_bits=0,1,2,3,75,78,81,83,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28,29,30,31,32,33,34,36,37,38,39,40,41,42 mps_pct=none tag=nomps_mask_tpc39
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: 'A GPU executes matrix multiplication by leveraging its massive parallelism, which is fundamentally different from the sequential processing of a CPU. Instead of calculating the result row-by-row'
+segment=0 batch=1 window_s=5.0 steps=87 step_ms_median=68.272 tok_per_s_wall=17.3 tok_per_s_median=14.6 kernel_ms_per_step=43.729 matmul_kernel_ms_per_step=11.173 matmul_kernel_weight_gbs=1421
+segment=1 batch=16 window_s=5.0 steps=71 step_ms_median=70.104 tok_per_s_wall=226.3 tok_per_s_median=228.2 kernel_ms_per_step=37.844 matmul_kernel_ms_per_step=11.129 matmul_kernel_weight_gbs=1426
+exit=0
+### no MPS, mask ntpc=52 packed bits=0,1,2,3,75,78,81,83,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28,29,30,31,32,33,34,36,37,38,39,40,41,42,43,45,46,47,48,49,50,51,52,54,55,56,57 Sat Nov 21 08:21:45 PM EST 2026 
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 smid_distinct=104 attr_sms=132 tpc_enable_bits=0,1,2,3,75,78,81,83,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28,29,30,31,32,33,34,36,37,38,39,40,41,42,43,45,46,47,48,49,50,51,52,54,55,56,57 mps_pct=none tag=nomps_mask_tpc52
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: 'A GPU executes matrix multiplication by leveraging its massive parallelism, which is fundamentally different from the sequential processing of a CPU. Instead of calculating the result row-by-row'
+segment=0 batch=1 window_s=5.1 steps=90 step_ms_median=69.129 tok_per_s_wall=17.8 tok_per_s_median=14.5 kernel_ms_per_step=43.232 matmul_kernel_ms_per_step=10.722 matmul_kernel_weight_gbs=1480
+segment=1 batch=16 window_s=5.1 steps=76 step_ms_median=70.406 tok_per_s_wall=240.0 tok_per_s_median=227.3 kernel_ms_per_step=37.719 matmul_kernel_ms_per_step=10.952 matmul_kernel_weight_gbs=1449
+exit=0
+### no MPS, mask ntpc=66 packed bits=0,1,2,3,75,78,81,83,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28,29,30,31,32,33,34,36,37,38,39,40,41,42,43,45,46,47,48,49,50,51,52,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71 Sat Nov 21 08:22:20 PM EST 2026 
+gpu=NVIDIA H200 torch=2.15.0+cu132 transformers=5.24.0.dev0 smid_distinct=132 attr_sms=132 tpc_enable_bits=0,1,2,3,75,78,81,83,9,10,11,12,13,14,15,16,18,19,20,21,22,23,24,25,27,28,29,30,31,32,33,34,36,37,38,39,40,41,42,43,45,46,47,48,49,50,51,52,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71 mps_pct=none tag=nomps_mask_tpc66
+model=/tmp/echung67/models/qwen class=Qwen3_5ForCausalLM params=8953803264 lm_param_bytes=17907606528 step_weight_bytes=15873369088 embedding_bytes=2034237440 lm_head_tied=False dtype=torch.bfloat16 prompt_tokens=26 new_tokens=128
+sample: 'A GPU executes matrix multiplication by leveraging its massive parallelism, which is fundamentally different from the sequential processing of a CPU. Instead of calculating the result row-by-row'
+segment=0 batch=1 window_s=5.1 steps=91 step_ms_median=68.473 tok_per_s_wall=18.0 tok_per_s_median=14.6 kernel_ms_per_step=43.845 matmul_kernel_ms_per_step=10.828 matmul_kernel_weight_gbs=1466
+segment=1 batch=16 window_s=5.0 steps=69 step_ms_median=70.504 tok_per_s_wall=219.8 tok_per_s_median=226.9 kernel_ms_per_step=38.666 matmul_kernel_ms_per_step=10.928 matmul_kernel_weight_gbs=1453
+exit=0

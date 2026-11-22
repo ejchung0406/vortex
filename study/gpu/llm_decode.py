@@ -28,6 +28,7 @@ p.add_argument("--sync-dir", help="co-run: directory of ready/go/done files shar
 p.add_argument("--role", default="b", choices=["a", "b"])
 p.add_argument("--tag", default="")
 p.add_argument("--no-profile", action="store_true", help="window mode: skip the torch.profiler kernel-time pass")
+p.add_argument("--event-timing", action="store_true", help="window mode: time every nn.Linear with CUDA events instead of torch.profiler (the profiler hangs with a TPC mask)")
 a = p.parse_args()
 
 import transformers
@@ -158,7 +159,26 @@ with torch.inference_mode():
             med = statistics.median(ts)
             state = prefill(b)
             sync()
-            if a.no_profile:
+            if a.event_timing:
+                evs = []
+                def pre(mod, inp):
+                    e = torch.cuda.Event(enable_timing=True); e.record(); evs.append([e, None])
+                def post(mod, inp, out):
+                    e = torch.cuda.Event(enable_timing=True); e.record(); evs[-1][1] = e
+                hs = []
+                for m_ in model.modules():
+                    if isinstance(m_, torch.nn.Linear):
+                        hs += [m_.register_forward_pre_hook(pre), m_.register_forward_hook(post)]
+                e0 = torch.cuda.Event(enable_timing=True); e1 = torch.cuda.Event(enable_timing=True)
+                e0.record()
+                for _ in range(32):
+                    state, _ = step(state, timed=False)
+                e1.record(); sync()
+                for h in hs:
+                    h.remove()
+                mm = sum(x.elapsed_time(y) for x, y in evs)  # ms in nn.Linear (GEMM kernels and their launch gaps)
+                allk = e0.elapsed_time(e1)                     # ms of GPU time for 32 steps, idle gaps included
+            elif a.no_profile:
                 allk = mm = float("nan")
             else:
                 with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:

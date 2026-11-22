@@ -1,0 +1,136 @@
+atl1-1-02-014-9-0.pace.gatech.edu
+NVIDIA H200, GPU-c0239183-b7f8-10aa-11ef-b7e9c10a4235, 615.71.09, 1980 MHz, 560.00 W
+Sat Nov 21 09:04:06 PM EST 2026
+mapcheck bits=66 mismatches=0
+gpc 0 sms 0 1 16 17 32 33 48 49 124 125 126 127 128 129 130 131
+gpc 1 sms 2 3 18 19 34 35 50 51 64 65 78 79 92 93 106 107
+gpc 2 sms 4 5 20 21 36 37 52 53 66 67 80 81 94 95 108 109
+gpc 3 sms 6 7 22 23 38 39 54 55 68 69 82 83 96 97 110 111
+gpc 4 sms 8 9 24 25 40 41 56 57 70 71 84 85 98 99 112 113
+gpc 5 sms 10 11 26 27 42 43 58 59 72 73 86 87 100 101 114 115
+gpc 6 sms 12 13 28 29 44 45 60 61 74 75 88 89 102 103 116 117 120 121
+gpc 7 sms 14 15 30 31 46 47 62 63 76 77 90 91 104 105 118 119 122 123
+buf=0x155100000000 gib=8.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=0 cold=2147483648 end=8589934592
+classify warm_sm=0 read_sm=4 thr=380 pages=4096 conf1=0 lowconf=4096 errs=0 blocksA=0 blocksB=0 sample_lat p10=275 p25=281 p50=295 p75=307 p90=313
+FATAL classification unreliable
+exit=1
+atl1-1-02-014-9-0.pace.gatech.edu
+NVIDIA H200, GPU-c0239183-b7f8-10aa-11ef-b7e9c10a4235, 615.71.09, 1980 MHz, 560.00 W
+Sat Nov 21 09:04:51 PM EST 2026
+mapcheck bits=66 mismatches=0
+gpc 0 sms 0 1 16 17 32 33 48 49 124 125 126 127 128 129 130 131
+gpc 1 sms 2 3 18 19 34 35 50 51 64 65 78 79 92 93 106 107
+gpc 2 sms 4 5 20 21 36 37 52 53 66 67 80 81 94 95 108 109
+gpc 3 sms 6 7 22 23 38 39 54 55 68 69 82 83 96 97 110 111
+gpc 4 sms 8 9 24 25 40 41 56 57 70 71 84 85 98 99 112 113
+gpc 5 sms 10 11 26 27 42 43 58 59 72 73 86 87 100 101 114 115
+gpc 6 sms 12 13 28 29 44 45 60 61 74 75 88 89 102 103 116 117 120 121
+gpc 7 sms 14 15 30 31 46 47 62 63 76 77 90 91 104 105 118 119 122 123
+buf=0x155100000000 gib=8.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=0 cold=2147483648 end=8589934592
+classify warm_sm=0 read_sm=2 thr=380 pages=4096 conf1=4074 lowconf=2 errs=0 blocksA=1048064 blocksB=1048064 sample_lat p10=274 p25=290 p50=431 p75=465 p90=483
+sidecheck gpc=1 sm=2 warm_sm=0 far_frac=0.499 p50=318 errs=0 => side other(B)
+sidecheck gpc=2 sm=4 warm_sm=0 far_frac=0.000 p50=295 errs=0 => side same-as-warm(A)
+sidecheck gpc=3 sm=6 warm_sm=0 far_frac=0.499 p50=320 errs=0 => side other(B)
+sidecheck gpc=4 sm=8 warm_sm=0 far_frac=0.499 p50=318 errs=0 => side other(B)
+sidecheck gpc=5 sm=10 warm_sm=0 far_frac=0.499 p50=320 errs=0 => side other(B)
+sidecheck gpc=6 sm=12 warm_sm=0 far_frac=0.000 p50=294 errs=0 => side same-as-warm(A)
+sidecheck gpc=7 sm=14 warm_sm=0 far_frac=0.000 p50=293 errs=0 => side same-as-warm(A)
+exit=0
+atl1-1-02-014-9-0.pace.gatech.edu
+NVIDIA H200, GPU-c0239183-b7f8-10aa-11ef-b7e9c10a4235, 615.71.09, 1980 MHz, 560.00 W
+Sat Nov 21 09:04:56 PM EST 2026
+mapcheck bits=66 mismatches=0
+gpc 0 sms 0 1 16 17 32 33 48 49 124 125 126 127 128 129 130 131
+gpc 1 sms 2 3 18 19 34 35 50 51 64 65 78 79 92 93 106 107
+gpc 2 sms 4 5 20 21 36 37 52 53 66 67 80 81 94 95 108 109
+gpc 3 sms 6 7 22 23 38 39 54 55 68 69 82 83 96 97 110 111
+gpc 4 sms 8 9 24 25 40 41 56 57 70 71 84 85 98 99 112 113
+gpc 5 sms 10 11 26 27 42 43 58 59 72 73 86 87 100 101 114 115
+gpc 6 sms 12 13 28 29 44 45 60 61 74 75 88 89 102 103 116 117 120 121
+gpc 7 sms 14 15 30 31 46 47 62 63 76 77 90 91 104 105 118 119 122 123
+buf=0x155100000000 gib=8.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=0 cold=2147483648 end=8589934592
+classify warm_sm=0 read_sm=6 thr=380 pages=4096 conf1=4074 lowconf=5 errs=0 blocksA=1047296 blocksB=1047296 sample_lat p10=276 p25=290 p50=432 p75=467 p90=485
+sidecheck gpc=1 sm=2 warm_sm=0 far_frac=0.499 p50=319 errs=0 => side other(B)
+sidecheck gpc=2 sm=4 warm_sm=0 far_frac=0.000 p50=294 errs=0 => side same-as-warm(A)
+sidecheck gpc=3 sm=6 warm_sm=0 far_frac=0.499 p50=319 errs=0 => side other(B)
+sidecheck gpc=4 sm=8 warm_sm=0 far_frac=0.499 p50=317 errs=0 => side other(B)
+sidecheck gpc=5 sm=10 warm_sm=0 far_frac=0.499 p50=320 errs=0 => side other(B)
+sidecheck gpc=6 sm=12 warm_sm=0 far_frac=0.000 p50=294 errs=0 => side same-as-warm(A)
+sidecheck gpc=7 sm=14 warm_sm=0 far_frac=0.000 p50=293 errs=0 => side same-as-warm(A)
+exit=0
+atl1-1-02-014-9-0.pace.gatech.edu
+NVIDIA H200, GPU-c0239183-b7f8-10aa-11ef-b7e9c10a4235, 615.71.09, 1980 MHz, 560.00 W
+Sat Nov 21 09:05:04 PM EST 2026
+mapcheck bits=66 mismatches=0
+gpc 0 sms 0 1 16 17 32 33 48 49 124 125 126 127 128 129 130 131
+gpc 1 sms 2 3 18 19 34 35 50 51 64 65 78 79 92 93 106 107
+gpc 2 sms 4 5 20 21 36 37 52 53 66 67 80 81 94 95 108 109
+gpc 3 sms 6 7 22 23 38 39 54 55 68 69 82 83 96 97 110 111
+gpc 4 sms 8 9 24 25 40 41 56 57 70 71 84 85 98 99 112 113
+gpc 5 sms 10 11 26 27 42 43 58 59 72 73 86 87 100 101 114 115
+gpc 6 sms 12 13 28 29 44 45 60 61 74 75 88 89 102 103 116 117 120 121
+gpc 7 sms 14 15 30 31 46 47 62 63 76 77 90 91 104 105 118 119 122 123
+buf=0x155100000000 gib=8.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=0 cold=2147483648 end=8589934592
+classify warm_sm=0 read_sm=8 thr=380 pages=4096 conf1=4073 lowconf=2 errs=0 blocksA=1048064 blocksB=1048064 sample_lat p10=276 p25=291 p50=431 p75=467 p90=488
+sidecheck gpc=1 sm=2 warm_sm=0 far_frac=0.499 p50=319 errs=0 => side other(B)
+sidecheck gpc=2 sm=4 warm_sm=0 far_frac=0.000 p50=294 errs=0 => side same-as-warm(A)
+sidecheck gpc=3 sm=6 warm_sm=0 far_frac=0.499 p50=318 errs=0 => side other(B)
+sidecheck gpc=4 sm=8 warm_sm=0 far_frac=0.499 p50=317 errs=0 => side other(B)
+sidecheck gpc=5 sm=10 warm_sm=0 far_frac=0.499 p50=321 errs=0 => side other(B)
+sidecheck gpc=6 sm=12 warm_sm=0 far_frac=0.000 p50=294 errs=0 => side same-as-warm(A)
+sidecheck gpc=7 sm=14 warm_sm=0 far_frac=0.000 p50=293 errs=0 => side same-as-warm(A)
+exit=0
+atl1-1-02-014-9-0.pace.gatech.edu
+NVIDIA H200, GPU-c0239183-b7f8-10aa-11ef-b7e9c10a4235, 615.71.09, 1980 MHz, 560.00 W
+Sat Nov 21 09:05:09 PM EST 2026
+mapcheck bits=66 mismatches=0
+gpc 0 sms 0 1 16 17 32 33 48 49 124 125 126 127 128 129 130 131
+gpc 1 sms 2 3 18 19 34 35 50 51 64 65 78 79 92 93 106 107
+gpc 2 sms 4 5 20 21 36 37 52 53 66 67 80 81 94 95 108 109
+gpc 3 sms 6 7 22 23 38 39 54 55 68 69 82 83 96 97 110 111
+gpc 4 sms 8 9 24 25 40 41 56 57 70 71 84 85 98 99 112 113
+gpc 5 sms 10 11 26 27 42 43 58 59 72 73 86 87 100 101 114 115
+gpc 6 sms 12 13 28 29 44 45 60 61 74 75 88 89 102 103 116 117 120 121
+gpc 7 sms 14 15 30 31 46 47 62 63 76 77 90 91 104 105 118 119 122 123
+buf=0x155100000000 gib=8.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=0 cold=2147483648 end=8589934592
+classify warm_sm=0 read_sm=10 thr=380 pages=4096 conf1=4073 lowconf=6 errs=0 blocksA=1047040 blocksB=1047040 sample_lat p10=277 p25=294 p50=433 p75=468 p90=487
+sidecheck gpc=1 sm=2 warm_sm=0 far_frac=0.499 p50=318 errs=0 => side other(B)
+sidecheck gpc=2 sm=4 warm_sm=0 far_frac=0.000 p50=294 errs=0 => side same-as-warm(A)
+sidecheck gpc=3 sm=6 warm_sm=0 far_frac=0.499 p50=318 errs=0 => side other(B)
+sidecheck gpc=4 sm=8 warm_sm=0 far_frac=0.499 p50=319 errs=0 => side other(B)
+sidecheck gpc=5 sm=10 warm_sm=0 far_frac=0.499 p50=320 errs=0 => side other(B)
+sidecheck gpc=6 sm=12 warm_sm=0 far_frac=0.000 p50=294 errs=0 => side same-as-warm(A)
+sidecheck gpc=7 sm=14 warm_sm=0 far_frac=0.000 p50=293 errs=0 => side same-as-warm(A)
+exit=0
+atl1-1-02-014-9-0.pace.gatech.edu
+NVIDIA H200, GPU-c0239183-b7f8-10aa-11ef-b7e9c10a4235, 615.71.09, 1980 MHz, 560.00 W
+Sat Nov 21 09:05:14 PM EST 2026
+mapcheck bits=66 mismatches=0
+gpc 0 sms 0 1 16 17 32 33 48 49 124 125 126 127 128 129 130 131
+gpc 1 sms 2 3 18 19 34 35 50 51 64 65 78 79 92 93 106 107
+gpc 2 sms 4 5 20 21 36 37 52 53 66 67 80 81 94 95 108 109
+gpc 3 sms 6 7 22 23 38 39 54 55 68 69 82 83 96 97 110 111
+gpc 4 sms 8 9 24 25 40 41 56 57 70 71 84 85 98 99 112 113
+gpc 5 sms 10 11 26 27 42 43 58 59 72 73 86 87 100 101 114 115
+gpc 6 sms 12 13 28 29 44 45 60 61 74 75 88 89 102 103 116 117 120 121
+gpc 7 sms 14 15 30 31 46 47 62 63 76 77 90 91 104 105 118 119 122 123
+buf=0x155100000000 gib=8.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=0 cold=2147483648 end=8589934592
+classify warm_sm=0 read_sm=12 thr=380 pages=4096 conf1=0 lowconf=4096 errs=0 blocksA=0 blocksB=0 sample_lat p10=274 p25=281 p50=293 p75=306 p90=313
+FATAL classification unreliable
+exit=1
+atl1-1-02-014-9-0.pace.gatech.edu
+NVIDIA H200, GPU-c0239183-b7f8-10aa-11ef-b7e9c10a4235, 615.71.09, 1980 MHz, 560.00 W
+Sat Nov 21 09:05:18 PM EST 2026
+mapcheck bits=66 mismatches=0
+gpc 0 sms 0 1 16 17 32 33 48 49 124 125 126 127 128 129 130 131
+gpc 1 sms 2 3 18 19 34 35 50 51 64 65 78 79 92 93 106 107
+gpc 2 sms 4 5 20 21 36 37 52 53 66 67 80 81 94 95 108 109
+gpc 3 sms 6 7 22 23 38 39 54 55 68 69 82 83 96 97 110 111
+gpc 4 sms 8 9 24 25 40 41 56 57 70 71 84 85 98 99 112 113
+gpc 5 sms 10 11 26 27 42 43 58 59 72 73 86 87 100 101 114 115
+gpc 6 sms 12 13 28 29 44 45 60 61 74 75 88 89 102 103 116 117 120 121
+gpc 7 sms 14 15 30 31 46 47 62 63 76 77 90 91 104 105 118 119 122 123
+buf=0x155100000000 gib=8.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=0 cold=2147483648 end=8589934592
+classify warm_sm=0 read_sm=14 thr=380 pages=4096 conf1=0 lowconf=4096 errs=0 blocksA=0 blocksB=0 sample_lat p10=275 p25=281 p50=294 p75=305 p90=312
+FATAL classification unreliable
+exit=1

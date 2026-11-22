@@ -1,0 +1,8 @@
+name=pr_simx-lmem-wake_base_sgemm_tcu_fp16
+src_rev=
+src_dirty=0
+host=atl1-1-02-005-3-1.pace.gatech.edu
+xconf=-DVX_CFG_NUM_THREADS=8 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_ISSUE_WIDTH=2 -DITYPE=fp16 -DOTYPE=fp32
+blackbox=--driver=simx --app=sgemm_tcu --perf=6 --cores=1
+rc=2
+wall_s=172

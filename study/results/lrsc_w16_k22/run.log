@@ -167,3 +167,143 @@ Test7: lrsc_counter
 [VXDRV]   RING_BASE=0x4000000004e662c0 HEAD_ADDR=0x4000000004e76380 CMPL_ADDR=0x4000000004e76480
 [VXDRV]   RING_SIZE_LOG2=16 Q_CONTROL=0x00000001 Q_TAIL=0x0000000000000980
 [VXDRV]   The ring was accepted but nothing is executing. Set VORTEX_CP_POLL_TIMEOUT_S=<sec> to abort instead of spinning.
+Test7-lrsc_counter PASSED
+PERF: core0: scheduler: idle=136%, occupancy=15.8 (99%), simt_util=31.2 (97%)
+PERF: core0: stalls: fetch=0%, ibuf=42%, scrb=99%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core0: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core0: branches: total=60108, divergent=0 (rate=0%)
+PERF: core0: memory: ifetch_lat=99.29, load_lat=2140.08, loads=1874952, stores=2048
+PERF: core0: instrs=241080, cycles=52979736, IPC=0.005
+PERF: core1: scheduler: idle=146%, occupancy=15.8 (99%), simt_util=31.1 (97%)
+PERF: core1: stalls: fetch=0%, ibuf=42%, scrb=99%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core1: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core1: branches: total=56409, divergent=0 (rate=0%)
+PERF: core1: memory: ifetch_lat=98.62, load_lat=2128.90, loads=1754600, stores=2048
+PERF: core1: instrs=226328, cycles=49644547, IPC=0.005
+PERF: core2: scheduler: idle=114%, occupancy=15.9 (99%), simt_util=31.2 (97%)
+PERF: core2: stalls: fetch=0%, ibuf=40%, scrb=99%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core2: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core2: branches: total=71785, divergent=0 (rate=0%)
+PERF: core2: memory: ifetch_lat=95.89, load_lat=199.52, loads=2239884, stores=2048
+PERF: core2: instrs=287832, cycles=63185038, IPC=0.005
+PERF: core3: scheduler: idle=128%, occupancy=15.8 (99%), simt_util=31.1 (97%)
+PERF: core3: stalls: fetch=0%, ibuf=42%, scrb=99%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core3: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core3: branches: total=64082, divergent=0 (rate=0%)
+PERF: core3: memory: ifetch_lat=99.29, load_lat=2118.15, loads=1998326, stores=2048
+PERF: core3: instrs=257200, cycles=56503203, IPC=0.005
+PERF: core4: scheduler: idle=109%, occupancy=15.9 (99%), simt_util=31.2 (98%)
+PERF: core4: stalls: fetch=0%, ibuf=40%, scrb=99%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core4: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core4: branches: total=75207, divergent=0 (rate=0%)
+PERF: core4: memory: ifetch_lat=95.57, load_lat=274.97, loads=2349924, stores=2048
+PERF: core4: instrs=301496, cycles=66239588, IPC=0.005
+PERF: core5: scheduler: idle=121%, occupancy=15.8 (99%), simt_util=31.3 (98%)
+PERF: core5: stalls: fetch=0%, ibuf=41%, scrb=99%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core5: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core5: branches: total=67696, divergent=0 (rate=0%)
+PERF: core5: memory: ifetch_lat=98.63, load_lat=87.08, loads=2121188, stores=2048
+PERF: core5: instrs=271704, cycles=59919052, IPC=0.005
+PERF: core6: scheduler: idle=270%, occupancy=15.2 (95%), simt_util=30.3 (95%)
+PERF: core6: stalls: fetch=0%, ibuf=43%, scrb=95%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core6: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core6: branches: total=31215, divergent=0 (rate=0%)
+PERF: core6: memory: ifetch_lat=120.34, load_lat=2004.41, loads=947816, stores=2048
+PERF: core6: instrs=125472, cycles=26848375, IPC=0.005
+PERF: core7: scheduler: idle=217%, occupancy=15.7 (98%), simt_util=30.7 (96%)
+PERF: core7: stalls: fetch=0%, ibuf=48%, scrb=98%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core7: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core7: branches: total=38551, divergent=0 (rate=0%)
+PERF: core7: memory: ifetch_lat=134.10, load_lat=2068.27, loads=1185446, stores=2048
+PERF: core7: instrs=154816, cycles=33428621, IPC=0.005
+PERF: core8: scheduler: idle=157%, occupancy=15.6 (97%), simt_util=31.0 (97%)
+PERF: core8: stalls: fetch=0%, ibuf=39%, scrb=97%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core8: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core8: branches: total=52859, divergent=0 (rate=0%)
+PERF: core8: memory: ifetch_lat=91.99, load_lat=2081.67, loads=1641406, stores=2048
+PERF: core8: instrs=212192, cycles=46146860, IPC=0.005
+PERF: core9: scheduler: idle=191%, occupancy=15.6 (98%), simt_util=30.9 (97%)
+PERF: core9: stalls: fetch=0%, ibuf=40%, scrb=98%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core9: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core9: branches: total=43463, divergent=0 (rate=0%)
+PERF: core9: memory: ifetch_lat=93.67, load_lat=2077.97, loads=1345622, stores=2048
+PERF: core9: instrs=174576, cycles=37896625, IPC=0.005
+PERF: core10: scheduler: idle=1786%, occupancy=13.2 (82%), simt_util=24.0 (75%)
+PERF: core10: stalls: fetch=0%, ibuf=6%, scrb=84%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core10: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core10: branches: total=6029, divergent=0 (rate=0%)
+PERF: core10: memory: ifetch_lat=18.25, load_lat=1476.06, loads=146578, stores=2048
+PERF: core10: instrs=24984, cycles=4060334, IPC=0.006
+PERF: core11: scheduler: idle=545%, occupancy=15.3 (95%), simt_util=28.0 (88%)
+PERF: core11: stalls: fetch=0%, ibuf=24%, scrb=96%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core11: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core11: branches: total=17041, divergent=0 (rate=0%)
+PERF: core11: memory: ifetch_lat=54.82, load_lat=1772.41, loads=479218, stores=2048
+PERF: core11: instrs=68864, cycles=13304907, IPC=0.005
+PERF: core12: scheduler: idle=430%, occupancy=15.5 (97%), simt_util=29.2 (91%)
+PERF: core12: stalls: fetch=0%, ibuf=35%, scrb=97%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core12: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core12: branches: total=20207, divergent=0 (rate=0%)
+PERF: core12: memory: ifetch_lat=80.24, load_lat=2022.87, loads=596554, stores=2048
+PERF: core12: instrs=82056, cycles=16871733, IPC=0.005
+PERF: core13: scheduler: idle=357%, occupancy=15.5 (97%), simt_util=29.7 (93%)
+PERF: core13: stalls: fetch=0%, ibuf=37%, scrb=97%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core13: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core13: branches: total=24181, divergent=0 (rate=0%)
+PERF: core13: memory: ifetch_lat=83.61, load_lat=1997.15, loads=719238, stores=2048
+PERF: core13: instrs=97432, cycles=20290046, IPC=0.005
+PERF: core14: scheduler: idle=673%, occupancy=14.8 (93%), simt_util=28.4 (89%)
+PERF: core14: stalls: fetch=0%, ibuf=30%, scrb=93%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core14: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core14: branches: total=13619, divergent=0 (rate=0%)
+PERF: core14: memory: ifetch_lat=65.46, load_lat=1883.02, loads=387998, stores=2048
+PERF: core14: instrs=55096, cycles=10776113, IPC=0.005
+PERF: core15: scheduler: idle=1074%, occupancy=14.6 (91%), simt_util=25.0 (78%)
+PERF: core15: stalls: fetch=0%, ibuf=9%, scrb=92%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core15: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core15: branches: total=9648, divergent=0 (rate=0%)
+PERF: core15: memory: ifetch_lat=23.98, load_lat=1419.45, loads=242678, stores=2048
+PERF: core15: instrs=39296, cycles=6750231, IPC=0.006
+PERF: core16: scheduler: idle=290%, occupancy=15.6 (97%), simt_util=29.9 (94%)
+PERF: core16: stalls: fetch=0%, ibuf=36%, scrb=97%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core16: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core16: branches: total=29307, divergent=0 (rate=0%)
+PERF: core16: memory: ifetch_lat=83.89, load_lat=2032.84, loads=880830, stores=2048
+PERF: core16: instrs=118136, cycles=24986687, IPC=0.005
+PERF: core17: scheduler: idle=164%, occupancy=15.7 (98%), simt_util=30.9 (97%)
+PERF: core17: stalls: fetch=0%, ibuf=40%, scrb=98%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core17: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core17: branches: total=50748, divergent=0 (rate=0%)
+PERF: core17: memory: ifetch_lat=93.82, load_lat=2100.62, loads=1571026, stores=2048
+PERF: core17: instrs=203696, cycles=44121780, IPC=0.005
+PERF: core18: scheduler: idle=182%, occupancy=15.5 (97%), simt_util=30.9 (97%)
+PERF: core18: stalls: fetch=0%, ibuf=38%, scrb=97%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core18: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core18: branches: total=45576, divergent=0 (rate=0%)
+PERF: core18: memory: ifetch_lat=89.26, load_lat=2052.16, loads=1413546, stores=2048
+PERF: core18: instrs=183152, cycles=39745534, IPC=0.005
+PERF: core19: scheduler: idle=240%, occupancy=15.7 (98%), simt_util=30.5 (95%)
+PERF: core19: stalls: fetch=0%, ibuf=38%, scrb=98%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core19: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core19: branches: total=35036, divergent=0 (rate=0%)
+PERF: core19: memory: ifetch_lat=89.88, load_lat=2070.85, loads=1069532, stores=2048
+PERF: core19: instrs=140864, cycles=30225228, IPC=0.005
+PERF: core20: scheduler: idle=100%, occupancy=15.7 (98%), simt_util=31.4 (98%)
+PERF: core20: stalls: fetch=0%, ibuf=41%, scrb=98%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core20: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core20: branches: total=81999, divergent=0 (rate=0%)
+PERF: core20: memory: ifetch_lat=98.11, load_lat=457.76, loads=2575816, stores=2048
+PERF: core20: instrs=328696, cycles=72481617, IPC=0.005
+PERF: core21: scheduler: idle=102%, occupancy=15.8 (99%), simt_util=31.4 (98%)
+PERF: core21: stalls: fetch=0%, ibuf=42%, scrb=99%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: core21: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: core21: branches: total=79840, divergent=0 (rate=0%)
+PERF: core21: memory: ifetch_lat=100.69, load_lat=399.48, loads=2505254, stores=2048
+PERF: core21: instrs=320008, cycles=70532844, IPC=0.005
+PERF: scheduler: idle=188%, occupancy=15.7 (98%), simt_util=30.8 (96%)
+PERF: stalls: fetch=0%, ibuf=40%, scrb=98%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: inst_mix: alu=63%, lsu=25%, sfu=13%, fpu=0%, tcu=0%
+PERF: branches: total=974606, divergent=0 (rate=0%)
+PERF: memory: ifetch_lat=95.21, load_lat=1364.29, loads=30047432, stores=45056
+PERF: instrs=3914976, cycles=72481617, IPC=0.054
+make: Leaving directory '/tmp/echung67/vx_15974361_170951/tests/regression/amo'

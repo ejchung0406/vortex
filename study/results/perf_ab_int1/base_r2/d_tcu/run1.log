@@ -1,0 +1,27 @@
+open device connection
+input data type: fp16 (id=2)
+output data type: fp32 (id=0)
+WMMA Core Dimension: M=2, N=2, K=2
+WMMA Tile Dimension: M=8, N=4, K=8
+matrix A: 64x64
+matrix B: 64x64
+matrix C: 64x64
+allocate device memory
+A_addr=0x30000
+B_addr=0x32000
+C_addr=0x34000
+upload matrix A buffer
+upload matrix B buffer
+load kernel module
+[iter 0] launch kernel
+[iter 0] download destination buffer
+[iter 0] wait for completion
+[iter 0] Elapsed time: 341 ms
+[iter 0] verify result
+[iter 0] match (0 errors)
+cleanup
+PERF: core0: lmem: reqs=0, bank_stalls=0 (utility=0%)
+PERF: core0: coalescer: misses=0
+PERF: memory: reqs=739 (r=466, w=273), lat=22.7 cyc, bank_st=0 (utility=100%)
+PERF: instrs=48032, cycles=83506, IPC=0.575
+PASSED!

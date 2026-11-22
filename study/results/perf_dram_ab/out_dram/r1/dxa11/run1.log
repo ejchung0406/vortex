@@ -70,7 +70,7 @@ VMManager Initialization...
 cores=11 warps=64 threads=32 slots=3 grid=16 tile_elems=4096 tiles=32 depth=4 consume=0 pattern=dxa unroll=4 bytes=8388608
 [VXDRV] Warning: CP has not retired a command in 10s.
 [VXDRV]   Q_SEQNUM=43 target=44 CP_CTRL=0x00000001 CP_STATUS=0x00000001 Q_ERROR=0x00000000
-[VXDRV]   RING_BASE=0x400000000400a340 HEAD_ADDR=0x400000000401a400 CMPL_ADDR=0x400000000401a500
+[VXDRV]   RING_BASE=0x400000000400a640 HEAD_ADDR=0x400000000401a700 CMPL_ADDR=0x400000000401a800
 [VXDRV]   RING_SIZE_LOG2=16 Q_CONTROL=0x00000001 Q_TAIL=0x0000000000000b00
 [VXDRV]   The ring was accepted but nothing is executing. Set VORTEX_CP_POLL_TIMEOUT_S=<sec> to abort instead of spinning.
 PERF: core0: lmem: reqs=2048, bank_stalls=0 (utility=100%)

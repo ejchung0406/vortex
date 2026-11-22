@@ -1,5 +1,10 @@
 # sim: DRAM interleave unit with the channel and bank mixed
 
+Status (wind-down, 2026-11-21): complete; committed as 109181e08, worktree clean,
+nothing pushed. Verified at XLEN 64 only (XLEN 32 out of scope; the AXI
+bank-model runs used the foldsim.yaml configuration at XLEN 64). Review
+findings: none open; F2 (default changed SimX mapping when MEM_BLOCK_SIZE != DATA_SIZE) fixed in 109181e08 with default 0, shown cycle-identical on SimX and rtlsim.
+
 ## Summary
 
 Adds a simulation-only knob, `VX_CFG_PLATFORM_MEMORY_INTERLEAVE_SIZE`
@@ -177,3 +182,4 @@ conflicts with this branch at the same anchors (also
   channels" text: fixed. Test through the channel's decode: added.
 - The bwstream measurement uses a test from sibling branch
   `pr/tests-bwstream`, copied into the build copy only.
+- Commit 109181e08 on `pr/dram-hbm3e` 243b3d81e.

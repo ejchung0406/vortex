@@ -1,0 +1,13 @@
+name=barfix_smr_s0_k1_n1_simx
+src_rev=
+src_dirty=
+src_phoenix=/storage/project/r-hkim358-0/echung67/vortex-exp/src_barfix_v5
+src_pushed=2026-11-21T20:30:17-05:00
+host=atl1-1-02-003-19-2.pace.gatech.edu
+cpu=Intel(R) Xeon(R) Gold 6226 CPU @ 2.70GHz
+cluster=ice
+xconf=-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=0
+blackbox=--driver=simx --app=smprobe --perf=7 --args=-k1 -n1 -i50 -c2 -s4 -d2000
+rc=0
+wall_s=153
+ran_on=ice (fetched 2026-11-21T21:18:40-05:00 from ice:~/scratch/vortex-ice/results/barfix_smr_s0_k1_n1_simx)
