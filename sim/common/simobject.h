@@ -201,14 +201,72 @@ protected:
 class SimEventBase {
 public:
   virtual ~SimEventBase() = default;
-  virtual void fire() = 0;
+  // Delivers the event and frees it: one dispatch per delivered event.
+  virtual void fire_and_free() = 0;
   uint64_t cycles() const { return cycles_; }
 
 protected:
   explicit SimEventBase(uint64_t cycles) : cycles_(cycles) {}
   uint64_t cycles_;
-  LinkedListNode<SimEventBase> list_;
+  SimEventBase* next_ = nullptr;
   friend class SimPlatform;
+  friend class SimEventList;
+};
+
+// Intrusive FIFO of events (a wheel bucket or a domain's immediate list):
+// events are appended and leave from the front, so one link suffices.
+class SimEventList {
+public:
+  bool empty() const { return head_ == nullptr; }
+
+  void push_back(SimEventBase* evt) {
+    evt->next_ = nullptr;
+    if (tail_) {
+      tail_->next_ = evt;
+    } else {
+      head_ = evt;
+    }
+    tail_ = evt;
+  }
+
+  SimEventBase* pop_front() {
+    auto* evt = head_;
+    head_ = evt->next_;
+    if (head_ == nullptr) {
+      tail_ = nullptr;
+    }
+    return evt;
+  }
+
+  // Detaches the whole chain (linked through next_) and empties the list.
+  SimEventBase* take_all() {
+    auto* evt = head_;
+    head_ = tail_ = nullptr;
+    return evt;
+  }
+
+  // Moves other's events, in order, in front of this list's.
+  void prepend(SimEventList& other) {
+    if (other.empty()) {
+      return;
+    }
+    other.tail_->next_ = head_;
+    if (tail_ == nullptr) {
+      tail_ = other.tail_;
+    }
+    head_ = other.head_;
+    other.head_ = other.tail_ = nullptr;
+  }
+
+  void clear_and_free() {
+    while (!this->empty()) {
+      delete this->pop_front();
+    }
+  }
+
+private:
+  SimEventBase* head_ = nullptr;
+  SimEventBase* tail_ = nullptr;
 };
 
 // Optimized Event for Channel Transfers
@@ -219,7 +277,7 @@ public:
   SimChannelEvent(SimChannel<Pkt>* channel, P&& pkt, uint64_t cycles)
       : SimEventBase(cycles), channel_(channel), pkt_(std::forward<P>(pkt)) {}
 
-  void fire() override;
+  void fire_and_free() override;
 
   static void* operator new(std::size_t) { return allocator_.allocate(1); }
   static void operator delete(void* ptr, std::size_t) noexcept {
@@ -242,7 +300,10 @@ public:
   SimCallEvent(F&& func, Pkt pkt, uint64_t cycles)
     : SimEventBase(cycles), func_(std::forward<F>(func)), pkt_(std::move(pkt)) {}
 
-  void fire() override { func_(pkt_); }
+  void fire_and_free() override {
+    func_(pkt_);
+    delete this;
+  }
 
   static void* operator new(std::size_t) { return allocator_.allocate(1); }
   static void operator delete(void* ptr, std::size_t) noexcept {
@@ -414,8 +475,8 @@ private:
   struct Domain {
     std::vector<SimObjectBase*> scan;   // creation order within the domain
     std::vector<uint8_t> active;        // tick flag of each scan entry
-    std::vector<LinkedList<SimEventBase, &SimEventBase::list_>> wheel;
-    LinkedList<SimEventBase, &SimEventBase::list_> imm;
+    std::vector<SimEventList> wheel;
+    SimEventList imm;
     // Packets in flight toward this domain's endpoints (see SimChannelBase).
     alignas(64) int64_t inflight = 0;
     uint32_t delta = 0;
@@ -709,16 +770,21 @@ private:
     // Delivery callbacks execute in the endpoint's domain context.
     tl_exec_domain_ = dom.id;
     tl_exec_object_ = nullptr;
-    for (auto it = bucket.begin(); it != bucket.end();) {
-      auto evt = &*it;
+    // Walk the detached chain. An event scheduled meanwhile is due at least
+    // a cycle later, so it never fires in this walk; the future wraparound
+    // collisions go back in front of it, in their order.
+    SimEventList kept;
+    auto* evt = bucket.take_all();
+    while (evt != nullptr) {
+      auto* next = evt->next_;
       if (evt->cycles() <= cycle) {
-        evt->fire();
-        it = bucket.erase(it);
-        delete evt;
+        evt->fire_and_free();
       } else {
-        ++it; // future wraparound collision in this wheel slot
+        kept.push_back(evt); // future wraparound collision in this wheel slot
       }
+      evt = next;
     }
+    bucket.prepend(kept);
   }
 
   void init_mt(uint32_t num_workers) {
@@ -1394,19 +1460,9 @@ inline void SimPlatform::reset() {
   // callers reset only from quiescence (see idle()).
   for (auto& dom : domains_) {
     for (auto& bucket : dom->wheel) {
-      while (!bucket.empty()) {
-        auto it = bucket.begin();
-        auto evt = &*it;
-        bucket.erase(it);
-        delete evt;
-      }
+      bucket.clear_and_free();
     }
-    while (!dom->imm.empty()) {
-      auto it = dom->imm.begin();
-      auto evt = &*it;
-      dom->imm.erase(it);
-      delete evt;
-    }
+    dom->imm.clear_and_free();
     dom->delta = 0;
   }
 
@@ -1555,19 +1611,9 @@ inline void SimPlatform::cleanup() {
 
   for (auto& dom : domains_) {
     for (auto& bucket : dom->wheel) {
-      while (!bucket.empty()) {
-        auto it = bucket.begin();
-        auto evt = &*it;
-        bucket.erase(it);
-        delete evt;
-      }
+      bucket.clear_and_free();
     }
-    while (!dom->imm.empty()) {
-      auto it = dom->imm.begin();
-      auto evt = &*it;
-      dom->imm.erase(it);
-      delete evt;
-    }
+    dom->imm.clear_and_free();
   }
   domains_.clear();
   mail_.clear();
@@ -1586,18 +1632,15 @@ inline void SimPlatform::fire_immediate_events(Domain& dom) {
   // appended mid-firing, which receive a delta above all queued ones. Firing
   // front-to-back is therefore identical to draining delta levels in order.
   while (!dom.imm.empty()) {
-    auto it = dom.imm.begin();
-    auto evt = &*it;
-    evt->fire();
-    dom.imm.erase(it);
-    delete evt;
+    dom.imm.pop_front()->fire_and_free();
   }
   dom.delta = 0;
 }
 
 template <typename Pkt>
-void SimChannelEvent<Pkt>::fire() {
+void SimChannelEvent<Pkt>::fire_and_free() {
   channel_->receive_packet(std::move(pkt_));
+  delete this;
 }
 
 inline SimObjectBase::SimObjectBase(const SimContext&, const std::string& name)
