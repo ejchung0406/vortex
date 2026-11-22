@@ -18,6 +18,11 @@ module VX_lane_dispatch import VX_gpu_pkg::*; #(
     parameter NUM_LANES  = 1,
     parameter OUT_BUF    = 0,
     parameter MAX_FANOUT = `MAX_FANOUT,
+    // An op leaves its dispatch queue as its last packet is taken into the
+    // packet register, and the next op's first packet follows it without an
+    // empty cycle. Applies where the register exists and each block has one
+    // queue (no batching).
+    parameter GAPLESS    = 0,
     // dispatch ports served, starting at issue slice port_base
     parameter NUM_PORTS  = `VX_CFG_ISSUE_WIDTH
 ) (
@@ -54,6 +59,10 @@ module VX_lane_dispatch import VX_gpu_pkg::*; #(
 
     localparam DATA_IN_TMASK_OFF = IN_DATAW - (UUID_WIDTH + ISSUE_WIS_W + NCTA_WIDTH + SIMD_IDX_W + `VX_CFG_SIMD_WIDTH);
     localparam DATA_IN_OPDS_OFF = 1 + 1;
+    localparam GAPLESS_ENABLE = (GAPLESS != 0) && FANOUT_ENABLE && (BATCH_COUNT == 1) && (`VX_CFG_SIMD_WIDTH != NUM_LANES);
+    // the op's fields that every packet carries
+    localparam HDR_LSB      = DATA_IN_OPDS_OFF + NUM_SRC_OPDS * `VX_CFG_SIMD_WIDTH * `VX_CFG_XLEN;
+    localparam HDR_ARGS_W   = DATA_IN_TMASK_OFF - HDR_LSB;
 
     typedef struct packed {
         logic [2:0][NUM_LANES-1:0][`VX_CFG_XLEN-1:0] rsdata;
@@ -78,6 +87,7 @@ module VX_lane_dispatch import VX_gpu_pkg::*; #(
     wire [BLOCK_SIZE-1:0] block_sop;
     wire [BLOCK_SIZE-1:0] block_eop;
     wire [BLOCK_SIZE-1:0] block_done;
+    wire [BLOCK_SIZE-1:0] block_pop;
 
     wire batch_done = (& block_done);
 
@@ -150,6 +160,20 @@ module VX_lane_dispatch import VX_gpu_pkg::*; #(
 
         wire valid_p, ready_p;
 
+        // the op whose packet is at the output: the queue head, or with
+        // GAPLESS the fields registered with the packet, as the head has
+        // moved on by the time the last packet leaves
+        wire [UUID_WIDTH-1:0]  out_uuid;
+        wire [ISSUE_WIS_W-1:0] out_wis;
+        wire [NCTA_WIDTH-1:0]  out_cta_id;
+        wire [SIMD_IDX_W-1:0]  out_sid;
+        wire                   out_sop, out_eop;
+        wire [HDR_ARGS_W-1:0]  out_args;
+        wire                   pop_p;
+
+        wire [UUID_WIDTH-1:0]  dispatch_uuid = dispatch_data[issue_idx][IN_DATAW-1 -: UUID_WIDTH];
+        wire [HDR_ARGS_W-1:0]  dispatch_args = dispatch_data[issue_idx][DATA_IN_TMASK_OFF-1 : HDR_LSB];
+
         if (`VX_CFG_SIMD_WIDTH != NUM_LANES) begin : g_partial_simd
 
             packet_t [NUM_PACKETS-1:0] packets;
@@ -170,23 +194,58 @@ module VX_lane_dispatch import VX_gpu_pkg::*; #(
 
             wire fire_p = valid_p && ready_p;
 
-            VX_nz_iterator #(
-                .DATAW   ($bits(packet_t)),
-                .KEYW    (NUM_LANES),
-                .N       (NUM_PACKETS),
-                .OUT_REG (FANOUT_ENABLE)
-            ) packet_iter (
-                .clk     (clk),
-                .reset   (reset),
-                .valid_in(dispatch_valid[issue_idx]),
-                .data_in (packets),
-                .next    (fire_p),
-                .valid_out(valid_p),
-                .data_out(block_packet),
-                .pid     (start_p),
-                .sop     (is_first_p),
-                .eop     (is_last_p)
-            );
+            if (GAPLESS_ENABLE) begin : g_gapless
+                localparam HDR_W = UUID_WIDTH + ISSUE_WIS_W + NCTA_WIDTH + SIMD_IDX_W + 1 + 1 + HDR_ARGS_W;
+                wire [HDR_W-1:0] dispatch_hdr = {dispatch_uuid, dispatch_wis, dispatch_cta_id, dispatch_sid, dispatch_sop, dispatch_eop, dispatch_args};
+                wire [NUM_PACKETS-1:0][HDR_W+$bits(packet_t)-1:0] iter_in;
+                for (genvar i = 0; i < NUM_PACKETS; ++i) begin : g_iter_in
+                    assign iter_in[i] = {dispatch_hdr, packets[i]};
+                end
+                wire [HDR_W-1:0] packet_hdr;
+
+                VX_nz_iterator #(
+                    .DATAW   (HDR_W + $bits(packet_t)),
+                    .KEYW    (NUM_LANES),
+                    .N       (NUM_PACKETS),
+                    .OUT_REG (1),
+                    .GAPLESS (1)
+                ) packet_iter (
+                    .clk     (clk),
+                    .reset   (reset),
+                    .valid_in(dispatch_valid[issue_idx]),
+                    .data_in (iter_in),
+                    .next    (fire_p),
+                    .valid_out(valid_p),
+                    .data_out({packet_hdr, block_packet}),
+                    .pid     (start_p),
+                    .sop     (is_first_p),
+                    .eop     (is_last_p),
+                    .last    (pop_p)
+                );
+                assign {out_uuid, out_wis, out_cta_id, out_sid, out_sop, out_eop, out_args} = packet_hdr;
+            end else begin : g_gapped
+                VX_nz_iterator #(
+                    .DATAW   ($bits(packet_t)),
+                    .KEYW    (NUM_LANES),
+                    .N       (NUM_PACKETS),
+                    .OUT_REG (FANOUT_ENABLE)
+                ) packet_iter (
+                    .clk     (clk),
+                    .reset   (reset),
+                    .valid_in(dispatch_valid[issue_idx]),
+                    .data_in (packets),
+                    .next    (fire_p),
+                    .valid_out(valid_p),
+                    .data_out(block_packet),
+                    .pid     (start_p),
+                    .sop     (is_first_p),
+                    .eop     (is_last_p),
+                    `UNUSED_PIN (last)
+                );
+                assign {out_uuid, out_wis, out_cta_id, out_sid, out_sop, out_eop, out_args} =
+                       {dispatch_uuid, dispatch_wis, dispatch_cta_id, dispatch_sid, dispatch_sop, dispatch_eop, dispatch_args};
+                assign pop_p = fire_p && is_last_p;
+            end
 
             assign block_tmask[block_idx] = block_packet.tmask;
             assign block_rsdata[block_idx] = block_packet.rsdata;
@@ -206,7 +265,11 @@ module VX_lane_dispatch import VX_gpu_pkg::*; #(
             assign block_valid[block_idx] = valid_p;
             assign block_ready[block_idx] = ready_p;
             assign block_done[block_idx]  = ready_p || ~valid_p;
+            assign {out_uuid, out_wis, out_cta_id, out_sid, out_sop, out_eop, out_args} =
+                   {dispatch_uuid, dispatch_wis, dispatch_cta_id, dispatch_sid, dispatch_sop, dispatch_eop, dispatch_args};
+            assign pop_p = valid_p && ready_p;
         end
+        assign block_pop[block_idx] = pop_p;
 
         wire [ISSUE_ISW_W-1:0] isw;
         if (BATCH_COUNT != 1) begin : g_isw_batch
@@ -219,11 +282,11 @@ module VX_lane_dispatch import VX_gpu_pkg::*; #(
             assign isw = port_base + ISSUE_ISW_W'(block_idx);
         end
 
-        wire [NW_WIDTH-1:0] block_wid = wis_to_wid(dispatch_wis, isw);
-        wire [GPID_WIDTH-1:0] warp_pid = GPID_WIDTH'(block_pid[block_idx]) + GPID_WIDTH'(dispatch_sid * NUM_PACKETS);
+        wire [NW_WIDTH-1:0] block_wid = wis_to_wid(out_wis, isw);
+        wire [GPID_WIDTH-1:0] warp_pid = GPID_WIDTH'(block_pid[block_idx]) + GPID_WIDTH'(out_sid * NUM_PACKETS);
 
-        wire warp_sop = block_sop[block_idx] && dispatch_sop;
-        wire warp_eop = block_eop[block_idx] && dispatch_eop;
+        wire warp_sop = block_sop[block_idx] && out_sop;
+        wire warp_eop = block_eop[block_idx] && out_eop;
 
         VX_elastic_buffer #(
             .DATAW   (OUT_DATAW),
@@ -235,14 +298,14 @@ module VX_lane_dispatch import VX_gpu_pkg::*; #(
             .valid_in  (valid_p),
             .ready_in  (ready_p),
             .data_in   ({
-                dispatch_data[issue_idx][IN_DATAW-1 -: UUID_WIDTH],
+                out_uuid,
                 block_wid,
-                dispatch_cta_id,
+                out_cta_id,
                 block_tmask[block_idx],
                 warp_pid,
                 warp_sop,
                 warp_eop,
-                dispatch_data[issue_idx][DATA_IN_TMASK_OFF-1 : (DATA_IN_OPDS_OFF + NUM_SRC_OPDS * `VX_CFG_SIMD_WIDTH * `VX_CFG_XLEN)],
+                out_args,
                 block_rsdata[block_idx][0],
                 block_rsdata[block_idx][1],
                 block_rsdata[block_idx][2]
@@ -258,7 +321,7 @@ module VX_lane_dispatch import VX_gpu_pkg::*; #(
     always @(*) begin
         ready_in = 0;
         for (integer block_idx = 0; block_idx < BLOCK_SIZE; ++block_idx) begin
-            ready_in[issue_indices[block_idx]] = block_valid[block_idx] && block_ready[block_idx] && block_eop[block_idx];
+            ready_in[issue_indices[block_idx]] = block_pop[block_idx];
         end
     end
     assign dispatch_ready = ready_in;

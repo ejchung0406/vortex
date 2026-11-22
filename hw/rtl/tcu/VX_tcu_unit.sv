@@ -61,7 +61,8 @@ module VX_tcu_unit import VX_gpu_pkg::*, VX_tcu_pkg::*; #(
     VX_lane_dispatch #(
         .BLOCK_SIZE (BLOCK_SIZE),
         .NUM_LANES  (NUM_LANES),
-        .OUT_BUF    (3)
+        .OUT_BUF    (3),
+        .GAPLESS    ((`VX_CFG_LANE_DISPATCH_GAPLESS >> 4) & 1)
     ) lane_dispatch (
         .clk        (clk),
         .reset      (reset),

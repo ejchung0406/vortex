@@ -96,6 +96,15 @@ VX_CFG_FETCH_INFLIGHT = 1
 # scoreboard slot of their own, so the TCU metadata loads that share the slot
 # at 0 no longer wait for FP operations. 0 serializes the flag writes.
 VX_CFG_FFLAGS_ACCUM = 0
+# A unit narrower than the warp takes an instruction in NUM_THREADS / lanes
+# packets through a registered packet iterator (SIMD widths above 12). At 0 an
+# op leaves its dispatch queue as its last packet leaves the register, and the
+# next op's first packet enters a cycle later: one empty cycle per op. A set
+# bit removes that cycle for one unit (1 ALU, 2 LSU, 4 SFU, 8 FPU, 16 TCU):
+# the op leaves its queue as the register takes its last packet, and its
+# fields travel with each packet. Applies to a unit whose blocks each have
+# one dispatch queue (blocks = ISSUE_WIDTH).
+VX_CFG_LANE_DISPATCH_GAPLESS = 0
 # 1 registers a resolved branch between the integer ALU and the warp
 # scheduler; 0 sends it straight from the ALU's result register, so the warp
 # is picked at the branch target one cycle earlier. The register has no

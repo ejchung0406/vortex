@@ -30,7 +30,7 @@ public:
 
 	// out_delay: cycles from the slot queue's head to the unit taking the op,
 	// past the lane-dispatch buffer when the unit has one.
-	Dispatcher(const SimContext& ctx, const char* name, Core* core, uint32_t queue_size, uint32_t block_size, uint32_t num_lanes, uint32_t out_delay);
+	Dispatcher(const SimContext& ctx, const char* name, Core* core, uint32_t queue_size, uint32_t block_size, uint32_t num_lanes, uint32_t out_delay, bool gapless);
 
 	virtual ~Dispatcher();
 
@@ -58,6 +58,8 @@ private:
 	// A SIMD slice wider than the fanout limit (8 lanes, plus half) splits
 	// into packets through a registered iterator.
 	bool iter_out_reg_;
+	// the op leaves its queue as the iterator's register takes its last packet
+	bool gapless_;
 	bool release_on_accept_ = false;
 
 	friend class SimObject<Dispatcher>;
