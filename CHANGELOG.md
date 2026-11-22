@@ -162,7 +162,14 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
   the SIMD width is below the thread count with more than one issue slot, whatever the lane counts. Configurations whose units
   are as wide as the warp, with SIMD width equal to the thread count, are unchanged. [sim/simx/dispatcher.cpp](sim/simx/dispatcher.cpp),
   [sim/simx/lsu_unit.cpp](sim/simx/lsu_unit.cpp).
-
+- **SimX ALU result switch.** An ALU block's integer and multiply/divide units reach its output through a switch that takes one
+  result per cycle and, when both units hold one, alternates between them, starting with the integer unit after reset; the integer
+  unit holds a single result, so while that result waits at the switch the unit, and an integer op at the block's input, wait
+  too. SimX took same-cycle results in the order they were sent (the multiply or divide first, every time) and let the integer
+  unit keep taking ops. Code that mixes multiplies with other integer operations moves, mostly by a few cycles (default
+  configuration: sgemm -n64 792,351 to 792,837 cycles against rtlsim's 792,858); an ALU kept busy by many warps with multiplies
+  moves most (warp_rate mul_add, 8 warps on one issue slot: 0.24% fast to 0.03%). Units without a multiply/divide result in
+  flight are unchanged. [sim/simx/alu_unit.cpp](sim/simx/alu_unit.cpp).
 - **ASIC core and top at 800 MHz.** On ASAP7 the core reached 655 MHz and top 654 MHz against the 800 MHz catalog clock, held by
   three datapaths: the FDIV/FSQRT result stage, the FMA's accumulate and rounding stages, and the integer multiplier. Each is
   retimed with no change in latency, so SimX and every cycle count are unchanged. FDIV/FSQRT decides the subnormal shift and tests
