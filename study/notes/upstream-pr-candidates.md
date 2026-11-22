@@ -3,7 +3,7 @@
 Things found on the fork (`feature/dxa-borrowing`) that could go to upstream
 Vortex, one PR per topic, once each is verified. Nothing here has been sent.
 Numbers are SimX unless noted; `h200s` is one sixth of an H200 (22 SMs, one
-HBM3e stack, 800 GB/s). Last updated 2026-11-21.
+HBM3e stack, 800 GB/s). Last updated 2026-11-22.
 
 Status words: **idea** (not implemented), **experimental** (works in a throwaway
 copy, behind build macros), **on fork** (committed on the fork branch),
@@ -20,7 +20,7 @@ reviewed, both simulators).
 | 6 | Core limits that hold the compute roof | config | profile values; rtlsim 118,350 -> 35,006 (SimX 118,418 -> 33,419) | defaults vs profile-only |
 | 7 | Smaller findings | notes | see below | |
 | 8 | **DXA workers per SM scale with the number of SMs simulated** (1 at 1-15 cores, 2 at 16-23, 16 at 132) | **bug** (config + stale doc) | found; profile works around it; `VX_CFG_DXA_MEM_PORTS` has no reader | report; pick the per-SM count |
-| 9 | **SimX dcache returns a younger store's data to an older load** | **bug** (wrong results) | fixed on fork dab77b7f2 + 51a4cce00, test `war_order`, reviewed twice; rtlsim passes it (16x16 write-back: 1,296,287 vs SimX 1,295,606) | h200s-size rtlsim still running; CI case |
+| 9 | **SimX dcache returns a younger store's data to an older load** | **bug** (wrong results) | fixed on fork dab77b7f2 + 51a4cce00, test `war_order`, reviewed twice; rtlsim passes it (16x16 write-back: 1,296,287 vs SimX 1,295,606) | h200s-size rtlsim still running; CI case added locally (0c75a1dcd) |
 | 10 | **SimX dcache replays a forwarded fill on a full response queue; RTL holds** | **bug** (SimX/RTL divergence, timing) | fixed on fork cbc696a98 behind a knob, on in `h200s`; rtlsim 20,570 vs SimX 20,266 / 25,824 | make it the default |
 | 11 | **Runtime: device address can alias a CP host region** | **bug** (crash or silent corruption) | fixed on fork b974a9e98 (simx), 51a4cce00 (rtlsim) | foldsim, firesim |
 | 12 | **DXA memory tag too narrow for more in-flight slots** | **bug** (RTL does not elaborate) | fixed on fork 348263623, rtlsim builds and passes | review |
@@ -33,24 +33,39 @@ reviewed, both simulators).
 | 19 | New kernels on the tensor-memory engine (`gemm_tmem`, `gemm_tmem_decode`) | tests | patch `gemm_tmem.patch`; 3,334 FLOPs/clock and 82 GB/s per SM | put on the fork after 22 and 24 |
 | 20 | DXA and shared-memory port against the real part | calibration | merged into 24 and 27 | |
 | 21 | What the real H200 measurements changed (per-SM ingest ~210 GB/s, GPC limit 1.28 TB/s, co-residency starves) | study direction | measured; `tpc-placement-and-borrowing.md` | not an upstream item |
-| 22 | **A lone warp executes one instruction per ~11 cycles** (stalled until decode at every instruction) | design (since 2021), performance | measured: H200 one warp up to ~1 instr/cycle, Vortex 11.75 cycles/instr (RTL = SimX on 52 cases); pipelined sequential fetch `VX_CFG_FETCH_INFLIGHT` in RTL + SimX on `feature/warp-rate` (4c0cf2c81): one warp 11.81 -> 3.84, rtlsim = SimX on 49 of 52 rows, the rest within 0.05% | not merged, review pending; logic depth; next limit is the issue path (~3.8 cycles) |
+| 22 | **A lone warp executes one instruction per ~11 cycles** (stalled until decode at every instruction) | design (since 2021), performance | measured: H200 one warp up to ~1 instr/cycle, Vortex 11.75 cycles/instr (RTL = SimX on 52 cases); pipelined sequential fetch `VX_CFG_FETCH_INFLIGHT` in RTL + SimX on `feature/warp-rate` (4c0cf2c81): one warp 11.81 -> 3.84, rtlsim = SimX on 49 of 52 rows, the rest within 0.05%; now on the work branch and set in `h200s` (see "Update to 22", 2026-11-22) | logic depth; next limits are items 39 and 40 |
 | 23 | **SimX's L2 replays a forwarded fill on a full response queue; RTL holds** | bug (SimX/RTL divergence, timing) | knob on fork (462002754), default off; SimX with hold off is closer to rtlsim (2 cores 20,860 vs 20,864 off / 21,137 on), so not set in `h200s` | explain why hold=1 is further from rtlsim |
 | 24 | DXA against the real part's copy curves (16 points) | calibration (design changes) | SimX knobs in `dxa_lmem_calib.patch`: 13 of 16 points within 10%; not on fork | redo after 22; RTL |
 | 25 | The megapage heap leaves the first 2 MB on 4 KB pages | runtime behaviour | found; test-side workaround | decide whether to change the mapping |
 | 26 | **SimX routed a tile-buffer word by comparing descriptor bases** | **bug** (abort) | fixed on fork 0c1054236 | review |
-| 27 | The shared-memory DMA port is exclusive between DXA writes and tile-buffer reads | calibration (design change) | SimX knob (budget 160 B/clock) in `dxa_lmem_calib.patch`; value not checked | check after 22; RTL |
-| 28 | **Debug builds fail on both drivers** (`__assert` in `sw/common/util.h` clashes with glibc) | **bug** (build) | found, not fixed | rename the macro |
-| 29 | **Every FP operation serialises on fflags** (one FP op per ~21 cycles per warp) | design, performance | `VX_CFG_FFLAGS_ACCUM` in RTL + SimX on `feature/warp-rate` (ea56a3ae3), rtlsim = SimX on every `warp_rate` row; one warp `fma_ind8` (8 warps x 8 threads build) 2,686 -> 1,388 cycles per iteration | not merged, review pending; decide the fflags rule; logic depth |
+| 27 | The shared-memory DMA port is exclusive between DXA writes and tile-buffer reads | calibration (design change) | `VX_CFG_LMEM_TCU_RDPORT` in RTL + SimX, merged (bd1ca451d, bb5d16d87), on in `h200s`: decode on one SM 81.5 -> 100.5 GB/s | a bench for the row-read wait rule; logic depth |
+| 28 | **Debug builds fail on both drivers** (`__assert` in `sw/common/util.h` clashes with glibc) | **bug** (build) | found, not fixed; no SimX build without NDEBUG compiles | rename the macro |
+| 29 | **Every FP operation serialises on fflags** (one FP op per ~21 cycles per warp) | design, performance | `VX_CFG_FFLAGS_ACCUM` in RTL + SimX on `feature/warp-rate` (ea56a3ae3), rtlsim = SimX on every `warp_rate` row; one warp `fma_ind8` (8 warps x 8 threads build) 2,686 -> 1,388 cycles per iteration; now on the work branch and set in `h200s` | decide the fflags rule; logic depth |
 | 30 | 16-byte loads unavailable at XLEN 64 (`LDST_WIDE` needs FLEN 32) | ISA / config limit | found | decide whether to allow it at FLEN 64 |
 | 31 | **SimX adds one register per direction on the DXA's socket memory path** | SimX/RTL divergence, timing | fix in `dxa_mc_parity.patch`, not applied: h200s `-n32` rtlsim 201,583, SimX 182,421 today (-9.5%), 219,161 with the patch (+8.7%) | a second, depth-dependent difference remains; 4-8 cores still +4.8% / -3.4% |
 | 32 | DXA perf counters: SimX sums all sockets, rtlsim reports socket 0 | SimX/RTL divergence, counters | found | pick one meaning |
 | 33 | **SimX local memory slept with a packet in flight to it** (hang with 2+ DXA workers) | **bug** (hang) | fixed on fork fad1f31d7; reproduces on upstream/master (`sgemm2_dxa`, 2-8 workers) | commit on a PR branch, CI case |
 | 34 | LR/SC at large configurations is slow, not livelocked | behaviour, performance | measured (`amo -t lrsc_counter`, h200s) | none; note only |
 | 35 | **upstream/master SimX does not build in a TCU configuration without WGMMA** (`decode_descs` guard) | **bug** (build, upstream) | found, not fixed | guard the call or move the definition |
-| 36 | **SimX freed a warp's instruction-buffer slot one cycle later than `VX_ibuffer`** (instruction arriving at an empty buffer) | SimX/RTL divergence, timing | fixed on `feature/warp-rate` (4c0cf2c81), not merged; invisible with one fetch in flight, 8% with four | merge with item 22 |
+| 36 | **SimX freed a warp's instruction-buffer slot one cycle later than `VX_ibuffer`** (instruction arriving at an empty buffer) | SimX/RTL divergence, timing | fixed (4c0cf2c81), now on the work branch; invisible with one fetch in flight, 8% with four | review |
+| 37 | **The host runtime stub `libvortex.so` was not rebuilt when CONFIGS change** (a default-built stub under an h200s simulator) | **bug** (build; wrong cycle counts under VM) | fixed on fork (84c36cefc, merge d1e537603): `bar_vis` 165,633 vs 154,182, `bwstream` one SM 156,327 vs 107,249 | why a 256 MB shift costs 7-31% is not traced |
+| 38 | **The kernel library's CTA entry has the same missing stamp** (OpenCL/HIP apps) | **bug** (build) | found, not fixed | add a flag stamp |
+| 39 | An empty cycle between instructions in the lane dispatch; three front-end registers without a function | design, performance (calibration knobs) | four knobs in RTL + SimX, merged 447824a88, defaults keep old timing; `h200s` settings in local commits 4001ed275, 602af5c84; branch-dense overshoot accepted (1.77 vs 1.16 instr/cycle) | h200s-size rtlsim references; H200 code-size sweep (preliminary); logic depth |
+| 40 | **SimX's LSU input holds 2 packets, the RTL 3; SimX couples lane-dispatch blocks** (units narrower than the warp) | SimX/RTL divergence, timing | fixes on `feature/lane-parity-r` (136393828, 5dd6109de), not merged | rebase onto 602af5c84; two rows still open |
+| 41 | `bar_vis` is bistable at the dcache capacity boundary | test design, measurement caveat | found; h200s-size SimX 127k-165k cycles with no relation to removed latency; a case off the boundary on `feature/lane-parity-r` (46c1dbadf) | do not use its cycle count for parity |
+| 42 | Two one-cycle differences on the dcache miss path (lookup stage; miss-to-fill 34 vs 35 cycles) | SimX/RTL divergence, timing | found, open | pin in the RTL |
+| 43 | Shared-memory stores: one 8-lane block request per cycle (4.02 cycles per 32-thread store; 12 for 4-byte-spaced stores) | design inefficiency | diagnosed (`sm-rate.md`, interim), not fixed | design a fix |
+| 44 | The DXA engine moves one 64 B line per cycle on its memory port; a 610-cycle issue loop per 16 KB tile | design, performance | diagnosed (`sm-rate.md`, interim): ~52 B/clock, part 103.5 | choose port and issue changes |
+| 45 | `fedp.h` `reduce_f8` shifts by a negative count | undefined behaviour, results unaffected | fix on `perf/fix3` (9eecced2b), not merged; results unchanged over 45M evaluations | merge |
+| 46 | **SimX: a DRAM read held in Ramulator across reset answers later and wraps the in-flight count** | **bug** (latent) | fix on `perf/fix3` (214cff19b), not merged; never reached in 320 runs, unit test only | merge |
+| 47 | **`dogfood` sub-test `bar` fails at default arguments, on upstream/master too** (1,008 result errors) | **bug** (test) | found, not fixed; CI never runs it that way | find the cause |
+| 48 | The kernel image upload is inside the measured window | measurement caveat | found; `bwstream` 22 cores 135,815 -> 138,679 from image size alone; fixed for these tests on `feature/noc` (3b4031f34) | none; note |
+| 49 | Network model, steps 0-1 | feature (study) | on `feature/noc` (ffb5f9b74), RTL + SimX, review findings fixed; not merged | lane-shape parity (RTL round trip ~105 cycles vs SimX 87) |
+| 50 | SimX host-speed stack (59 commits); its sweep tool counted empty logs as identical | performance (simulator), tooling defect | merged and pushed (a2341f5f7); cycle-identical in three build modes; 2.0-7.0x wall on h200s cases; sweep fixed and rerun: 310 identical | none |
 | – | DXA copy on 4 cores: SimX 19,874 vs rtlsim 18,321 cycles (8.5%) | unexplained divergence | noted under 23 | find the cause |
 | – | Plain-load calibration: L1 input limit (~139 GB/s per SM), candidate `VX_CFG_DCACHE_READ_MERGE_LINE` | calibration (not adopted) | SimX only, `ld_calib.patch` | keep as a candidate until item 22 lands |
 | M1 | cuBLAS 13.4 returns NaN or wrong values for BF16 GEMMs under an MPS active-thread percentage | real-GPU measurement hazard, not a Vortex item | measured (`h200-go-nogo.md` §3) | none: MPS-percentage results invalid, TPC masks used |
+| M2 | The tensor-core roof per actual SM clock is 4,096 FLOPs; "3,786 per clock" used the wrong clock | real-GPU measurement, not a Vortex item | measured (`h200-wgmma-width.md`) | profile text and items 14, 17, 19 still quote 3,786 |
 
 Issue texts in English for 9, 10, 11: `upstream-issue-drafts.md`. Upstream `master` checked at ccf811e11 (2026-11-20): the affected files are unchanged there.
 
@@ -501,6 +516,126 @@ Sources: `git log feature/dxa-borrowing..feature/warp-rate` (2f156bfc1, d434c1fb
 - Invisible with one fetch in flight per warp (the slot count never reached the limit that way, so defaults do not move); with four fetches in flight it cost 8%.
 - Fixed in SimX on `feature/warp-rate` in 4c0cf2c81, together with item 22's fetch; not merged.
 
+## Added 2026-11-22 (items 37-50; updates to 9, 18, 22, 27, 28, the plain-load comparison; measurement note M2)
+Sources: `open-threads.md` ("Update 2026-11-22"), `simx-perf.md` sections 8-15, `sm-rate.md` (interim), `h200-wgmma-width.md`, `results/wl_pf2_table.txt`, and the commit messages quoted by hash. Work branch: pushed head d1e537603; local, waiting for h200s-size rtlsim references: 4001ed275, 602af5c84, 0c75a1dcd.
+
+### Update to 9 (dcache ordering): CI case
+- `war_order` now has a CI case on both models at 16 warps x 16 threads with a write-back dcache (0c75a1dcd, local, not pushed): SimX 1,295,606 cycles, rtlsim 1,296,287. The h200s-size rtlsim run is still owed.
+
+### Update to 18 (barrier scope 1): `bar_vis` is not a parity yardstick at the h200s size
+- The h200s-size `bar_vis` cycle count depends on a cache-capacity regime, not on the barrier path (item 41). At the final profile settings with the two SimX fixes of item 40, small shapes agree within 0.62% (rtlsim / SimX): 16 warps x 32 threads, scope 0 42,518 / 42,698, scope 1 33,597 / 33,536; 8 warps x 32 threads 43,747 / 43,477; with VM 45,122 / 45,022.
+
+### Update to 22 (per-warp instruction rate): on the work branch; the next limits
+- `VX_CFG_FETCH_INFLIGHT` and `VX_CFG_FFLAGS_ACCUM` (items 22, 29) and the instruction-buffer fix (item 36) are on `feature/dxa-borrowing` (4c0cf2c81 is an ancestor of the pushed head d1e537603), and `h200s` sets `FETCH_INFLIGHT=4`, `FFLAGS_ACCUM=1`. The tables that still say "not merged" for 22, 29 and 36 are superseded.
+- What was found behind it on the per-warp path: an empty cycle between instructions in the lane dispatch and three registers in the front end (item 39), and two SimX differences that show only with a unit narrower than the warp (item 40).
+- One warp at `h200s`, cycles per instruction (`results/wl_pf2_table.txt`, columns before / the three front-end knobs at 0 / plus the ALU bit; H200 in brackets): `int_ind8` 3.83 / 3.79 / 3.06 (1.21); `fma_ind8` 3.66 / 3.41 / 3.41 (1.07); `br_every1` 22.88 / 19.91 / 19.90 (10.78); `int_dep` 14.49 / 13.48 / 13.47 (4.84); `lds_own` 6.35 / 6.02 / 5.83 (3.27).
+
+### Update to 27 (shared-memory DMA port): `VX_CFG_LMEM_TCU_RDPORT`, merged (bd1ca451d, 73b994588, bb5d16d87)
+- **What**: the tensor core's shared-memory operand reads and the DXA's writes took turns on the local memory's one DMA port, on the banks' read/write port, so a byte the DXA stages and the tensor core reads crossed that port twice. With several LSU blocks each bank is a `VX_1rw1r_ram` whose read-only port served the second LSU read engine alone. With the knob at 1 the tensor core's row reads use that read-only port and the DMA port carries the DXA's writes only. Default 0 is the old structure. RTL and SimX; the build refuses the knob with one LSU block.
+- **Kind**: calibration knob with a structural change behind it. The earlier SimX-only experiment (a 160 B/clock budget on the one port) stays in `dxa_lmem_calib.patch` and is not on the fork.
+- **Evidence**: `gemm_tmem_decode` on one SM 1,633,486 -> 1,324,983 cycles (81.5 -> 100.5 GB/s); after it the kernel is bound by the DXA's supply (item 44). `h200s` sets it (bb5d16d87).
+- **Left**: the rule that bounds a row read's wait behind an atomic or a write to its row has no failing test (it needs a bench on the local memory unit); logic depth not measured.
+
+### Update to 28 (debug builds): no SimX build without NDEBUG compiles
+- Confirmed again on the work branch: every SimX build without `-DNDEBUG` (`DEBUG=1`) fails. `sw/common/util.h` defines a 2-argument `__assert` macro, and glibc's `<assert.h>`, re-included through `<cassert>` in `sim/common/simobject.h` after `util.h`, declares a 3-argument `__assert`. Still not fixed.
+
+### Update to the plain-load comparison
+- Like for like (128 KB in flight) a simulated SM streams plain loads at 70 B/clock against the part's ~110. The earlier "79 vs 218 GB/s" comparison used different in-flight depths (`sm-rate.md`: the `bwstream` shape holds 32 KB in flight, the part's 218 GB/s kernel 128 KB).
+
+### 37. The host runtime stub `libvortex.so` was not rebuilt when CONFIGS change (bug, build; wrong cycle counts under VM; fixed d1e537603)
+- **What**: `make software` built `sw/runtime/libvortex.so` once and nothing rebuilt it for `--profile` or another CONFIGS: the stub's Makefile listed only its sources and headers as prerequisites (84c36cefc). The stub is not configuration-neutral: built with `VX_CFG_VM_ENABLE` it reserves a 256 MB pinned slab (`sw/runtime/common/device.cpp:38`), so a default-built stub puts every buffer 256 MB lower. A direct `ci/blackbox.sh --profile=h200s` after a default `make software` therefore ran the h200s machine with a runtime compiled for the default one; `run_point.sbatch`, which exports PROFILE for the whole job, always produced the consistent kind.
+- **Effect**: same instructions, different cycles. `h200s`, SimX, stale stub / rebuilt: `bar_vis` 165,633 / 154,182; `bwstream` one SM 156,327 / 107,249 (-31%); `gemm_block` 665,219 / 665,514. Only VM configurations are affected; the `-D` parity sweeps without VM were not.
+- **Fix** (84c36cefc, merge d1e537603, pushed): the stub keeps a flag stamp like the other runtime libraries and rebuilds when its CONFIGS change.
+- **Wrong explanations on the way** (all discarded): the source copy, the PERF flag, stale objects, the kernel library, the config header. `simx-perf.md` sections 12 and 13 record two of them as they were believed.
+- **Not traced**: why a 256 MB shift of the buffers costs 7-31% of the cycles.
+
+### 38. The kernel library's CTA entry has the same missing stamp for OpenCL/HIP apps (bug, build; open)
+- OpenCL and HIP apps link the kernel library's CTA entry (`sw/kernel`), which is built once by `make software` under whatever PROFILE and CONFIGS are in the environment and still has no flag stamp. Regression apps assemble `vx_start.S` themselves and are not affected (84c36cefc). Example of what differs: a default-built library lacks the `VX_CFG_VM_ENABLE` satp write in `__vx_cta_entry` (`simx-perf.md` section 13).
+- Status: found, not fixed. Until it is, export PROFILE before `configure` and `make software`.
+
+### 39. An empty cycle between instructions in the lane dispatch, and three front-end registers without a function (design, performance; knobs merged 447824a88, default = old timing)
+- **Lane dispatch**: a unit narrower than the warp sends an instruction as NUM_THREADS / lanes packets through a registered packet iterator. The instruction leaves its dispatch queue as its last packet leaves the register, the register is cleared in that cycle, and the next instruction's first packet enters a cycle later: a 32-thread warp on a 16-lane ALU issues one instruction per 3 cycles, not 2 (e4e42e75a).
+- **Front end**: a fetch pick crosses two 2-entry registered buffers back to back (the warp scheduler's and the fetch unit's); frontend slice 0's icache port goes through the flush injector's arbiter, which registers the request once more, a cycle the other slices do not have; and with more than one operand collector per issue slice their merge registers its output behind each collector's own registered output (c26288cd9, 7d72fe655, 1b66cbad8).
+- **Knobs** (RTL + SimX, each default keeps today's timing): `VX_CFG_LANE_DISPATCH_GAPLESS` (bits: 1 ALU, 2 LSU, 4 SFU, 8 FPU, 16 TCU), `VX_CFG_FETCH_REQ_BUF`, `VX_CFG_FLUSH_REQ_BUF`, `VX_CFG_OPC_MERGE_BUF`.
+- **`h200s`** (local commits, not pushed): 4001ed275 sets the three buffers to 0; 602af5c84 sets `LANE_DISPATCH_GAPLESS=1` (the ALU bit only; the LSU bit waits for item 40).
+- **Effect**, SimX, one SM, d1e537603 -> 4001ed275 -> 602af5c84: `bar_vis` 154,182 / 152,601 / 146,121; `fetch_squash` 10,495 / 10,074 / 10,016; `gemm_block` (`-m16 -n1024 -k4096 -s1`, MTILES=1) 665,514 / 632,810 / 574,100; `gemm_tmem_decode` (`-m16 -n8192 -k4096`) 1,324,983 / 1,322,752 / 1,319,938; `bwstream` (`-n2048 -u4 -b32`) 409,346 / 410,006 / 419,474 (slower, unexplained). One warp's taken branch 22.9 -> 19.9 cycles with the three buffers at 0 (H200: 10.8-12). With the ALU bit the load stream at 128 KB in flight goes from 76 to 106 GB/s on one SM (H200: 116). Full before/after table, 277 points: `results/wl_pf2_table.txt`.
+- **Accepted overshoot**: with the ALU bit, branch-dense code with the SM full (64 warps, a branch in every instruction) runs at 1.77 instructions per cycle against the part's 1.16 measured with a 12.4 KB loop (1.23 without the bit). The user accepted this on 2026-11-22 for the study's branch-sparse workloads; the profile's sources text records it.
+- **Preliminary, real H200** (`results_gpu/h200_brcap_*`): the 1.16 saturation depends on code size. A 32-branch loop of 3.2 KB reaches 1.70 branches per clock at 64 warps, so it looks like an instruction-cache capacity effect with many warps, not a branch limit. A footprint sweep is queued; until it is in, the "overshoot" above is against a number that may not be a limit.
+- **Left**: h200s-size rtlsim references for the two profile commits; logic depth of every knob.
+
+### 40. SimX's LSU input holds 2 packets where the RTL holds 3, and SimX couples lane-dispatch blocks (SimX/RTL divergence, timing; fixes on `feature/lane-parity-r`, not merged)
+- Both show only when a warp is split into packets (a unit narrower than the warp), so the full-width shapes used for most parity runs did not see them.
+- **(a) LSU input capacity** (136393828): a packet reaches an LSU block through the iterator's packet register and the lane-dispatch skid buffer, three entries in all. SimX models both as the unit's input channel but gave it the skid buffer's two entries: two credits over a three-cycle loop, so the LSU took two packets in three cycles where the RTL takes one per cycle. A 32-thread store or load on 8 lanes took 6 cycles instead of 5. rtlsim / SimX before / after, `warp_rate`, cycles per iteration, 8 warps x 32 threads at the h200s unit shape: `sts_own` one warp 727.50 / 849.75 / 727.50, `lds_nouse` one warp 748.00 / 866.50 / 748.00.
+- **(b) Lane-dispatch block coupling** (5dd6109de): with one block per issue slot the RTL has no batch select and each block starts its next instruction once its last packet has left. SimX marked a finished block as done for the batch and cleared the mark only when every block of the unit had finished, so a block that was ahead waited for the slowest. rtlsim / SimX before / after, 16 warps x 32 threads: `int_ind8` 16 warps 1723.50 / 1802.50 / 1723.50; `int_dep` 16 warps 1788.00 / 1800.50 / 1788.00. Two rows stay open after the fix (`lds_own` 16 warps 4282.50 / 4259.00 / 4235.25; `br_every16` 8 warps at the h200s unit shape 1251.75 / 1235.75 / 1244.00).
+- Full-width shapes do not move with either fix (SimX, to the cycle).
+- Status: the branch (both fixes and parity cases for 32-thread warps on narrower ALU and LSU) is being rebased onto 602af5c84.
+
+### 41. `bar_vis` is bistable at the dcache capacity boundary (test design; measurement caveat)
+- Its noise CTAs read the same lines two iterations apart, and the dcache holds exactly the ~256 lines filled in between. The second touch hits or misses depending on a one-or-two-iteration skew between CTAs, and a one-cycle difference anywhere selects the regime.
+- h200s-size SimX ranges 127k-165k cycles across fix and knob combinations, with no relation to the latency removed. One case (46c1dbadf): rtlsim 48,792 / SimX 44,931 cycles (7.9%) with 16,246 / 12,523 lines read from DRAM, although DRAM serves both at the same rate.
+- **Consequence**: do not use its cycle count as a parity yardstick. A parity case off the boundary was added on `feature/lane-parity-r` (46c1dbadf): 8 warps x 32 threads at the h200s unit shape, rtlsim / SimX 43,747 / 43,477 cycles (-0.62%), 16,480 / 16,477 DRAM reads.
+
+### 42. Two one-cycle differences between SimX and RTL on the dcache miss path (SimX/RTL divergence, timing; open)
+- Found while closing the lane-shape parity (item 40's "(c)"): one at the lookup stage, and miss-to-fill 34 vs 35 cycles. Being pinned in the RTL; no fix yet.
+
+### 43. Shared-memory stores: one 8-lane block request per cycle (design inefficiency; diagnosed, not fixed; `sm-rate.md`, interim)
+- The local-memory unit takes one LSU block's request (8 lanes) per cycle for writes and two (16 lanes) for reads: writes use the first engine alone, and the read-only second engine takes nothing while a write waits. Measured at 64 warps: 4.02 cycles per 32-thread store, 2.02 per load. The part does 1.02 stores per clock.
+- 4-byte-spaced stores take 12 cycles per instruction: two lanes writing the two halves of one 8-byte bank word count as a conflict and need an extra pass.
+- With 16 LSU lanes the same stores take 2.02 cycles (6.0 for the 4-byte-spaced ones); with 32 LMEM banks nothing changes, so the banks are not the limit.
+
+### 44. The DXA engine moves one line per cycle on its memory port, and one warp's issue loop takes 610 cycles per tile (design; diagnosed, interim; `sm-rate.md`)
+- The engine tops out near 52 B/clock for both the copy (part: 103.5) and the decode kernel (the part's tensor bound: 58).
+- **Port**: 8 workers share one 64 B line per cycle on the engine's memory port (`VX_dxa_core`, `GMEM_OUT_PORTS = 1`). Instrumented, 3 CTAs x depth 4: requests leave in 81% of active cycles (0.82 line per cycle) with 3.7 workers blocked at the port per cycle; the port still idles 19% of the time because the 8 workers run in step and each waits a memory round trip for its tail. 16 workers fill the port to 0.99 line per cycle (60.4 B/clock against 51.4).
+- **Issue loop**: one issuing warp cannot issue faster than one 16 KB transfer per ~610 cycles (48 instructions per tile; the part ~228 cycles). The test kernel also computes two runtime divisions per tile.
+- Not explained: with link and memory latency at zero the DXA copy is slower (25.4 B/clock).
+
+### 45. `fedp.h` `reduce_f8` shifts by a negative count (undefined behaviour, results unaffected; fix on `perf/fix3`, not merged)
+- For fp8/bf8, when exactly one product of a pair is zero and has the larger exponent field, the smaller term is aligned with a shift by a negative count. The shifted value is that zero product, so the result is 0 for any shift; g++ 12 on x86 produces 0 and results are bit-correct, but they rest on undefined behaviour. SimX at `h200s` reaches it on 0.5-10% of fp8 pair reductions.
+- Fix 9eecced2b (align to 0 for a negative difference, which is also what the RTL gives) with a unit test built under UBSan (the old header stops at "shift exponent -3 is negative"). Results unchanged over 45M evaluations.
+- Checked on the way: at `h200s` the accumulator width never exceeds 32 bits, matching the RTL's 32-bit tree, with no headroom (more than 32 products per evaluation or W >= 30 would pass it).
+
+### 46. SimX: a DRAM read Ramulator holds across reset answers later and wraps the in-flight count (bug, latent; fix on `perf/fix3`, not merged)
+- `RamulatorDram::reset()` drops queued transactions and zeroes each channel's in-flight count but cannot reset Ramulator. A read it still held completed later, delivered a response for a request made before the reset, and decremented the count from 0; the uint32 wrapped, and with a nonzero `PLATFORM_MEMORY_QUEUE_SIZE` `can_accept()` stayed false from then on.
+- Never reached in 320 runs; shown by a unit test only (`tests/unittest/dram_sim`). Fix 214cff19b: such a read completes inside Ramulator and answers nothing.
+
+### 47. `tests/regression/dogfood`: the sub-test `bar` fails at default arguments, on upstream/master too (bug, test)
+- 1,008 result errors with default arguments, on upstream/master as well. CI never runs it that way, so it stayed unseen. Status: found, not fixed.
+
+### 48. The kernel image upload is inside the measured window (measurement caveat)
+- Linking two timing kernels into `bwstream`'s and `bwstream_dxa`'s `kernel.vxbin` left `kernel_main`'s code where it was but grew the image the host uploads. The upload is inside the measured window and its extra lines reach memory, so the default runs moved at equal instruction counts: h200s, 22 cores, `bwstream -n256 -u4 -b32` 135,815 -> 138,679 cycles; `bwstream_dxa -e4096 -n16 -d4 -c0` 55,664 -> 54,797 (3b4031f34).
+- Fixed on `feature/noc` (the timing kernels build into a second binary; the default `kernel.vxbin` is byte-identical again). The caveat stays for any test: a change in image size alone moves the cycle count.
+
+### 49. Network model, steps 0-1: status (`feature/noc`, head ffb5f9b74, not merged)
+- Steps 0-1 (a socket's issue limit on read lines, the DXA engine's memory ports reaching the socket's, SM groups between the sockets and the L2, a launch core mask) are in RTL and SimX on the branch; review findings fixed; the `bwstream` default shift was item 48. Runs on ICE.
+- **Open, lane-shape parity**: with ungated groups the RTL round trip is ~105 cycles against SimX's 87. Hypothesis, not verified: the L2 gets 8 banks instead of 16 with 4-lane groups.
+
+### 50. SimX host-speed stack merged (a2341f5f7, 59 commits; pushed), and the sweep tool that counted empty logs as identical
+- **Identity**: cycle-identical to its base 811e78b15 in three build modes: 17 study cases (fresh trees, the profile applied to the whole build), the 310 CI cases as CI runs them, and the 310 with `--perf=1`.
+- **Speed** (`simx-perf.md` section 14; job perf_measure3 16000666; base and merged alternating 5 times on a shared node; median wall): 2.0-7.0x on the h200s cases, 1.2-1.4x on the default-configuration cases.
+
+| case | cycles | base wall s | merged wall s | speedup |
+|---|---|---|---|---|
+| bar1 | 154,182 | 6.5 | 3.2 | 2.03x |
+| bw1 | 107,249 | 8.5 | 3.7 | 2.30x |
+| bw4 | 109,307 | 45.8 | 19.9 | 2.30x |
+| bw11 | 132,106 | 233.4 | 80.1 | 2.91x |
+| bw22 | 259,697 | 670.8 | 217.9 | 3.08x |
+| dxa4 | 67,926 | 14.6 | 4.1 | 3.60x |
+| dxa11 | 38,916 | 20.9 | 5.7 | 3.66x |
+| dxa22 | 29,980 | 31.2 | 7.3 | 4.27x |
+| gb1 | 665,514 | 43.0 | 16.8 | 2.56x |
+| gb22 (one pair) | 1,002,693 | 3,293.1 | 835.9 | 3.94x |
+| gtd1 | 974,462 | 224.9 | 44.2 | 5.09x |
+| gtm1 | 613,318 | 177.4 | 31.2 | 5.69x |
+| roof1 | 132,608 | 21.5 | 3.1 | 6.95x |
+| d_sgemm | 792,351 | 2.4 | 1.9 | 1.24x |
+| d_sgemm4 | 1,453,274 | 18.2 | 14.5 | 1.26x |
+| d_tcu | 83,506 | 0.3 | 0.2 | 1.40x |
+
+- **Corrected timing table**: the table above replaces the earlier ones (`simx-perf.md` sections 5 and 7), which were taken with a default-built runtime stub under an h200s simulator (item 37): identical within that mode, but not the mode the study numbers use.
+- **The sweep tool defect** (`perf/sweep/run.sh`, `simx-perf.md` section 11): rows were read with `IFS=$'\t' read`; tab is IFS whitespace, so a row with an empty CONFIGS field collapsed, the command was lost, `bash -c ""` returned 0 with an empty log, and the comparison counted two empty logs as identical. 45 of the 310 cases never ran; the stack was merged on a claim of "310 identical" that was really 265. After the fix and a rerun all 45 are identical; whole sweep: 310 identical, 289 with a cycle count, 301 PASSED (9 OpenCL host cases do not build on this cluster on either side). Rule adopted for every comparison: it must fail when nothing ran.
+- **Parked, not to be merged**: `perf/mt3` (multi-thread SimX: 425 of 425 runs cycle-identical, 3.5x at 22 SMs, ThreadSanitizer never ran) and `perf/build2`.
+
 ## Plain-load calibration (not adopted)
 Sources: `notes/ld_calib.patch` (load-calibration copy `src_ld`, SimX only, with path counters behind `PATH_STATS`), runs `results/ld_*` and `results/wrr_ld*`.
 - **The L1 input limit.** A warp's 64 B coalesced line is two 32 B dcache requests to one bank: the dcache's read merge takes reads of the same word only. One SM streaming plain loads plateaus at **~139 GB/s per SM** (`ldstream` lean, one SM: L2-resident `ld_fa_ll_a32` / `_a64` 140.7 / 138.8; DRAM `wrr_ldl64_def` 139.0, `_k2f` 139.7, `_k4f` 138.4). The real H200's per-SM ingress is 215-230 GB/s (item 21, `h200-l2-structure.md`).
@@ -514,6 +649,12 @@ Sources: `notes/ld_calib.patch` (load-calibration copy `src_ld`, SimX only, with
 - Qwen3.5-9B alone in an MPS client: wrong output (`!!!!`, the argmax of all-NaN logits) at 80/70/40/20% (104/92/52/26 SMs read back), correct at none/100/60/10% (132/132/78/12). First failing module `layers.0.mlp.gate_proj`, a plain BF16 `nn.Linear` with finite inputs. Standalone `F.linear` on Qwen's shapes: bad on 18 of 30 shapes at 80%, 7 at 60%, 25 at 40%, 0 at 100%. Not the script, uninitialised memory, Triton/FLA or the co-runner.
 - With the SM allotment set by a TPC mask instead, the output is correct at every SM count (26-132).
 - **Consequence**: every result taken under an MPS active-thread percentage with this software is invalid for correctness-sensitive work; the Qwen numbers under MPS 80/70/40/20% and the co-runs at LLM 20/40% (`corun-workloads.md`) came from runs computing NaN. TPC masks are used instead (they slow the host-bound decode 2.5x and hang CUPTI, so kernel times under a mask still need another method).
+
+### M2. The tensor-core roof per actual SM clock is 4,096 FLOPs, not 3,786
+- Source: `h200-wgmma-width.md` (2026-11-22; FP16 in, FP32 accumulate, m64nNk16, one CTA on one SM, medians of 5 trials, every cell passed the exact check).
+- One warpgroup reaches 4,096 FLOPs per clock with operands from shared memory at N >= 64 (N = 8 / 16 / 32: 910 / 1,638 / 2,731, bound by 128 B per clock of operand reads); more warpgroups or CTAs never add throughput.
+- The clock is the actual SM clock: 1.800 GHz on tensor-active SMs while NVML reports 1980 MHz. "3,786 per clock" (989.5 TFLOPS / 132 / 1.98 GHz) is therefore the wrong normalisation.
+- **Consequence**: items 14, 17 and 19 and the `h200s` sources text compare against 3,786; read them against 4,096. Not rewritten here.
 
 ## How these were found (for the talk)
 - Rule that produced most of them: match a real H200, never provision above it, and when a number looks wrong test several hypotheses instead of tuning.

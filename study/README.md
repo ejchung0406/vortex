@@ -29,6 +29,8 @@ on GitHub.
 | `notes/framing-critique.md` | Reviewer-style critique of the research framing (verdict: revise) |
 | `notes/ice-cluster.md` | How the ICE cluster is set up as a second, free cluster for SimX runs (in progress) |
 | `notes/simx-perf.md` | SimX wall-clock optimisation with bit-identical cycle counts (in progress) |
+| `notes/sm-rate.md` | Why one simulated SM moves memory at half the H200 rate: shared-memory stores, the DXA engine's port and issue loop, plain loads like for like (running log, interim) |
+| `notes/h200-wgmma-width.md` | Real H200: tensor-core throughput against wgmma tile width and number of issuers; the roof is 4,096 FLOPs per actual SM clock |
 | `notes/*.patch` | Patches as produced by the investigations (most are already commits on this branch; `dxa_mc_parity.patch`, `warp_rate.patch`, `noc_model.patch`, `ld_calib.patch`, `wrr_fetch_ahead_rtl_wip.patch` are not; the per-warp rate work is on branch `feature/warp-rate`) |
 | `notes/noc_collect.py` | Result collection for the network-model runs |
 | `pr/notes/` | Notes of the upstream-PR effort (wound down 2026-11-21); `INDEX.md` is its final state. Some notes are drafts (in progress) |
@@ -37,6 +39,7 @@ on GitHub.
 | `scripts/run_point.sbatch` | One simulator data point: configure, build and run in a node-local tree |
 | `scripts/*.py`, `scripts/wait_results.sh` | Result collection |
 | `slurm/*_names.txt` | Run names of each experiment batch |
+| `results/wl_pf2_table.txt` | `h200s` before/after table for the lane-dispatch and front-end knobs (277 points, SimX, one core) |
 | `results/<name>/` | Raw output of each run: `meta.txt` (source, config, arguments), `run.log`, `build.log`, DRAM stats. Files over 5 MB (two instruction traces) and the compiled build stages under `perf_*/stage_*` are left out |
 | `gpu/` | Real-GPU measurement sources and scripts (CUDA, cuBLAS, CUTLASS, PyTorch); compiled binaries, address lists and latency samples are left out |
 | `results_gpu/` | Real-GPU raw output (`h200_gng_*` go/no-go, `h200_bys_*` bystander, `h200_warprate_nottaken.txt` branch cost); per-slot `*.util` samples are left out |
