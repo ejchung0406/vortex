@@ -39,6 +39,7 @@ public:
     uint32_t num_lanes;   // lanes of a warp request
     uint32_t B;           // log2 number of banks
     uint32_t dma_clients; // row-wide DMA masters, served round-robin
+    bool     rd_port;     // row reads on the banks' second port
   };
 
   struct PerfStats {
@@ -60,6 +61,10 @@ public:
   // DMA port: client c uses channels [c * DMA_PORTS, (c + 1) * DMA_PORTS).
   std::vector<SimChannel<MemReq>> DmaInputs;
   std::vector<SimChannel<MemRsp>> DmaOutputs;
+
+  // Row read port (Config::rd_port): one row on DMA_PORTS channels.
+  std::vector<SimChannel<MemReq>> RdInputs;
+  std::vector<SimChannel<MemRsp>> RdOutputs;
 
   LocalMem(const SimContext& ctx, const char* name, const Config& config);
   virtual ~LocalMem();

@@ -42,6 +42,13 @@ using namespace vortex;
 // the first engine, while one waited at an input the cycle before, or in a
 // cycle the first engine may be taking one, so every write keeps its order
 // against every read.
+// The row read port takes whole bank rows on the banks' second port. A request
+// seen in one cycle is served the next at the earliest, and not while an
+// atomic owns its bank. It shares the port with the read engine in turn: the
+// read engine issues no pass in the first cycle a request is seen, nor in
+// every other cycle while requests keep coming, and a row read waits a cycle
+// behind a pass of the read engine. A row read also waits while a DMA write
+// or a store lands in its row, and then returns the row as written.
 // The model does a pass's bank accesses when it is issued. Every access keeps
 // its order relative to the others, so this is the order the banks see.
 class LocalMem::Impl {
@@ -81,6 +88,8 @@ protected:
     // pending is followed by a cycle that finds the next ones
     bool        ready = false;
     std::deque<RspEntry> rsp_queue;
+    // a pass was issued this cycle: its bank accesses happen in the next
+    bool        passed = false;
   };
 
   LocalMem* simobject_;
@@ -111,6 +120,14 @@ protected:
   bool      write_waiting_r_;
   bool      dma_slot_;
   uint32_t  dma_last_grant_;
+  bool      rd_slot_;
+  // the read engine was held back for a row read in the last cycle
+  bool      b_held_;
+  // rows written this cycle: by the DMA port, and by the store pass issued
+  // the cycle before
+  std::vector<uint64_t> wr_rows_;
+  // rows of the store pass issued this cycle
+  std::vector<uint64_t> store_rows_;
   mutable PerfStats perf_stats_;
 
   uint64_t to_local_addr(uint64_t addr) const {
@@ -125,6 +142,13 @@ protected:
 
   uint32_t bank_of(uint64_t addr) const {
     return (uint32_t)(bank_word(addr) & ((1u << config_.B) - 1));
+  }
+
+  // The unit two accesses meet in: a bank row, or a block when a row is
+  // narrower than the blocks the model's row accesses are made of.
+  uint64_t row_of(uint64_t addr) const {
+    constexpr uint64_t kUnit = (DMA_ROW_SIZE > VX_CFG_MEM_BLOCK_SIZE) ? DMA_ROW_SIZE : VX_CFG_MEM_BLOCK_SIZE;
+    return to_local_addr(addr) / kUnit;
   }
 
   static bool is_plain_read(const LsuReq& req) {
@@ -287,6 +311,9 @@ protected:
 #if VX_CFG_EXT_A_ENABLED
           amo_unit_.invalidate(to_local_addr(req.addr), req.hart_id);
 #endif
+          if (config_.rd_port) {
+            wr_rows_.push_back(this->row_of(req.addr));
+          }
         } else {
           MemRsp rsp{req.tag, req.hart_id, req.uuid};
           auto rsp_data = make_mem_block();
@@ -304,6 +331,49 @@ protected:
     }
   }
 
+  bool rd_pending() const {
+    for (auto& in : simobject_->RdInputs) {
+      if (!in.empty()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Serve the row read port's request, unless a write lands in its row.
+  void rd_fire() {
+    for (uint32_t p = 0; p < simobject_->RdInputs.size(); ++p) {
+      auto& in = simobject_->RdInputs.at(p);
+      if (in.empty()) {
+        continue;
+      }
+      if (simobject_->RdOutputs.at(p).full()) {
+        return;
+      }
+      uint64_t row = this->row_of(in.peek().addr);
+      for (auto w : wr_rows_) {
+        if (w == row) {
+          return;
+        }
+      }
+    }
+    for (uint32_t p = 0; p < simobject_->RdInputs.size(); ++p) {
+      auto& in = simobject_->RdInputs.at(p);
+      if (in.empty()) {
+        continue;
+      }
+      auto& req = in.peek();
+      uint64_t line_addr = to_local_addr(req.addr) & ~uint64_t(VX_CFG_MEM_BLOCK_SIZE - 1);
+      MemRsp rsp{req.tag, req.hart_id, req.uuid};
+      auto rsp_data = make_mem_block();
+      ram_.read(rsp_data->data(), line_addr, VX_CFG_MEM_BLOCK_SIZE);
+      rsp.data = rsp_data;
+      simobject_->RdOutputs.at(p).send(rsp, 0);
+      DT(4, simobject_->name() << "-rd req : " << req);
+      in.pop();
+    }
+  }
+
   // Issue an engine's next pass. Returns true when it was the request's last,
   // which frees S1 for a new request in the same cycle. The response queue
   // occupancy is the one from the start of the cycle.
@@ -314,6 +384,7 @@ protected:
       return false;
     }
     auto served = this->select_pass(req, e.pending);
+    e.passed = true;
     LsuRsp rsp(config_.num_lanes);
     rsp.tag  = req.tag;
     rsp.cid  = req.cid;
@@ -323,6 +394,9 @@ protected:
         continue;
       }
       auto data = this->access(req, i);
+      if (config_.rd_port && req.is_write() && !req.is_amo()) {
+        store_rows_.push_back(this->row_of(req.addrs.at(i)));
+      }
       if (has_rsp) {
         rsp.mask.set(i);
         rsp.data.at(i) = data;
@@ -441,6 +515,8 @@ public:
     , write_waiting_r_(false)
     , dma_slot_(false)
     , dma_last_grant_(0)
+    , rd_slot_(false)
+    , b_held_(false)
   {
     for (auto& e : engines_) {
       e.pending = BitVector<>(config.num_lanes);
@@ -460,6 +536,7 @@ public:
       e.s1_valid = false;
       e.pending.reset();
       e.rsp_queue.clear();
+      e.passed = false;
     }
     for (auto& r : rsp_regs_) {
       r.valid = false;
@@ -470,6 +547,10 @@ public:
     write_waiting_r_ = false;
     dma_slot_ = false;
     dma_last_grant_ = config_.dma_clients ? (config_.dma_clients - 1) : 0;
+    rd_slot_ = false;
+    b_held_ = false;
+    wr_rows_.clear();
+    store_rows_.clear();
   }
 
   void tick() {
@@ -530,18 +611,33 @@ public:
         e.ready = true;
       }
     }
+    // The row read port and the read engine take the second port in turn.
+    bool rd_valid = config_.rd_port && this->rd_pending();
+    bool b_hold = rd_valid && !b_held_;
+    b_held_ = b_hold;
+    bool b_at_banks = config_.rd_port && engines_.at(1).passed;
+    wr_rows_.swap(store_rows_);
+    store_rows_.clear();
+    for (auto& e : engines_) {
+      e.passed = false;
+    }
     if (stall_cycles_ != 0) {
       --stall_cycles_;
       dma_slot_ = false;
+      rd_slot_ = false;
     } else {
       bool dma_valid = this->dma_pending();
       if (dma_slot_) {
         this->dma_fire();
       }
       dma_slot_ = dma_valid;
+      if (rd_slot_ && rd_valid && !b_at_banks) {
+        this->rd_fire();
+      }
+      rd_slot_ = rd_valid;
       if (!dma_valid) {
         for (uint32_t k = 0; k < num_engines; ++k) {
-          if (can_pass.at(k)) {
+          if (can_pass.at(k) && !(k == 1 && b_hold)) {
             s1_ready.at(k) = this->issue_pass(engines_.at(k), rsp_count.at(k));
           }
         }
@@ -570,7 +666,8 @@ public:
       this->arbitrate(s0_ready, a_write, b_busy);
     }
 
-    bool idle = (stall_cycles_ == 0) && !dma_slot_ && !a_sel_.valid && !b_sel_.valid;
+    bool idle = (stall_cycles_ == 0) && !dma_slot_ && !a_sel_.valid && !b_sel_.valid
+             && !rd_slot_ && !b_held_ && store_rows_.empty();
     for (auto& e : engines_) {
       idle = idle && e.s0.empty() && !e.s1_valid && e.rsp_queue.empty();
     }
@@ -581,6 +678,9 @@ public:
     // empty() does not see it; size() counts it. Sleeping past one would leave
     // it unserved until some later packet happened to wake the unit.
     for (auto& in : simobject_->DmaInputs) {
+      idle = idle && (in.size() == 0);
+    }
+    for (auto& in : simobject_->RdInputs) {
       idle = idle && (in.size() == 0);
     }
     for (auto& in : simobject_->ReqIn) {
@@ -613,6 +713,8 @@ LocalMem::LocalMem(const SimContext& ctx, const char* name, const Config& config
   , RspOut(config.num_blocks, this)
   , DmaInputs(config.dma_clients * DMA_PORTS, this)
   , DmaOutputs(config.dma_clients * DMA_PORTS, this)
+  , RdInputs(config.rd_port ? DMA_PORTS : 0, this)
+  , RdOutputs(config.rd_port ? DMA_PORTS : 0, this)
   , impl_(new Impl(this, config))
 {}
 

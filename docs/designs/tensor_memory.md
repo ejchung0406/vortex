@@ -134,6 +134,9 @@ its own block and row counters, and the walk is back to back from 2 on.
 `VX_CFG_TCU_TMEM_A_BANKROW` (default 0) at 1 lets one shared-memory read
 serve every remaining row-major A row in the bank row it reads, instead of a
 read per row. Sparse and block-major B keep the one-block fetch.
+`VX_CFG_LMEM_TCU_RDPORT` (default 0) at 1 sends these reads to the local
+memory banks' second port instead of the DMA port they otherwise share with
+the DXA's writes ([lsu_pipeline_design.md](lsu_pipeline_design.md) §5.2).
 
 An op leaving the engine posts its commits with the count of steps issued
 so far; a commit arrives on its barrier once that many steps have been

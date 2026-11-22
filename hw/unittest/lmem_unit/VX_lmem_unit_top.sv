@@ -125,6 +125,19 @@ module VX_lmem_unit_top import VX_gpu_pkg::*; #(
         .ready_out (dma_bus_if.req_ready)
     );
 
+    // the row read port is left off
+    VX_mem_bus_if #(
+        .DATA_SIZE  (NUM_BANKS * WORD_SIZE),
+        .TAG_WIDTH  (DMA_TAG_WIDTH),
+        .ADDR_WIDTH (DMA_ADDR_WIDTH)
+    ) rd_bus_if();
+    assign rd_bus_if.req_valid = 1'b0;
+    assign rd_bus_if.req_data  = '0;
+    assign rd_bus_if.rsp_ready = 1'b0;
+    `UNUSED_VAR (rd_bus_if.req_ready)
+    `UNUSED_VAR (rd_bus_if.rsp_valid)
+    `UNUSED_VAR (rd_bus_if.rsp_data)
+
     assign dma_rsp_valid              = dma_bus_if.rsp_valid;
     assign dma_rsp_data               = dma_bus_if.rsp_data.data;
     assign dma_rsp_tag                = dma_bus_if.rsp_data.tag;
@@ -150,6 +163,7 @@ module VX_lmem_unit_top import VX_gpu_pkg::*; #(
     `endif
         .lsu_mem_if (lsu_mem_if),
         .dma_bus_if (dma_bus_if),
+        .rd_bus_if  (rd_bus_if),
         `UNUSED_PIN (store_empty)
     );
 

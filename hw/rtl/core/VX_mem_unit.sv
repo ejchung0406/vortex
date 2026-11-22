@@ -72,6 +72,33 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
 
     localparam LMEM_ADDR_WIDTH = `VX_CFG_LMEM_LOG_SIZE - `CLOG2(LSU_WORD_SIZE);
 
+    // The tensor unit's row reads use the banks' read-only port, which exists
+    // with several LSU blocks, instead of the DMA port.
+    localparam LMEM_TCU_RD = `VX_CFG_TCU_WGMMA_ENABLED && (`VX_CFG_LMEM_TCU_RDPORT != 0);
+    `STATIC_ASSERT((`VX_CFG_LMEM_TCU_RDPORT == 0) || (`VX_CFG_NUM_LSU_BLOCKS > 1),
+                   ("LMEM_TCU_RDPORT=%0d needs the banks' read-only port: NUM_LSU_BLOCKS > 1", `VX_CFG_LMEM_TCU_RDPORT))
+
+    VX_mem_bus_if #(
+        .DATA_SIZE   (LMEM_DMA_DATA_SIZE),
+        .TAG_WIDTH   (TCU_LMEM_TAG_W),
+        .ATTR_WIDTH  (LMEM_DMA_ATTR_W),
+        .ADDR_WIDTH  (LMEM_DMA_ADDR_WIDTH)
+    ) lmem_rd_if();
+
+`ifdef VX_CFG_TCU_WGMMA_ENABLE
+    if (LMEM_TCU_RD) begin : g_lmem_rd
+        `ASSIGN_VX_MEM_BUS_IF (lmem_rd_if, tcu_lmem_if);
+    end
+`endif
+    if (!LMEM_TCU_RD) begin : g_no_lmem_rd
+        assign lmem_rd_if.req_valid = 1'b0;
+        assign lmem_rd_if.req_data  = '0;
+        assign lmem_rd_if.rsp_ready = 1'b0;
+        `UNUSED_VAR (lmem_rd_if.req_ready)
+        `UNUSED_VAR (lmem_rd_if.rsp_valid)
+        `UNUSED_VAR (lmem_rd_if.rsp_data)
+    end
+
     // DMA arbiter: merge DXA writes and/or TCU reads onto single DMA port.
 
     VX_mem_bus_if #(
@@ -107,7 +134,16 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
         `ASSIGN_VX_MEM_BUS_IF_EX (dma_arb_in_if[LMEM_DMA_DXA_IDX], dxa_lmem_bus_if, LMEM_DMA_IN_TAG_W, DXA_LMEM_OUT_TAG_W, UUID_WIDTH);
     `endif
     `ifdef VX_CFG_TCU_WGMMA_ENABLE
-        `ASSIGN_VX_MEM_BUS_IF_EX (dma_arb_in_if[LMEM_DMA_TCU_IDX], tcu_lmem_if, LMEM_DMA_IN_TAG_W, TCU_LMEM_TAG_W, UUID_WIDTH);
+        if (LMEM_TCU_RD) begin : g_tcu_rdport
+            assign dma_arb_in_if[LMEM_DMA_TCU_IDX].req_valid = 1'b0;
+            assign dma_arb_in_if[LMEM_DMA_TCU_IDX].req_data  = '0;
+            assign dma_arb_in_if[LMEM_DMA_TCU_IDX].rsp_ready = 1'b1;
+            `UNUSED_VAR (dma_arb_in_if[LMEM_DMA_TCU_IDX].req_ready)
+            `UNUSED_VAR (dma_arb_in_if[LMEM_DMA_TCU_IDX].rsp_valid)
+            `UNUSED_VAR (dma_arb_in_if[LMEM_DMA_TCU_IDX].rsp_data)
+        end else begin : g_tcu_dma
+            `ASSIGN_VX_MEM_BUS_IF_EX (dma_arb_in_if[LMEM_DMA_TCU_IDX], tcu_lmem_if, LMEM_DMA_IN_TAG_W, TCU_LMEM_TAG_W, UUID_WIDTH);
+        end
     `endif
 
         // Round-robin, so a DXA write stream cannot starve the TCU's operand reads.
@@ -183,6 +219,8 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
         .TAG_WIDTH     (LSU_TAG_WIDTH),
         .DMA_ENABLE    (LMEM_DMA_EN),
         .DMA_TAG_WIDTH (LMEM_DMA_TAG_WIDTH),
+        .RD_ENABLE     (LMEM_TCU_RD),
+        .RD_TAG_WIDTH  (TCU_LMEM_TAG_W),
         .AMO_ENABLE    (`VX_CFG_EXT_A_ENABLED)
     ) lmem_unit (
         .clk           (clk),
@@ -192,6 +230,7 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
     `endif
         .lsu_mem_if    (lmem_if),
         .dma_bus_if    (lmem_dma_if),
+        .rd_bus_if     (lmem_rd_if),
         .store_empty   (lmem_store_empty)
     );
 

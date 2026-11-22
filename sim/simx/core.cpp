@@ -195,7 +195,10 @@ public:
 
     // create local memory: it takes each LSU block's warp requests whole.
     // The DXA writes and the TCU tile-buffer reads share the row-wide DMA
-    // port, round-robin.
+    // port, round-robin, unless the reads use the banks' second port
+    // (LMEM_TCU_RDPORT), which several LSU blocks bring.
+    static_assert(VX_CFG_LMEM_TCU_RDPORT == 0 || VX_CFG_NUM_LSU_BLOCKS > 1,
+                  "LMEM_TCU_RDPORT=1 needs the banks' read-only port: NUM_LSU_BLOCKS > 1");
     static_assert(uint64_t(VX_CFG_LMEM_SIZE) <= (uint64_t(1) << VX_CFG_LMEM_LOG_SIZE)
                && 2 * uint64_t(VX_CFG_LMEM_SIZE) > (uint64_t(1) << VX_CFG_LMEM_LOG_SIZE),
                   "LMEM_LOG_SIZE must be clog2(LMEM_SIZE)");
@@ -213,7 +216,8 @@ public:
       VX_CFG_NUM_LSU_BLOCKS,
       LSU_CHANNELS,
       log2ceil(VX_CFG_LMEM_NUM_BANKS),
-      VX_CFG_EXT_DXA_ENABLED + VX_CFG_TCU_WGMMA_ENABLED
+      VX_CFG_EXT_DXA_ENABLED + ((VX_CFG_LMEM_TCU_RDPORT != 0) ? 0 : VX_CFG_TCU_WGMMA_ENABLED),
+      (VX_CFG_LMEM_TCU_RDPORT != 0) && (VX_CFG_TCU_WGMMA_ENABLED != 0)
     });
 
     // create lmem switch
@@ -361,13 +365,18 @@ public:
 
   #ifdef VX_CFG_TCU_WGMMA_ENABLE
     // Bind the TCU tile-buffer subsystem (TcuTbuf) to the LMEM DMA port,
-    // as the client after the DXA.
+    // as the client after the DXA, or to the row read port.
     {
       auto& tbuf = tcu_unit_->tbuf();
       uint32_t base = VX_CFG_EXT_DXA_ENABLED * LocalMem::DMA_PORTS;
       for (uint32_t p = 0; p < LocalMem::DMA_PORTS; ++p) {
-        tbuf->lmem_req_out.at(p).bind(&local_mem_->DmaInputs.at(base + p));
-        local_mem_->DmaOutputs.at(base + p).bind(&tbuf->lmem_rsp_in.at(p));
+        if (VX_CFG_LMEM_TCU_RDPORT != 0) {
+          tbuf->lmem_req_out.at(p).bind(&local_mem_->RdInputs.at(p));
+          local_mem_->RdOutputs.at(p).bind(&tbuf->lmem_rsp_in.at(p));
+        } else {
+          tbuf->lmem_req_out.at(p).bind(&local_mem_->DmaInputs.at(base + p));
+          local_mem_->DmaOutputs.at(base + p).bind(&tbuf->lmem_rsp_in.at(p));
+        }
       }
     }
   #endif

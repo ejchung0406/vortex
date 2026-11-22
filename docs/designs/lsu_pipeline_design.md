@@ -343,6 +343,27 @@ The direct-memory clients (the DXA writes and the tensor unit's reads) take
 whole bank rows on the first port: a DMA request seen in one cycle stops the
 passes and gets the banks the next.
 
+`VX_CFG_LMEM_TCU_RDPORT` (default 0) at 1 moves the tensor unit's row reads to
+the banks' second port, which several LSU blocks bring (the build refuses the
+knob with one), so the first port's DMA slot carries the DXA's writes alone
+and a byte the DXA stages no longer crosses one port twice on its way to the
+tensor unit. A row read seen in one cycle is served the next at the earliest,
+as on the DMA port, and not while an atomic owns its bank. Three rules keep
+the two ports apart:
+
+- **Sharing with the read engine.** The read engine issues no pass in the
+  first cycle a row read is seen, nor in every other cycle while row reads
+  keep coming, and a row read waits while a pass of the read engine is at the
+  banks. Each side waits at most one cycle for the other; with both
+  continuous each gets every other cycle (64 B per clock of row reads at 16
+  banks, and one read pass per two cycles; the first engine is not affected).
+- **A write in the same row.** The second port returns an undefined word when
+  the first port writes it in the same cycle. A row read therefore waits
+  while a DMA write or a store lands in its row and is served the cycle
+  after, with the row as written; writes to other rows do not hold it.
+- **Atomics.** No row read is served in the read, capture and write-back
+  cycles of an atomic, as for the DMA port.
+
 ### 5.3 Global path
 
 | stage | role |

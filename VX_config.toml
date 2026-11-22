@@ -441,6 +441,15 @@ VX_CFG_LMEM_LOG_SIZE = "expr: clog2(max($lmem_min_bytes, $VX_CFG_LMEM_NUM_BANKS 
 # Capacity in bytes; LMEM_LOG_SIZE is its power-of-two address window, so a
 # capacity like 96 KB or 228 KB sets both (LMEM_LOG_SIZE = clog2(LMEM_SIZE)).
 VX_CFG_LMEM_SIZE = "expr: pow(2, $VX_CFG_LMEM_LOG_SIZE)"
+# Which bank port serves the tensor unit's operand row reads. 0: the DMA port,
+# on the banks' read/write port, taken in turn with the DXA's row writes, so a
+# byte the DXA stages and the tensor unit reads crosses that port twice. 1: the
+# banks' read-only port, which only exists with several LSU blocks
+# (NUM_LSU_BLOCKS > 1; the build refuses 1 otherwise) and which the second LSU
+# read engine uses: the two take it in turn, each waiting at most one cycle
+# for the other, and a row read waits while a write lands in its row. The DMA
+# port then carries the DXA's writes alone. No effect without WGMMA operands.
+VX_CFG_LMEM_TCU_RDPORT = 0
 
 [tcu]
 # string enum: 'DPI'|'DSP'|'BHF'|'TFR'|'FPNEW'; TFR is the universal default. On

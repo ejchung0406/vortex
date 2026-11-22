@@ -17,6 +17,13 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
   [VX_fetch.sv](hw/rtl/core/VX_fetch.sv), [VX_decode.sv](hw/rtl/core/VX_decode.sv) and
   [sim/simx/core.cpp](sim/simx/core.cpp); `tests/regression/warp_rate` measures the rate by instruction class and
   `tests/regression/fetch_squash` checks that nothing fetched on a wrong path executes.
+- **Tensor-unit operand reads on the local memory banks' read-only port (`VX_CFG_LMEM_TCU_RDPORT`, default 0).** With 1 the
+  tensor unit's shared-memory row reads leave the DMA port, which they share with the DXA's row writes on the banks' read/write
+  port, for the read-only port that several LSU blocks bring, so a byte the DXA stages and the tensor unit reads no longer crosses
+  one port twice. The row reads and the second LSU read engine take the port in turn, a row read waits while a write lands in its
+  row, and none is served while an atomic owns its bank. [VX_lmem_unit.sv](hw/rtl/mem/VX_lmem_unit.sv),
+  [VX_mem_unit.sv](hw/rtl/core/VX_mem_unit.sv), [sim/simx/mem/local_mem.cpp](sim/simx/mem/local_mem.cpp);
+  [lsu_pipeline_design.md](docs/designs/lsu_pipeline_design.md) §5.2.
 - **Branch register (`VX_CFG_BRANCH_REG`, default 1).** With 0 a resolved branch goes to the warp scheduler straight from the
   integer ALU's result register, and the warp is picked at the target one cycle earlier; the register between them has no
   function. [VX_alu_int.sv](hw/rtl/core/VX_alu_int.sv), [sim/simx/alu_unit.cpp](sim/simx/alu_unit.cpp).
