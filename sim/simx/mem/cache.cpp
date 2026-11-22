@@ -639,8 +639,9 @@ public:
     if (chain == nullptr) {
       return false;
     }
-    if (root_id)
+    if (root_id) {
       *root_id = chain->ids.front();
+    }
     return true;
   }
 
@@ -751,7 +752,9 @@ public:
     // accumulated ready_reqs_ stays correct and dequeue drains oldest-first, so
     // each line's waiters still replay in program order. Double-replaying the
     // same fill is caught by the Core-type assert above.
-    auto &chain = *this->find_chain(root_entry.set_id, root_entry.addr_tag, root_entry.sector_id);
+    auto *chain_ptr = this->find_chain(root_entry.set_id, root_entry.addr_tag, root_entry.sector_id);
+    assert(chain_ptr != nullptr);
+    auto &chain = *chain_ptr;
     for (uint32_t i : chain.ids) {
       auto &entry = entries_[i];
       if (entry.bank_req.type == bank_req_t::Core) {
@@ -773,7 +776,9 @@ public:
     assert(entry.bank_req.type == bank_req_t::Core);
     entry.bank_req.type = bank_req_t::Replay;
     ++ready_reqs_;
-    --this->find_chain(entry.set_id, entry.addr_tag, entry.sector_id)->num_core;
+    auto *chain = this->find_chain(entry.set_id, entry.addr_tag, entry.sector_id);
+    assert(chain != nullptr);
+    --chain->num_core;
     this->heap_push(id);
   }
 
@@ -784,7 +789,9 @@ public:
     assert(!heap_.empty());
     uint32_t head = heap_.front();
     auto &root = entries_.at(head);
-    auto &chain = *this->find_chain(root.set_id, root.addr_tag, root.sector_id);
+    auto *chain_ptr = this->find_chain(root.set_id, root.addr_tag, root.sector_id);
+    assert(chain_ptr != nullptr);
+    auto &chain = *chain_ptr;
     for (uint32_t i : chain.ids) {
       auto &entry = entries_[i];
       if (entry.bank_req.type == bank_req_t::Replay) {
@@ -826,6 +833,7 @@ public:
     --size_;
     free_[id / 64] |= 1ull << (id % 64);
     auto it = chain_map_.find(key_t{picked.addr_tag, picked.set_id, picked.sector_id});
+    assert(it != chain_map_.end());
     auto &chain = chains_[it->second];
     chain.ids.erase(std::lower_bound(chain.ids.begin(), chain.ids.end(), id));
     chain.num_ordered -= is_ordered(*out);

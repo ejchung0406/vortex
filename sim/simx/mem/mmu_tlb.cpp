@@ -13,6 +13,7 @@
 #include "tlb_types.h"
 #include <VX_types.h>
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 
 namespace vortex {
@@ -68,6 +69,7 @@ void Tlb::index_erase(uint32_t id) {
   const auto& e = entries_[id];
   auto& li = index_.at(e.level);
   auto it = li.keys.find(e.vpn >> (e.level * VPN_LEVEL_BITS));
+  assert(it != li.keys.end());
   auto& ids = it->second;
   ids.erase(std::lower_bound(ids.begin(), ids.end(), id));
   if (ids.empty()) {
