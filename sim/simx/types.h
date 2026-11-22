@@ -1408,8 +1408,11 @@ public:
 
   HashTable(uint32_t capacity)
     : entries_(capacity)
+    , free_((capacity + 63) / 64, 0)
     , size_(0)
-  {}
+  {
+    this->clear_free();
+  }
 
   bool empty() const {
     return (0 == size_);
@@ -1439,15 +1442,19 @@ public:
     return entry.second;
   }
 
+  // Takes the lowest free index; the free slots are a bit set.
   uint32_t allocate(const T& value) {
-    for (uint32_t i = 0, n = entries_.size(); i < n; ++i) {
-      auto& entry = entries_.at(i);
-      if (!entry.first) {
-        entry.first = true;
-        entry.second = value;
-        ++size_;
-        return i;
+    for (uint32_t w = 0, n = free_.size(); w < n; ++w) {
+      if (free_[w] == 0) {
+        continue;
       }
+      uint32_t i = w * 64 + __builtin_ctzll(free_[w]);
+      free_[w] &= free_[w] - 1;
+      auto& entry = entries_.at(i);
+      entry.first = true;
+      entry.second = value;
+      ++size_;
+      return i;
     }
     assert(false);
     return -1;
@@ -1457,6 +1464,7 @@ public:
     auto& entry = entries_.at(index);
     assert(entry.first);
     entry.first = false;
+    free_[index / 64] |= 1ull << (index % 64);
     --size_;
   }
 
@@ -1465,11 +1473,20 @@ public:
       auto& entry = entries_.at(i);
       entry.first = false;
     }
+    this->clear_free();
     size_ = 0;
   }
 
 private:
+  void clear_free() {
+    for (uint32_t w = 0, n = free_.size(); w < n; ++w) {
+      uint32_t bits = std::min<uint32_t>(64, entries_.size() - w * 64);
+      free_[w] = (bits == 64) ? ~0ull : ((1ull << bits) - 1);
+    }
+  }
+
   std::vector<std::pair<bool, T>> entries_;
+  std::vector<uint64_t> free_; // one bit per free entry
   uint32_t size_;
 };
 
