@@ -141,7 +141,10 @@ void Dispatcher::on_tick() {
         new_trace = new (trace_alloc) instr_trace_t(*trace);
         block_pids_.at(b) = start + 1;
       } else {
-        block_pids_.at(b) = -1; // mark block as processed
+        // Without batches each block's iterator runs on its own queue and
+        // takes the next op without waiting for the other blocks; a batch
+        // moves on once all its blocks are done.
+        block_pids_.at(b) = (num_blocks_ == 1) ? 0 : -1;
         if (iter_out_reg_ && !gapless_) {
           // The iterator's output register holds the last packet a cycle
           // more: the op leaves its slot queue then, and the register is
