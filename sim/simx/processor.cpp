@@ -49,7 +49,7 @@ ProcessorImpl::ProcessorImpl()
 
   // create kernel management unit (SimObject)
   constexpr uint32_t total_cores = VX_CFG_NUM_CLUSTERS * NUM_SOCKETS * VX_CFG_SOCKET_SIZE;
-  kmu_ = Kmu::Create("kmu", total_cores);
+  kmu_ = Kmu::Create("kmu", VX_CFG_NUM_CLUSTERS, NUM_SOCKETS, VX_CFG_SOCKET_SIZE);
 
   // create memory simulator; with the CP writing into the last-level cache,
   // the memory side carries a transfer's fills across the launch reset
@@ -324,6 +324,11 @@ int ProcessorImpl::run() {
       } else {
         exitcode |= cluster->get_exitcode();
       }
+    }
+    // CTAs the KMU has yet to issue, or holds in its fan-out tree, are in no
+    // channel either.
+    if (kmu_->busy()) {
+      any_running = true;
     }
 #ifdef VX_CFG_VM_ENABLE
     // A walk in flight holds no channel packet while it waits on memory,

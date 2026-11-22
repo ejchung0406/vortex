@@ -241,8 +241,7 @@ A launch can be kept off some cores: the KMU's `VX_DCR_KMU_CORE_DISABLE*`
 words hold one bit per core, and each fan-out level takes an output out of
 the compute round-robin when every core below it is masked. Fragment routing
 ignores the mask. The mask is kept across launches; with every core masked no
-compute message is ever accepted, so the launch does not finish. SimX applies
-the same mask to its flat scan of the cores.
+compute message is ever accepted, so the launch does not finish.
 
 Both rules are the same idea: affinity that must not be load-balanced is
 expressed as message length, and the arb never has to unpack `data` to
@@ -480,10 +479,10 @@ Two preconditions make this sound, both already enforced:
 
 SimX has no bus, so its `Kmu` carries the routing itself: the destination is
 fixed **before** a message is sent — a locked cluster's remaining members go
-only to the core that took the first, and a new message goes to the nearest
-ready core from the round-robin pointer, as the RTL fan-out picks the nearest
-ready output
-([`kmu.cpp:122-156`](../../sim/simx/kmu/kmu.cpp#L122)).
+only to the core that took the first, and a new message walks the same tree
+as the RTL fan-out: each level, from a round-robin pointer of its own, takes
+the nearest child with a ready, unmasked core below it
+([`kmu.cpp:141-209`](../../sim/simx/kmu/kmu.cpp#L141)).
 
 **Why this is load-bearing rather than an optimisation.** The obvious
 consequence of a split cluster is that LMEM peers resolve to another CTA's
