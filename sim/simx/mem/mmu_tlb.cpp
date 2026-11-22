@@ -27,20 +27,53 @@ static_assert((VX_VM_PT_SIZE / VX_VM_PTE_SIZE) == (1u << VPN_LEVEL_BITS),
 
 Tlb::Result Tlb::lookup(uint64_t vpn) {
   ++reads_;
-  // the valid entries in index order: the first match wins, as in a scan of
-  // the whole array
-  for (uint32_t i : valid_ids_) {
-    auto& e = entries_[i];
-    uint32_t shift = e.level * VPN_LEVEL_BITS;
-    if ((e.vpn >> shift) == (vpn >> shift)) {
-      e.mru = true;
-      ++hits_;
-      uint64_t low_mask = (uint64_t(1) << shift) - 1;
-      return {true, e.ppn | (vpn & low_mask), e.flags, e.level};
+  // An entry matches when its vpn and the lookup's agree above its level's
+  // offset; of all matching entries the lowest index wins, as in a scan of
+  // the array in index order.
+  uint32_t best = UINT32_MAX;
+  for (uint32_t level = 0, n = index_.size(); level < n; ++level) {
+    auto& li = index_[level];
+    if (li.count == 0) {
+      continue;
     }
+    auto it = li.keys.find(vpn >> (level * VPN_LEVEL_BITS));
+    if (it != li.keys.end() && it->second.front() < best) {
+      best = it->second.front();
+    }
+  }
+  if (best != UINT32_MAX) {
+    auto& e = entries_[best];
+    uint32_t shift = e.level * VPN_LEVEL_BITS;
+    e.mru = true;
+    ++hits_;
+    uint64_t low_mask = (uint64_t(1) << shift) - 1;
+    return {true, e.ppn | (vpn & low_mask), e.flags, e.level};
   }
   ++misses_;
   return {};
+}
+
+void Tlb::index_insert(uint32_t id) {
+  const auto& e = entries_[id];
+  if (e.level >= index_.size()) {
+    index_.resize(e.level + 1);
+  }
+  auto& li = index_[e.level];
+  auto& ids = li.keys[e.vpn >> (e.level * VPN_LEVEL_BITS)];
+  ids.insert(std::lower_bound(ids.begin(), ids.end(), id), id);
+  ++li.count;
+}
+
+void Tlb::index_erase(uint32_t id) {
+  const auto& e = entries_[id];
+  auto& li = index_.at(e.level);
+  auto it = li.keys.find(e.vpn >> (e.level * VPN_LEVEL_BITS));
+  auto& ids = it->second;
+  ids.erase(std::lower_bound(ids.begin(), ids.end(), id));
+  if (ids.empty()) {
+    li.keys.erase(it);
+  }
+  --li.count;
 }
 
 void Tlb::fill(uint64_t vpn, uint64_t ppn, uint8_t flags, uint8_t level) {
@@ -63,8 +96,7 @@ void Tlb::fill(uint64_t vpn, uint64_t ppn, uint8_t flags, uint8_t level) {
 
   if (entries_[victim].valid) {
     ++evictions_;
-  } else {
-    valid_ids_.insert(std::lower_bound(valid_ids_.begin(), valid_ids_.end(), (uint32_t)victim), (uint32_t)victim);
+    this->index_erase(victim);
   }
 
   uint64_t low_mask = (uint64_t(1) << (level * VPN_LEVEL_BITS)) - 1;
@@ -74,6 +106,7 @@ void Tlb::fill(uint64_t vpn, uint64_t ppn, uint8_t flags, uint8_t level) {
   entries_[victim].ppn   = ppn & ~low_mask;
   entries_[victim].flags = flags;
   entries_[victim].level = level;
+  this->index_insert(victim);
 }
 
 void Tlb::flush() {
@@ -81,7 +114,7 @@ void Tlb::flush() {
     e.valid = false;
     e.mru = false;
   }
-  valid_ids_.clear();
+  index_.clear();
 }
 
 } // namespace vortex
