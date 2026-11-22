@@ -2,11 +2,15 @@
 //
 // Each CTA (one warp) has the DXA copy `tiles` tiles of `tile_elems` floats
 // into its local memory, `depth` of them outstanding at once, and sums them
-// (or, with -c0, reads one word of each). The host never writes the buffer, so
-// every line is a memory read that no cache holds. The grid is `rounds` CTAs
-// per CTA slot of the device (warps, or what local memory holds) unless -g
-// gives the CTA count; the bytes read are grid * tiles * tile_elems * 4. Read
-// the bandwidth from the perf report (--perf=7): memory reads over cycles.
+// (or, with -c0, reads one word of each). The host never writes the buffer,
+// so every line is a memory read that no cache holds (an upload would leave
+// the lines in the last-level cache). The grid is `rounds` CTAs per CTA slot
+// of the device (warps, or what local memory holds) unless -g gives the CTA
+// count; the bytes read are grid * tiles * tile_elems * 4. Read the bandwidth
+// from the perf report (--perf=7): memory reads over cycles.
+//
+// Unwritten memory reads as one value in the simulators, so the host check
+// proves that every tile was delivered, not that it came from the right address.
 
 #include <algorithm>
 #include <cstdint>
@@ -39,6 +43,7 @@ uint32_t consume = 1;
 
 vx_device_h device = nullptr;
 vx_buffer_h src_buffer = nullptr;
+vx_buffer_h probe_buffer = nullptr;
 vx_buffer_h out_buffer = nullptr;
 vx_queue_h  queue   = nullptr;
 vx_module_h module_ = nullptr;
@@ -66,19 +71,35 @@ static void parse_args(int argc, char **argv) {
     default:  show_usage(); exit(-1);
     }
   }
-  if (tile_elems == 0 || tile_elems > 0xffff || tiles == 0 || depth < 1 || depth > 8 || consume > 1) {
-    std::cerr << "tile elements must be 1..65535, tiles nonzero, depth 1..8, consume 0 or 1" << std::endl;
+  const uint32_t max_depth = std::min<uint32_t>(BWSTREAM_DXA_MAX_DEPTH, VX_CFG_NUM_BARRIERS);
+  if (tile_elems == 0 || tile_elems > 0xffff || tiles == 0 || rounds == 0 || depth < 1 || depth > max_depth
+      || consume > 1) {
+    std::cerr << "tile elements must be 1..65535, tiles and rounds nonzero, depth 1.." << max_depth
+              << ", consume 0 or 1" << std::endl;
     exit(-1);
   }
 }
 
 void cleanup() {
   if (device) {
-    if (src_buffer) vx_buffer_release(src_buffer);
-    if (out_buffer) vx_buffer_release(out_buffer);
-    if (kernel)  vx_kernel_release(kernel);
-    if (module_) vx_module_release(module_);
-    if (queue)   vx_queue_release(queue);
+    if (src_buffer) {
+      vx_buffer_release(src_buffer);
+    }
+    if (probe_buffer) {
+      vx_buffer_release(probe_buffer);
+    }
+    if (out_buffer) {
+      vx_buffer_release(out_buffer);
+    }
+    if (kernel) {
+      vx_kernel_release(kernel);
+    }
+    if (module_) {
+      vx_module_release(module_);
+    }
+    if (queue) {
+      vx_queue_release(queue);
+    }
     vx_device_dump_perf(device, stdout);
     vx_device_release(device);
   }
@@ -114,8 +135,9 @@ int main(int argc, char *argv[]) {
   uint32_t local_mem = depth * tile_elems * sizeof(float);
   RT_CHECK(vx_check_occupancy(device, (uint32_t)num_threads, local_mem));
   uint64_t slots = std::min<uint64_t>(num_warps, lmem_bytes / local_mem);
-  if (grid == 0)
+  if (grid == 0) {
     grid = (uint32_t)(num_cores * slots) * rounds;
+  }
 
   uint64_t total_threads = (uint64_t)grid * num_threads;
   uint64_t total_elems = (uint64_t)grid * tiles * tile_elems;
@@ -141,11 +163,13 @@ int main(int argc, char *argv[]) {
   kernel_arg.depth      = depth;
   kernel_arg.consume    = consume;
 
-  // Unwritten device memory reads as one fill value; fetch it to predict the sums.
+  // Unwritten device memory reads as one fill value; fetch it from a buffer of
+  // its own to predict the sums, so no line of the source enters a cache.
   float fill = 0.0f;
   {
     vx_event_h fill_ev = nullptr;
-    RT_CHECK(vx_enqueue_read(queue, &fill, src_buffer, 0, sizeof(fill), 0, nullptr, &fill_ev));
+    RT_CHECK(vx_buffer_create(device, sizeof(fill), VX_MEM_READ, &probe_buffer));
+    RT_CHECK(vx_enqueue_read(queue, &fill, probe_buffer, 0, sizeof(fill), 0, nullptr, &fill_ev));
     RT_CHECK(vx_event_wait_value(fill_ev, 1, VX_TIMEOUT_INFINITE));
     vx_event_release(fill_ev);
   }
@@ -176,16 +200,18 @@ int main(int argc, char *argv[]) {
 
   // Every element reads as `fill`: redo the kernel's accumulation in its order.
   volatile float sum = 0.0f;
-  for (uint64_t i = 0; i < (uint64_t)tiles * (consume ? tile_elems / num_threads : 1); ++i)
+  for (uint64_t i = 0; i < (uint64_t)tiles * (consume ? tile_elems / num_threads : 1); ++i) {
     sum = sum + fill;
+  }
 
   uint64_t errors = 0;
   for (uint64_t g = 0; g < total_threads; ++g) {
     float expected = sum + (float)(g + 1);
     if (h_out[g] != expected) {
-      if (errors < 10)
+      if (errors < 10) {
         printf("*** error: [%llu] expected=%f, actual=%f\n", (unsigned long long)g,
                expected, h_out[g]);
+      }
       ++errors;
     }
   }

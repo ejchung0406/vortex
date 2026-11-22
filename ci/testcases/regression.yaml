@@ -72,6 +72,27 @@ tests:
   app: bar_vis
   configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1
   args: -w4
+# The same with the loading CTAs holding a one-bank data cache's four MSHRs, so
+# that the bank back-pressures the checking CTAs' stores on their way to it,
+# every warp storing just before the barrier; then with a link to the cache.
+- id: bar-vis-warp-scope-bank-stress
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: bar_vis
+  configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1
+    -DVX_CFG_DCACHE_NUM_BANKS=1 -DVX_CFG_DCACHE_MSHR_SIZE=4
+  args: -w4 -r64 -s1 -d0
+- id: bar-vis-warp-scope-bank-stress-link
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: bar_vis
+  configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1
+    -DVX_CFG_DCACHE_NUM_BANKS=1 -DVX_CFG_DCACHE_MSHR_SIZE=4 -DVX_CFG_L1_LINK_LATENCY=8
+  args: -w4 -r64 -s1 -d0
 # Atomics with two LSU blocks: the read engine drains before an atomic enters
 # the first engine.
 - id: lmem-access-amo-iw2

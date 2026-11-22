@@ -316,7 +316,8 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
                 .reset      (reset),
                 .bus_in_if  (l2_link_bus_if[i]),
                 .bus_out_if (per_socket_mem_bus_if[i]),
-                .empty      (l2_link_empty[i])
+                .empty      (l2_link_empty[i]),
+                `UNUSED_PIN (req_empty)
             );
         end else begin : g_wire
             `ASSIGN_VX_MEM_BUS_IF (per_socket_mem_bus_if[i], l2_link_bus_if[i]);

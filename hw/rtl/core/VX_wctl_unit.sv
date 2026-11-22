@@ -183,14 +183,15 @@ module VX_wctl_unit import VX_gpu_pkg::*; #(
     // BAR (vx_barrier or vx_barrier_arrive) drains LSU before continuing: the
     // whole core's (VX_CFG_BAR_DRAIN_SCOPE 0), or for a barrier that stalls its
     // warp, so that nothing younger of the warp is in flight, the warp's own
-    // instructions committed, every LSU block's requests sent and no store in
-    // flight to the data cache or local memory (scope 1).
+    // instructions committed, every LSU block's requests sent and no request
+    // in flight to the data cache or local memory (scope 1). The core's dMMU
+    // lanes are part of that path; the rest of the MMUs hold none of the
+    // warp's stores, and its loads are answered.
     wire lsu_core_drained = (& warp_ctl_if.lsu_sched_empty) && warp_ctl_if.mmu_empty;
     wire lsu_sched_drained;
     if (`VX_CFG_BAR_DRAIN_SCOPE != 0) begin : g_bar_drain_warp
         wire lsu_warp_drained = warp_ctl_if.warp_pending_alm_empty[wid_to_sfu_local(execute_if.data.header.wid)]
-                             && (& warp_ctl_if.lsu_sched_sent) && warp_ctl_if.lsu_store_landed
-                             && warp_ctl_if.mmu_empty;
+                             && (& warp_ctl_if.lsu_sched_sent) && warp_ctl_if.lsu_store_landed;
         assign lsu_sched_drained = execute_if.data.op_args.wctl.is_bar_arrive ? lsu_core_drained : lsu_warp_drained;
     end else begin : g_bar_drain_core
         `UNUSED_VAR ({warp_ctl_if.lsu_sched_sent, warp_ctl_if.lsu_store_landed})

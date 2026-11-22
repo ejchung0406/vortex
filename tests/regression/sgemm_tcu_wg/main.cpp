@@ -633,6 +633,21 @@ int main(int argc, char *argv[]) {
     K = K2;
   }
 
+#ifdef WGMMA_AB_ALIAS
+  // B comes out of A's tile in shared memory: one CTA, whose B columns are
+  // the first rows of its A tile.
+  static_assert(vt::ITYPE::bits >= 8, "WGMMA_AB_ALIAS needs whole-byte elements");
+  if (M != cta_M || N != per_warp_N) {
+    std::cout << "Note: WGMMA_AB_ALIAS runs one CTA: M=" << cta_M << " N=" << per_warp_N << std::endl;
+    M = cta_M;
+    N = per_warp_N;
+  }
+  if (N > M) {
+    std::cerr << "Error: WGMMA_AB_ALIAS needs N=" << N << " <= M=" << M << std::endl;
+    return -1;
+  }
+#endif
+
   size_t sizeA = M * K;
   size_t sizeB = K * N;
   size_t sizeC = M * N;
@@ -676,6 +691,13 @@ int main(int argc, char *argv[]) {
   for (uint32_t i = 0; i < sizeB; ++i) {
     h_B[i] = generate_B_value<vt::ITYPE>();
   }
+#ifdef WGMMA_AB_ALIAS
+  for (uint32_t k = 0; k < K; ++k) {
+    for (uint32_t n = 0; n < N; ++n) {
+      h_B[k * N + n] = h_A[n * K + k];
+    }
+  }
+#endif
 
   {
     std::cout << "upload matrix A buffer" << std::endl;

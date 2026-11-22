@@ -1973,13 +1973,14 @@ public:
     uint32_t num_outputs,
     std::function<uint32_t(const Req& req)> output_sel,
     uint32_t req_delay,
-    uint32_t rsp_delay
+    uint32_t rsp_delay,
+    uint32_t rsp_in_size = 2
   )
     : SimObject<TxRxCrossBar<Req, Rsp>>(ctx, name)
     , ReqIn(num_inputs, this)
     , RspOut(num_inputs, this)
     , ReqOut(num_outputs, this)
-    , RspIn(num_outputs, this)
+    , RspIn(num_outputs, SimChannel<Rsp>(this, rsp_in_size))
     , crossbar_(nullptr)
     , arbiter_(type, num_outputs)
     , rsp_delay_(rsp_delay)

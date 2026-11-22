@@ -117,6 +117,18 @@ tests:
   app: sgemm_tcu_wg
   configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
     -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=8 -DWGMMA_SS -DWGMMA_KMAJOR_B -DB_PAD_K=1 -DB_OFF_K=1 -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1
+# The first warp's A descriptor is the B descriptor, and B's 32 rows run past
+# that warp's 8 rows of A into the other warps': the tile buffer routes a word
+# by the operand that reads it, not by its address.
+- id: sgemm_tcu_wg-ab-alias
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: sgemm_tcu_wg
+  args: -k64
+  configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
+    -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=32 -DWGMMA_SS -DWGMMA_RMAJOR_A -DWGMMA_KMAJOR_B -DWGMMA_AB_ALIAS -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1
 
 - id: sgemm_tcu_wg_sp-1
   via: blackbox
@@ -271,6 +283,17 @@ tests:
   args: -m 128 -n 128 -k 128
   configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_TCU_SPARSE_ENABLE -DVX_CFG_TCU_FEDP2K
     -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=8 -DWGMMA_RS -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1
+# The same with barriers that wait only for their own warp's accesses
+# (VX_CFG_BAR_DRAIN_SCOPE=1) while the tensor unit's metadata reads share the
+# LSU's request queue and the tiles are read out of shared memory.
+- id: model_parity-wgmma-sparse-fullk-bar-warp
+  check: model_parity
+  via: blackbox
+  app: sgemm_tcu_wg_sp
+  args: -m 128 -n 128 -k 128
+  configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_TCU_SPARSE_ENABLE -DVX_CFG_TCU_FEDP2K
+    -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=8 -DWGMMA_RS -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1
+    -DVX_CFG_BAR_DRAIN_SCOPE=1
 - id: perf_gate-wgmma-sparse-fullk
   check: perf_gate
   via: blackbox
