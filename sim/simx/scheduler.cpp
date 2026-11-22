@@ -37,6 +37,11 @@ warp_t::warp_t(uint32_t num_threads)
   , PC(0)
   , uuid(0)
   , mscratch(0)
+  , fetch_PC(0)
+  , fetch_epoch(0)
+  , fetch_inflight(0)
+  , fetch_resync(true)
+  , fetch_squash_pending(false)
   , cta_csrs()
 {
 }
@@ -54,6 +59,10 @@ void warp_t::reset() {
   this->mepc    = 0;
   this->mcause  = 0;
   this->mtval   = 0;
+  // fetch_epoch keeps counting, so a fetch from before the reset stays stale
+  this->fetch_inflight = 0;
+  this->fetch_resync   = true;
+  this->fetch_squash_pending = false;
   // Register files live in OpcUnit and are reset there.
 }
 
@@ -117,6 +126,7 @@ void Scheduler::activate_warp(uint32_t wid, const cta_warp_record_t& rec) {
   // the kernel's per-CTA dispatch window — a fixed 20-byte (5-instruction)
   // sequence that reloads the entry pointer and kargs before re-calling.
   warp.PC       = rec.do_init ? rec.PC : (warp.PC - 20);
+  warp.fetch_resync = true;
   warp.tmask    = rec.tmask;
   warp.mscratch = rec.mscratch;
 
@@ -180,6 +190,7 @@ void Scheduler::schedule_begin() {
     for (uint32_t i = 1; i < wspawn_.num_warps; ++i) {
       auto& warp = warps_.at(i);
       warp.PC = wspawn_.nextPC;
+      warp.fetch_resync = true;
       warp.tmask.set(0);
       warp.mscratch = spawning_mscratch;
       active_warps_.set(i);
@@ -194,6 +205,17 @@ void Scheduler::schedule_begin() {
 }
 
 bool Scheduler::has_ready(const WarpMask& warp_mask) const {
+  if (VX_CFG_FETCH_INFLIGHT > 1) {
+    for (size_t wid = 0, nw = VX_CFG_NUM_WARPS; wid < nw; ++wid) {
+      if (active_warps_.test(wid) && !stalled_warps_.test(wid) && warp_mask.test(wid)
+       && (warps_.at(wid).fetch_inflight == 0
+        || (warps_.at(wid).fetch_inflight < VX_CFG_FETCH_INFLIGHT && this->fetch_alone(wid)
+         && this->fetch_page_ok(wid)))) {
+        return true;
+      }
+    }
+    return false;
+  }
   return (active_warps_ & ~stalled_warps_ & warp_mask).any();
 }
 
@@ -202,9 +224,23 @@ instr_trace_t* Scheduler::schedule(const WarpMask& warp_mask) {
 
   // pick next ready warp
   for (size_t wid = 0, nw = VX_CFG_NUM_WARPS; wid < nw; ++wid) {
-    if (active_warps_.test(wid) && !stalled_warps_.test(wid) && warp_mask.test(wid)) {
+    if (active_warps_.test(wid) && !stalled_warps_.test(wid) && warp_mask.test(wid)
+     && (VX_CFG_FETCH_INFLIGHT == 1 || warps_.at(wid).fetch_inflight == 0)) {
       scheduled_warp = wid;
       break;
+    }
+  }
+  // A warp fetches ahead only while it is the one runnable warp of its frontend
+  // slice: with others runnable they fill its gaps, and the fetches it would
+  // drop at its next branch would take icache bandwidth from them.
+  if (VX_CFG_FETCH_INFLIGHT > 1 && scheduled_warp == -1) {
+    for (size_t wid = 0, nw = VX_CFG_NUM_WARPS; wid < nw; ++wid) {
+      if (active_warps_.test(wid) && !stalled_warps_.test(wid) && warp_mask.test(wid)
+       && warps_.at(wid).fetch_inflight < VX_CFG_FETCH_INFLIGHT
+       && this->fetch_alone(wid) && this->fetch_page_ok(wid)) {
+        scheduled_warp = wid;
+        break;
+      }
     }
   }
 
@@ -231,16 +267,28 @@ instr_trace_t* Scheduler::schedule(const WarpMask& warp_mask) {
     trace->cid    = core_->id();
     trace->wid    = scheduled_warp;
     trace->cta_id = warp.cta_csrs.cta_id;
-    trace->PC     = warp.PC;
     trace->tmask  = warp.tmask;
 
     // PC is advanced at decode (+2 for RVC, +4 otherwise) — matches
     // the hardware warp-PC update at decode.
     // Branch/JAL/JALR commit later overrides warp.PC with the
     // resolved target.
-
-    // Suspend warp until decode resumes it (non-stalling) or commit (stalling).
-    this->suspend(scheduled_warp);
+    if (VX_CFG_FETCH_INFLIGHT > 1) {
+      // Fetch ahead: the warp stays schedulable and fetches the next word; decode
+      // suspends it at a stalling instruction.
+      if (warp.fetch_resync) {
+        warp.fetch_PC = warp.PC;
+        warp.fetch_resync = false;
+      }
+      trace->PC          = warp.fetch_PC;
+      trace->fetch_epoch = warp.fetch_epoch;
+      warp.fetch_PC += 4;
+      ++warp.fetch_inflight;
+    } else {
+      trace->PC = warp.PC;
+      // Suspend warp until decode resumes it (non-stalling) or commit (stalling).
+      this->suspend(scheduled_warp);
+    }
   }
 
   return trace;
@@ -252,6 +300,15 @@ void Scheduler::schedule_end() {
   // becomes visible to the pick loop next cycle — so a warp released as its
   // instruction resolves is never re-scheduled the same cycle.
   stalled_warps_ = stalled_warps_next_;
+  if (VX_CFG_FETCH_INFLIGHT > 1) {
+    for (auto& warp : warps_) {
+      if (warp.fetch_squash_pending) {
+        ++warp.fetch_epoch;
+        warp.fetch_resync = true;
+        warp.fetch_squash_pending = false;
+      }
+    }
+  }
   cta_active_view_ = active_warps_;
   for (uint32_t i = 0; i < cta_fire_cnt_; ++i) {
     cta_active_view_.set(cta_fire_wids_[i]);
@@ -313,6 +370,45 @@ void Scheduler::resume(uint32_t wid) {
   assert(stalled_warps_next_.test(wid));
   stalled_warps_next_.reset(wid);
   DT(3, core_->name() << " warp-state: wid=" << wid << ", stalled=false");
+}
+
+#if (VX_CFG_FETCH_INFLIGHT > 1) && defined(VX_CFG_EXT_C_ENABLE)
+#error "VX_CFG_FETCH_INFLIGHT > 1 fetches 4-byte words ahead, which compressed instructions break"
+#endif
+
+bool Scheduler::fetch_alone(uint32_t wid) const {
+  for (uint32_t w = wid % VX_CFG_FETCH_WIDTH; w < VX_CFG_NUM_WARPS; w += VX_CFG_FETCH_WIDTH) {
+    if (w != wid && active_warps_.test(w) && !stalled_warps_.test(w)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// A fetch ahead does not enter a new page: a fetch that is later dropped must
+// not take a translation fault, which the icache MMU reports and never answers.
+bool Scheduler::fetch_page_ok(uint32_t wid) const {
+#ifdef VX_CFG_VM_ENABLE
+  auto& warp = warps_.at(wid);
+  return warp.fetch_resync || (warp.fetch_PC & ((Word(1) << VX_VM_PAGE_LOG2_SIZE) - 1)) != 0;
+#else
+  __unused (wid);
+  return true;
+#endif
+}
+
+bool Scheduler::fetch_current(const instr_trace_t* trace) const {
+  return trace->fetch_epoch == warps_.at(trace->wid).fetch_epoch;
+}
+
+void Scheduler::fetch_retire(uint32_t wid) {
+  auto& warp = warps_.at(wid);
+  assert(warp.fetch_inflight > 0);
+  --warp.fetch_inflight;
+}
+
+void Scheduler::fetch_squash(uint32_t wid) {
+  warps_.at(wid).fetch_squash_pending = true;
 }
 
 void Scheduler::advance_pc(const instr_trace_t* trace, uint32_t inc) {

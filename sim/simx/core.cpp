@@ -555,7 +555,9 @@ public:
       auto& fetch_latch = fetch_latch_.at(f);
       WarpMask warp_mask;
       for (uint32_t w = f; w < VX_CFG_NUM_WARPS; w += VX_CFG_FETCH_WIDTH) {
-        if (all_full || !ibuf_full_r_.at(w)) {
+        // fetch ahead stays within the warp's buffer slots
+        bool overflow_ok = all_full && (VX_CFG_FETCH_INFLIGHT == 1 || scheduler_->warp(w).fetch_inflight == 0);
+        if (overflow_ok || !ibuf_full_r_.at(w)) {
           warp_mask.set(w);
         }
       }
@@ -582,7 +584,9 @@ public:
       ++perf_stats_.sched_idle;
     }
     for (uint32_t w = 0; w < VX_CFG_NUM_WARPS; ++w) {
-      ibuf_full_r_.at(w) = (ibuf_inflight_.at(w) == VX_CFG_IBUF_SIZE);
+      // with fetch ahead an overflow pick may take a warp past its slots
+      ibuf_full_r_.at(w) = (VX_CFG_FETCH_INFLIGHT > 1) ? (ibuf_inflight_.at(w) >= VX_CFG_IBUF_SIZE)
+                                                       : (ibuf_inflight_.at(w) == VX_CFG_IBUF_SIZE);
       ibuf_queue_full_r_.at(w) = (ibuf_queued_.at(w) >= VX_CFG_IBUF_SIZE);
     }
 
@@ -618,8 +622,24 @@ public:
   #endif
     auto& icache_req = (f == 0) ? icache_flush_buf_->In : icache_port;
 
+    // A fetch of a squashed stream leaves at the icache output, needing no
+    // buffer slot.
+    bool rsp_dropped = false;
+    if (VX_CFG_FETCH_INFLIGHT > 1 && !icache_rsp.empty()) {
+      auto& mem_rsp = icache_rsp.peek();
+      auto trace = pending_icache.at(mem_rsp.tag);
+      if (!scheduler_->fetch_current(trace)) {
+        DT(3, simobject_->name() << " icache-rsp drop: " << *trace);
+        pending_icache.release(mem_rsp.tag);
+        icache_rsp.pop();
+        --pending_ifetches_;
+        this->fetch_drop(trace, false);
+        rsp_dropped = true;
+      }
+    }
+
     // handle icache response — extract instruction word from the TLM line payload
-    if (!icache_rsp.empty()){
+    if (!rsp_dropped && !icache_rsp.empty()){
       auto& mem_rsp = icache_rsp.peek();
       auto trace = pending_icache.at(mem_rsp.tag);
       assert(mem_rsp.data && "icache response must carry line payload");
@@ -734,6 +754,23 @@ public:
 
     auto trace = decode_latch.peek();
 
+    if (VX_CFG_FETCH_INFLIGHT > 1) {
+      // A fetch is decoded only at its warp's PC: one of a squashed stream is
+      // dropped, and one that overtook an older fetch is dropped and restarts
+      // the stream there.
+      bool current = scheduler_->fetch_current(trace);
+      if (!current || trace->PC != scheduler_->warp(trace->wid).PC) {
+        DT(3, simobject_->name() << "-pipeline decode drop: " << *trace);
+        if (current) {
+          scheduler_->fetch_squash(trace->wid);
+        }
+        this->fetch_drop(trace, true);
+        decode_latch.pop();
+        return;
+      }
+      scheduler_->fetch_retire(trace->wid);
+    }
+
     // the icache response took the buffer slot this instruction lands in
     auto& ibuffer = ibuffers_.at(trace->wid);
     assert(!ibuffer->full());
@@ -773,7 +810,14 @@ public:
 
     // Resume warp for non-stalling instructions (ALU, FPU);
     // stalling instructions (LSU, SFU, TCU, branches) stay suspended until commit
-    if (!trace->fetch_stall) {
+    if (VX_CFG_FETCH_INFLIGHT > 1) {
+      // A stalling instruction holds its warp from here, and what was fetched
+      // behind it is dropped.
+      if (trace->fetch_stall) {
+        scheduler_->fetch_squash(trace->wid);
+        scheduler_->suspend(trace->wid);
+      }
+    } else if (!trace->fetch_stall) {
       scheduler_->resume(trace->wid);
     }
 
@@ -1000,6 +1044,22 @@ public:
         ++perf_stats_.scrb_stalls;
       }
     }
+  }
+
+  // A dropped fetch leaves the front end: its buffer slot and pending count
+  // return; `queued` when it had reached the decode latch.
+  void fetch_drop(instr_trace_t* trace, bool queued) {
+    uint32_t wid = trace->wid;
+    scheduler_->fetch_retire(wid);
+    this->pending_remove(wid);
+    assert(ibuf_inflight_.at(wid) > 0);
+    --ibuf_inflight_.at(wid);
+    if (queued) {
+      assert(ibuf_queued_.at(wid) > 0);
+      --ibuf_queued_.at(wid);
+    }
+    trace->~instr_trace_t();
+    trace_pool_.deallocate(trace, 1);
   }
 
   void ibuf_release(uint32_t wid) {
@@ -1358,6 +1418,7 @@ public:
   }
   void dtm_set_pc(uint32_t wid, Word pc) {
     scheduler_->warp(wid).PC = pc;
+    scheduler_->fetch_squash(wid);
   }
   Word dtm_get_ireg(uint32_t wid, uint32_t reg) {
     return operands_.at(wid % VX_CFG_ISSUE_WIDTH)->dtm_ireg(wid, reg);

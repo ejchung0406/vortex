@@ -85,6 +85,16 @@ struct warp_t {
   // Per-warp MSCRATCH (holds kernel arg pointer, set at CTA dispatch)
   Word                              mscratch;
 
+  // Sequential fetch ahead (FETCH_INFLIGHT > 1): the next fetch address, the
+  // epoch that retires older fetches, and the fetches not yet decoded. PC stays
+  // the architectural next PC, advanced at decode. A squash is registered like
+  // the stall: a pick in its cycle still carries the old epoch.
+  Word                              fetch_PC;
+  uint32_t                          fetch_epoch;
+  uint32_t                          fetch_inflight;
+  bool                              fetch_resync;
+  bool                              fetch_squash_pending;
+
   // Per-warp machine-mode trap CSRs. Synchronous ECALL/EBREAK traps
   // redirect the warp PC to mtvec and snapshot the faulting PC/cause
   // here; MRET restores the PC from mepc. See Scheduler::raise_trap.
@@ -136,6 +146,18 @@ public:
   // depending on is_rvc; mirrors the hardware warp-PC update at decode).
   void advance_pc(const instr_trace_t* trace, uint32_t inc);
   bool running() const;
+
+  // Fetch ahead (FETCH_INFLIGHT > 1). A fetch of the warp's current stream is
+  // kept; a fetch leaves the front end once decoded or dropped; a squash drops
+  // the warp's fetches in flight and restarts its stream at its PC.
+  bool fetch_current(const instr_trace_t* trace) const;
+  // whether wid is the only runnable warp of its frontend slice
+  bool fetch_alone(uint32_t wid) const;
+  // whether wid's next fetch ahead stays in the page of its last fetch
+  bool fetch_page_ok(uint32_t wid) const;
+  void fetch_retire(uint32_t wid);
+  void fetch_squash(uint32_t wid);
+
   bool wspawn(uint32_t num_warps, Word nextPC);
   bool setTmask(uint32_t wid, const ThreadMask& tmask);
 

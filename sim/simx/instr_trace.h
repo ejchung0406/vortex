@@ -79,6 +79,9 @@ public:
   // Cycle the instruction entered its warp's instruction buffer.
   uint64_t ibuf_time;
 
+  // The warp's fetch epoch at the pick; decode drops a fetch of an older one.
+  uint32_t fetch_epoch;
+
   instr_trace_t(uint64_t uuid)
     : uuid(uuid)
     , cid(0)
@@ -104,6 +107,7 @@ public:
     , fetch_stall(false)
     , resume_warp(false)
     , ibuf_time(0)
+    , fetch_epoch(0)
     , log_once_(false)
   {}
 
@@ -133,6 +137,7 @@ public:
     , fetch_stall(rhs.fetch_stall)
     , resume_warp(rhs.resume_warp)
     , ibuf_time(rhs.ibuf_time)
+    , fetch_epoch(rhs.fetch_epoch)
     , log_once_(false)
   {}
 
