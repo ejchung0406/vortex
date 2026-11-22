@@ -37,6 +37,8 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
 
     // KMU bus
     VX_kmu_bus_if.slave         kmu_bus_if[1],
+    // This cluster's cores masked off for launches
+    input  wire [`VX_CFG_NUM_CORES-1:0] core_disable,
 
     // Global barrier bus to the device-level barrier unit
     VX_gbar_bus_if.master       gbar_bus_if,
@@ -105,6 +107,12 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
 
     VX_kmu_bus_if per_socket_kmu_bus_if[NUM_SOCKETS]();
 
+    // A socket takes compute launches while any of its cores is enabled.
+    wire [NUM_SOCKETS-1:0] per_socket_disable;
+    for (genvar i = 0; i < NUM_SOCKETS; ++i) begin : g_socket_disable
+        assign per_socket_disable[i] = (& core_disable[i * `VX_CFG_SOCKET_SIZE +: `VX_CFG_SOCKET_SIZE]);
+    end
+
 `ifdef VX_CFG_EXT_RASTER_ENABLE
     // The raster engines are a launch master alongside the device KMU: a fragment
     // wave IS a launch now, so it merges here instead of being injected at every
@@ -140,10 +148,11 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .ARBITER     ("R"),
         .OUT_BUF     (3)   // register the merged launch link
     ) kmu_merge (
-        .clk        (clk),
-        .reset      (reset),
-        .bus_in_if  (kmu_arb_in_if),
-        .bus_out_if (cluster_merged_kmu_if)
+        .clk         (clk),
+        .reset       (reset),
+        .bus_in_if   (kmu_arb_in_if),
+        .bus_out_if  (cluster_merged_kmu_if),
+        .out_disable (1'b0)
     );
 
     VX_kmu_bus_arb #(
@@ -152,10 +161,11 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .DEST_DIV    (KMU_DEST_DIV_CLUSTER),
         .OUT_BUF     ((NUM_SOCKETS > 1) ? 3 : 0)
     ) kmu_dist (
-        .clk        (clk),
-        .reset      (reset),
-        .bus_in_if  (cluster_merged_kmu_if),
-        .bus_out_if (per_socket_kmu_bus_if)
+        .clk         (clk),
+        .reset       (reset),
+        .bus_in_if   (cluster_merged_kmu_if),
+        .bus_out_if  (per_socket_kmu_bus_if),
+        .out_disable (per_socket_disable)
     );
 `else
     VX_kmu_bus_arb #(
@@ -164,10 +174,11 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .DEST_DIV   (KMU_DEST_DIV_CLUSTER),
         .OUT_BUF    ((NUM_SOCKETS > 1) ? 3 : 0)
     ) kmu_arb (
-        .clk        (clk),
-        .reset      (reset),
-        .bus_in_if  (kmu_bus_if),
-        .bus_out_if (per_socket_kmu_bus_if)
+        .clk         (clk),
+        .reset       (reset),
+        .bus_in_if   (kmu_bus_if),
+        .bus_out_if  (per_socket_kmu_bus_if),
+        .out_disable (per_socket_disable)
     );
 `endif
 
@@ -587,6 +598,7 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         `endif
 
             .kmu_bus_if     (per_socket_kmu_bus_if[socket_id +: 1]),
+            .core_disable   (core_disable[socket_id * `VX_CFG_SOCKET_SIZE +: `VX_CFG_SOCKET_SIZE]),
 
             .gbar_bus_if    (per_socket_gbar_bus_if[socket_id]),
 

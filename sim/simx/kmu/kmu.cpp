@@ -34,6 +34,10 @@ Kmu::Kmu(const SimContext& ctx, const char* name, uint32_t num_cores)
   , cluster_core_(0)
   , inflight_(num_cores, 0)
 {
+  __assert(num_cores <= 32 * VX_DCR_KMU_CORE_DISABLE_WORDS, "the core-disable mask is too narrow");
+  for (auto& w : core_disable_) {
+    w = 0;
+  }
   block_dim_[0]    = block_dim_[1]    = block_dim_[2]    = 1;
   grid_dim_[0]     = grid_dim_[1]     = grid_dim_[2]     = 1;
   cluster_dim_[0]  = cluster_dim_[1]  = cluster_dim_[2]  = 1;
@@ -84,7 +88,12 @@ void Kmu::dcr_write(uint32_t addr, uint32_t value) {
   case VX_DCR_KMU_CLUSTER_DIM_X: cluster_dim_[0] = value; break;
   case VX_DCR_KMU_CLUSTER_DIM_Y: cluster_dim_[1] = value; break;
   case VX_DCR_KMU_CLUSTER_DIM_Z: cluster_dim_[2] = value; break;
-  default: break;
+  default:
+    if (addr >= VX_DCR_KMU_CORE_DISABLE0
+     && addr < VX_DCR_KMU_CORE_DISABLE0 + VX_DCR_KMU_CORE_DISABLE_WORDS) {
+      core_disable_[addr - VX_DCR_KMU_CORE_DISABLE0] = value;
+    }
+    break;
   }
 }
 
@@ -126,10 +135,11 @@ void Kmu::on_tick() {
   // round-robin pointer, so a core that drains its work sooner takes the next
   // cluster instead of the launch waiting on a busy neighbour. One CTA per
   // cycle — the launch bus carries a single beat. A lane is ready when its
-  // transport has room and the core holds fewer than LAUNCH_CREDITS CTAs it
-  // has not yet admitted.
+  // core is not masked off, its transport has room and the core holds fewer
+  // than LAUNCH_CREDITS CTAs it has not yet admitted.
   auto lane_ready = [&](uint32_t c) {
-    return !bus_out.at(c).full() && inflight_[c] < LAUNCH_CREDITS;
+    bool disabled = (core_disable_[c / 32] >> (c % 32)) & 1;
+    return !disabled && !bus_out.at(c).full() && inflight_[c] < LAUNCH_CREDITS;
   };
   uint32_t target = num_cores;
   if (cluster_locked_) {

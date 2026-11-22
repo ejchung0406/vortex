@@ -237,6 +237,13 @@ descending from `rr_ptr` so the nearest ready output wins. Since a compute
 message is a whole cluster (§4.5), `rr_ptr` advances once per *cluster* — so
 clusters, not CTAs, are the unit of load balancing.
 
+A launch can be kept off some cores: the KMU's `VX_DCR_KMU_CORE_DISABLE*`
+words hold one bit per core, and each fan-out level takes an output out of
+the compute round-robin when every core below it is masked. Fragment routing
+ignores the mask. The mask is kept across launches; with every core masked no
+compute message is ever accepted, so the launch does not finish. SimX applies
+the same mask to its flat scan of the cores.
+
 Both rules are the same idea: affinity that must not be load-balanced is
 expressed as message length, and the arb never has to unpack `data` to
 honour it.

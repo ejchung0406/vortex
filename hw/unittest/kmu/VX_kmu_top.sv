@@ -51,7 +51,8 @@ module VX_kmu_top import VX_gpu_pkg::*;
         .dcr_req_data  (dcr_req_data),
         .start         (start),
         .busy          (kmu_busy),
-        .kmu_bus_if    (kmu_bus_if)
+        .kmu_bus_if    (kmu_bus_if),
+        `UNUSED_PIN (core_disable)
     );
 
 endmodule

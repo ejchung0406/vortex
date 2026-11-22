@@ -229,10 +229,11 @@ module VX_graphics import VX_gpu_pkg::*
         .ARBITER     ("R"),
         .OUT_BUF     (3)   // register the cluster-crossing launch stream
     ) raster_kmu_merge (
-        .clk        (clk),
-        .reset      (reset),
-        .bus_in_if  (raster_core_kmu_if),
-        .bus_out_if (raster_kmu_bus_if)
+        .clk         (clk),
+        .reset       (reset),
+        .bus_in_if   (raster_core_kmu_if),
+        .bus_out_if  (raster_kmu_bus_if),
+        .out_disable (1'b0)
     );
 
     // Launch liveness: a fragment launch beat still in the merge -- at a raster core

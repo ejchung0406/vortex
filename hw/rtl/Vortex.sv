@@ -100,6 +100,7 @@ module Vortex import VX_gpu_pkg::*, VX_trace_pkg::*, VX_tlb_pkg::*; (
     // Kernel Management Unit
     VX_kmu_bus_if kmu_bus_in[1]();
     wire kmu_busy;
+    wire [`VX_CFG_NUM_CLUSTERS * `VX_CFG_NUM_CORES-1:0] core_disable;
 `ifdef VX_CFG_EXT_RASTER_ENABLE
     VX_raster_launch_if raster_launch_if();
 `endif
@@ -117,7 +118,8 @@ module Vortex import VX_gpu_pkg::*, VX_trace_pkg::*, VX_tlb_pkg::*; (
     `ifdef VX_CFG_EXT_RASTER_ENABLE
         .raster_launch_if (raster_launch_if),
     `endif
-        .kmu_bus_if (kmu_bus_in[0])
+        .kmu_bus_if (kmu_bus_in[0]),
+        .core_disable (core_disable)
     );
 
 `ifdef SCOPE
@@ -272,16 +274,23 @@ module Vortex import VX_gpu_pkg::*, VX_trace_pkg::*, VX_tlb_pkg::*; (
 
     VX_kmu_bus_if per_cluster_kmu_bus_if[`VX_CFG_NUM_CLUSTERS]();
 
+    // A cluster takes compute launches while any of its cores is enabled.
+    wire [`VX_CFG_NUM_CLUSTERS-1:0] per_cluster_disable;
+    for (genvar c = 0; c < `VX_CFG_NUM_CLUSTERS; ++c) begin : g_cluster_disable
+        assign per_cluster_disable[c] = (& core_disable[c * `VX_CFG_NUM_CORES +: `VX_CFG_NUM_CORES]);
+    end
+
     VX_kmu_bus_arb #(
         .NUM_INPUTS (1),
         .NUM_OUTPUTS (`VX_CFG_NUM_CLUSTERS),
         .DEST_DIV   (KMU_DEST_DIV_DEVICE),
         .OUT_BUF    ((`VX_CFG_NUM_CLUSTERS > 1) ? 3 : 0)  // register per-cluster kmu fan-out (SLR-crossing skid)
     ) kmu_arb (
-        .clk        (clk),
-        .reset      (reset),
-        .bus_in_if  (kmu_bus_in),
-        .bus_out_if (per_cluster_kmu_bus_if)
+        .clk         (clk),
+        .reset       (reset),
+        .bus_in_if   (kmu_bus_in),
+        .bus_out_if  (per_cluster_kmu_bus_if),
+        .out_disable (per_cluster_disable)
     );
 
 `ifdef VX_CFG_EXT_RASTER_ENABLE
@@ -462,6 +471,7 @@ module Vortex import VX_gpu_pkg::*, VX_trace_pkg::*, VX_tlb_pkg::*; (
             .mem_bus_if         (per_cluster_mem_bus_if[cluster_id * L2_MEM_PORTS +: L2_MEM_PORTS]),
 
             .kmu_bus_if         (per_cluster_kmu_bus_if[cluster_id +: 1]),
+            .core_disable       (core_disable[cluster_id * `VX_CFG_NUM_CORES +: `VX_CFG_NUM_CORES]),
 
             .gbar_bus_if        (per_cluster_gbar_bus_if[cluster_id]),
 

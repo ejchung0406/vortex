@@ -34,9 +34,16 @@ module VX_kmu import VX_gpu_pkg::*; import VX_trace_pkg::*; #(
     VX_raster_launch_if.master          raster_launch_if,
 `endif
 
-    VX_kmu_bus_if.master                kmu_bus_if
+    VX_kmu_bus_if.master                kmu_bus_if,
+
+    // Cores masked off for launches, one bit per core of the device
+    output wire [`VX_CFG_NUM_CLUSTERS * `VX_CFG_NUM_CORES-1:0] core_disable
 );
     `UNUSED_SPARAM (INSTANCE_ID)
+
+    localparam NUM_ALL_CORES = `VX_CFG_NUM_CLUSTERS * `VX_CFG_NUM_CORES;
+    `STATIC_ASSERT(NUM_ALL_CORES <= 32 * `VX_DCR_KMU_CORE_DISABLE_WORDS,
+        ("the core-disable DCRs hold %0d cores, not %0d", 32 * `VX_DCR_KMU_CORE_DISABLE_WORDS, NUM_ALL_CORES))
 
     // Configuration registers
     reg [`VX_CFG_XLEN-1:0] dcr_PC;
@@ -57,6 +64,7 @@ module VX_kmu import VX_gpu_pkg::*; import VX_trace_pkg::*; #(
     // (cluster members co-resident on one core), so sized NW_WIDTH+1 at the
     // source rather than stored 32-bit and sliced at each use.
     reg [2:0][NW_WIDTH:0] dcr_cluster_dim;
+    reg [NUM_ALL_CORES-1:0] dcr_core_disable;
     `UNUSED_VAR(dcr_param)
 
     // Internal counters for CTA distribution.
@@ -149,6 +157,7 @@ module VX_kmu import VX_gpu_pkg::*; import VX_trace_pkg::*; #(
             dcr_tmem_cols   <= '0;
         `endif
             dcr_warp_step   <= '0;
+            dcr_core_disable <= '0;
         end else if (dcr_req_valid && dcr_req_rw) begin
             case(dcr_req_addr)
                 // Program startup PC
@@ -190,6 +199,12 @@ module VX_kmu import VX_gpu_pkg::*; import VX_trace_pkg::*; #(
                 `VX_DCR_KMU_CLUSTER_DIM_Z: dcr_cluster_dim[2] <= dcr_req_data[NW_WIDTH:0];
                 default: ;
             endcase
+            // Core-disable words: bit c of word w is core 32w + c
+            for (integer c = 0; c < NUM_ALL_CORES; ++c) begin
+                if (dcr_req_addr == VX_DCR_ADDR_WIDTH'(`VX_DCR_KMU_CORE_DISABLE0 + c / 32)) begin
+                    dcr_core_disable[c] <= dcr_req_data[c % 32];
+                end
+            end
         end
     end
 
@@ -416,6 +431,9 @@ module VX_kmu import VX_gpu_pkg::*; import VX_trace_pkg::*; #(
     assign kmu_bus_if.dest  = '0;
 
     assign busy = running | raster_start_r;
+
+    // A plain wire to every launch router: it changes only between launches.
+    assign core_disable = dcr_core_disable;
 
 `ifdef DBG_TRACE_PIPELINE
     always @(posedge clk) begin

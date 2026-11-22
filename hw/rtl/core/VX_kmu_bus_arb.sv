@@ -32,6 +32,8 @@
 //              same-pixel blend order.
 //   COMPUTE  — round-robin over the ready outputs, which is what the plain
 //              stream arbiter did before and what keeps CTAs spread across cores.
+//              An output in `out_disable` (every core below it masked off for
+//              launches) takes no new compute message.
 
 module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
     parameter NUM_INPUTS  = 1,
@@ -48,7 +50,10 @@ module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
     // folding the launch-link `valid` into its own busy (see VX_socket/VX_cluster/
     // Vortex/VX_graphics), so the transport itself carries no busy or occupancy state.
     VX_kmu_bus_if.slave  bus_in_if [NUM_INPUTS],
-    VX_kmu_bus_if.master bus_out_if [NUM_OUTPUTS]
+    VX_kmu_bus_if.master bus_out_if [NUM_OUTPUTS],
+
+    // Static for a launch: written between launches through the KMU's DCRs.
+    input wire [NUM_OUTPUTS-1:0] out_disable
 );
     // Single-stage router only: a merge (N->1) or a distribute (1->M), never a
     // crossbar. A genuine N->M would chain the fan-in arbiter and the fan-out mux
@@ -169,8 +174,8 @@ module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
 
         wire [SEL_O-1:0] dest_sel = SEL_O'((32'(m_data[PW_DEST +: KMU_DEST_W]) / DEST_DIV) % NUM_OUTPUTS);
 
-        // Round-robin over the ready outputs, starting at rr_ptr. Descending
-        // scan so the nearest ready output (smallest step from rr_ptr) is the
+        // Round-robin over the ready, enabled outputs, starting at rr_ptr.
+        // Descending scan so the nearest one (smallest step from rr_ptr) is the
         // last assignment and therefore wins.
         reg [SEL_O-1:0] rr_sel;
         always @(*) begin
@@ -178,21 +183,24 @@ module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
             for (integer k = NUM_OUTPUTS - 1; k >= 0; --k) begin
                 automatic logic [SEL_O-1:0] idx =
                     SEL_O'((32'(rr_ptr) + k) % NUM_OUTPUTS);
-                if (out_ready[idx]) begin
+                if (out_ready[idx] && ~out_disable[idx]) begin
                     rr_sel = idx;
                 end
             end
         end
 
-        wire [SEL_O-1:0] sel_new = (m_data[PW_KIND] == KMU_KIND_FRAGMENT)
-                                 ? dest_sel : rr_sel;
+        wire is_fragment = (m_data[PW_KIND] == KMU_KIND_FRAGMENT);
+        wire [SEL_O-1:0] sel_new = is_fragment ? dest_sel : rr_sel;
         wire [SEL_O-1:0] sel = lock_v ? lock_sel : sel_new;
+        // With no output eligible rr_sel falls back to rr_ptr, which may be
+        // disabled: hold the header rather than send it there.
+        wire sel_ok = lock_v || is_fragment || ~out_disable[sel];
 
         for (genvar o = 0; o < NUM_OUTPUTS; ++o) begin : g_sel
-            assign out_valid[o] = m_valid && (sel == SEL_O'(o));
+            assign out_valid[o] = m_valid && sel_ok && (sel == SEL_O'(o));
             assign out_data[o]  = m_data;
         end
-        assign m_ready = out_ready[sel];
+        assign m_ready = out_ready[sel] && sel_ok;
 
         wire m_fire = m_valid && m_ready;
         wire [SEL_O-1:0] rr_next = (sel == SEL_O'(NUM_OUTPUTS - 1)) ? '0 : (sel + SEL_O'(1));
@@ -214,9 +222,12 @@ module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
     end else begin : g_fanout_1
 
         `UNUSED_PARAM (DEST_DIV)
-        assign out_valid[0] = m_valid;
+        // The mask is static for a launch, so gating each compute beat gates
+        // whole messages.
+        wire sel_ok = (m_data[PW_KIND] == KMU_KIND_FRAGMENT) || ~out_disable[0];
+        assign out_valid[0] = m_valid && sel_ok;
         assign out_data[0]  = m_data;
-        assign m_ready      = out_ready[0];
+        assign m_ready      = out_ready[0] && sel_ok;
 
     end
 

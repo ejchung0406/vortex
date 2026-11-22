@@ -55,6 +55,8 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
 
     // KMU bus
     VX_kmu_bus_if.slave     kmu_bus_if[1],
+    // This socket's cores masked off for launches
+    input wire [`VX_CFG_SOCKET_SIZE-1:0] core_disable,
 
     // Global barrier
     VX_gbar_bus_if.master   gbar_bus_if,
@@ -81,10 +83,11 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .DEST_DIV   (KMU_DEST_DIV_SOCKET),
         .OUT_BUF    ((`VX_CFG_SOCKET_SIZE > 1) ? 3 : 0)
     ) kmu_arb (
-        .clk        (clk),
-        .reset      (reset),
-        .bus_in_if  (kmu_bus_if),
-        .bus_out_if (per_core_kmu_bus_if)
+        .clk         (clk),
+        .reset       (reset),
+        .bus_in_if   (kmu_bus_if),
+        .bus_out_if  (per_core_kmu_bus_if),
+        .out_disable (core_disable)
     );
 
     VX_gbar_bus_if per_core_gbar_bus_if[`VX_CFG_SOCKET_SIZE]();

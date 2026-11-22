@@ -116,6 +116,8 @@ private:
   uint32_t cluster_core_;
   // CTAs sent but not yet admitted by each core's dispatcher.
   std::vector<uint32_t> inflight_;
+  // Cores masked off for launches; kept across launches like the descriptor.
+  uint32_t core_disable_[VX_DCR_KMU_CORE_DISABLE_WORDS];
 
   friend class SimObject<Kmu>;
 };
