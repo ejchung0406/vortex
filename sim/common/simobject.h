@@ -793,7 +793,7 @@ private:
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename Pkt>
-class SimChannel : public SimChannelBase {
+class SimChannel final : public SimChannelBase {
 public:
   static_assert(std::is_copy_constructible_v<Pkt>, "Packet must be copy constructible");
   using TxCallback = SmallFunction<void(const Pkt&, uint64_t), 48>;
@@ -874,50 +874,23 @@ public:
   void set_registered_ready(bool enable) { reg_ready_ = enable; }
 
   void send(const Pkt& pkt, uint64_t delay = 1) {
-    auto& platform = SimPlatform::instance();
-    // A send whose endpoint lives in another domain is handed to that
-    // domain's owner as a deferred call: it re-issues the send locally next
-    // cycle with one less delay, landing on the same absolute cycle. All
-    // channel state is thereby touched only by its owning thread. Capacity
-    // needs no check here — cross-domain producers are credit-gated at the
-    // boundary, so a deferred send always finds space.
-    if (platform.is_cross_exec(this->endpoint()->module_)) {
-      __assert(delay >= 1, "cross-domain send requires a registered delay");
-      this->cross_send(Pkt(pkt), delay);
-      return;
-    }
-    __assert(!this->full(), "channel is full");
-    if (platform.audit_enabled()) {
-      platform.audit_send(this, delay);
-    }
-    this->reserve();
-    platform.schedule(this, pkt, delay);
+    this->send_impl<true>(pkt, delay);
   }
 
   void send(Pkt&& pkt, uint64_t delay = 1) {
-    auto& platform = SimPlatform::instance();
-    if (platform.is_cross_exec(this->endpoint()->module_)) {
-      __assert(delay >= 1, "cross-domain send requires a registered delay");
-      this->cross_send(std::move(pkt), delay);
-      return;
-    }
-    __assert(!this->full(), "channel is full");
-    if (platform.audit_enabled()) {
-      platform.audit_send(this, delay);
-    }
-    this->reserve();
-    platform.schedule(this, std::move(pkt), delay);
+    this->send_impl<true>(std::move(pkt), delay);
   }
 
+  // The capacity was just checked: the send does not check it again.
   [[nodiscard]] bool try_send(const Pkt& pkt, uint64_t delay = 1) {
     if (this->full()) return false;
-    this->send(pkt, delay);
+    this->send_impl<false>(pkt, delay);
     return true;
   }
 
   [[nodiscard]] bool try_send(Pkt&& pkt, uint64_t delay = 1) {
     if (this->full()) return false;
-    this->send(std::move(pkt), delay);
+    this->send_impl<false>(std::move(pkt), delay);
     return true;
   }
 
@@ -939,6 +912,33 @@ public:
   }
 
   static constexpr size_t kInlineCrossPkt = 128;
+
+private:
+  template <bool kCheckFull, typename P>
+  void send_impl(P&& pkt, uint64_t delay) {
+    auto& platform = SimPlatform::instance();
+    // A send whose endpoint lives in another domain is handed to that
+    // domain's owner as a deferred call: it re-issues the send locally next
+    // cycle with one less delay, landing on the same absolute cycle. All
+    // channel state is thereby touched only by its owning thread. Capacity
+    // needs no check here — cross-domain producers are credit-gated at the
+    // boundary, so a deferred send always finds space.
+    if (platform.is_cross_exec(this->endpoint()->module_)) {
+      __assert(delay >= 1, "cross-domain send requires a registered delay");
+      this->cross_send(Pkt(std::forward<P>(pkt)), delay);
+      return;
+    }
+    if constexpr (kCheckFull) {
+      __assert(!this->full(), "channel is full");
+    }
+    if (platform.audit_enabled()) {
+      platform.audit_send(this, delay);
+    }
+    this->reserve();
+    platform.schedule(this, std::forward<P>(pkt), delay);
+  }
+
+public:
 
   bool empty() const override {
     this->assert_endpoint();
