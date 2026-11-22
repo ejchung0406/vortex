@@ -588,12 +588,17 @@ void AluUnit::on_tick() {
     auto& input = Inputs.at(b);
     auto& output = Outputs.at(b);
     auto& pes = pe_results_.at(b);
-    // The output channel counts the results still in the units too.
+    // The output channel counts the results still in the units too. The
+    // integer unit holds one result: while it waits at the switch the unit,
+    // and an integer op at the block's input behind it, wait too; the
+    // multiply/divide unit's output buffer takes the wait instead.
+    bool to_mdv = !input.empty() && std::get_if<MdvType>(&input.peek()->op_type);
     if (!input.empty() && !output.full()
-     && (output.size() + pes[0].size() + pes[1].size()) < output.capacity()) {
+     && (output.size() + pes[0].size() + pes[1].size()) < output.capacity()
+     && (to_mdv || pes[0].empty())) {
       auto trace = input.peek();
       this->execute(trace);
-      uint32_t pe = std::get_if<MdvType>(&trace->op_type) ? 1 : 0;
+      uint32_t pe = to_mdv ? 1 : 0;
       pes[pe].emplace_back(now + this->latency_of(trace), trace);
       input.pop();
       if (!kGather && trace->eop) {
