@@ -1,0 +1,35 @@
+--- a/sim/simx/dxa/dxa_core.cpp	2026-11-21 16:15:53.640308086 -0500
++++ b/sim/simx/dxa/dxa_core.cpp	2026-11-21 16:15:53.684308704 -0500
+@@ -54,6 +54,14 @@
+ constexpr uint32_t kCoresPerSocket = VX_CFG_SOCKET_SIZE;
+ // A delivered line reaches its SMEM write through two pipeline registers.
+ constexpr uint32_t kSmemWrLatency = 2;
++// The socket's memory port is a registered boundary in each direction, and
++// the socket arbiter behind it registers both directions again: one register
++// each way that the RTL arbiter (VX_socket mem_arb, REQ_OUT_BUF/RSP_OUT_BUF)
++// does not have. The L1 caches discount it (Cache::Config::mem_rsp_slice);
++// the DXA's GMEM reads enter the arbiter in the cycle they issue and make up
++// the response's cycle on the way to the SMEM write.
++constexpr uint32_t kGmemReqDelay = 0;
++constexpr uint32_t kGmemRspCredit = 1;
+ 
+ } // namespace
+ 
+@@ -608,7 +616,7 @@
+     s.oob_pending = false;
+     s.rsp_arrived = true;
+     s.deferred    = defer;
+-    s.ready_cycle = cycle_ + kSmemWrLatency;
++    s.ready_cycle = cycle_ + kSmemWrLatency - (s.rsp_data ? kGmemRspCredit : 0);
+   }
+ 
+   // ── gmem_req: issue MemReqs with available inflight slots ────────────
+@@ -663,7 +671,7 @@
+     mreq.uuid  = w.req.uuid;
+ 
+     auto& ch = gmem_arb_->ReqIn.at(w.worker_id);
+-    if (!ch.try_send(mreq)) return; // arb backpressure
++    if (!ch.try_send(mreq, kGmemReqDelay)) return; // arb backpressure
+ 
+     w.inflight[slot].allocated   = true;
+     w.inflight[slot].rsp_arrived = false;

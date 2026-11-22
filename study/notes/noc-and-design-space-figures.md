@@ -77,9 +77,9 @@ Label every element with its tag: FACT, INFERENCE or RUMOR.
 ### Nodes
 
 - `SM` (unified L1/smem 228 KB, ~128 B/clk; TMA). FACT
-- `TPC` = 2 SMs + mux (read speedup 2). FACT (MICRO'24)
-- `CPC` = 2–3 TPCs. INFERENCE
-- `GPC` = 7–9 TPCs (H100 SXM: 8 GPCs, 132 SMs); uplink ≈ 0.85 × sum of SMs. FACT (MICRO'24)
+- `TPC` = 2 SMs (read speedup 2, no limit: FACT, MICRO'24 and our H200). [corr. 2026-11-21: "mux" is Jin's wording, not NVIDIA's]
+- `CPC` = 2–3 TPCs. Name documented (patent, driver), size INFERENCE; no read-bandwidth effect
+- `GPC` = 7–9 TPCs (H100 SXM: 8 GPCs, 132 SMs); uplink: [corr. 2026-11-21] ~1.28 TB/s from DRAM ≈ 6 SMs at 210 GB/s (our H200); Jin L2-hit reads: 9 SMs (1/TPC) ≈ 7.8×, 18 SMs ≈ 9× one SM
 - `GPC SM-to-SM network` (DSMEM; clusters ≤ 8 portable / 16). FACT
   - "~32 B/clk per SM; receive port shared with L2 fills". RUMOR, label it so.
 - `Crossbar` (`xbar`; `gxc` compressor at the GPC side). FACT (Nsight unit names)
@@ -91,7 +91,7 @@ Label every element with its tag: FACT, INFERENCE or RUMOR.
 ### Edges
 
 - SM -> TPC mux : requests
-- TPC -> CPC -> GPC uplink : "≈ 8 SMs' worth per GPC (H100)"
+- TPC -> CPC -> GPC uplink : "≈ 1.28 TB/s ≈ 6 SMs' worth per GPC (H200, measured)" [corr. 2026-11-21]
 - GPC uplink -> Crossbar : requests and responses
 - Crossbar -> L2 slice (near partition) : "~273 cycles hit"
 - Crossbar -> L2 slice (far partition, via ltcfabric) : "+160–175 cycles"
@@ -167,7 +167,7 @@ Edges:
 4. Group DXA pool -> Group data crossbar -> B.LMEM : 128 B beats [NEW]
 5. L.Core -> Group DXA pool : the compute job's own small use, with a quota [NEW]
 
-Callout: "cap = P_g × 64 B/clk per group (H100 GPC ≈ 8 SMs' worth); no lender involved".
+Callout: "cap = P_g × 64 B/clk per group (H200 GPC ≈ 6 SMs' worth, measured) [corr. 2026-11-21]; no lender involved".
 
 ### (c4) Option 3b — fat-pipe SM (DXA on all 4 socket ports)
 

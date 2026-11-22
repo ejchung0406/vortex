@@ -1,0 +1,13 @@
+name=wrr_roof128_k2f
+src_rev=
+src_dirty=
+src_phoenix=/storage/project/r-hkim358-0/echung67/vortex-exp/src_wr_b
+src_pushed=2026-11-21T21:55:21-05:00
+host=atl1-1-03-007-26-2.pace.gatech.edu
+cpu=Intel(R) Xeon(R) Gold 6226 CPU @ 2.70GHz
+cluster=ice
+xconf=-DVX_CFG_FETCH_INFLIGHT=2 -DVX_CFG_FFLAGS_ACCUM=1  -DVX_DBG_STALL_TIMEOUT=20000000
+blackbox=--driver=simx --app=tmem_roof --perf=4 --profile=h200s --cores=1 --args=-m0 -n128 -i256
+rc=0
+wall_s=216
+ran_on=ice (fetched 2026-11-21T22:21:49-05:00 from ice:~/scratch/vortex-ice/results/wrr_roof128_k2f)

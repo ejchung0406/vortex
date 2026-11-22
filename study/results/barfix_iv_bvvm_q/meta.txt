@@ -1,0 +1,8 @@
+name=barfix_iv_bvvm_q
+src_rev=
+src_dirty=0
+host=atl1-1-03-003-15-1.pace.gatech.edu
+xconf=-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1 -DVX_CFG_VM_ENABLE
+blackbox=--driver=simx --app=bar_vis --perf=7 --args=-w4 -l0
+rc=0
+wall_s=174

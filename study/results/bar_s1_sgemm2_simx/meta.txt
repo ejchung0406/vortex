@@ -1,0 +1,8 @@
+name=bar_s1_sgemm2_simx
+src_rev=
+src_dirty=0
+host=atl1-1-02-010-28-2.pace.gatech.edu
+xconf=-DVX_CFG_NUM_THREADS=16 -DVX_CFG_BAR_DRAIN_SCOPE=1
+blackbox=--driver=simx --app=sgemm2 --perf=1 --args=-n32 -t4
+rc=0
+wall_s=153

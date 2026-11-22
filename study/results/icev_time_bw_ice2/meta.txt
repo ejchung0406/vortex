@@ -1,0 +1,13 @@
+name=icev_time_bw_ice2
+src_rev=
+src_dirty=
+src_phoenix=/storage/project/r-hkim358-0/echung67/vortex-exp/src_ice_val
+src_pushed=2026-11-21T18:27:43-05:00
+host=atl1-1-02-010-5-2.pace.gatech.edu
+cpu=Intel(R) Xeon(R) Gold 6226 CPU @ 2.70GHz
+cluster=ice
+xconf=
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200s --cores=4 --args=-n512 -r1 -p0 -u4 -b32
+rc=0
+wall_s=290
+ran_on=ice (fetched 2026-11-21T19:17:03-05:00 from ice:~/scratch/vortex-ice/results/icev_time_bw_ice2)

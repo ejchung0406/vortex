@@ -1,0 +1,19 @@
+name=pr_dram-sched-window_simx
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-sched-window rev=214ff1649ce64d7874f8f5c145ab8ff61f237482
+host=atl1-1-02-010-25-2.pace.gatech.edu
+driver=simx xlen=64
+ext_symbols=32
+case unit app=unit:dram_sim args="" configs="" flags="" env="" rc=0   unit_fails=0 wall=23
+case unitb app=unit:dram_bank_model args="" configs="" flags="" env="" rc=0   unit_fails=0 wall=23
+case sgemm32 app=sgemm args="-n32" configs="" flags="" env="" rc=0 cycles=113990 instrs=47904 unit_fails=0 wall=152
+case sgemv app=sgemv args="-m128 -n128" configs="" flags="" env="" rc=0 cycles=58603 instrs=20640 unit_fails=0 wall=4
+case vecadd app=vecadd args="-n16384" configs="" flags="" env="" rc=0 cycles=381938 instrs=122912 unit_fails=0 wall=3
+case dxa app=dxa_copy args="-d2" configs="-DVX_CFG_EXT_DXA_ENABLE" flags="" env="" rc=0 cycles=53990 instrs=15968 unit_fails=0 wall=159
+case l2mc app=sgemm args="-n32" configs="" flags="--l2cache --cores=2" env="" rc=0 cycles=57246 instrs=47936 unit_fails=0 wall=152
+case hbm3 app=vecadd args="-n16384" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6545" flags="--l2cache --cores=2" env="" rc=0 cycles=188562 instrs=122944 unit_fails=0 wall=150
+case gddr6 app=sgemv args="-m128 -n128" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=GDDR6 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=8 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=14000" flags="" env="" rc=0 cycles=58278 instrs=20640 unit_fails=0 wall=150
+case prof_p100 app=sgemv args="-m256 -n256" configs="" flags="--profile=p100 --cores=4" env="" rc=0 cycles=75722 instrs=12264 unit_fails=0 wall=184
+case prof_gtx1080 app=vecadd args="-n65536" configs="" flags="--profile=gtx1080 --cores=4" env="" rc=0 cycles=16882 instrs=65280 unit_fails=0 wall=209
+case prof_h100 app=vecadd args="-n65536" configs="" flags="--profile=h100 --cores=4" env="" rc=0 cycles=15659 instrs=65280 unit_fails=0 wall=208
+case parity_window app=vecadd args="-n16384" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6400 -DVX_CFG_PLATFORM_MEMORY_SCHED_WINDOW=256" flags="--l2cache --cores=2" env="" rc=0 cycles=188562 instrs=122944 unit_fails=0 wall=151
+case m_w32 app=vecadd args="-n262144" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6400" flags="--l2cache --cores=8" env="" rc=0 cycles=818741 instrs=1966336 unit_fails=0 wall=166

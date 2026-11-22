@@ -1,0 +1,8 @@
+name=l2h_h200s_h0_bw
+src_rev=
+src_dirty=0
+host=atl1-1-03-002-5-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_L2_FWD_HOLD=0
+blackbox=--driver=simx --app=bwstream --perf=5 --profile=h200s --cores=11 --args=-n512 -r1 -p0 -u4 -b32
+rc=0
+wall_s=356

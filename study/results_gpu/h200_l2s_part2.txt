@@ -1,0 +1,222 @@
+# 1 SM (i) TMA alone 32KBx6
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --tma 1 --tile-kb 32 --depth 6 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=6 tile_kb=32 ld=0 block=32768 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=195.9 tma_gbs=195.9 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=195.9
+  per_sm_gbs: 0:195.9
+exit=0 secs=1.0
+# 2 SMs of a TPC (i) TMA alone 32KBx6
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --tma 1 --tile-kb 32 --depth 6 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=6 tile_kb=32 ld=0 block=32768 units=2 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=391.4 tma_gbs=391.4 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=391.4
+  per_sm_gbs: 0:195.7 1:195.7
+exit=0 secs=1.1
+# 1 SM (i) TMA alone 2 issuers 32KBx3
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --tma 2 --tile-kb 32 --depth 3 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=2 depth=3 tile_kb=32 ld=0 block=32768 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=204.3 tma_gbs=204.3 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=204.3
+  per_sm_gbs: 0:204.3
+exit=0 secs=1.1
+# 2 SMs of a TPC (i) TMA alone 2 issuers 32KBx3
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --tma 2 --tile-kb 32 --depth 3 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=2 depth=3 tile_kb=32 ld=0 block=32768 units=2 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=408.0 tma_gbs=408.0 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=408.0
+  per_sm_gbs: 0:203.8 1:204.2
+exit=0 secs=1.0
+# 1 SM (ii) loads alone 32 warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --ld 32 --block 4096 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=32 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=218.2 tma_gbs=0.0 ld_gbs=218.2 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=218.2
+  per_sm_gbs: 0:218.2
+exit=0 secs=1.0
+# 2 SMs of a TPC (ii) loads alone 32 warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --ld 32 --block 4096 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=32 block=4096 units=2 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=426.3 tma_gbs=0.0 ld_gbs=426.3 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1979 g0_gbs=426.3
+  per_sm_gbs: 0:213.1 1:213.2
+exit=0 secs=1.0
+# 1 SM (ii) loads alone 24 warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --ld 24 --block 4096 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=24 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=161.4 tma_gbs=0.0 ld_gbs=161.4 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=161.4
+  per_sm_gbs: 0:161.4
+exit=0 secs=1.0
+# 2 SMs of a TPC (ii) loads alone 24 warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --ld 24 --block 4096 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=24 block=4096 units=2 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=333.3 tma_gbs=0.0 ld_gbs=333.3 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1979 g0_gbs=333.3
+  per_sm_gbs: 0:166.9 1:166.5
+exit=0 secs=1.0
+# 1 SM (ii) loads alone 32 warps, carveout 100 (small L1)
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --ld 32 --block 4096 --dur-ms 500 --carveout 100
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=32 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=100 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=80.8 tma_gbs=0.0 ld_gbs=80.8 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=80.8
+  per_sm_gbs: 0:80.8
+exit=0 secs=1.0
+# 2 SMs of a TPC (ii) loads alone 32 warps, carveout 100 (small L1)
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --ld 32 --block 4096 --dur-ms 500 --carveout 100
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=32 block=4096 units=2 dur_ms=500 mb_per_unit=64.0 carveout=100 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=145.0 tma_gbs=0.0 ld_gbs=145.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1979 g0_gbs=145.0
+  per_sm_gbs: 1:72.5 0:72.5
+exit=0 secs=1.1
+# 1 SM (iii) same CTA TMA 32KBx6 + 24 load warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --tma 1 --tile-kb 32 --depth 6 --ld 24 --block 32768 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=6 tile_kb=32 ld=24 block=32768 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=215.1 tma_gbs=78.1 ld_gbs=137.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=215.1
+  per_sm_gbs: 0:215.1
+exit=0 secs=1.1
+# 2 SMs of a TPC (iii) same CTA TMA 32KBx6 + 24 load warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --tma 1 --tile-kb 32 --depth 6 --ld 24 --block 32768 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=6 tile_kb=32 ld=24 block=32768 units=2 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=427.4 tma_gbs=156.8 ld_gbs=270.6 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1979 g0_gbs=427.4
+  per_sm_gbs: 1:208.3 0:219.1
+exit=0 secs=1.2
+# 1 SM (iii) same CTA TMA 32KBx6 + 16 load warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --tma 1 --tile-kb 32 --depth 6 --ld 16 --block 32768 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=6 tile_kb=32 ld=16 block=32768 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=229.6 tma_gbs=124.5 ld_gbs=105.1 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=229.6
+  per_sm_gbs: 0:229.6
+exit=0 secs=1.1
+# 2 SMs of a TPC (iii) same CTA TMA 32KBx6 + 16 load warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --tma 1 --tile-kb 32 --depth 6 --ld 16 --block 32768 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=6 tile_kb=32 ld=16 block=32768 units=2 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=452.8 tma_gbs=249.2 ld_gbs=203.5 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=452.8
+  per_sm_gbs: 0:224.7 1:228.1
+exit=0 secs=1.0
+# 1 SM (iii) two CTAs: TMA kernel + 24-warp load kernel (carveout 100 both)
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --tma 1 --tile-kb 32 --depth 6 --dur-ms 500 --second-ld 24 --carveout 100
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=6 tile_kb=32 ld=0 block=32768 units=1 dur_ms=500 mb_per_unit=64.0 carveout=100 smr=0 shared=0 write=0 second_ld=24 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=157.7 tma_gbs=43.5 ld_gbs=0.0 ld2_gbs=114.2 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=157.7
+  per_sm_gbs: 0:157.7
+exit=0 secs=1.1
+# 2 SMs of a TPC (iii) two CTAs: TMA kernel + 24-warp load kernel (carveout 100 both)
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --tma 1 --tile-kb 32 --depth 6 --dur-ms 500 --second-ld 24 --carveout 100
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=6 tile_kb=32 ld=0 block=32768 units=2 dur_ms=500 mb_per_unit=64.0 carveout=100 smr=0 shared=0 write=0 second_ld=24 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=254.6 tma_gbs=70.9 ld_gbs=0.0 ld2_gbs=183.7 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=254.6
+  per_sm_gbs: 0:126.3 1:128.3
+exit=0 secs=1.0
+# 1 SM (iii) two CTAs: TMA kernel + 30-warp load kernel (carveout 100 both)
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --tma 1 --tile-kb 32 --depth 6 --dur-ms 500 --second-ld 30 --carveout 100
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=6 tile_kb=32 ld=0 block=32768 units=1 dur_ms=500 mb_per_unit=64.0 carveout=100 smr=0 shared=0 write=0 second_ld=30 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=161.8 tma_gbs=43.0 ld_gbs=0.0 ld2_gbs=118.8 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=161.8
+  per_sm_gbs: 0:161.8
+exit=0 secs=1.0
+# 2 SMs of a TPC (iii) two CTAs: TMA kernel + 30-warp load kernel (carveout 100 both)
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --tma 1 --tile-kb 32 --depth 6 --dur-ms 500 --second-ld 30 --carveout 100
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=6 tile_kb=32 ld=0 block=32768 units=2 dur_ms=500 mb_per_unit=64.0 carveout=100 smr=0 shared=0 write=0 second_ld=30 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=276.9 tma_gbs=74.8 ld_gbs=0.0 ld2_gbs=202.1 smr_gbs=0.0 clock_mhz_avg=1979 g0_gbs=276.9
+  per_sm_gbs: 1:138.6 0:138.3
+exit=0 secs=1.0
+# 1 SM (iv) smem readers alone 2 warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --smr 2 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=0 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=2 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=0.0 tma_gbs=0.0 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=108.3 clock_mhz_avg=1980 g0_gbs=0.0
+  per_sm_gbs: 0:0.0
+exit=0 secs=1.0
+# 2 SMs of a TPC (iv) smem readers alone 2 warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --smr 2 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=0 block=4096 units=2 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=2 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=0.0 tma_gbs=0.0 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=216.6 clock_mhz_avg=1980 g0_gbs=0.0
+  per_sm_gbs: 0:0.0 1:0.0
+exit=0 secs=1.0
+# 1 SM (iv) smem readers alone 4 warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --smr 4 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=0 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=4 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=0.0 tma_gbs=0.0 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=126.7 clock_mhz_avg=1980 g0_gbs=0.0
+  per_sm_gbs: 0:0.0
+exit=0 secs=1.1
+# 2 SMs of a TPC (iv) smem readers alone 4 warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --smr 4 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=0 block=4096 units=2 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=4 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=0.0 tma_gbs=0.0 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=253.4 clock_mhz_avg=1980 g0_gbs=0.0
+  per_sm_gbs: 0:0.0 1:0.0
+exit=0 secs=1.0
+# 1 SM (iv) smem readers alone 8 warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --smr 8 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=0 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=8 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=0.0 tma_gbs=0.0 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=126.7 clock_mhz_avg=1980 g0_gbs=0.0
+  per_sm_gbs: 0:0.0
+exit=0 secs=1.1
+# 2 SMs of a TPC (iv) smem readers alone 8 warps
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --smr 8 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=0 block=4096 units=2 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=8 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=0.0 tma_gbs=0.0 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=253.4 clock_mhz_avg=1980 g0_gbs=0.0
+  per_sm_gbs: 1:0.0 0:0.0
+exit=0 secs=1.1
+# 1 SM (iv) TMA 32KBx5 alone
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --tma 1 --tile-kb 32 --depth 5 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=5 tile_kb=32 ld=0 block=32768 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=183.3 tma_gbs=183.3 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=183.3
+  per_sm_gbs: 0:183.3
+exit=0 secs=1.0
+# 2 SMs of a TPC (iv) TMA 32KBx5 alone
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --tma 1 --tile-kb 32 --depth 5 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=5 tile_kb=32 ld=0 block=32768 units=2 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=363.0 tma_gbs=363.0 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=363.0
+  per_sm_gbs: 1:181.4 0:181.5
+exit=0 secs=1.1
+# 1 SM (iv) TMA 32KBx5 + 2 smem readers
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --tma 1 --tile-kb 32 --depth 5 --smr 2 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=5 tile_kb=32 ld=0 block=32768 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=2 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=174.0 tma_gbs=174.0 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=99.2 clock_mhz_avg=1980 g0_gbs=174.0
+  per_sm_gbs: 0:174.0
+exit=0 secs=1.0
+# 2 SMs of a TPC (iv) TMA 32KBx5 + 2 smem readers
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --tma 1 --tile-kb 32 --depth 5 --smr 2 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=5 tile_kb=32 ld=0 block=32768 units=2 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=2 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=348.0 tma_gbs=348.0 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=198.5 clock_mhz_avg=1980 g0_gbs=348.0
+  per_sm_gbs: 0:174.0 1:174.0
+exit=0 secs=1.1
+# 1 SM (iv) TMA 32KBx5 + 1 smem reader
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --tma 1 --tile-kb 32 --depth 5 --smr 1 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=5 tile_kb=32 ld=0 block=32768 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=1 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=179.6 tma_gbs=179.6 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=53.9 clock_mhz_avg=1980 g0_gbs=179.6
+  per_sm_gbs: 0:179.6
+exit=0 secs=1.0
+# 2 SMs of a TPC (iv) TMA 32KBx5 + 1 smem reader
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,1 --tma 1 --tile-kb 32 --depth 5 --smr 1 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=1 depth=5 tile_kb=32 ld=0 block=32768 units=2 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=1 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=356.7 tma_gbs=356.7 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=107.8 clock_mhz_avg=1980 g0_gbs=356.7
+  per_sm_gbs: 1:178.3 0:178.4
+exit=0 secs=1.0
+# 1 SM loads 32 warps, near pages
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0@/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lists/near_sideA.u32 --ld 32 --block 4096 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=32 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=223.1 tma_gbs=0.0 ld_gbs=223.1 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1979 g0_gbs=223.1
+  per_sm_gbs: 0:223.1
+exit=0 secs=1.0
+# 1 SM TMA 4x(4KBx12), near pages
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0@/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lists/near_sideA.u32 --tma 4 --tile-kb 4 --depth 12 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=4 depth=12 tile_kb=4 ld=0 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=94.8 tma_gbs=94.8 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=94.8
+  per_sm_gbs: 0:94.8
+exit=0 secs=1.0
+# 1 SM TMA 4x(4KBx12) + 24 load warps, near pages
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0@/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lists/near_sideA.u32 --tma 4 --tile-kb 4 --depth 12 --ld 24 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=4 depth=12 tile_kb=4 ld=24 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=196.9 tma_gbs=47.0 ld_gbs=150.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=196.9
+  per_sm_gbs: 0:196.9
+exit=0 secs=1.1
+# 1 SM loads 32 warps, far pages
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0@/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lists/far_sideA.u32 --ld 32 --block 4096 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=0 depth=6 tile_kb=32 ld=32 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=205.8 tma_gbs=0.0 ld_gbs=205.8 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=205.8
+  per_sm_gbs: 0:205.8
+exit=0 secs=1.1
+# 1 SM TMA 4x(4KBx12), far pages
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0@/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lists/far_sideA.u32 --tma 4 --tile-kb 4 --depth 12 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=4 depth=12 tile_kb=4 ld=0 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=93.9 tma_gbs=93.9 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=93.9
+  per_sm_gbs: 0:93.9
+exit=0 secs=1.1
+# 1 SM TMA 4x(4KBx12) + 24 load warps, far pages
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0@/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lists/far_sideA.u32 --tma 4 --tile-kb 4 --depth 12 --ld 24 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=4 depth=12 tile_kb=4 ld=24 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=174.1 tma_gbs=42.1 ld_gbs=132.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=174.1
+  per_sm_gbs: 0:174.1
+exit=0 secs=1.0
+# 1 SM TMA 4x(4KBx12), mixed pages
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab tw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0 --tma 4 --tile-kb 4 --depth 12 --dur-ms 500
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+tw rep=0 tma=4 depth=12 tile_kb=4 ld=0 block=4096 units=1 dur_ms=500 mb_per_unit=64.0 carveout=-1 smr=0 shared=0 write=0 second_ld=0 missing_units=0 tma_errs=0 ld_errs=0 check=ok total_gbs=94.1 tma_gbs=94.1 ld_gbs=0.0 ld2_gbs=0.0 smr_gbs=0.0 clock_mhz_avg=1980 g0_gbs=94.1
+  per_sm_gbs: 0:94.1
+exit=0 secs=1.0

@@ -1,0 +1,10 @@
+name=pr_gb_rtl_wg_s1
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_tests-gemm-block_wip
+src_rev=wip: upstream ccf811e11 + new gemm_block (uncommitted)
+xlen=64
+host=atl1-1-02-008-25-2.pace.gatech.edu
+configs=-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
+blackbox=--driver=rtlsim --app=gemm_block --args=-s1
+PERF: instrs=107648, cycles=192420
+wall_s=6
+rc=0

@@ -1,0 +1,8 @@
+name=barfix_i_bwsdxa_rtlsim
+src_rev=
+src_dirty=0
+host=atl1-1-02-008-11-1.pace.gatech.edu
+xconf=-DVX_CFG_EXT_DXA_ENABLE
+blackbox=--driver=rtlsim --app=bwstream_dxa --perf=7 --args=-e64 -n8 -d4
+rc=0
+wall_s=54

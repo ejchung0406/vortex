@@ -1,0 +1,59 @@
++ export MAKEFLAGS=-j3
++ MAKEFLAGS=-j3
++ nice make -s -C tests/regression/demo runtime-simx
++ echo 'runtime-simx build rc=0'
+runtime-simx build rc=0
++ run demo --app=demo
++ tag=demo
++ shift
++ nice timeout 3600 ./ci/blackbox.sh --driver=simx --app=demo
++ echo 'bb demo rc=0'
+bb demo rc=0
++ tail -3
++ grep -E 'PERF: instrs|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/bb_demo.log
+PERF: instrs=2468, cycles=6410, IPC=0.385
+PASSED!
++ run sgemm16 --app=sgemm --args=-n16
++ tag=sgemm16
++ shift
++ nice timeout 3600 ./ci/blackbox.sh --driver=simx --app=sgemm --args=-n16
++ echo 'bb sgemm16 rc=0'
+bb sgemm16 rc=0
++ grep -E 'PERF: instrs|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/bb_sgemm16.log
++ tail -3
+PERF: instrs=7520, cycles=18364, IPC=0.409
+PASSED!
++ run vecadd --app=vecadd
++ tag=vecadd
++ shift
++ nice timeout 3600 ./ci/blackbox.sh --driver=simx --app=vecadd
++ echo 'bb vecadd rc=0'
+bb vecadd rc=0
++ grep -E 'PERF: instrs|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/bb_vecadd.log
++ tail -3
+PERF: instrs=512, cycles=1631, IPC=0.314
+PASSED!
++ run multikernel --app=multikernel
++ tag=multikernel
++ shift
++ nice timeout 3600 ./ci/blackbox.sh --driver=simx --app=multikernel
++ echo 'bb multikernel rc=0'
+bb multikernel rc=0
++ grep -E 'PERF: instrs|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/bb_multikernel.log
++ tail -3
+PERF: instrs=13104, cycles=39335, IPC=0.333
+PASSED!
++ run module_reload --app=module_reload
++ tag=module_reload
++ shift
++ nice timeout 3600 ./ci/blackbox.sh --driver=simx --app=module_reload
++ echo 'bb module_reload rc=0'
+bb module_reload rc=0
++ grep -E 'PERF: instrs|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/bb_module_reload.log
++ tail -3
+Test PASSED
++ make -s -C tests/regression/dxa_copy clean
++ CONFIGS=-DVX_CFG_EXT_DXA_ENABLE
++ nice make -s -C tests/regression/dxa_copy
++ CONFIGS=-DVX_CFG_EXT_DXA_ENABLE
++ nice make -s -C tests/regression/dxa_copy runtime-simx

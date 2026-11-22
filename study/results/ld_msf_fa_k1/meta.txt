@@ -1,0 +1,8 @@
+name=ld_msf_fa_k1
+src_rev=
+src_dirty=0
+host=atl1-1-02-008-11-2.pace.gatech.edu
+xconf=-DPATH_STATS -DVX_CFG_DCACHE_READ_MERGE_LINE=1 -DVX_CFG_BAR_DRAIN_SCOPE=2
+blackbox=--driver=simx --app=ldstream --perf=7 --profile=h200s --cores=1 --args=-t1024 -b8 -u8 -m16 -a
+rc=0
+wall_s=274

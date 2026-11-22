@@ -1,0 +1,8 @@
+name=tmc_qb4d_56
+src_rev=
+src_dirty=0
+host=atl1-1-03-003-14-1.pace.gatech.edu
+xconf=-DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_TMEM_ENABLE -DVX_CFG_TCU_TMEM_COLS=1024 -DVX_CFG_TCU_TMEM_B_AHEAD=2 -DVX_CFG_TCU_TMEM_A_BANKROW=1 -DTCU_ENGINE_STATS -DLMEM_DMA_STATS -DLEAN_ISSUE=1 -DKSTEPS=4 -DPIPE=3 -DXFER=65536 -DCONSUME_WARPS=56
+blackbox=--driver=simx --app=gemm_tmem_decode --perf=16 --profile=h200s --cores=1 --args=-m16 -n1024 -k2048 -P4 -a
+rc=0
+wall_s=250

@@ -1,0 +1,13 @@
+name=barfix_v4_s0_link_simx
+src_rev=
+src_dirty=
+src_phoenix=/storage/project/r-hkim358-0/echung67/vortex-exp/src_barfix_v4
+src_pushed=2026-11-21T19:50:12-05:00
+host=atl1-1-02-003-19-2.pace.gatech.edu
+cpu=Intel(R) Xeon(R) Gold 6226 CPU @ 2.70GHz
+cluster=ice
+xconf=-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_L1_LINK_LATENCY=8
+blackbox=--driver=simx --app=bar_vis --perf=7 --args=-w4
+rc=0
+wall_s=157
+ran_on=ice (fetched 2026-11-21T20:00:57-05:00 from ice:~/scratch/vortex-ice/results/barfix_v4_s0_link_simx)

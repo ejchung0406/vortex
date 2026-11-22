@@ -1,0 +1,93 @@
+atl1-1-02-012-23-0.pace.gatech.edu
+Sat Nov 21 02:40:55 PM EST 2026
+name, clocks.current.sm [MHz], clocks.max.sm [MHz], power.draw [W]
+NVIDIA H200, 345 MHz, 1980 MHz, 86.92 W
+device=NVIDIA H200 sms=132 clock_khz=1980000
+kind=int_dep W=1 iters=2000 nsm=1 warps_per_sm=1 cyc_per_iter_warp=634.11 cyc_per_iter_sm=634.11 ghz=1.980 max_trywait=0
+kind=int_dep W=2 iters=2000 nsm=1 warps_per_sm=2 cyc_per_iter_warp=634.09 cyc_per_iter_sm=634.10 ghz=1.980 max_trywait=0
+kind=int_dep W=4 iters=2000 nsm=1 warps_per_sm=4 cyc_per_iter_warp=634.10 cyc_per_iter_sm=634.10 ghz=1.980 max_trywait=0
+kind=int_dep W=8 iters=2000 nsm=1 warps_per_sm=8 cyc_per_iter_warp=639.10 cyc_per_iter_sm=639.10 ghz=1.980 max_trywait=0
+kind=int_dep W=16 iters=2000 nsm=1 warps_per_sm=16 cyc_per_iter_warp=709.82 cyc_per_iter_sm=709.83 ghz=1.980 max_trywait=0
+kind=int_dep W=32 iters=2000 nsm=1 warps_per_sm=32 cyc_per_iter_warp=1176.81 cyc_per_iter_sm=1176.83 ghz=1.980 max_trywait=0
+kind=int_dep W=64 iters=2000 nsm=2 warps_per_sm=64 cyc_per_iter_warp=2338.72 cyc_per_iter_sm=2338.80 ghz=1.980 max_trywait=0
+kind=int_ind4 W=1 iters=4000 nsm=1 warps_per_sm=1 cyc_per_iter_warp=184.05 cyc_per_iter_sm=184.05 ghz=1.980 max_trywait=0
+kind=int_ind4 W=2 iters=4000 nsm=1 warps_per_sm=2 cyc_per_iter_warp=184.05 cyc_per_iter_sm=184.05 ghz=1.980 max_trywait=0
+kind=int_ind4 W=4 iters=4000 nsm=1 warps_per_sm=4 cyc_per_iter_warp=184.05 cyc_per_iter_sm=184.05 ghz=1.980 max_trywait=0
+kind=int_ind4 W=8 iters=4000 nsm=1 warps_per_sm=8 cyc_per_iter_warp=317.05 cyc_per_iter_sm=317.05 ghz=1.980 max_trywait=0
+kind=int_ind4 W=16 iters=4000 nsm=1 warps_per_sm=16 cyc_per_iter_warp=595.06 cyc_per_iter_sm=595.06 ghz=1.980 max_trywait=0
+kind=int_ind4 W=32 iters=4000 nsm=1 warps_per_sm=32 cyc_per_iter_warp=1171.11 cyc_per_iter_sm=1171.12 ghz=1.980 max_trywait=0
+kind=int_ind4 W=64 iters=4000 nsm=2 warps_per_sm=64 cyc_per_iter_warp=2340.16 cyc_per_iter_sm=2340.19 ghz=1.980 max_trywait=0
+kind=int_ind8 W=1 iters=4000 nsm=1 warps_per_sm=1 cyc_per_iter_warp=158.05 cyc_per_iter_sm=158.05 ghz=1.980 max_trywait=0
+kind=int_ind8 W=2 iters=4000 nsm=1 warps_per_sm=2 cyc_per_iter_warp=158.05 cyc_per_iter_sm=158.05 ghz=1.980 max_trywait=0
+kind=int_ind8 W=4 iters=4000 nsm=1 warps_per_sm=4 cyc_per_iter_warp=158.05 cyc_per_iter_sm=158.05 ghz=1.980 max_trywait=0
+kind=int_ind8 W=8 iters=4000 nsm=1 warps_per_sm=8 cyc_per_iter_warp=292.06 cyc_per_iter_sm=292.06 ghz=1.980 max_trywait=0
+kind=int_ind8 W=16 iters=4000 nsm=1 warps_per_sm=16 cyc_per_iter_warp=584.06 cyc_per_iter_sm=584.06 ghz=1.980 max_trywait=0
+kind=int_ind8 W=32 iters=4000 nsm=1 warps_per_sm=32 cyc_per_iter_warp=1170.33 cyc_per_iter_sm=1170.34 ghz=1.980 max_trywait=0
+kind=int_ind8 W=64 iters=4000 nsm=2 warps_per_sm=64 cyc_per_iter_warp=2338.53 cyc_per_iter_sm=2338.68 ghz=1.980 max_trywait=0
+kind=fma_dep W=1 iters=2000 nsm=1 warps_per_sm=1 cyc_per_iter_warp=519.10 cyc_per_iter_sm=519.10 ghz=1.980 max_trywait=0
+kind=fma_dep W=2 iters=2000 nsm=1 warps_per_sm=2 cyc_per_iter_warp=519.10 cyc_per_iter_sm=519.10 ghz=1.980 max_trywait=0
+kind=fma_dep W=4 iters=2000 nsm=1 warps_per_sm=4 cyc_per_iter_warp=519.10 cyc_per_iter_sm=519.10 ghz=1.980 max_trywait=0
+kind=fma_dep W=8 iters=2000 nsm=1 warps_per_sm=8 cyc_per_iter_warp=523.10 cyc_per_iter_sm=523.10 ghz=1.980 max_trywait=0
+kind=fma_dep W=16 iters=2000 nsm=1 warps_per_sm=16 cyc_per_iter_warp=530.12 cyc_per_iter_sm=530.12 ghz=1.980 max_trywait=0
+kind=fma_dep W=32 iters=2000 nsm=1 warps_per_sm=32 cyc_per_iter_warp=1060.21 cyc_per_iter_sm=1060.24 ghz=1.980 max_trywait=0
+kind=fma_dep W=64 iters=2000 nsm=2 warps_per_sm=64 cyc_per_iter_warp=2081.15 cyc_per_iter_sm=2108.69 ghz=1.980 max_trywait=0
+kind=fma_ind4 W=1 iters=4000 nsm=1 warps_per_sm=1 cyc_per_iter_warp=140.05 cyc_per_iter_sm=140.05 ghz=1.980 max_trywait=0
+kind=fma_ind4 W=2 iters=4000 nsm=1 warps_per_sm=2 cyc_per_iter_warp=140.05 cyc_per_iter_sm=140.05 ghz=1.980 max_trywait=0
+kind=fma_ind4 W=4 iters=4000 nsm=1 warps_per_sm=4 cyc_per_iter_warp=140.05 cyc_per_iter_sm=140.05 ghz=1.980 max_trywait=0
+kind=fma_ind4 W=8 iters=4000 nsm=1 warps_per_sm=8 cyc_per_iter_warp=262.06 cyc_per_iter_sm=262.06 ghz=1.980 max_trywait=0
+kind=fma_ind4 W=16 iters=4000 nsm=1 warps_per_sm=16 cyc_per_iter_warp=524.10 cyc_per_iter_sm=524.11 ghz=1.980 max_trywait=0
+kind=fma_ind4 W=32 iters=4000 nsm=1 warps_per_sm=32 cyc_per_iter_warp=1048.52 cyc_per_iter_sm=1048.54 ghz=1.980 max_trywait=0
+kind=fma_ind4 W=64 iters=4000 nsm=2 warps_per_sm=64 cyc_per_iter_warp=2042.55 cyc_per_iter_sm=2096.53 ghz=1.980 max_trywait=0
+kind=fma_ind8 W=1 iters=4000 nsm=1 warps_per_sm=1 cyc_per_iter_warp=140.05 cyc_per_iter_sm=140.05 ghz=1.980 max_trywait=0
+kind=fma_ind8 W=2 iters=4000 nsm=1 warps_per_sm=2 cyc_per_iter_warp=140.05 cyc_per_iter_sm=140.05 ghz=1.980 max_trywait=0
+kind=fma_ind8 W=4 iters=4000 nsm=1 warps_per_sm=4 cyc_per_iter_warp=140.05 cyc_per_iter_sm=140.05 ghz=1.980 max_trywait=0
+kind=fma_ind8 W=8 iters=4000 nsm=1 warps_per_sm=8 cyc_per_iter_warp=262.06 cyc_per_iter_sm=262.06 ghz=1.980 max_trywait=0
+kind=fma_ind8 W=16 iters=4000 nsm=1 warps_per_sm=16 cyc_per_iter_warp=524.10 cyc_per_iter_sm=524.11 ghz=1.980 max_trywait=0
+kind=fma_ind8 W=32 iters=4000 nsm=1 warps_per_sm=32 cyc_per_iter_warp=1048.19 cyc_per_iter_sm=1048.21 ghz=1.980 max_trywait=0
+kind=fma_ind8 W=64 iters=4000 nsm=2 warps_per_sm=64 cyc_per_iter_warp=2040.93 cyc_per_iter_sm=2096.66 ghz=1.980 max_trywait=0
+kind=br_every1 W=1 iters=4000 nsm=1 warps_per_sm=1 cyc_per_iter_warp=1434.03 cyc_per_iter_sm=1434.03 ghz=1.980 max_trywait=0
+kind=br_every1 W=2 iters=4000 nsm=1 warps_per_sm=2 cyc_per_iter_warp=1434.03 cyc_per_iter_sm=1434.03 ghz=1.980 max_trywait=0
+kind=br_every1 W=4 iters=4000 nsm=1 warps_per_sm=4 cyc_per_iter_warp=1435.03 cyc_per_iter_sm=1435.03 ghz=1.980 max_trywait=0
+kind=br_every1 W=8 iters=4000 nsm=1 warps_per_sm=8 cyc_per_iter_warp=1892.90 cyc_per_iter_sm=1892.90 ghz=1.980 max_trywait=0
+kind=br_every1 W=16 iters=4000 nsm=1 warps_per_sm=16 cyc_per_iter_warp=2380.08 cyc_per_iter_sm=2380.08 ghz=1.980 max_trywait=0
+kind=br_every1 W=32 iters=4000 nsm=1 warps_per_sm=32 cyc_per_iter_warp=3644.56 cyc_per_iter_sm=3644.57 ghz=1.980 max_trywait=0
+kind=br_every1 W=64 iters=4000 nsm=2 warps_per_sm=64 cyc_per_iter_warp=7346.36 cyc_per_iter_sm=7346.43 ghz=1.980 max_trywait=0
+kind=br_every4 W=1 iters=4000 nsm=1 warps_per_sm=1 cyc_per_iter_warp=516.06 cyc_per_iter_sm=516.06 ghz=1.980 max_trywait=0
+kind=br_every4 W=2 iters=4000 nsm=1 warps_per_sm=2 cyc_per_iter_warp=516.05 cyc_per_iter_sm=516.05 ghz=1.980 max_trywait=0
+kind=br_every4 W=4 iters=4000 nsm=1 warps_per_sm=4 cyc_per_iter_warp=516.05 cyc_per_iter_sm=516.05 ghz=1.980 max_trywait=0
+kind=br_every4 W=8 iters=4000 nsm=1 warps_per_sm=8 cyc_per_iter_warp=632.09 cyc_per_iter_sm=632.09 ghz=1.980 max_trywait=0
+kind=br_every4 W=16 iters=4000 nsm=1 warps_per_sm=16 cyc_per_iter_warp=792.20 cyc_per_iter_sm=792.21 ghz=1.980 max_trywait=0
+kind=br_every4 W=32 iters=4000 nsm=1 warps_per_sm=32 cyc_per_iter_warp=1222.59 cyc_per_iter_sm=1222.61 ghz=1.980 max_trywait=0
+kind=br_every4 W=64 iters=4000 nsm=2 warps_per_sm=64 cyc_per_iter_warp=2309.37 cyc_per_iter_sm=2309.63 ghz=1.980 max_trywait=0
+kind=br_every16 W=1 iters=4000 nsm=1 warps_per_sm=1 cyc_per_iter_warp=283.05 cyc_per_iter_sm=283.05 ghz=1.980 max_trywait=0
+kind=br_every16 W=2 iters=4000 nsm=1 warps_per_sm=2 cyc_per_iter_warp=283.05 cyc_per_iter_sm=283.05 ghz=1.980 max_trywait=0
+kind=br_every16 W=4 iters=4000 nsm=1 warps_per_sm=4 cyc_per_iter_warp=283.05 cyc_per_iter_sm=283.05 ghz=1.980 max_trywait=0
+kind=br_every16 W=8 iters=4000 nsm=1 warps_per_sm=8 cyc_per_iter_warp=363.29 cyc_per_iter_sm=363.29 ghz=1.980 max_trywait=0
+kind=br_every16 W=16 iters=4000 nsm=1 warps_per_sm=16 cyc_per_iter_warp=584.12 cyc_per_iter_sm=584.12 ghz=1.980 max_trywait=0
+kind=br_every16 W=32 iters=4000 nsm=1 warps_per_sm=32 cyc_per_iter_warp=1135.22 cyc_per_iter_sm=1135.25 ghz=1.980 max_trywait=0
+kind=br_every16 W=64 iters=4000 nsm=2 warps_per_sm=64 cyc_per_iter_warp=2264.08 cyc_per_iter_sm=2265.61 ghz=1.980 max_trywait=0
+kind=lds_own W=1 iters=4000 nsm=1 warps_per_sm=1 cyc_per_iter_warp=638.03 cyc_per_iter_sm=638.03 ghz=1.980 max_trywait=0
+kind=lds_own W=2 iters=4000 nsm=1 warps_per_sm=2 cyc_per_iter_warp=638.03 cyc_per_iter_sm=638.03 ghz=1.980 max_trywait=0
+kind=lds_own W=4 iters=4000 nsm=1 warps_per_sm=4 cyc_per_iter_warp=643.28 cyc_per_iter_sm=643.28 ghz=1.980 max_trywait=0
+kind=lds_own W=8 iters=4000 nsm=1 warps_per_sm=8 cyc_per_iter_warp=1024.24 cyc_per_iter_sm=1024.24 ghz=1.980 max_trywait=0
+kind=lds_own W=16 iters=4000 nsm=1 warps_per_sm=16 cyc_per_iter_warp=2050.69 cyc_per_iter_sm=2050.69 ghz=1.980 max_trywait=0
+kind=lds_own W=32 iters=4000 nsm=1 warps_per_sm=32 cyc_per_iter_warp=4097.97 cyc_per_iter_sm=4097.97 ghz=1.980 max_trywait=0
+kind=lds_own W=64 iters=4000 nsm=2 warps_per_sm=64 cyc_per_iter_warp=8194.41 cyc_per_iter_sm=8194.47 ghz=1.980 max_trywait=0
+kind=lds_chase W=1 iters=2000 nsm=1 warps_per_sm=1 cyc_per_iter_warp=2944.05 cyc_per_iter_sm=2944.05 ghz=1.980 max_trywait=0
+kind=lds_chase W=2 iters=2000 nsm=1 warps_per_sm=2 cyc_per_iter_warp=2944.05 cyc_per_iter_sm=2944.05 ghz=1.980 max_trywait=0
+kind=lds_chase W=4 iters=2000 nsm=1 warps_per_sm=4 cyc_per_iter_warp=2944.06 cyc_per_iter_sm=2944.06 ghz=1.980 max_trywait=0
+kind=lds_chase W=8 iters=2000 nsm=1 warps_per_sm=8 cyc_per_iter_warp=2944.06 cyc_per_iter_sm=2944.06 ghz=1.980 max_trywait=0
+kind=lds_chase W=16 iters=2000 nsm=1 warps_per_sm=16 cyc_per_iter_warp=2944.07 cyc_per_iter_sm=2944.08 ghz=1.980 max_trywait=0
+kind=lds_chase W=32 iters=2000 nsm=1 warps_per_sm=32 cyc_per_iter_warp=4096.09 cyc_per_iter_sm=4096.10 ghz=1.980 max_trywait=0
+kind=lds_chase W=64 iters=2000 nsm=2 warps_per_sm=64 cyc_per_iter_warp=8210.33 cyc_per_iter_sm=8210.40 ghz=1.980 max_trywait=0
+kind=sts_own W=1 iters=4000 nsm=1 warps_per_sm=1 cyc_per_iter_warp=521.03 cyc_per_iter_sm=521.03 ghz=1.980 max_trywait=0
+kind=sts_own W=2 iters=4000 nsm=1 warps_per_sm=2 cyc_per_iter_warp=521.03 cyc_per_iter_sm=521.03 ghz=1.980 max_trywait=0
+kind=sts_own W=4 iters=4000 nsm=1 warps_per_sm=4 cyc_per_iter_warp=521.03 cyc_per_iter_sm=521.03 ghz=1.980 max_trywait=0
+kind=sts_own W=8 iters=4000 nsm=1 warps_per_sm=8 cyc_per_iter_warp=1024.38 cyc_per_iter_sm=1024.38 ghz=1.980 max_trywait=0
+kind=sts_own W=16 iters=4000 nsm=1 warps_per_sm=16 cyc_per_iter_warp=2048.14 cyc_per_iter_sm=2048.14 ghz=1.980 max_trywait=0
+kind=sts_own W=32 iters=4000 nsm=1 warps_per_sm=32 cyc_per_iter_warp=4096.23 cyc_per_iter_sm=4096.23 ghz=1.980 max_trywait=0
+kind=sts_own W=64 iters=4000 nsm=2 warps_per_sm=64 cyc_per_iter_warp=8192.33 cyc_per_iter_sm=8192.39 ghz=1.980 max_trywait=0
+warprate.cu:241 unspecified launch failure
+Sat Nov 21 02:40:57 PM EST 2026
+clocks.current.sm [MHz]
+1980 MHz

@@ -1,0 +1,13 @@
+name=pr_dram_base_v2_simx
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram_base rev=ccf811e1196d7aa2aa2f8a3ada77797c1ff6333d
+host=atl1-1-03-003-5-1.pace.gatech.edu
+driver=simx xlen=64
+ext_symbols=0
+case mem8 app=sgemm args="" configs="-DVX_CFG_MEM_BLOCK_SIZE=8 -DVX_CFG_LMEM_NUM_BANKS=4 -DVX_CFG_DCACHE_NUM_BANKS=1" flags="" env="" rc=0 cycles=817602 instrs=334880 unit_fails=0 wall=167
+case sgemm32 app=sgemm args="-n32" configs="" flags="" env="" rc=0 cycles=113990 instrs=47904 unit_fails=0 wall=166
+case vecadd app=vecadd args="-n16384" configs="" flags="" env="" rc=0 cycles=381938 instrs=122912 unit_fails=0 wall=4
+case l2mc app=sgemm args="-n32" configs="" flags="--l2cache --cores=2" env="" rc=0 cycles=57246 instrs=47936 unit_fails=0 wall=165
+case hbm3 app=vecadd args="-n16384" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6545" flags="--l2cache --cores=2" env="" rc=0 cycles=188562 instrs=122944 unit_fails=0 wall=165
+fails=0 of 5
+wall_s=667
+rc=0

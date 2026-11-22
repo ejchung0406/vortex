@@ -1,0 +1,7 @@
+name=pr_tcu-bbuf-geometry_br_f2k_b16_rtlsim
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_tcu-bbuf-geometry
+src_rev=e025a8db6d4c1b56573de138934057980c955108
+host=atl1-1-02-003-23-2.pace.gatech.edu
+xlen=64
+xconf=-DVX_CFG_NUM_THREADS=32 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_LMEM_NUM_BANKS=16 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1 -DVX_CFG_TCU_FEDP2K -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=8 -DWGMMA_RS
+blackbox=--driver=rtlsim --app=sgemm_tcu_wg --perf=7 --args=-m 128 -n 128 -k 128

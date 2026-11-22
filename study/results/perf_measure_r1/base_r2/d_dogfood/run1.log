@@ -1,0 +1,1256 @@
+test ids: 0 - 0
+workitem size: 64
+using kernel: kernel.vxbin
+open device connection
+number of points: 1024
+buffer size: 4096 bytes
+allocate device memory
+dev_src0=0x30000
+dev_src1=0x31000
+dev_dst=0x32000
+allocate host buffers
+load kernel module
+Test0: iadd
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test0-iadd PASSED!
+Test1: imul
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test1-imul PASSED!
+Test2: idiv
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test2-idiv PASSED!
+Test3: idiv-mul
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test3-idiv-mul PASSED!
+Test4: fadd
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test4-fadd PASSED!
+Test5: fsub
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test5-fsub PASSED!
+Test6: fmul
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test6-fmul PASSED!
+Test7: fmadd
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test7-fmadd PASSED!
+Test8: fmsub
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test8-fmsub PASSED!
+Test9: fnmadd
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test9-fnmadd PASSED!
+Test10: fnmsub
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test10-fnmsub PASSED!
+Test11: fnmadd-madd
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test11-fnmadd-madd PASSED!
+Test12: fdiv
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test12-fdiv PASSED!
+Test13: fdiv2
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test13-fdiv2 PASSED!
+Test14: fsqrt
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test14-fsqrt PASSED!
+Test15: ftoi
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test15-ftoi PASSED!
+Test16: ftou
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test16-ftou PASSED!
+Test17: itof
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test17-itof PASSED!
+Test18: utof
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test18-utof PASSED!
+Test19: fclamp
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test19-fclamp PASSED!
+Test20: iclamp
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test20-iclamp PASSED!
+Test21: trig
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+Test21-trig PASSED!
+Test22: bar
+get test arguments
+upload source buffer0
+upload source buffer1
+clear destination buffer
+start device
+download destination buffer
+wait for completion
+verify test result
+error at result #16: expected=11, actual=deadbeef
+error at result #17: expected=12, actual=deadbeef
+error at result #18: expected=13, actual=deadbeef
+error at result #19: expected=14, actual=deadbeef
+error at result #20: expected=15, actual=deadbeef
+error at result #21: expected=16, actual=deadbeef
+error at result #22: expected=17, actual=deadbeef
+error at result #23: expected=18, actual=deadbeef
+error at result #24: expected=19, actual=deadbeef
+error at result #25: expected=1a, actual=deadbeef
+error at result #26: expected=1b, actual=deadbeef
+error at result #27: expected=1c, actual=deadbeef
+error at result #28: expected=1d, actual=deadbeef
+error at result #29: expected=1e, actual=deadbeef
+error at result #30: expected=1f, actual=deadbeef
+error at result #31: expected=20, actual=deadbeef
+error at result #32: expected=21, actual=deadbeef
+error at result #33: expected=22, actual=deadbeef
+error at result #34: expected=23, actual=deadbeef
+error at result #35: expected=24, actual=deadbeef
+error at result #36: expected=25, actual=deadbeef
+error at result #37: expected=26, actual=deadbeef
+error at result #38: expected=27, actual=deadbeef
+error at result #39: expected=28, actual=deadbeef
+error at result #40: expected=29, actual=deadbeef
+error at result #41: expected=2a, actual=deadbeef
+error at result #42: expected=2b, actual=deadbeef
+error at result #43: expected=2c, actual=deadbeef
+error at result #44: expected=2d, actual=deadbeef
+error at result #45: expected=2e, actual=deadbeef
+error at result #46: expected=2f, actual=deadbeef
+error at result #47: expected=30, actual=deadbeef
+error at result #48: expected=31, actual=deadbeef
+error at result #49: expected=32, actual=deadbeef
+error at result #50: expected=33, actual=deadbeef
+error at result #51: expected=34, actual=deadbeef
+error at result #52: expected=35, actual=deadbeef
+error at result #53: expected=36, actual=deadbeef
+error at result #54: expected=37, actual=deadbeef
+error at result #55: expected=38, actual=deadbeef
+error at result #56: expected=39, actual=deadbeef
+error at result #57: expected=3a, actual=deadbeef
+error at result #58: expected=3b, actual=deadbeef
+error at result #59: expected=3c, actual=deadbeef
+error at result #60: expected=3d, actual=deadbeef
+error at result #61: expected=3e, actual=deadbeef
+error at result #62: expected=3f, actual=deadbeef
+error at result #63: expected=40, actual=deadbeef
+error at result #64: expected=41, actual=deadbeef
+error at result #65: expected=42, actual=deadbeef
+error at result #66: expected=43, actual=deadbeef
+error at result #67: expected=44, actual=deadbeef
+error at result #68: expected=45, actual=deadbeef
+error at result #69: expected=46, actual=deadbeef
+error at result #70: expected=47, actual=deadbeef
+error at result #71: expected=48, actual=deadbeef
+error at result #72: expected=49, actual=deadbeef
+error at result #73: expected=4a, actual=deadbeef
+error at result #74: expected=4b, actual=deadbeef
+error at result #75: expected=4c, actual=deadbeef
+error at result #76: expected=4d, actual=deadbeef
+error at result #77: expected=4e, actual=deadbeef
+error at result #78: expected=4f, actual=deadbeef
+error at result #79: expected=50, actual=deadbeef
+error at result #80: expected=51, actual=deadbeef
+error at result #81: expected=52, actual=deadbeef
+error at result #82: expected=53, actual=deadbeef
+error at result #83: expected=54, actual=deadbeef
+error at result #84: expected=55, actual=deadbeef
+error at result #85: expected=56, actual=deadbeef
+error at result #86: expected=57, actual=deadbeef
+error at result #87: expected=58, actual=deadbeef
+error at result #88: expected=59, actual=deadbeef
+error at result #89: expected=5a, actual=deadbeef
+error at result #90: expected=5b, actual=deadbeef
+error at result #91: expected=5c, actual=deadbeef
+error at result #92: expected=5d, actual=deadbeef
+error at result #93: expected=5e, actual=deadbeef
+error at result #94: expected=5f, actual=deadbeef
+error at result #95: expected=60, actual=deadbeef
+error at result #96: expected=61, actual=deadbeef
+error at result #97: expected=62, actual=deadbeef
+error at result #98: expected=63, actual=deadbeef
+error at result #99: expected=64, actual=deadbeef
+error at result #100: expected=65, actual=deadbeef
+error at result #101: expected=66, actual=deadbeef
+error at result #102: expected=67, actual=deadbeef
+error at result #103: expected=68, actual=deadbeef
+error at result #104: expected=69, actual=deadbeef
+error at result #105: expected=6a, actual=deadbeef
+error at result #106: expected=6b, actual=deadbeef
+error at result #107: expected=6c, actual=deadbeef
+error at result #108: expected=6d, actual=deadbeef
+error at result #109: expected=6e, actual=deadbeef
+error at result #110: expected=6f, actual=deadbeef
+error at result #111: expected=70, actual=deadbeef
+error at result #112: expected=71, actual=deadbeef
+error at result #113: expected=72, actual=deadbeef
+error at result #114: expected=73, actual=deadbeef
+error at result #115: expected=74, actual=deadbeef
+error at result #116: expected=75, actual=deadbeef
+error at result #117: expected=76, actual=deadbeef
+error at result #118: expected=77, actual=deadbeef
+error at result #119: expected=78, actual=deadbeef
+error at result #120: expected=79, actual=deadbeef
+error at result #121: expected=7a, actual=deadbeef
+error at result #122: expected=7b, actual=deadbeef
+error at result #123: expected=7c, actual=deadbeef
+error at result #124: expected=7d, actual=deadbeef
+error at result #125: expected=7e, actual=deadbeef
+error at result #126: expected=7f, actual=deadbeef
+error at result #127: expected=80, actual=deadbeef
+error at result #128: expected=81, actual=deadbeef
+error at result #129: expected=82, actual=deadbeef
+error at result #130: expected=83, actual=deadbeef
+error at result #131: expected=84, actual=deadbeef
+error at result #132: expected=85, actual=deadbeef
+error at result #133: expected=86, actual=deadbeef
+error at result #134: expected=87, actual=deadbeef
+error at result #135: expected=88, actual=deadbeef
+error at result #136: expected=89, actual=deadbeef
+error at result #137: expected=8a, actual=deadbeef
+error at result #138: expected=8b, actual=deadbeef
+error at result #139: expected=8c, actual=deadbeef
+error at result #140: expected=8d, actual=deadbeef
+error at result #141: expected=8e, actual=deadbeef
+error at result #142: expected=8f, actual=deadbeef
+error at result #143: expected=90, actual=deadbeef
+error at result #144: expected=91, actual=deadbeef
+error at result #145: expected=92, actual=deadbeef
+error at result #146: expected=93, actual=deadbeef
+error at result #147: expected=94, actual=deadbeef
+error at result #148: expected=95, actual=deadbeef
+error at result #149: expected=96, actual=deadbeef
+error at result #150: expected=97, actual=deadbeef
+error at result #151: expected=98, actual=deadbeef
+error at result #152: expected=99, actual=deadbeef
+error at result #153: expected=9a, actual=deadbeef
+error at result #154: expected=9b, actual=deadbeef
+error at result #155: expected=9c, actual=deadbeef
+error at result #156: expected=9d, actual=deadbeef
+error at result #157: expected=9e, actual=deadbeef
+error at result #158: expected=9f, actual=deadbeef
+error at result #159: expected=a0, actual=deadbeef
+error at result #160: expected=a1, actual=deadbeef
+error at result #161: expected=a2, actual=deadbeef
+error at result #162: expected=a3, actual=deadbeef
+error at result #163: expected=a4, actual=deadbeef
+error at result #164: expected=a5, actual=deadbeef
+error at result #165: expected=a6, actual=deadbeef
+error at result #166: expected=a7, actual=deadbeef
+error at result #167: expected=a8, actual=deadbeef
+error at result #168: expected=a9, actual=deadbeef
+error at result #169: expected=aa, actual=deadbeef
+error at result #170: expected=ab, actual=deadbeef
+error at result #171: expected=ac, actual=deadbeef
+error at result #172: expected=ad, actual=deadbeef
+error at result #173: expected=ae, actual=deadbeef
+error at result #174: expected=af, actual=deadbeef
+error at result #175: expected=b0, actual=deadbeef
+error at result #176: expected=b1, actual=deadbeef
+error at result #177: expected=b2, actual=deadbeef
+error at result #178: expected=b3, actual=deadbeef
+error at result #179: expected=b4, actual=deadbeef
+error at result #180: expected=b5, actual=deadbeef
+error at result #181: expected=b6, actual=deadbeef
+error at result #182: expected=b7, actual=deadbeef
+error at result #183: expected=b8, actual=deadbeef
+error at result #184: expected=b9, actual=deadbeef
+error at result #185: expected=ba, actual=deadbeef
+error at result #186: expected=bb, actual=deadbeef
+error at result #187: expected=bc, actual=deadbeef
+error at result #188: expected=bd, actual=deadbeef
+error at result #189: expected=be, actual=deadbeef
+error at result #190: expected=bf, actual=deadbeef
+error at result #191: expected=c0, actual=deadbeef
+error at result #192: expected=c1, actual=deadbeef
+error at result #193: expected=c2, actual=deadbeef
+error at result #194: expected=c3, actual=deadbeef
+error at result #195: expected=c4, actual=deadbeef
+error at result #196: expected=c5, actual=deadbeef
+error at result #197: expected=c6, actual=deadbeef
+error at result #198: expected=c7, actual=deadbeef
+error at result #199: expected=c8, actual=deadbeef
+error at result #200: expected=c9, actual=deadbeef
+error at result #201: expected=ca, actual=deadbeef
+error at result #202: expected=cb, actual=deadbeef
+error at result #203: expected=cc, actual=deadbeef
+error at result #204: expected=cd, actual=deadbeef
+error at result #205: expected=ce, actual=deadbeef
+error at result #206: expected=cf, actual=deadbeef
+error at result #207: expected=d0, actual=deadbeef
+error at result #208: expected=d1, actual=deadbeef
+error at result #209: expected=d2, actual=deadbeef
+error at result #210: expected=d3, actual=deadbeef
+error at result #211: expected=d4, actual=deadbeef
+error at result #212: expected=d5, actual=deadbeef
+error at result #213: expected=d6, actual=deadbeef
+error at result #214: expected=d7, actual=deadbeef
+error at result #215: expected=d8, actual=deadbeef
+error at result #216: expected=d9, actual=deadbeef
+error at result #217: expected=da, actual=deadbeef
+error at result #218: expected=db, actual=deadbeef
+error at result #219: expected=dc, actual=deadbeef
+error at result #220: expected=dd, actual=deadbeef
+error at result #221: expected=de, actual=deadbeef
+error at result #222: expected=df, actual=deadbeef
+error at result #223: expected=e0, actual=deadbeef
+error at result #224: expected=e1, actual=deadbeef
+error at result #225: expected=e2, actual=deadbeef
+error at result #226: expected=e3, actual=deadbeef
+error at result #227: expected=e4, actual=deadbeef
+error at result #228: expected=e5, actual=deadbeef
+error at result #229: expected=e6, actual=deadbeef
+error at result #230: expected=e7, actual=deadbeef
+error at result #231: expected=e8, actual=deadbeef
+error at result #232: expected=e9, actual=deadbeef
+error at result #233: expected=ea, actual=deadbeef
+error at result #234: expected=eb, actual=deadbeef
+error at result #235: expected=ec, actual=deadbeef
+error at result #236: expected=ed, actual=deadbeef
+error at result #237: expected=ee, actual=deadbeef
+error at result #238: expected=ef, actual=deadbeef
+error at result #239: expected=f0, actual=deadbeef
+error at result #240: expected=f1, actual=deadbeef
+error at result #241: expected=f2, actual=deadbeef
+error at result #242: expected=f3, actual=deadbeef
+error at result #243: expected=f4, actual=deadbeef
+error at result #244: expected=f5, actual=deadbeef
+error at result #245: expected=f6, actual=deadbeef
+error at result #246: expected=f7, actual=deadbeef
+error at result #247: expected=f8, actual=deadbeef
+error at result #248: expected=f9, actual=deadbeef
+error at result #249: expected=fa, actual=deadbeef
+error at result #250: expected=fb, actual=deadbeef
+error at result #251: expected=fc, actual=deadbeef
+error at result #252: expected=fd, actual=deadbeef
+error at result #253: expected=fe, actual=deadbeef
+error at result #254: expected=ff, actual=deadbeef
+error at result #255: expected=100, actual=deadbeef
+error at result #256: expected=101, actual=deadbeef
+error at result #257: expected=102, actual=deadbeef
+error at result #258: expected=103, actual=deadbeef
+error at result #259: expected=104, actual=deadbeef
+error at result #260: expected=105, actual=deadbeef
+error at result #261: expected=106, actual=deadbeef
+error at result #262: expected=107, actual=deadbeef
+error at result #263: expected=108, actual=deadbeef
+error at result #264: expected=109, actual=deadbeef
+error at result #265: expected=10a, actual=deadbeef
+error at result #266: expected=10b, actual=deadbeef
+error at result #267: expected=10c, actual=deadbeef
+error at result #268: expected=10d, actual=deadbeef
+error at result #269: expected=10e, actual=deadbeef
+error at result #270: expected=10f, actual=deadbeef
+error at result #271: expected=110, actual=deadbeef
+error at result #272: expected=111, actual=deadbeef
+error at result #273: expected=112, actual=deadbeef
+error at result #274: expected=113, actual=deadbeef
+error at result #275: expected=114, actual=deadbeef
+error at result #276: expected=115, actual=deadbeef
+error at result #277: expected=116, actual=deadbeef
+error at result #278: expected=117, actual=deadbeef
+error at result #279: expected=118, actual=deadbeef
+error at result #280: expected=119, actual=deadbeef
+error at result #281: expected=11a, actual=deadbeef
+error at result #282: expected=11b, actual=deadbeef
+error at result #283: expected=11c, actual=deadbeef
+error at result #284: expected=11d, actual=deadbeef
+error at result #285: expected=11e, actual=deadbeef
+error at result #286: expected=11f, actual=deadbeef
+error at result #287: expected=120, actual=deadbeef
+error at result #288: expected=121, actual=deadbeef
+error at result #289: expected=122, actual=deadbeef
+error at result #290: expected=123, actual=deadbeef
+error at result #291: expected=124, actual=deadbeef
+error at result #292: expected=125, actual=deadbeef
+error at result #293: expected=126, actual=deadbeef
+error at result #294: expected=127, actual=deadbeef
+error at result #295: expected=128, actual=deadbeef
+error at result #296: expected=129, actual=deadbeef
+error at result #297: expected=12a, actual=deadbeef
+error at result #298: expected=12b, actual=deadbeef
+error at result #299: expected=12c, actual=deadbeef
+error at result #300: expected=12d, actual=deadbeef
+error at result #301: expected=12e, actual=deadbeef
+error at result #302: expected=12f, actual=deadbeef
+error at result #303: expected=130, actual=deadbeef
+error at result #304: expected=131, actual=deadbeef
+error at result #305: expected=132, actual=deadbeef
+error at result #306: expected=133, actual=deadbeef
+error at result #307: expected=134, actual=deadbeef
+error at result #308: expected=135, actual=deadbeef
+error at result #309: expected=136, actual=deadbeef
+error at result #310: expected=137, actual=deadbeef
+error at result #311: expected=138, actual=deadbeef
+error at result #312: expected=139, actual=deadbeef
+error at result #313: expected=13a, actual=deadbeef
+error at result #314: expected=13b, actual=deadbeef
+error at result #315: expected=13c, actual=deadbeef
+error at result #316: expected=13d, actual=deadbeef
+error at result #317: expected=13e, actual=deadbeef
+error at result #318: expected=13f, actual=deadbeef
+error at result #319: expected=140, actual=deadbeef
+error at result #320: expected=141, actual=deadbeef
+error at result #321: expected=142, actual=deadbeef
+error at result #322: expected=143, actual=deadbeef
+error at result #323: expected=144, actual=deadbeef
+error at result #324: expected=145, actual=deadbeef
+error at result #325: expected=146, actual=deadbeef
+error at result #326: expected=147, actual=deadbeef
+error at result #327: expected=148, actual=deadbeef
+error at result #328: expected=149, actual=deadbeef
+error at result #329: expected=14a, actual=deadbeef
+error at result #330: expected=14b, actual=deadbeef
+error at result #331: expected=14c, actual=deadbeef
+error at result #332: expected=14d, actual=deadbeef
+error at result #333: expected=14e, actual=deadbeef
+error at result #334: expected=14f, actual=deadbeef
+error at result #335: expected=150, actual=deadbeef
+error at result #336: expected=151, actual=deadbeef
+error at result #337: expected=152, actual=deadbeef
+error at result #338: expected=153, actual=deadbeef
+error at result #339: expected=154, actual=deadbeef
+error at result #340: expected=155, actual=deadbeef
+error at result #341: expected=156, actual=deadbeef
+error at result #342: expected=157, actual=deadbeef
+error at result #343: expected=158, actual=deadbeef
+error at result #344: expected=159, actual=deadbeef
+error at result #345: expected=15a, actual=deadbeef
+error at result #346: expected=15b, actual=deadbeef
+error at result #347: expected=15c, actual=deadbeef
+error at result #348: expected=15d, actual=deadbeef
+error at result #349: expected=15e, actual=deadbeef
+error at result #350: expected=15f, actual=deadbeef
+error at result #351: expected=160, actual=deadbeef
+error at result #352: expected=161, actual=deadbeef
+error at result #353: expected=162, actual=deadbeef
+error at result #354: expected=163, actual=deadbeef
+error at result #355: expected=164, actual=deadbeef
+error at result #356: expected=165, actual=deadbeef
+error at result #357: expected=166, actual=deadbeef
+error at result #358: expected=167, actual=deadbeef
+error at result #359: expected=168, actual=deadbeef
+error at result #360: expected=169, actual=deadbeef
+error at result #361: expected=16a, actual=deadbeef
+error at result #362: expected=16b, actual=deadbeef
+error at result #363: expected=16c, actual=deadbeef
+error at result #364: expected=16d, actual=deadbeef
+error at result #365: expected=16e, actual=deadbeef
+error at result #366: expected=16f, actual=deadbeef
+error at result #367: expected=170, actual=deadbeef
+error at result #368: expected=171, actual=deadbeef
+error at result #369: expected=172, actual=deadbeef
+error at result #370: expected=173, actual=deadbeef
+error at result #371: expected=174, actual=deadbeef
+error at result #372: expected=175, actual=deadbeef
+error at result #373: expected=176, actual=deadbeef
+error at result #374: expected=177, actual=deadbeef
+error at result #375: expected=178, actual=deadbeef
+error at result #376: expected=179, actual=deadbeef
+error at result #377: expected=17a, actual=deadbeef
+error at result #378: expected=17b, actual=deadbeef
+error at result #379: expected=17c, actual=deadbeef
+error at result #380: expected=17d, actual=deadbeef
+error at result #381: expected=17e, actual=deadbeef
+error at result #382: expected=17f, actual=deadbeef
+error at result #383: expected=180, actual=deadbeef
+error at result #384: expected=181, actual=deadbeef
+error at result #385: expected=182, actual=deadbeef
+error at result #386: expected=183, actual=deadbeef
+error at result #387: expected=184, actual=deadbeef
+error at result #388: expected=185, actual=deadbeef
+error at result #389: expected=186, actual=deadbeef
+error at result #390: expected=187, actual=deadbeef
+error at result #391: expected=188, actual=deadbeef
+error at result #392: expected=189, actual=deadbeef
+error at result #393: expected=18a, actual=deadbeef
+error at result #394: expected=18b, actual=deadbeef
+error at result #395: expected=18c, actual=deadbeef
+error at result #396: expected=18d, actual=deadbeef
+error at result #397: expected=18e, actual=deadbeef
+error at result #398: expected=18f, actual=deadbeef
+error at result #399: expected=190, actual=deadbeef
+error at result #400: expected=191, actual=deadbeef
+error at result #401: expected=192, actual=deadbeef
+error at result #402: expected=193, actual=deadbeef
+error at result #403: expected=194, actual=deadbeef
+error at result #404: expected=195, actual=deadbeef
+error at result #405: expected=196, actual=deadbeef
+error at result #406: expected=197, actual=deadbeef
+error at result #407: expected=198, actual=deadbeef
+error at result #408: expected=199, actual=deadbeef
+error at result #409: expected=19a, actual=deadbeef
+error at result #410: expected=19b, actual=deadbeef
+error at result #411: expected=19c, actual=deadbeef
+error at result #412: expected=19d, actual=deadbeef
+error at result #413: expected=19e, actual=deadbeef
+error at result #414: expected=19f, actual=deadbeef
+error at result #415: expected=1a0, actual=deadbeef
+error at result #416: expected=1a1, actual=deadbeef
+error at result #417: expected=1a2, actual=deadbeef
+error at result #418: expected=1a3, actual=deadbeef
+error at result #419: expected=1a4, actual=deadbeef
+error at result #420: expected=1a5, actual=deadbeef
+error at result #421: expected=1a6, actual=deadbeef
+error at result #422: expected=1a7, actual=deadbeef
+error at result #423: expected=1a8, actual=deadbeef
+error at result #424: expected=1a9, actual=deadbeef
+error at result #425: expected=1aa, actual=deadbeef
+error at result #426: expected=1ab, actual=deadbeef
+error at result #427: expected=1ac, actual=deadbeef
+error at result #428: expected=1ad, actual=deadbeef
+error at result #429: expected=1ae, actual=deadbeef
+error at result #430: expected=1af, actual=deadbeef
+error at result #431: expected=1b0, actual=deadbeef
+error at result #432: expected=1b1, actual=deadbeef
+error at result #433: expected=1b2, actual=deadbeef
+error at result #434: expected=1b3, actual=deadbeef
+error at result #435: expected=1b4, actual=deadbeef
+error at result #436: expected=1b5, actual=deadbeef
+error at result #437: expected=1b6, actual=deadbeef
+error at result #438: expected=1b7, actual=deadbeef
+error at result #439: expected=1b8, actual=deadbeef
+error at result #440: expected=1b9, actual=deadbeef
+error at result #441: expected=1ba, actual=deadbeef
+error at result #442: expected=1bb, actual=deadbeef
+error at result #443: expected=1bc, actual=deadbeef
+error at result #444: expected=1bd, actual=deadbeef
+error at result #445: expected=1be, actual=deadbeef
+error at result #446: expected=1bf, actual=deadbeef
+error at result #447: expected=1c0, actual=deadbeef
+error at result #448: expected=1c1, actual=deadbeef
+error at result #449: expected=1c2, actual=deadbeef
+error at result #450: expected=1c3, actual=deadbeef
+error at result #451: expected=1c4, actual=deadbeef
+error at result #452: expected=1c5, actual=deadbeef
+error at result #453: expected=1c6, actual=deadbeef
+error at result #454: expected=1c7, actual=deadbeef
+error at result #455: expected=1c8, actual=deadbeef
+error at result #456: expected=1c9, actual=deadbeef
+error at result #457: expected=1ca, actual=deadbeef
+error at result #458: expected=1cb, actual=deadbeef
+error at result #459: expected=1cc, actual=deadbeef
+error at result #460: expected=1cd, actual=deadbeef
+error at result #461: expected=1ce, actual=deadbeef
+error at result #462: expected=1cf, actual=deadbeef
+error at result #463: expected=1d0, actual=deadbeef
+error at result #464: expected=1d1, actual=deadbeef
+error at result #465: expected=1d2, actual=deadbeef
+error at result #466: expected=1d3, actual=deadbeef
+error at result #467: expected=1d4, actual=deadbeef
+error at result #468: expected=1d5, actual=deadbeef
+error at result #469: expected=1d6, actual=deadbeef
+error at result #470: expected=1d7, actual=deadbeef
+error at result #471: expected=1d8, actual=deadbeef
+error at result #472: expected=1d9, actual=deadbeef
+error at result #473: expected=1da, actual=deadbeef
+error at result #474: expected=1db, actual=deadbeef
+error at result #475: expected=1dc, actual=deadbeef
+error at result #476: expected=1dd, actual=deadbeef
+error at result #477: expected=1de, actual=deadbeef
+error at result #478: expected=1df, actual=deadbeef
+error at result #479: expected=1e0, actual=deadbeef
+error at result #480: expected=1e1, actual=deadbeef
+error at result #481: expected=1e2, actual=deadbeef
+error at result #482: expected=1e3, actual=deadbeef
+error at result #483: expected=1e4, actual=deadbeef
+error at result #484: expected=1e5, actual=deadbeef
+error at result #485: expected=1e6, actual=deadbeef
+error at result #486: expected=1e7, actual=deadbeef
+error at result #487: expected=1e8, actual=deadbeef
+error at result #488: expected=1e9, actual=deadbeef
+error at result #489: expected=1ea, actual=deadbeef
+error at result #490: expected=1eb, actual=deadbeef
+error at result #491: expected=1ec, actual=deadbeef
+error at result #492: expected=1ed, actual=deadbeef
+error at result #493: expected=1ee, actual=deadbeef
+error at result #494: expected=1ef, actual=deadbeef
+error at result #495: expected=1f0, actual=deadbeef
+error at result #496: expected=1f1, actual=deadbeef
+error at result #497: expected=1f2, actual=deadbeef
+error at result #498: expected=1f3, actual=deadbeef
+error at result #499: expected=1f4, actual=deadbeef
+error at result #500: expected=1f5, actual=deadbeef
+error at result #501: expected=1f6, actual=deadbeef
+error at result #502: expected=1f7, actual=deadbeef
+error at result #503: expected=1f8, actual=deadbeef
+error at result #504: expected=1f9, actual=deadbeef
+error at result #505: expected=1fa, actual=deadbeef
+error at result #506: expected=1fb, actual=deadbeef
+error at result #507: expected=1fc, actual=deadbeef
+error at result #508: expected=1fd, actual=deadbeef
+error at result #509: expected=1fe, actual=deadbeef
+error at result #510: expected=1ff, actual=deadbeef
+error at result #511: expected=200, actual=deadbeef
+error at result #512: expected=201, actual=deadbeef
+error at result #513: expected=202, actual=deadbeef
+error at result #514: expected=203, actual=deadbeef
+error at result #515: expected=204, actual=deadbeef
+error at result #516: expected=205, actual=deadbeef
+error at result #517: expected=206, actual=deadbeef
+error at result #518: expected=207, actual=deadbeef
+error at result #519: expected=208, actual=deadbeef
+error at result #520: expected=209, actual=deadbeef
+error at result #521: expected=20a, actual=deadbeef
+error at result #522: expected=20b, actual=deadbeef
+error at result #523: expected=20c, actual=deadbeef
+error at result #524: expected=20d, actual=deadbeef
+error at result #525: expected=20e, actual=deadbeef
+error at result #526: expected=20f, actual=deadbeef
+error at result #527: expected=210, actual=deadbeef
+error at result #528: expected=211, actual=deadbeef
+error at result #529: expected=212, actual=deadbeef
+error at result #530: expected=213, actual=deadbeef
+error at result #531: expected=214, actual=deadbeef
+error at result #532: expected=215, actual=deadbeef
+error at result #533: expected=216, actual=deadbeef
+error at result #534: expected=217, actual=deadbeef
+error at result #535: expected=218, actual=deadbeef
+error at result #536: expected=219, actual=deadbeef
+error at result #537: expected=21a, actual=deadbeef
+error at result #538: expected=21b, actual=deadbeef
+error at result #539: expected=21c, actual=deadbeef
+error at result #540: expected=21d, actual=deadbeef
+error at result #541: expected=21e, actual=deadbeef
+error at result #542: expected=21f, actual=deadbeef
+error at result #543: expected=220, actual=deadbeef
+error at result #544: expected=221, actual=deadbeef
+error at result #545: expected=222, actual=deadbeef
+error at result #546: expected=223, actual=deadbeef
+error at result #547: expected=224, actual=deadbeef
+error at result #548: expected=225, actual=deadbeef
+error at result #549: expected=226, actual=deadbeef
+error at result #550: expected=227, actual=deadbeef
+error at result #551: expected=228, actual=deadbeef
+error at result #552: expected=229, actual=deadbeef
+error at result #553: expected=22a, actual=deadbeef
+error at result #554: expected=22b, actual=deadbeef
+error at result #555: expected=22c, actual=deadbeef
+error at result #556: expected=22d, actual=deadbeef
+error at result #557: expected=22e, actual=deadbeef
+error at result #558: expected=22f, actual=deadbeef
+error at result #559: expected=230, actual=deadbeef
+error at result #560: expected=231, actual=deadbeef
+error at result #561: expected=232, actual=deadbeef
+error at result #562: expected=233, actual=deadbeef
+error at result #563: expected=234, actual=deadbeef
+error at result #564: expected=235, actual=deadbeef
+error at result #565: expected=236, actual=deadbeef
+error at result #566: expected=237, actual=deadbeef
+error at result #567: expected=238, actual=deadbeef
+error at result #568: expected=239, actual=deadbeef
+error at result #569: expected=23a, actual=deadbeef
+error at result #570: expected=23b, actual=deadbeef
+error at result #571: expected=23c, actual=deadbeef
+error at result #572: expected=23d, actual=deadbeef
+error at result #573: expected=23e, actual=deadbeef
+error at result #574: expected=23f, actual=deadbeef
+error at result #575: expected=240, actual=deadbeef
+error at result #576: expected=241, actual=deadbeef
+error at result #577: expected=242, actual=deadbeef
+error at result #578: expected=243, actual=deadbeef
+error at result #579: expected=244, actual=deadbeef
+error at result #580: expected=245, actual=deadbeef
+error at result #581: expected=246, actual=deadbeef
+error at result #582: expected=247, actual=deadbeef
+error at result #583: expected=248, actual=deadbeef
+error at result #584: expected=249, actual=deadbeef
+error at result #585: expected=24a, actual=deadbeef
+error at result #586: expected=24b, actual=deadbeef
+error at result #587: expected=24c, actual=deadbeef
+error at result #588: expected=24d, actual=deadbeef
+error at result #589: expected=24e, actual=deadbeef
+error at result #590: expected=24f, actual=deadbeef
+error at result #591: expected=250, actual=deadbeef
+error at result #592: expected=251, actual=deadbeef
+error at result #593: expected=252, actual=deadbeef
+error at result #594: expected=253, actual=deadbeef
+error at result #595: expected=254, actual=deadbeef
+error at result #596: expected=255, actual=deadbeef
+error at result #597: expected=256, actual=deadbeef
+error at result #598: expected=257, actual=deadbeef
+error at result #599: expected=258, actual=deadbeef
+error at result #600: expected=259, actual=deadbeef
+error at result #601: expected=25a, actual=deadbeef
+error at result #602: expected=25b, actual=deadbeef
+error at result #603: expected=25c, actual=deadbeef
+error at result #604: expected=25d, actual=deadbeef
+error at result #605: expected=25e, actual=deadbeef
+error at result #606: expected=25f, actual=deadbeef
+error at result #607: expected=260, actual=deadbeef
+error at result #608: expected=261, actual=deadbeef
+error at result #609: expected=262, actual=deadbeef
+error at result #610: expected=263, actual=deadbeef
+error at result #611: expected=264, actual=deadbeef
+error at result #612: expected=265, actual=deadbeef
+error at result #613: expected=266, actual=deadbeef
+error at result #614: expected=267, actual=deadbeef
+error at result #615: expected=268, actual=deadbeef
+error at result #616: expected=269, actual=deadbeef
+error at result #617: expected=26a, actual=deadbeef
+error at result #618: expected=26b, actual=deadbeef
+error at result #619: expected=26c, actual=deadbeef
+error at result #620: expected=26d, actual=deadbeef
+error at result #621: expected=26e, actual=deadbeef
+error at result #622: expected=26f, actual=deadbeef
+error at result #623: expected=270, actual=deadbeef
+error at result #624: expected=271, actual=deadbeef
+error at result #625: expected=272, actual=deadbeef
+error at result #626: expected=273, actual=deadbeef
+error at result #627: expected=274, actual=deadbeef
+error at result #628: expected=275, actual=deadbeef
+error at result #629: expected=276, actual=deadbeef
+error at result #630: expected=277, actual=deadbeef
+error at result #631: expected=278, actual=deadbeef
+error at result #632: expected=279, actual=deadbeef
+error at result #633: expected=27a, actual=deadbeef
+error at result #634: expected=27b, actual=deadbeef
+error at result #635: expected=27c, actual=deadbeef
+error at result #636: expected=27d, actual=deadbeef
+error at result #637: expected=27e, actual=deadbeef
+error at result #638: expected=27f, actual=deadbeef
+error at result #639: expected=280, actual=deadbeef
+error at result #640: expected=281, actual=deadbeef
+error at result #641: expected=282, actual=deadbeef
+error at result #642: expected=283, actual=deadbeef
+error at result #643: expected=284, actual=deadbeef
+error at result #644: expected=285, actual=deadbeef
+error at result #645: expected=286, actual=deadbeef
+error at result #646: expected=287, actual=deadbeef
+error at result #647: expected=288, actual=deadbeef
+error at result #648: expected=289, actual=deadbeef
+error at result #649: expected=28a, actual=deadbeef
+error at result #650: expected=28b, actual=deadbeef
+error at result #651: expected=28c, actual=deadbeef
+error at result #652: expected=28d, actual=deadbeef
+error at result #653: expected=28e, actual=deadbeef
+error at result #654: expected=28f, actual=deadbeef
+error at result #655: expected=290, actual=deadbeef
+error at result #656: expected=291, actual=deadbeef
+error at result #657: expected=292, actual=deadbeef
+error at result #658: expected=293, actual=deadbeef
+error at result #659: expected=294, actual=deadbeef
+error at result #660: expected=295, actual=deadbeef
+error at result #661: expected=296, actual=deadbeef
+error at result #662: expected=297, actual=deadbeef
+error at result #663: expected=298, actual=deadbeef
+error at result #664: expected=299, actual=deadbeef
+error at result #665: expected=29a, actual=deadbeef
+error at result #666: expected=29b, actual=deadbeef
+error at result #667: expected=29c, actual=deadbeef
+error at result #668: expected=29d, actual=deadbeef
+error at result #669: expected=29e, actual=deadbeef
+error at result #670: expected=29f, actual=deadbeef
+error at result #671: expected=2a0, actual=deadbeef
+error at result #672: expected=2a1, actual=deadbeef
+error at result #673: expected=2a2, actual=deadbeef
+error at result #674: expected=2a3, actual=deadbeef
+error at result #675: expected=2a4, actual=deadbeef
+error at result #676: expected=2a5, actual=deadbeef
+error at result #677: expected=2a6, actual=deadbeef
+error at result #678: expected=2a7, actual=deadbeef
+error at result #679: expected=2a8, actual=deadbeef
+error at result #680: expected=2a9, actual=deadbeef
+error at result #681: expected=2aa, actual=deadbeef
+error at result #682: expected=2ab, actual=deadbeef
+error at result #683: expected=2ac, actual=deadbeef
+error at result #684: expected=2ad, actual=deadbeef
+error at result #685: expected=2ae, actual=deadbeef
+error at result #686: expected=2af, actual=deadbeef
+error at result #687: expected=2b0, actual=deadbeef
+error at result #688: expected=2b1, actual=deadbeef
+error at result #689: expected=2b2, actual=deadbeef
+error at result #690: expected=2b3, actual=deadbeef
+error at result #691: expected=2b4, actual=deadbeef
+error at result #692: expected=2b5, actual=deadbeef
+error at result #693: expected=2b6, actual=deadbeef
+error at result #694: expected=2b7, actual=deadbeef
+error at result #695: expected=2b8, actual=deadbeef
+error at result #696: expected=2b9, actual=deadbeef
+error at result #697: expected=2ba, actual=deadbeef
+error at result #698: expected=2bb, actual=deadbeef
+error at result #699: expected=2bc, actual=deadbeef
+error at result #700: expected=2bd, actual=deadbeef
+error at result #701: expected=2be, actual=deadbeef
+error at result #702: expected=2bf, actual=deadbeef
+error at result #703: expected=2c0, actual=deadbeef
+error at result #704: expected=2c1, actual=deadbeef
+error at result #705: expected=2c2, actual=deadbeef
+error at result #706: expected=2c3, actual=deadbeef
+error at result #707: expected=2c4, actual=deadbeef
+error at result #708: expected=2c5, actual=deadbeef
+error at result #709: expected=2c6, actual=deadbeef
+error at result #710: expected=2c7, actual=deadbeef
+error at result #711: expected=2c8, actual=deadbeef
+error at result #712: expected=2c9, actual=deadbeef
+error at result #713: expected=2ca, actual=deadbeef
+error at result #714: expected=2cb, actual=deadbeef
+error at result #715: expected=2cc, actual=deadbeef
+error at result #716: expected=2cd, actual=deadbeef
+error at result #717: expected=2ce, actual=deadbeef
+error at result #718: expected=2cf, actual=deadbeef
+error at result #719: expected=2d0, actual=deadbeef
+error at result #720: expected=2d1, actual=deadbeef
+error at result #721: expected=2d2, actual=deadbeef
+error at result #722: expected=2d3, actual=deadbeef
+error at result #723: expected=2d4, actual=deadbeef
+error at result #724: expected=2d5, actual=deadbeef
+error at result #725: expected=2d6, actual=deadbeef
+error at result #726: expected=2d7, actual=deadbeef
+error at result #727: expected=2d8, actual=deadbeef
+error at result #728: expected=2d9, actual=deadbeef
+error at result #729: expected=2da, actual=deadbeef
+error at result #730: expected=2db, actual=deadbeef
+error at result #731: expected=2dc, actual=deadbeef
+error at result #732: expected=2dd, actual=deadbeef
+error at result #733: expected=2de, actual=deadbeef
+error at result #734: expected=2df, actual=deadbeef
+error at result #735: expected=2e0, actual=deadbeef
+error at result #736: expected=2e1, actual=deadbeef
+error at result #737: expected=2e2, actual=deadbeef
+error at result #738: expected=2e3, actual=deadbeef
+error at result #739: expected=2e4, actual=deadbeef
+error at result #740: expected=2e5, actual=deadbeef
+error at result #741: expected=2e6, actual=deadbeef
+error at result #742: expected=2e7, actual=deadbeef
+error at result #743: expected=2e8, actual=deadbeef
+error at result #744: expected=2e9, actual=deadbeef
+error at result #745: expected=2ea, actual=deadbeef
+error at result #746: expected=2eb, actual=deadbeef
+error at result #747: expected=2ec, actual=deadbeef
+error at result #748: expected=2ed, actual=deadbeef
+error at result #749: expected=2ee, actual=deadbeef
+error at result #750: expected=2ef, actual=deadbeef
+error at result #751: expected=2f0, actual=deadbeef
+error at result #752: expected=2f1, actual=deadbeef
+error at result #753: expected=2f2, actual=deadbeef
+error at result #754: expected=2f3, actual=deadbeef
+error at result #755: expected=2f4, actual=deadbeef
+error at result #756: expected=2f5, actual=deadbeef
+error at result #757: expected=2f6, actual=deadbeef
+error at result #758: expected=2f7, actual=deadbeef
+error at result #759: expected=2f8, actual=deadbeef
+error at result #760: expected=2f9, actual=deadbeef
+error at result #761: expected=2fa, actual=deadbeef
+error at result #762: expected=2fb, actual=deadbeef
+error at result #763: expected=2fc, actual=deadbeef
+error at result #764: expected=2fd, actual=deadbeef
+error at result #765: expected=2fe, actual=deadbeef
+error at result #766: expected=2ff, actual=deadbeef
+error at result #767: expected=300, actual=deadbeef
+error at result #768: expected=301, actual=deadbeef
+error at result #769: expected=302, actual=deadbeef
+error at result #770: expected=303, actual=deadbeef
+error at result #771: expected=304, actual=deadbeef
+error at result #772: expected=305, actual=deadbeef
+error at result #773: expected=306, actual=deadbeef
+error at result #774: expected=307, actual=deadbeef
+error at result #775: expected=308, actual=deadbeef
+error at result #776: expected=309, actual=deadbeef
+error at result #777: expected=30a, actual=deadbeef
+error at result #778: expected=30b, actual=deadbeef
+error at result #779: expected=30c, actual=deadbeef
+error at result #780: expected=30d, actual=deadbeef
+error at result #781: expected=30e, actual=deadbeef
+error at result #782: expected=30f, actual=deadbeef
+error at result #783: expected=310, actual=deadbeef
+error at result #784: expected=311, actual=deadbeef
+error at result #785: expected=312, actual=deadbeef
+error at result #786: expected=313, actual=deadbeef
+error at result #787: expected=314, actual=deadbeef
+error at result #788: expected=315, actual=deadbeef
+error at result #789: expected=316, actual=deadbeef
+error at result #790: expected=317, actual=deadbeef
+error at result #791: expected=318, actual=deadbeef
+error at result #792: expected=319, actual=deadbeef
+error at result #793: expected=31a, actual=deadbeef
+error at result #794: expected=31b, actual=deadbeef
+error at result #795: expected=31c, actual=deadbeef
+error at result #796: expected=31d, actual=deadbeef
+error at result #797: expected=31e, actual=deadbeef
+error at result #798: expected=31f, actual=deadbeef
+error at result #799: expected=320, actual=deadbeef
+error at result #800: expected=321, actual=deadbeef
+error at result #801: expected=322, actual=deadbeef
+error at result #802: expected=323, actual=deadbeef
+error at result #803: expected=324, actual=deadbeef
+error at result #804: expected=325, actual=deadbeef
+error at result #805: expected=326, actual=deadbeef
+error at result #806: expected=327, actual=deadbeef
+error at result #807: expected=328, actual=deadbeef
+error at result #808: expected=329, actual=deadbeef
+error at result #809: expected=32a, actual=deadbeef
+error at result #810: expected=32b, actual=deadbeef
+error at result #811: expected=32c, actual=deadbeef
+error at result #812: expected=32d, actual=deadbeef
+error at result #813: expected=32e, actual=deadbeef
+error at result #814: expected=32f, actual=deadbeef
+error at result #815: expected=330, actual=deadbeef
+error at result #816: expected=331, actual=deadbeef
+error at result #817: expected=332, actual=deadbeef
+error at result #818: expected=333, actual=deadbeef
+error at result #819: expected=334, actual=deadbeef
+error at result #820: expected=335, actual=deadbeef
+error at result #821: expected=336, actual=deadbeef
+error at result #822: expected=337, actual=deadbeef
+error at result #823: expected=338, actual=deadbeef
+error at result #824: expected=339, actual=deadbeef
+error at result #825: expected=33a, actual=deadbeef
+error at result #826: expected=33b, actual=deadbeef
+error at result #827: expected=33c, actual=deadbeef
+error at result #828: expected=33d, actual=deadbeef
+error at result #829: expected=33e, actual=deadbeef
+error at result #830: expected=33f, actual=deadbeef
+error at result #831: expected=340, actual=deadbeef
+error at result #832: expected=341, actual=deadbeef
+error at result #833: expected=342, actual=deadbeef
+error at result #834: expected=343, actual=deadbeef
+error at result #835: expected=344, actual=deadbeef
+error at result #836: expected=345, actual=deadbeef
+error at result #837: expected=346, actual=deadbeef
+error at result #838: expected=347, actual=deadbeef
+error at result #839: expected=348, actual=deadbeef
+error at result #840: expected=349, actual=deadbeef
+error at result #841: expected=34a, actual=deadbeef
+error at result #842: expected=34b, actual=deadbeef
+error at result #843: expected=34c, actual=deadbeef
+error at result #844: expected=34d, actual=deadbeef
+error at result #845: expected=34e, actual=deadbeef
+error at result #846: expected=34f, actual=deadbeef
+error at result #847: expected=350, actual=deadbeef
+error at result #848: expected=351, actual=deadbeef
+error at result #849: expected=352, actual=deadbeef
+error at result #850: expected=353, actual=deadbeef
+error at result #851: expected=354, actual=deadbeef
+error at result #852: expected=355, actual=deadbeef
+error at result #853: expected=356, actual=deadbeef
+error at result #854: expected=357, actual=deadbeef
+error at result #855: expected=358, actual=deadbeef
+error at result #856: expected=359, actual=deadbeef
+error at result #857: expected=35a, actual=deadbeef
+error at result #858: expected=35b, actual=deadbeef
+error at result #859: expected=35c, actual=deadbeef
+error at result #860: expected=35d, actual=deadbeef
+error at result #861: expected=35e, actual=deadbeef
+error at result #862: expected=35f, actual=deadbeef
+error at result #863: expected=360, actual=deadbeef
+error at result #864: expected=361, actual=deadbeef
+error at result #865: expected=362, actual=deadbeef
+error at result #866: expected=363, actual=deadbeef
+error at result #867: expected=364, actual=deadbeef
+error at result #868: expected=365, actual=deadbeef
+error at result #869: expected=366, actual=deadbeef
+error at result #870: expected=367, actual=deadbeef
+error at result #871: expected=368, actual=deadbeef
+error at result #872: expected=369, actual=deadbeef
+error at result #873: expected=36a, actual=deadbeef
+error at result #874: expected=36b, actual=deadbeef
+error at result #875: expected=36c, actual=deadbeef
+error at result #876: expected=36d, actual=deadbeef
+error at result #877: expected=36e, actual=deadbeef
+error at result #878: expected=36f, actual=deadbeef
+error at result #879: expected=370, actual=deadbeef
+error at result #880: expected=371, actual=deadbeef
+error at result #881: expected=372, actual=deadbeef
+error at result #882: expected=373, actual=deadbeef
+error at result #883: expected=374, actual=deadbeef
+error at result #884: expected=375, actual=deadbeef
+error at result #885: expected=376, actual=deadbeef
+error at result #886: expected=377, actual=deadbeef
+error at result #887: expected=378, actual=deadbeef
+error at result #888: expected=379, actual=deadbeef
+error at result #889: expected=37a, actual=deadbeef
+error at result #890: expected=37b, actual=deadbeef
+error at result #891: expected=37c, actual=deadbeef
+error at result #892: expected=37d, actual=deadbeef
+error at result #893: expected=37e, actual=deadbeef
+error at result #894: expected=37f, actual=deadbeef
+error at result #895: expected=380, actual=deadbeef
+error at result #896: expected=381, actual=deadbeef
+error at result #897: expected=382, actual=deadbeef
+error at result #898: expected=383, actual=deadbeef
+error at result #899: expected=384, actual=deadbeef
+error at result #900: expected=385, actual=deadbeef
+error at result #901: expected=386, actual=deadbeef
+error at result #902: expected=387, actual=deadbeef
+error at result #903: expected=388, actual=deadbeef
+error at result #904: expected=389, actual=deadbeef
+error at result #905: expected=38a, actual=deadbeef
+error at result #906: expected=38b, actual=deadbeef
+error at result #907: expected=38c, actual=deadbeef
+error at result #908: expected=38d, actual=deadbeef
+error at result #909: expected=38e, actual=deadbeef
+error at result #910: expected=38f, actual=deadbeef
+error at result #911: expected=390, actual=deadbeef
+error at result #912: expected=391, actual=deadbeef
+error at result #913: expected=392, actual=deadbeef
+error at result #914: expected=393, actual=deadbeef
+error at result #915: expected=394, actual=deadbeef
+error at result #916: expected=395, actual=deadbeef
+error at result #917: expected=396, actual=deadbeef
+error at result #918: expected=397, actual=deadbeef
+error at result #919: expected=398, actual=deadbeef
+error at result #920: expected=399, actual=deadbeef
+error at result #921: expected=39a, actual=deadbeef
+error at result #922: expected=39b, actual=deadbeef
+error at result #923: expected=39c, actual=deadbeef
+error at result #924: expected=39d, actual=deadbeef
+error at result #925: expected=39e, actual=deadbeef
+error at result #926: expected=39f, actual=deadbeef
+error at result #927: expected=3a0, actual=deadbeef
+error at result #928: expected=3a1, actual=deadbeef
+error at result #929: expected=3a2, actual=deadbeef
+error at result #930: expected=3a3, actual=deadbeef
+error at result #931: expected=3a4, actual=deadbeef
+error at result #932: expected=3a5, actual=deadbeef
+error at result #933: expected=3a6, actual=deadbeef
+error at result #934: expected=3a7, actual=deadbeef
+error at result #935: expected=3a8, actual=deadbeef
+error at result #936: expected=3a9, actual=deadbeef
+error at result #937: expected=3aa, actual=deadbeef
+error at result #938: expected=3ab, actual=deadbeef
+error at result #939: expected=3ac, actual=deadbeef
+error at result #940: expected=3ad, actual=deadbeef
+error at result #941: expected=3ae, actual=deadbeef
+error at result #942: expected=3af, actual=deadbeef
+error at result #943: expected=3b0, actual=deadbeef
+error at result #944: expected=3b1, actual=deadbeef
+error at result #945: expected=3b2, actual=deadbeef
+error at result #946: expected=3b3, actual=deadbeef
+error at result #947: expected=3b4, actual=deadbeef
+error at result #948: expected=3b5, actual=deadbeef
+error at result #949: expected=3b6, actual=deadbeef
+error at result #950: expected=3b7, actual=deadbeef
+error at result #951: expected=3b8, actual=deadbeef
+error at result #952: expected=3b9, actual=deadbeef
+error at result #953: expected=3ba, actual=deadbeef
+error at result #954: expected=3bb, actual=deadbeef
+error at result #955: expected=3bc, actual=deadbeef
+error at result #956: expected=3bd, actual=deadbeef
+error at result #957: expected=3be, actual=deadbeef
+error at result #958: expected=3bf, actual=deadbeef
+error at result #959: expected=3c0, actual=deadbeef
+error at result #960: expected=3c1, actual=deadbeef
+error at result #961: expected=3c2, actual=deadbeef
+error at result #962: expected=3c3, actual=deadbeef
+error at result #963: expected=3c4, actual=deadbeef
+error at result #964: expected=3c5, actual=deadbeef
+error at result #965: expected=3c6, actual=deadbeef
+error at result #966: expected=3c7, actual=deadbeef
+error at result #967: expected=3c8, actual=deadbeef
+error at result #968: expected=3c9, actual=deadbeef
+error at result #969: expected=3ca, actual=deadbeef
+error at result #970: expected=3cb, actual=deadbeef
+error at result #971: expected=3cc, actual=deadbeef
+error at result #972: expected=3cd, actual=deadbeef
+error at result #973: expected=3ce, actual=deadbeef
+error at result #974: expected=3cf, actual=deadbeef
+error at result #975: expected=3d0, actual=deadbeef
+error at result #976: expected=3d1, actual=deadbeef
+error at result #977: expected=3d2, actual=deadbeef
+error at result #978: expected=3d3, actual=deadbeef
+error at result #979: expected=3d4, actual=deadbeef
+error at result #980: expected=3d5, actual=deadbeef
+error at result #981: expected=3d6, actual=deadbeef
+error at result #982: expected=3d7, actual=deadbeef
+error at result #983: expected=3d8, actual=deadbeef
+error at result #984: expected=3d9, actual=deadbeef
+error at result #985: expected=3da, actual=deadbeef
+error at result #986: expected=3db, actual=deadbeef
+error at result #987: expected=3dc, actual=deadbeef
+error at result #988: expected=3dd, actual=deadbeef
+error at result #989: expected=3de, actual=deadbeef
+error at result #990: expected=3df, actual=deadbeef
+error at result #991: expected=3e0, actual=deadbeef
+error at result #992: expected=3e1, actual=deadbeef
+error at result #993: expected=3e2, actual=deadbeef
+error at result #994: expected=3e3, actual=deadbeef
+error at result #995: expected=3e4, actual=deadbeef
+error at result #996: expected=3e5, actual=deadbeef
+error at result #997: expected=3e6, actual=deadbeef
+error at result #998: expected=3e7, actual=deadbeef
+error at result #999: expected=3e8, actual=deadbeef
+error at result #1000: expected=3e9, actual=deadbeef
+error at result #1001: expected=3ea, actual=deadbeef
+error at result #1002: expected=3eb, actual=deadbeef
+error at result #1003: expected=3ec, actual=deadbeef
+error at result #1004: expected=3ed, actual=deadbeef
+error at result #1005: expected=3ee, actual=deadbeef
+error at result #1006: expected=3ef, actual=deadbeef
+error at result #1007: expected=3f0, actual=deadbeef
+error at result #1008: expected=3f1, actual=deadbeef
+error at result #1009: expected=3f2, actual=deadbeef
+error at result #1010: expected=3f3, actual=deadbeef
+error at result #1011: expected=3f4, actual=deadbeef
+error at result #1012: expected=3f5, actual=deadbeef
+error at result #1013: expected=3f6, actual=deadbeef
+error at result #1014: expected=3f7, actual=deadbeef
+error at result #1015: expected=3f8, actual=deadbeef
+error at result #1016: expected=3f9, actual=deadbeef
+error at result #1017: expected=3fa, actual=deadbeef
+error at result #1018: expected=3fb, actual=deadbeef
+error at result #1019: expected=3fc, actual=deadbeef
+error at result #1020: expected=3fd, actual=deadbeef
+error at result #1021: expected=3fe, actual=deadbeef
+error at result #1022: expected=3ff, actual=deadbeef
+error at result #1023: expected=400, actual=deadbeef
+found 1008 errors!
+Test22-bar FAILED!
+cleanup
+PERF: core0: lmem: reqs=0, bank_stalls=0 (utility=0%)
+PERF: core0: coalescer: misses=16896
+PERF: memory: reqs=4592 (r=3038, w=1554), lat=23.2 cyc, bank_st=0 (utility=100%)
+PERF: instrs=75360, cycles=233631, IPC=0.323

@@ -1,0 +1,8 @@
+name=pr_simx-lmem-wake_fix_sgemm_tcu_wg
+src_rev=
+src_dirty=0
+host=atl1-1-03-003-28-2.pace.gatech.edu
+xconf=-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
+blackbox=--driver=simx --app=sgemm_tcu_wg --perf=6 --cores=1
+rc=0
+wall_s=165

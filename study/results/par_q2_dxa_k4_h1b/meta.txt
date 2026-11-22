@@ -1,0 +1,8 @@
+name=par_q2_dxa_k4_h1b
+src_rev=540b3dad2aab25b849701bc166377520e06b4036
+src_dirty=1
+host=atl1-1-02-009-4-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_L2_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_L2_NUM_BANKS=8 -DVX_CFG_NUM_DXA_CORES=4 -DVX_CFG_DXA_MAX_INFLIGHT=64 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=8 -DVX_CFG_L2_FWD_HOLD=1
+blackbox=--driver=simx --app=bwstream_dxa --perf=5 --cores=4 --args=-e1024 -n16 -g8 -d4 -c0
+rc=0
+wall_s=168

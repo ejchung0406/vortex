@@ -1,0 +1,15 @@
+make: Entering directory '/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-sched-window/third_party'
+mkdir -p ramulator_ext
+/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin/g++ -std=c++20 -O3 -DNDEBUG -fPIC -isystem ramulator/src -isystem ramulator/ext/spdlog/include -isystem ramulator/ext/yaml-cpp/include -c ramulator/src/dram/impl/GDDR6.cpp -o ramulator_ext/gddr6.o
+mkdir -p ramulator_ext
+sed -e 's/GenericDRAMController/WindowedDRAMController/g' \
+    -e 's/"Generic", "A generic DRAM controller."/"Windowed", "The generic DRAM controller with sized request buffers."/' \
+    -e '/m_wr_high_watermark = param/a\      m_read_buffer.max_size = param<int>("read_buffer_size").desc("Read requests the scheduler chooses among.").default_val(32);\n      m_write_buffer.max_size = param<int>("write_buffer_size").desc("Write requests the scheduler chooses among.").default_val(32);' \
+    ramulator/src/dram_controller/impl/generic_dram_controller.cpp > ramulator_ext/windowed_controller.cpp.tmp
+grep -q 'class WindowedDRAMController' ramulator_ext/windowed_controller.cpp.tmp && grep -q '"Windowed"' ramulator_ext/windowed_controller.cpp.tmp \
+  && grep -q 'read_buffer_size' ramulator_ext/windowed_controller.cpp.tmp && grep -q 'write_buffer_size' ramulator_ext/windowed_controller.cpp.tmp \
+  || { rm -f ramulator_ext/windowed_controller.cpp.tmp; echo "third_party: Ramulator's generic controller no longer has the lines the windowed copy rewrites" >&2; exit 1; }
+mv ramulator_ext/windowed_controller.cpp.tmp ramulator_ext/windowed_controller.cpp
+/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin/g++ -std=c++20 -O3 -DNDEBUG -fPIC -isystem ramulator/src -isystem ramulator/ext/spdlog/include -isystem ramulator/ext/yaml-cpp/include -c ramulator_ext/windowed_controller.cpp -o ramulator_ext/windowed_controller.o
+/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin/g++ -shared ramulator_ext/gddr6.o ramulator_ext/windowed_controller.o -Lramulator -lramulator -o ramulator_ext/libramulator-vortex.so
+make: Leaving directory '/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-sched-window/third_party'

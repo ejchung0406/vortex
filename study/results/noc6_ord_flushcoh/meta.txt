@@ -1,0 +1,8 @@
+name=noc6_ord_flushcoh
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-7-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96 -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_L2_ENABLE
+blackbox=--driver=simx --app=flush_coherence --perf=7 --cores=4 --args=-n2048 -r16 -c
+rc=0
+wall_s=160

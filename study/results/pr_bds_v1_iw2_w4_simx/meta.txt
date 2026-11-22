@@ -1,0 +1,9 @@
+name=pr_bds_v1_iw2_w4_simx
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_bar-drain-scope_var
+src_rev=var-0770c8a1ea6b463faa68da7578ec3df3768af120
+host=atl1-1-02-009-5-2.pace.gatech.edu
+xlen=64
+xconf=-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1 -DBAR_DRAIN_TEST -DBAR_DRAIN_TEST_1
+blackbox=--driver=simx --app=bar_vis --args=-w4
+rc=0
+wall_s=156

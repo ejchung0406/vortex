@@ -1,0 +1,5 @@
+sgemm vortex2: 16x16
+CONFIGS: num_threads=4, num_warps=4, num_cores=1, num_clusters=1, socket_size=1, local_mem_base=0x1fffc0000, num_barriers=8
+Elapsed: 232 ms
+PERF: instrs=7520, cycles=18398, IPC=0.409
+PASSED!

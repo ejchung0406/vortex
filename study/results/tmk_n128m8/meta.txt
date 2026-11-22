@@ -1,0 +1,8 @@
+name=tmk_n128m8
+src_rev=
+src_dirty=0
+host=atl1-1-02-005-21-2.pace.gatech.edu
+xconf=-DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_TMEM_ENABLE -DVX_CFG_TCU_TMEM_COLS=1024 -DVX_CFG_TCU_TMEM_B_AHEAD=2 -DVX_CFG_TCU_TMEM_A_BANKROW=1 -DTCU_ENGINE_STATS -DTILE_N=128 -DMTILES=8 -DPIPE=5
+blackbox=--driver=simx --app=gemm_tmem --perf=11 --profile=h200s --cores=1 --args=-m512 -n512 -k3840
+rc=2
+wall_s=213

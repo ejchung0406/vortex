@@ -1,0 +1,16 @@
+SIMX-MT: unregistered cross-domain edge: cluster0-socket0-unit_mmu -> cluster0-l2tlb
+SIMX-MT: unregistered cross-domain edge: cluster0-socket0-core0-dcache_mmu -> cluster0-l2tlb
+SIMX-MT: unregistered cross-domain edge: cluster0-socket0-core0-icache_mmu -> cluster0-l2tlb
+SIMX-MT: unregistered cross-domain edge: cluster0-l2tlb -> cluster0-socket0-unit_mmu
+SIMX-MT: unregistered cross-domain edge: cluster0-l2tlb -> cluster0-socket0-core0-dcache_mmu
+SIMX-MT: unregistered cross-domain edge: cluster0-l2tlb -> cluster0-socket0-core0-icache_mmu
+SIMX-MT: parallel execution disabled until every cross-domain edge carries a registered stage
+[VM] Heap mapped with superpages
+VMManager Initialization...
+cores=1 warps=64 threads=32 grid=64 steps=512 pattern=coalesced unroll=4 bytes=4194304
+PERF: core0: lmem: reqs=0, bank_stalls=0 (utility=0%)
+PERF: core0: coalescer: misses=0
+PERF: core0: vm: tlb_reads=539074, hit=85%, evicts=213, ptw_walks=469, ptw_avg_lat=18.55
+PERF: memory: reqs=65557 (r=65545, w=12), lat=388.0 cyc, bank_st=2088 (utility=97%)
+PERF: instrs=121408, cycles=117390, IPC=1.034
+PASSED!

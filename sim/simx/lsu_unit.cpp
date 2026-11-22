@@ -193,15 +193,9 @@ LsuUnit::~LsuUnit()
 {}
 
 // Returns true when no block holds a request still to send; reads may await
-// their response.
+// their response. A tensor-unit metadata read not yet taken into a block's
+// queue is still the tensor unit's.
 bool LsuUnit::sent() const {
-#ifdef TCU_META_ENABLE
-	for (uint32_t p = 0; p < TCU_AGU_PORTS; ++p) {
-		if (!TcuReqIn.at(p).empty()) {
-			return false;
-		}
-	}
-#endif
 	for (uint32_t b = 0; b < VX_CFG_NUM_LSU_BLOCKS; ++b) {
 		if (!states_.at(b).req_queue.empty()) {
 			return false;

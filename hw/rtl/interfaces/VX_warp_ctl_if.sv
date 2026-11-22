@@ -32,13 +32,14 @@ interface VX_warp_ctl_if import VX_gpu_pkg::*; ();
     // SMEM/GMEM fence — pending LSU memory ops finish before the warp suspends
     // or the barrier arrival is registered. This is the CUDA __syncthreads /
     // OpenCL barrier(CLK_LOCAL_MEM_FENCE) contract. With
-    // VX_CFG_BAR_DRAIN_SCOPE=1 a barrier that stalls its warp uses
-    // lsu_sched_sent and the warp's pending status instead.
+    // VX_CFG_BAR_DRAIN_SCOPE=1 a barrier that stalls its warp uses the warp's
+    // pending status, lsu_sched_sent and lsu_store_landed instead; the last
+    // two are core-wide and, but for local memory, see loads as well as stores.
     wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] lsu_sched_empty;
     // the same, but for reads awaiting their response: every request sent
     wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] lsu_sched_sent;
-    // no store in flight past the schedulers: the global-store paths and local
-    // memory hold none
+    // past the schedulers, no request on the path to the data cache (through
+    // its dMMU lanes and link) and no store on the path to local memory
     wire lsu_store_landed;
     wire mmu_empty;
 

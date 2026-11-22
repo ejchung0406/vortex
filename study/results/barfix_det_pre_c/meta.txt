@@ -1,0 +1,8 @@
+name=barfix_det_pre_c
+src_rev=
+src_dirty=0
+host=atl1-1-01-002-23-2.pace.gatech.edu
+xconf=-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1 -DBARFIX_MON -DVX_CFG_DCACHE_NUM_BANKS=1 -DVX_CFG_DCACHE_MSHR_SIZE=4 -DVX_CFG_SOCKET_SIZE=2
+blackbox=--driver=rtlsim --app=bar_vis --perf=7 --cores=2 --args=-w4 -r64 -s1 -d0
+rc=0
+wall_s=255

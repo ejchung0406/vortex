@@ -1,0 +1,13 @@
+name=barfix_sm_s0_k1_n1
+src_rev=
+src_dirty=
+src_phoenix=/storage/project/r-hkim358-0/echung67/vortex-exp/src_barfix_v5
+src_pushed=2026-11-21T20:30:17-05:00
+host=atl1-1-03-004-5-2.pace.gatech.edu
+cpu=Intel(R) Xeon(R) Gold 6226 CPU @ 2.70GHz
+cluster=ice
+xconf=-DVX_CFG_BAR_DRAIN_SCOPE=0
+blackbox=--driver=simx --app=smprobe --perf=7 --profile=h200s --cores=1 --args=-k1 -n1 -i200
+rc=0
+wall_s=244
+ran_on=ice (fetched 2026-11-21T21:15:45-05:00 from ice:~/scratch/vortex-ice/results/barfix_sm_s0_k1_n1)

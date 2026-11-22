@@ -1,0 +1,8 @@
+name=barm_s1_bws
+src_rev=
+src_dirty=0
+host=atl1-1-02-005-6-2.pace.gatech.edu
+xconf=-DVX_CFG_BAR_DRAIN_SCOPE=1
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200s --cores=1
+rc=0
+wall_s=212

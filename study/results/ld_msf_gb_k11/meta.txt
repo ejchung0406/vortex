@@ -1,0 +1,8 @@
+name=ld_msf_gb_k11
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-20-2.pace.gatech.edu
+xconf=-DPATH_STATS -DVX_CFG_DCACHE_READ_MERGE_LINE=1 -DVX_CFG_BAR_DRAIN_SCOPE=2 -DVX_DBG_STALL_TIMEOUT=20000000 -DMTILES=1 -DPROFILE_ENABLE -DVX_CFG_DCACHE_SIZE=32768
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=11 --args=-m16 -n11264 -k4096 -s0 -d2
+rc=0
+wall_s=1318

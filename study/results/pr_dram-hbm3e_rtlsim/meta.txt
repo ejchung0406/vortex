@@ -1,0 +1,18 @@
+name=pr_dram-hbm3e_rtlsim
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e rev=eac8c869ece4251fccdbfcbd9026f6a25729f1a2
+host=atl1-1-02-010-22-2.pace.gatech.edu
+driver=rtlsim xlen=64
+ext_symbols=0
+case sgemm32 app=sgemm args="-n32" configs="" flags="" env="" rc=0 cycles=114005 instrs=47904 unit_fails=0 wall=39
+case sgemv app=sgemv args="-m128 -n128" configs="" flags="" env="" rc=0 cycles=58608 instrs=20640 unit_fails=0 wall=5
+case vecadd app=vecadd args="-n16384" configs="" flags="" env="" rc=0 cycles=380940 instrs=122912 unit_fails=0 wall=8
+case dxa app=dxa_copy args="-d2" configs="-DVX_CFG_EXT_DXA_ENABLE" flags="" env="" rc=0 cycles=53994 instrs=15968 unit_fails=0 wall=42
+case l2mc app=sgemm args="-n32" configs="" flags="--l2cache --cores=2" env="" rc=0 cycles=57326 instrs=47936 unit_fails=0 wall=70
+case hbm3 app=vecadd args="-n16384" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6545" flags="--l2cache --cores=2" env="" rc=0 cycles=188051 instrs=122944 unit_fails=0 wall=78
+case gddr6 app=sgemv args="-m128 -n128" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=GDDR6 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=8 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=14000" flags="" env="" rc=0 cycles=58053 instrs=20640 unit_fails=0 wall=40
+case parity_hbm3e app=vecadd args="-n16384" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3E -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6400 -DVX_CFG_PLATFORM_MEMORY_BANK_GROUPS=8" flags="--l2cache --cores=2" env="" rc=0 cycles=188053 instrs=122944 unit_fails=0 wall=79
+case axi_demo app=demo args="" configs="-DVX_CFG_NUM_CLUSTERS=1 -DVX_CFG_NUM_CORES=1 -DVX_CFG_NUM_WARPS=2 -DVX_CFG_NUM_THREADS=2 -DVX_CFG_ICACHE_DISABLE -DVX_CFG_DCACHE_DISABLE -DVX_CFG_LMEM_DISABLE -DVX_CFG_FPU_TYPE_STD -DPLATFORM_MEMORY_ID_WIDTH=5" flags="" env="AXI_BUS=1 AXI_MEM_MODEL=bank" rc=0 cycles=17150 instrs=1234 unit_fails=0 wall=32
+case axi_sgemm app=sgemm args="-n16" configs="-DVX_CFG_NUM_CLUSTERS=1 -DVX_CFG_NUM_CORES=1 -DVX_CFG_NUM_WARPS=2 -DVX_CFG_NUM_THREADS=2 -DVX_CFG_ICACHE_DISABLE -DVX_CFG_DCACHE_DISABLE -DVX_CFG_LMEM_DISABLE -DVX_CFG_FPU_TYPE_STD -DPLATFORM_MEMORY_ID_WIDTH=5" flags="" env="AXI_BUS=1 AXI_MEM_MODEL=bank" rc=0 cycles=200012 instrs=14992 unit_fails=0 wall=6
+fails=0 of 10
+wall_s=399
+rc=0

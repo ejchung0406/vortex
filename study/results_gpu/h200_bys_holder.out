@@ -1,0 +1,27 @@
+---------------------------------------
+Begin Slurm Prolog: Nov-21-2026 21:03:11
+Job ID:    15985900
+User ID:   echung67
+Account:   gts-hkim358-paid
+Job name:  bys_h200
+Partition: gpu-h200
+QOS:       inferno
+---------------------------------------
+atl1-1-02-014-9-0.pace.gatech.edu
+GPU 0: NVIDIA H200 (UUID: GPU-c0239183-b7f8-10aa-11ef-b7e9c10a4235)
+NVIDIA H200, 615.71.09, 1980 MHz, 143771 MiB, 560.00 W
+Sat Nov 21 09:03:11 PM EST 2026
+[2026-11-21T22:15:49.272] error: *** STEP 15985900.0 ON atl1-1-02-014-9-0 CANCELLED AT 2026-11-21T22:15:49 DUE to SIGNAL Terminated ***
+[2026-11-21T22:15:49.272] error: *** JOB 15985900 ON atl1-1-02-014-9-0 CANCELLED AT 2026-11-21T22:15:49 DUE to SIGNAL Terminated ***
+---------------------------------------
+Begin Slurm Epilog: Nov-21-2026 22:15:54
+Job ID:        15985900
+User ID:       echung67
+Account:       gts-hkim358-paid
+Job name:      bys_h200
+Resources:     cpu=8,gres/gpu:h200=1,mem=64G,node=1
+Rsrc Used:     cput=09:41:36,vmem=0,walltime=01:12:42,mem=23180K,energy_used=0
+Partition:     gpu-h200
+QOS:           inferno
+Nodes:         atl1-1-02-014-9-0
+---------------------------------------

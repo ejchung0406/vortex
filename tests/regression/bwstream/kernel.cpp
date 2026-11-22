@@ -16,15 +16,18 @@
 template <int U>
 static inline float sum_stride(const float* p, uint32_t steps, uint32_t stride) {
   float s[U];
-  for (int u = 0; u < U; ++u)
+  for (int u = 0; u < U; ++u) {
     s[u] = 0.0f;
+  }
   for (uint32_t i = 0; i < steps; i += U) {
-    for (int u = 0; u < U; ++u)
+    for (int u = 0; u < U; ++u) {
       s[u] += p[(uint64_t)(i + u) * stride];
+    }
   }
   float r = 0.0f;
-  for (int u = 0; u < U; ++u)
+  for (int u = 0; u < U; ++u) {
     r += s[u];
+  }
   return r;
 }
 
@@ -44,13 +47,14 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   uint32_t T = blockDim.x;
   uint32_t t = threadIdx.x;
   uint32_t gid = blockIdx.x * T + t;
-  uint32_t W = (arg->pattern == BWSTREAM_ROWS || arg->block_warps == 0) ? 1 : arg->block_warps;
+  uint32_t W = arg->block_warps;
   const float* base = src + (uint64_t)(blockIdx.x / W) * W * steps * T + (uint64_t)(blockIdx.x % W) * T;
 
   float s;
-  if (arg->pattern == BWSTREAM_ROWS)
+  if (arg->pattern == BWSTREAM_ROWS) {
     s = sum_unrolled(base + (uint64_t)t * steps, steps, 1, arg->unroll);
-  else
+  } else {
     s = sum_unrolled(base + t, steps, W * T, arg->unroll);
+  }
   out[gid] = s + (float)(gid + 1);
 }

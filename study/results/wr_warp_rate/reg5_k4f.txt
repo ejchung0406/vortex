@@ -1,0 +1,29 @@
+diverge rc=0 passed=1 instrs=248779 cycles=716865
+diverge_w8t8 rc=0 passed=1 instrs=1924718 cycles=3724099
+diverge_large rc=0 passed=1 instrs=17104 cycles=52699
+diverge_loop rc=0 passed=1 instrs=8096 cycles=24527
+wsync rc=0 passed=1 instrs=33853 cycles=264845
+bar_vis rc=0 passed=1 instrs=16392 cycles=39852
+bar_slot_phase rc=0 passed=1 instrs=13548 cycles=62167
+async_barrier rc=0 passed=1 instrs=30144 cycles=108969
+gbar_phase_c2 rc=0 passed=1 instrs=290 cycles=520
+async_gbarrier_c2 rc=0 passed=1 instrs=49762 cycles=64118
+dogfood rc=0 passed=22 instrs=75006 cycles=209319
+dogfood_bar rc=0 passed=1 instrs=354 cycles=2052
+dogfood_gbar_c2 rc=0 passed=1 instrs=616 cycles=2931
+demo rc=0 passed=1 instrs=2468 cycles=5811
+basic rc=0 passed=1 instrs=672 cycles=6046
+printf rc=0 passed=1 instrs=88630 cycles=241137
+fence rc=0 passed=1 instrs=2444 cycles=5833
+single_cta rc=0 passed=1 instrs=182 cycles=1693
+cta_cluster rc=0 passed=1  
+occupancy_t32 rc=0 passed=1 instrs=327812 cycles=1142207
+multikernel rc=0 passed=1 instrs=13104 cycles=37087
+sort rc=0 passed=1 instrs=182176 cycles=426028
+bfs rc=0 passed=1 instrs=3781 cycles=19938
+war_order rc=0 passed=1 instrs=2687292 cycles=6566643
+raw_order rc=0 passed=1 instrs=5008 cycles=12083
+vecadd rc=0 passed=1 instrs=512 cycles=1539
+sgemm rc=0 passed=1 instrs=334880 cycles=718611
+mstress rc=0 passed=1 instrs=14980 cycles=31007
+done

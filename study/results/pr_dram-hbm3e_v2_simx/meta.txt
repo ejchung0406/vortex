@@ -1,0 +1,20 @@
+name=pr_dram-hbm3e_v2_simx
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e rev=8230e48a61f0149e352db70ddbe394be61c38b3e
+host=atl1-1-02-003-16-1.pace.gatech.edu
+driver=simx xlen=64
+ext_symbols=0
+case unit app=unit:dram_sim args="" configs="" flags="" env="" rc=0   unit_fails=0 wall=26
+case unitb app=unit:dram_bank_model args="" configs="" flags="" env="" rc=0   unit_fails=0 wall=25
+case mem8 app=sgemm args="" configs="-DVX_CFG_MEM_BLOCK_SIZE=8 -DVX_CFG_LMEM_NUM_BANKS=4 -DVX_CFG_DCACHE_NUM_BANKS=1" flags="" env="" rc=0 cycles=817602 instrs=334880 unit_fails=0 wall=168
+case sgemm32 app=sgemm args="-n32" configs="" flags="" env="" rc=0 cycles=113990 instrs=47904 unit_fails=0 wall=166
+case vecadd app=vecadd args="-n16384" configs="" flags="" env="" rc=0 cycles=381938 instrs=122912 unit_fails=0 wall=4
+case l2mc app=sgemm args="-n32" configs="" flags="--l2cache --cores=2" env="" rc=0 cycles=57246 instrs=47936 unit_fails=0 wall=168
+case hbm3 app=vecadd args="-n16384" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6545" flags="--l2cache --cores=2" env="" rc=0 cycles=188562 instrs=122944 unit_fails=0 wall=167
+case pa_off app=vecadd args="-n16384" configs="-DVX_CFG_PLATFORM_CLOCK_RATE=1980 -DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3E -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=2 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6400" flags="--l2cache --cores=2" env="" rc=0 cycles=188627 instrs=122944 unit_fails=0 wall=169
+case pa_on app=vecadd args="-n16384" configs="-DVX_CFG_PLATFORM_CLOCK_RATE=1980 -DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3E -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=2 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6400 -DVX_CFG_PLATFORM_MEMORY_BANK_GROUPS=8" flags="--l2cache --cores=2" env="" rc=0 cycles=188574 instrs=122944 unit_fails=0 wall=167
+case bw_hbm3 app=bwstream args="-n256 -r1 -p0 -u4 -b32" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=2 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6400" flags="--profile=h100 --cores=4" env="" rc=0 cycles=342346 instrs=256256 unit_fails=0 wall=264
+case bw_hbm3e app=bwstream args="-n256 -r1 -p0 -u4 -b32" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3E -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6400" flags="--profile=h100 --cores=4" env="" rc=0 cycles=205431 instrs=256256 unit_fails=0 wall=258
+case bw_hbm3e_bg8 app=bwstream args="-n256 -r1 -p0 -u4 -b32" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3E -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6400 -DVX_CFG_PLATFORM_MEMORY_BANK_GROUPS=8" flags="--profile=h100 --cores=4" env="" rc=0 cycles=198122 instrs=256256 unit_fails=0 wall=256
+fails=0 of 12
+wall_s=1838
+rc=0

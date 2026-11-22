@@ -1,0 +1,52 @@
+### ncu device attributes on tpc_bwsweep
+==PROF== Connected to process 2405982 (/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_bwsweep)
+==PROF== Profiling "stream" - 0 (1/1): 0%....50%....100% - 1 pass
+gpu=NVIDIA H200 sms=132 pattern=coalesced unroll=1 blocks=132 threads=1024 gib=0.25 gbs_best=1564.9 gbs_mean=1564.9
+==PROF== Disconnected from process 2405982
+[2405982] tpc_bwsweep@127.0.0.1
+  void stream<1>(const float *, unsigned long, int, float *) (132, 1, 1)x(1024, 1, 1), Context 1, Stream 7, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------------------- ----------- ------------
+    Metric Name                             Metric Unit Metric Value
+    --------------------------------------- ----------- ------------
+    device__attribute_display_name                       NVIDIA H200
+    device__attribute_dram_bandwidth                         (!) n/a
+    device__attribute_fb_bus_width                             6,016
+    device__attribute_fbp_count                                   12
+    device__attribute_l2_cache_size                       62,914,560
+    device__attribute_l2s_count                                   96
+    device__attribute_max_gpu_frequency_khz                1,980,000
+    device__attribute_max_mem_frequency_khz                3,201,000
+    device__attribute_multiprocessor_count                       132
+    device__attribute_num_gpcs                               (!) n/a
+    device__attribute_num_l2s_per_fbp                              8
+    device__attribute_num_tpc_per_gpc                        (!) n/a
+    device__attribute_num_tpcs                               (!) n/a
+    --------------------------------------- ----------- ------------
+
+### ncu per-instance counts
+==PROF== Connected to process 2406058 (/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_bwsweep)
+==PROF== Profiling "stream" - 0 (1/1): 0%....50%....100% - 1 pass
+gpu=NVIDIA H200 sms=132 pattern=coalesced unroll=1 blocks=132 threads=1024 gib=0.25 gbs_best=1561.8 gbs_mean=1561.8
+==PROF== Disconnected from process 2406058
+[2406058] tpc_bwsweep@127.0.0.1
+  void stream<1>(const float *, unsigned long, int, float *) (132, 1, 1)x(1024, 1, 1), Context 1, Stream 7, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------- ----------- ------------
+    Metric Name                 Metric Unit Metric Value
+    --------------------------- ----------- ------------
+    dram__sectors_read.sum           sector    8,381,160
+    fbpa__dram_read_sectors.sum      sector    8,381,160
+    ltc__t_sectors.sum                           (!) n/a
+    lts__t_sectors.sum               sector   12,612,259
+    --------------------------- ----------- ------------
+
+### all device attributes
+494428
+==PROF== Connected to process 2406190 (/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/tpc_bwsweep)
+==ERROR== Failed to find metric regex:device__attribute_.*
+
+==ERROR== Failed to profile "stream" in process 2406190
+==PROF== Trying to shutdown target application
+==ERROR== The application returned an error code (9).
+srun: error: atl1-1-02-014-16-0: task 0: Exited with exit code 9

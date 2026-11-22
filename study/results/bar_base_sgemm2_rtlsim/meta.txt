@@ -1,0 +1,8 @@
+name=bar_base_sgemm2_rtlsim
+src_rev=
+src_dirty=0
+host=atl1-1-02-008-15-2.pace.gatech.edu
+xconf=-DVX_CFG_NUM_THREADS=16
+blackbox=--driver=rtlsim --app=sgemm2 --perf=1 --args=-n32 -t4
+rc=0
+wall_s=59

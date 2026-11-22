@@ -1,0 +1,8 @@
+name=noc_g2d_dxa_pk16
+src_rev=
+src_dirty=0
+host=atl1-1-02-007-8-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NOC_GROUP_SIZE=16 -DVX_CFG_NOC_UPLINK_PORTS=16 -DVX_CFG_NOC_UPLINK_BYTES=646 -DVX_CFG_L2_SIZE=20971520 -DVX_CFG_L2_NUM_WAYS=20 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=32 -DVX_CFG_PLATFORM_MEMORY_PEAK_BW=1600000 -DVX_CFG_L2_NUM_BANKS=32
+blackbox=--driver=simx --app=bwstream_dxa --perf=7 --profile=h200s --cores=32 --args=-e4096 -n64 -d4 -c0 -M0-15
+rc=0
+wall_s=349

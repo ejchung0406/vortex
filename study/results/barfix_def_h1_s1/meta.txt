@@ -1,0 +1,8 @@
+name=barfix_def_h1_s1
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-16-1.pace.gatech.edu
+xconf=-DMTILES=1 -DPROFILE_ENABLE -DVX_CFG_BAR_DRAIN_SCOPE=1
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=1 --args=-m16 -n8192 -k4096 -s0 -b1 -t1 -r1
+rc=0
+wall_s=660

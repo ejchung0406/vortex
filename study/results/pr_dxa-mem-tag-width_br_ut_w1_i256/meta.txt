@@ -1,0 +1,8 @@
+name=br_ut_w1_i256
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width
+xlen=64
+target=hw/unittest/dxa_core run
+xconf=-DVX_CFG_NUM_DXA_CORES=1 -DVX_CFG_DXA_MAX_INFLIGHT=256
+host=atl1-1-02-005-10-2.pace.gatech.edu
+rc=0
+wall_s=14

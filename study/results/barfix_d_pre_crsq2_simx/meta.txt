@@ -1,0 +1,8 @@
+name=barfix_d_pre_crsq2_simx
+src_rev=
+src_dirty=0
+host=atl1-1-02-004-14-2.pace.gatech.edu
+xconf=-DVX_CFG_L2_ENABLE -DVX_CFG_L2_CRSQ_SIZE=2
+blackbox=--driver=simx --app=bwstream --perf=7 --cores=4
+rc=2
+wall_s=156

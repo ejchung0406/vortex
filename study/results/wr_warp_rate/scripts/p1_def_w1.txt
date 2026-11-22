@@ -1,0 +1,16 @@
+kind=int_ind8 W=1 iters=32 cyc_per_iter_warp=1528.06 cyc_per_iter_sm=1528.06
+PERF: scheduler: idle=97%, occupancy=1.0 (2%), simt_util=31.7 (99%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=0%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=9.03, load_lat=443.18, loads=160, stores=66
+PERF: instrs=4321, cycles=52625, IPC=0.082
+kind=int_dep W=1 iters=32 cyc_per_iter_warp=1897.97 cyc_per_iter_sm=1897.97
+PERF: scheduler: idle=97%, occupancy=1.0 (2%), simt_util=31.7 (99%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=20%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=9.08, load_lat=443.18, loads=160, stores=66
+PERF: instrs=4324, cycles=64462, IPC=0.067
+kind=br_every1 W=1 iters=32 cyc_per_iter_warp=3118.12 cyc_per_iter_sm=3118.12
+PERF: scheduler: idle=98%, occupancy=1.0 (2%), simt_util=31.7 (99%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=0%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=9.44, load_lat=443.18, loads=160, stores=66
+PERF: instrs=4319, cycles=103507, IPC=0.042
+done

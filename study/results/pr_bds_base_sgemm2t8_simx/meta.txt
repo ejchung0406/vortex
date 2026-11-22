@@ -1,0 +1,9 @@
+name=pr_bds_base_sgemm2t8_simx
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_bar-drain-scope_base
+src_rev=ccf811e1196d7aa2aa2f8a3ada77797c1ff6333d
+host=atl1-1-01-003-29-1.pace.gatech.edu
+xlen=64
+xconf=-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_ISSUE_WIDTH=2
+blackbox=--driver=simx --app=sgemm2 --args=-n128 -t8
+rc=0
+wall_s=163

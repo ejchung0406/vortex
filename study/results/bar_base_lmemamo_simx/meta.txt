@@ -1,0 +1,8 @@
+name=bar_base_lmemamo_simx
+src_rev=
+src_dirty=0
+host=atl1-1-02-011-6-2.pace.gatech.edu
+xconf=-DVX_CFG_EXT_A_ENABLE -DVX_CFG_NUM_THREADS=16
+blackbox=--driver=simx --app=lmem_access --perf=1
+rc=0
+wall_s=156

@@ -1,0 +1,5 @@
+make: Entering directory '/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/third_party'
+mkdir -p ramulator_ext
+/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin/g++ -std=c++20 -O3 -DNDEBUG -fPIC -isystem ramulator/src -isystem ramulator/ext/spdlog/include -isystem ramulator/ext/yaml-cpp/include -c ramulator/src/dram/impl/GDDR6.cpp -o ramulator_ext/gddr6.o
+/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin/g++ -shared ramulator_ext/gddr6.o -Lramulator -lramulator -o ramulator_ext/libramulator-vortex.so
+make: Leaving directory '/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/third_party'

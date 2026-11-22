@@ -27,13 +27,15 @@ module VX_mem_bus_delay import VX_gpu_pkg::*; #(
     input wire              reset,
     VX_mem_bus_if.slave     bus_in_if,
     VX_mem_bus_if.master    bus_out_if,
-    output wire             empty
+    output wire             empty,
+    // no request in flight, whatever responses are
+    output wire             req_empty
 );
     localparam DATA_WIDTH = (8 * DATA_SIZE);
     localparam REQ_DATAW  = 1 + ADDR_WIDTH + DATA_WIDTH + DATA_SIZE + ATTR_WIDTH + TAG_WIDTH;
     localparam RSP_DATAW  = DATA_WIDTH + TAG_WIDTH;
 
-    wire req_empty, rsp_empty;
+    wire rsp_empty;
 
     wire [REQ_DATAW-1:0] req_data_in = bus_in_if.req_data;
     wire [REQ_DATAW-1:0] req_data_out;

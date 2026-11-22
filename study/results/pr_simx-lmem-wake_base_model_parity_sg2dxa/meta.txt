@@ -1,0 +1,8 @@
+name=pr_simx-lmem-wake_base_model_parity_sg2dxa
+src_rev=
+src_dirty=0
+host=atl1-1-02-018-22-2.pace.gatech.edu
+xconf=-DVX_CFG_EXT_DXA_ENABLE
+blackbox=--driver=simx --app=sgemm2_dxa --perf=6 --cores=1 --args=-n128 -t4 -m1
+rc=0
+wall_s=188

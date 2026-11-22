@@ -1,0 +1,9 @@
+name=pr_fh_model_parity-flush-chain_h1
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_knob
+xlen=64
+host=atl1-1-02-008-6-2.pace.gatech.edu
+configs=-DVX_CFG_SOCKET_SIZE=1 -DVX_CFG_DCACHE_FWD_HOLD=1
+blackbox=--driver=simx --app=flush_coherence --args=-n2048 -r16 -c --cores=4 --l2cache
+PERF: instrs=378880, cycles=260495
+wall_s=157
+rc=0

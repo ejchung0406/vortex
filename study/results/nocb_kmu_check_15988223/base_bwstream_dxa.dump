@@ -1,0 +1,556 @@
+
+kernel.elf:	file format elf64-littleriscv
+
+Disassembly of section .init:
+
+0000000180000000 <_start>:
+180000000: 00100293    	li	t0, 0x1
+180000004: 02029293    	slli	t0, t0, 0x20
+180000008: 03fff137    	lui	sp, 0x3fff
+18000000c: 00611113    	slli	sp, sp, 0x6
+180000010: 00516133    	or	sp, sp, t0
+180000014: f14022f3    	csrr	t0, mhartid
+180000018: 00d29313    	slli	t1, t0, 0xd
+18000001c: 40610133    	sub	sp, sp, t1
+180000020: ce102df3    	csrr	s11, 0xce1
+180000024: 34002573    	csrr	a0, mscratch
+180000028: 000d80e7    	jalr	s11
+18000002c: 0000700b    	<unknown>
+180000030: 0000000b    	vx_tmc	zero
+
+Disassembly of section .text:
+
+0000000180000034 <kernel_main>:
+180000034: f6010113    	addi	sp, sp, -0xa0
+180000038: 08113c23    	sd	ra, 0x98(sp)
+18000003c: 00053583    	ld	a1, 0x0(a0)
+180000040: 00b13023    	sd	a1, 0x0(sp)
+180000044: 00852603    	lw	a2, 0x8(a0)
+180000048: 00c52683    	lw	a3, 0xc(a0)
+18000004c: 01056803    	lwu	a6, 0x10(a0)
+180000050: 01452e03    	lw	t3, 0x14(a0)
+180000054: cd902773    	csrr	a4, 0xcd9
+180000058: cd3025f3    	csrr	a1, 0xcd3
+18000005c: cd6027f3    	csrr	a5, 0xcd6
+180000060: cdf028f3    	csrr	a7, 0xcdf
+180000064: cd2023f3    	csrr	t2, 0xcd2
+180000068: cd002ef3    	csrr	t4, 0xcd0
+18000006c: 02069313    	slli	t1, a3, 0x20
+180000070: 00283f13    	sltiu	t5, a6, 0x2
+180000074: 02d782b3    	mul	t0, a5, a3
+180000078: 100e8f93    	addi	t6, t4, 0x100
+18000007c: 200e8413    	addi	s0, t4, 0x200
+180000080: 300e8493    	addi	s1, t4, 0x300
+180000084: 400e8913    	addi	s2, t4, 0x400
+180000088: 500e8993    	addi	s3, t4, 0x500
+18000008c: 600e8a13    	addi	s4, t4, 0x600
+180000090: 700e8a93    	addi	s5, t4, 0x700
+180000094: 02035313    	srli	t1, t1, 0x20
+180000098: ffff4f13    	not	t5, t5
+18000009c: 01d12423    	sw	t4, 0x8(sp)
+1800000a0: 00712623    	sw	t2, 0xc(sp)
+1800000a4: 01f12823    	sw	t6, 0x10(sp)
+1800000a8: 00712a23    	sw	t2, 0x14(sp)
+1800000ac: 00812c23    	sw	s0, 0x18(sp)
+1800000b0: 00712e23    	sw	t2, 0x1c(sp)
+1800000b4: 02912023    	sw	s1, 0x20(sp)
+1800000b8: 02712223    	sw	t2, 0x24(sp)
+1800000bc: 03212423    	sw	s2, 0x28(sp)
+1800000c0: 02712623    	sw	t2, 0x2c(sp)
+1800000c4: 03312823    	sw	s3, 0x30(sp)
+1800000c8: 02712a23    	sw	t2, 0x34(sp)
+1800000cc: 03412c23    	sw	s4, 0x38(sp)
+1800000d0: 02712e23    	sw	t2, 0x3c(sp)
+1800000d4: 05512023    	sw	s5, 0x40(sp)
+1800000d8: 04712223    	sw	t2, 0x44(sp)
+1800000dc: cd1024f3    	csrr	s1, 0xcd1
+1800000e0: 00d033b3    	snez	t2, a3
+1800000e4: 007f7eb3    	and	t4, t5, t2
+1800000e8: 001ea38b    	vx_split_n	t2, t4
+1800000ec: 0004849b    	sext.w	s1, s1
+1800000f0: 080e8263    	beqz	t4, 0x180000174 <kernel_main+0x140>
+1800000f4: 00000e93    	li	t4, 0x0
+1800000f8: 02c28f33    	mul	t5, t0, a2
+1800000fc: 00100a93    	li	s5, 0x1
+180000100: 00810413    	addi	s0, sp, 0x8
+180000104: cc402973    	csrr	s2, tmask
+180000108: 800009b7    	lui	s3, 0x80000
+18000010c: 0019899b    	addiw	s3, s3, 0x1
+180000110: 00000a13    	li	s4, 0x0
+180000114: 0280006f    	j	0x18000013c <kernel_main+0x108>
+180000118: 006abfb3    	sltu	t6, s5, t1
+18000011c: 001a8a93    	addi	s5, s5, 0x1
+180000120: 00840413    	addi	s0, s0, 0x8
+180000124: 010abb33    	sltu	s6, s5, a6
+180000128: 01fb7fb3    	and	t6, s6, t6
+18000012c: 001fcf93    	xori	t6, t6, 0x1
+180000130: 00ca0a33    	add	s4, s4, a2
+180000134: 012fd08b    	vx_pred_n	t6, s2
+180000138: 020f9e63    	bnez	t6, 0x180000174 <kernel_main+0x140>
+18000013c: fc049ee3    	bnez	s1, 0x180000118 <kernel_main+0xe4>
+180000140: 00042b03    	lw	s6, 0x0(s0)
+180000144: 020a1f93    	slli	t6, s4, 0x20
+180000148: 014f0bb3    	add	s7, t5, s4
+18000014c: 01efdf93    	srli	t6, t6, 0x1e
+180000150: 020b9b93    	slli	s7, s7, 0x20
+180000154: 01f88fb3    	add	t6, a7, t6
+180000158: 020bdb93    	srli	s7, s7, 0x20
+18000015c: 013b6c0b    	<unknown>
+180000160: 024b1b13    	slli	s6, s6, 0x24
+180000164: 020b5b13    	srli	s6, s6, 0x20
+180000168: e97b0fab    	vx_tex	t6, s6, s7, t4
+18000016c: 060f800b    	<unknown>
+180000170: fa9ff06f    	j	0x180000118 <kernel_main+0xe4>
+180000174: 0003b00b    	vx_join	t2
+180000178: 0016be93    	seqz	t4, a3
+18000017c: 001ea38b    	vx_split_n	t2, t4
+180000180: f00007d3    	fmv.w.x	fa5, zero
+180000184: 020e8e63    	beqz	t4, 0x1800001c0 <kernel_main+0x18c>
+180000188: 0003b00b    	vx_join	t2
+18000018c: 02e78633    	mul	a2, a5, a4
+180000190: 00b60533    	add	a0, a2, a1
+180000194: 00150613    	addi	a2, a0, 0x1
+180000198: 02051513    	slli	a0, a0, 0x20
+18000019c: d0167753    	fcvt.s.wu	fa4, a2
+1800001a0: 01e55513    	srli	a0, a0, 0x1e
+1800001a4: 00e7f7d3    	fadd.s	fa5, fa5, fa4
+1800001a8: 00013583    	ld	a1, 0x0(sp)
+1800001ac: 00a58533    	add	a0, a1, a0
+1800001b0: 00f52027    	fsw	fa5, 0x0(a0)
+1800001b4: 09813083    	ld	ra, 0x98(sp)
+1800001b8: 0a010113    	addi	sp, sp, 0xa0
+1800001bc: 00008067    	ret
+1800001c0: fff80f13    	addi	t5, a6, -0x1
+1800001c4: 02059f93    	slli	t6, a1, 0x20
+1800001c8: f00007d3    	fmv.w.x	fa5, zero
+1800001cc: cc402473    	csrr	s0, tmask
+1800001d0: 009034b3    	snez	s1, s1
+1800001d4: 001e3e13    	seqz	t3, t3
+1800001d8: 00810913    	addi	s2, sp, 0x8
+1800001dc: 0005899b    	sext.w	s3, a1
+1800001e0: 80000ab7    	lui	s5, 0x80000
+1800001e4: 020fda13    	srli	s4, t6, 0x20
+1800001e8: 00c9b9b3    	sltu	s3, s3, a2
+1800001ec: 002a1a13    	slli	s4, s4, 0x2
+1800001f0: 001a8a9b    	addiw	s5, s5, 0x1
+1800001f4: 00000b13    	li	s6, 0x0
+1800001f8: 02c0006f    	j	0x180000224 <kernel_main+0x1f0>
+1800001fc: 014c8cb3    	add	s9, s9, s4
+180000200: 000ca707    	flw	fa4, 0x0(s9)
+180000204: 00e7f7d3    	fadd.s	fa5, fa5, fa4
+180000208: 000c300b    	vx_join	s8
+18000020c: 017fc00b    	vx_bar	t6, s7
+180000210: 001b0b13    	addi	s6, s6, 0x1
+180000214: 006b4533    	xor	a0, s6, t1
+180000218: 00153513    	seqz	a0, a0
+18000021c: 0085508b    	vx_pred_n	a0, s0
+180000220: f60514e3    	bnez	a0, 0x180000188 <kernel_main+0x154>
+180000224: 016f0fbb    	addw	t6, t5, s6
+180000228: 00dfbbb3    	sltu	s7, t6, a3
+18000022c: 001bcb93    	xori	s7, s7, 0x1
+180000230: 0174ec33    	or	s8, s1, s7
+180000234: 000c2b8b    	vx_split	s7, s8
+180000238: 040c1663    	bnez	s8, 0x180000284 <kernel_main+0x250>
+18000023c: 030ffc3b    	remuw	s8, t6, a6
+180000240: 005f8fb3    	add	t6, t6, t0
+180000244: 020c1c93    	slli	s9, s8, 0x20
+180000248: 02cc0c33    	mul	s8, s8, a2
+18000024c: 02cf8fb3    	mul	t6, t6, a2
+180000250: 01dcdc93    	srli	s9, s9, 0x1d
+180000254: 020c1c13    	slli	s8, s8, 0x20
+180000258: 020f9f93    	slli	t6, t6, 0x20
+18000025c: 01990cb3    	add	s9, s2, s9
+180000260: 000cac83    	lw	s9, 0x0(s9)
+180000264: 01ec5c13    	srli	s8, s8, 0x1e
+180000268: 020fdd13    	srli	s10, t6, 0x20
+18000026c: 01888fb3    	add	t6, a7, s8
+180000270: 015cec0b    	<unknown>
+180000274: 024c9c93    	slli	s9, s9, 0x24
+180000278: 020cdc13    	srli	s8, s9, 0x20
+18000027c: e9ac0fab    	vx_tex	t6, s8, s10, t4
+180000280: 060f800b    	<unknown>
+180000284: 000bb00b    	vx_join	s7
+180000288: 030b7c3b    	remuw	s8, s6, a6
+18000028c: 020c1f93    	slli	t6, s8, 0x20
+180000290: 01dfdf93    	srli	t6, t6, 0x1d
+180000294: 01f90bb3    	add	s7, s2, t6
+180000298: 000baf83    	lw	t6, 0x0(s7)
+18000029c: 004bab83    	lw	s7, 0x4(s7)
+1800002a0: 02cc0c33    	mul	s8, s8, a2
+1800002a4: 017fc00b    	vx_bar	t6, s7
+1800002a8: 020c1c13    	slli	s8, s8, 0x20
+1800002ac: 01ec5c93    	srli	s9, s8, 0x1e
+1800002b0: 01988cb3    	add	s9, a7, s9
+1800002b4: 000e2c0b    	vx_split	s8, t3
+1800002b8: f40e12e3    	bnez	t3, 0x1800001fc <kernel_main+0x1c8>
+1800002bc: 0019ad0b    	vx_split_n	s10, s3
+1800002c0: 02098863    	beqz	s3, 0x1800002f0 <kernel_main+0x2bc>
+1800002c4: cc402df3    	csrr	s11, tmask
+1800002c8: 00058513    	mv	a0, a1
+1800002cc: 02051093    	slli	ra, a0, 0x20
+1800002d0: 01e0d093    	srli	ra, ra, 0x1e
+1800002d4: 001c80b3    	add	ra, s9, ra
+1800002d8: 0000a707    	flw	fa4, 0x0(ra)
+1800002dc: 00e5053b    	addw	a0, a0, a4
+1800002e0: 00c530b3    	sltu	ra, a0, a2
+1800002e4: 00e7f7d3    	fadd.s	fa5, fa5, fa4
+1800002e8: 01b0d00b    	vx_pred	ra, s11
+1800002ec: fe0090e3    	bnez	ra, 0x1800002cc <kernel_main+0x298>
+1800002f0: 000d300b    	vx_join	s10
+1800002f4: f15ff06f    	j	0x180000208 <kernel_main+0x1d4>
+
+Disassembly of section .comment:
+
+0000000000000000 <.comment>:
+       0: 6e616c63     	bltu	sp, t1, 0x6f8 <.comment+0x6f8>
+       4: 65762067     	<unknown>
+       8: 7372         	<unknown>
+       a: 6f69         	<unknown>
+       c: 206e         	<unknown>
+       e: 3032         	<unknown>
+      10: 312e         	<unknown>
+      12: 382e         	<unknown>
+      14: 2820         	<unknown>
+      16: 7468         	<unknown>
+      18: 7074         	<unknown>
+      1a: 2f2f3a73     	csrrc	s4, 0x2f2, t5
+      1e: 68746967     	<unknown>
+      22: 6275         	<unknown>
+      24: 632e         	<unknown>
+      26: 762f6d6f     	jal	s10, 0xf6788 <.comment+0xf6788>
+      2a: 6574726f     	jal	tp, 0x47e80 <.comment+0x47e80>
+      2e: 6778         	<unknown>
+      30: 6770         	<unknown>
+      32: 7570         	<unknown>
+      34: 766c6c2f     	<unknown>
+      38: 2e6d         	<unknown>
+      3a: 20746967     	<unknown>
+      3e: 3861         	<unknown>
+      40: 6131         	<unknown>
+      42: 3935         	<unknown>
+      44: 3735         	<unknown>
+      46: 3466         	<unknown>
+      48: 3630         	<unknown>
+      4a: 6130         	<unknown>
+      4c: 3432         	<unknown>
+      4e: 63613437     	lui	s0, 0x63613
+      52: 66323733     	<unknown>
+      56: 3966         	<unknown>
+      58: 6265         	<unknown>
+      5a: 3839         	<unknown>
+      5c: 3661         	<unknown>
+      5e: 3434         	<unknown>
+      60: 3139         	<unknown>
+      62: 6161         	<unknown>
+      64: 6630         	<unknown>
+      66: 0029         	<unknown>
+
+Disassembly of section .riscv.attributes:
+
+0000000000000000 <.riscv.attributes>:
+       0: 6941         	<unknown>
+       2: 0000         	<unknown>
+       4: 7200         	<unknown>
+       6: 7369         	<unknown>
+       8: 01007663     	bgeu	zero, a6, 0x14 <.riscv.attributes+0x14>
+       c: 005f 0000 1004       	<unknown>
+      12: 7205         	<unknown>
+      14: 3676         	<unknown>
+      16: 6934         	<unknown>
+      18: 7032         	<unknown>
+      1a: 5f31         	<unknown>
+      1c: 326d         	<unknown>
+      1e: 3070         	<unknown>
+      20: 615f 7032 5f31       	<unknown>
+      26: 3266         	<unknown>
+      28: 3270         	<unknown>
+      2a: 645f 7032 5f32       	<unknown>
+      30: 697a         	<unknown>
+      32: 646e6f63     	bltu	t3, t1, 0x690 <.riscv.attributes+0x690>
+      36: 7031         	<unknown>
+      38: 5f30         	<unknown>
+      3a: 697a         	<unknown>
+      3c: 32727363     	bgeu	tp, t2, 0x362 <.riscv.attributes+0x362>
+      40: 3070         	<unknown>
+      42: 7a5f 6d6d 6c75       	<unknown>
+      48: 7031         	<unknown>
+      4a: 5f30         	<unknown>
+      4c: 617a         	<unknown>
+      4e: 6d61         	<unknown>
+      50: 3070316f     	jal	sp, 0x3b56 <.riscv.attributes+0x3b56>
+      54: 7a5f 6c61 7372       	<unknown>
+      5a: 30703163     	<unknown>
+      5e: 785f 6f76 7472       	<unknown>
+      64: 7865         	<unknown>
+      66: 7031         	<unknown>
+      68: 0030         	<unknown>
+
+Disassembly of section .symtab:
+
+0000000000000000 <.symtab>:
+		...
+      1c: 00010003     	lb	zero, 0x0(sp)
+      20: 0000         	<unknown>
+      22: 8000         	<unknown>
+      24: 0001         	<unknown>
+		...
+      32: 0000         	<unknown>
+      34: 00020003     	lb	zero, 0x0(tp)
+      38: 0034         	<unknown>
+      3a: 8000         	<unknown>
+      3c: 0001         	<unknown>
+		...
+      4a: 0000         	<unknown>
+      4c: 00030003     	lb	zero, 0x0(t1)
+		...
+      64: 00040003     	lb	zero, 0x0(s0)
+		...
+      78: 0001         	<unknown>
+      7a: 0000         	<unknown>
+      7c: 0004         	<unknown>
+      7e: fff1         	<unknown>
+		...
+      90: 000c         	<unknown>
+      92: 0000         	<unknown>
+      94: 0000         	<unknown>
+      96: 0001         	<unknown>
+      98: 0000         	<unknown>
+      9a: 8000         	<unknown>
+      9c: 0001         	<unknown>
+		...
+      a6: 0000         	<unknown>
+      a8: 0000000f     	fence	0, 0
+      ac: 0000         	<unknown>
+      ae: 0004         	<unknown>
+		...
+      c0: 0012         	<unknown>
+      c2: 0000         	<unknown>
+      c4: 0004         	<unknown>
+      c6: fff1         	<unknown>
+		...
+      d8: 000c         	<unknown>
+      da: 0000         	<unknown>
+      dc: 0000         	<unknown>
+      de: 0002         	<unknown>
+      e0: 0034         	<unknown>
+      e2: 8000         	<unknown>
+      e4: 0001         	<unknown>
+		...
+      ee: 0000         	<unknown>
+      f0: 0000000f     	fence	0, 0
+      f4: 0000         	<unknown>
+      f6: 00670003     	lb	zero, 0x6(a4)
+		...
+     106: 0000         	<unknown>
+     108: 0000000f     	fence	0, 0
+     10c: 0000         	<unknown>
+     10e: 0004         	<unknown>
+     110: 00000053     	fadd.s	ft0, ft0, ft0, rne
+		...
+     120: 001d         	<unknown>
+     122: 0000         	<unknown>
+     124: 0012         	<unknown>
+     126: 0002         	<unknown>
+     128: 0034         	<unknown>
+     12a: 8000         	<unknown>
+     12c: 0001         	<unknown>
+     12e: 0000         	<unknown>
+     130: 02c4         	<unknown>
+     132: 0000         	<unknown>
+     134: 0000         	<unknown>
+     136: 0000         	<unknown>
+     138: 0035         	<unknown>
+     13a: 0000         	<unknown>
+     13c: 0010         	<unknown>
+     13e: 0002         	<unknown>
+     140: 12f8         	<unknown>
+     142: 8000         	<unknown>
+     144: 0001         	<unknown>
+		...
+     14e: 0000         	<unknown>
+     150: 0045         	<unknown>
+     152: 0000         	<unknown>
+     154: 0010         	<unknown>
+     156: fff1         	<unknown>
+     158: 1af8         	<unknown>
+     15a: 8000         	<unknown>
+     15c: 0001         	<unknown>
+		...
+     166: 0000         	<unknown>
+     168: 0056         	<unknown>
+     16a: 0000         	<unknown>
+     16c: 0012         	<unknown>
+     16e: 0001         	<unknown>
+     170: 0000         	<unknown>
+     172: 8000         	<unknown>
+     174: 0001         	<unknown>
+     176: 0000         	<unknown>
+     178: 0034         	<unknown>
+     17a: 0000         	<unknown>
+     17c: 0000         	<unknown>
+     17e: 0000         	<unknown>
+     180: 0029         	<unknown>
+     182: 0000         	<unknown>
+     184: 0012         	<unknown>
+     186: 0002         	<unknown>
+     188: 0034         	<unknown>
+     18a: 8000         	<unknown>
+     18c: 0001         	<unknown>
+     18e: 0000         	<unknown>
+     190: 02c4         	<unknown>
+     192: 0000         	<unknown>
+     194: 0000         	<unknown>
+     196: 0000         	<unknown>
+     198: 0076         	<unknown>
+     19a: 0000         	<unknown>
+     19c: 0012         	<unknown>
+     19e: 0001         	<unknown>
+     1a0: 0000         	<unknown>
+     1a2: 8000         	<unknown>
+     1a4: 0001         	<unknown>
+		...
+     1ae: 0000         	<unknown>
+     1b0: 0065         	<unknown>
+     1b2: 0000         	<unknown>
+     1b4: 0010         	<unknown>
+     1b6: 0002         	<unknown>
+     1b8: 1300         	<unknown>
+     1ba: 8000         	<unknown>
+     1bc: 0001         	<unknown>
+		...
+     1c6: 0000         	<unknown>
+     1c8: 0071         	<unknown>
+     1ca: 0000         	<unknown>
+     1cc: 0010         	<unknown>
+     1ce: 0002         	<unknown>
+     1d0: 1300         	<unknown>
+     1d2: 8000         	<unknown>
+     1d4: 0001         	<unknown>
+		...
+     1de: 0000         	<unknown>
+     1e0: 007d         	<unknown>
+     1e2: 0000         	<unknown>
+     1e4: 0010         	<unknown>
+     1e6: fff1         	<unknown>
+     1e8: 0000         	<unknown>
+     1ea: 8000         	<unknown>
+     1ec: 0001         	<unknown>
+		...
+     1f6: 0000         	<unknown>
+     1f8: 008a         	<unknown>
+     1fa: 0000         	<unknown>
+     1fc: 0010         	<unknown>
+     1fe: 0002         	<unknown>
+     200: 12f8         	<unknown>
+     202: 8000         	<unknown>
+     204: 0001         	<unknown>
+		...
+     20e: 0000         	<unknown>
+     210: 0099         	<unknown>
+     212: 0000         	<unknown>
+     214: 0010         	<unknown>
+     216: 0002         	<unknown>
+     218: 1300         	<unknown>
+     21a: 8000         	<unknown>
+     21c: 0001         	<unknown>
+		...
+     226: 0000         	<unknown>
+     228: 00a0         	<unknown>
+     22a: 0000         	<unknown>
+     22c: 0010         	<unknown>
+     22e: 0002         	<unknown>
+     230: 1300         	<unknown>
+     232: 8000         	<unknown>
+     234: 0001         	<unknown>
+		...
+     23e: 0000         	<unknown>
+
+Disassembly of section .strtab:
+
+0000000000000000 <.strtab>:
+       0: 7600         	<unknown>
+       2: 5f78         	<unknown>
+       4: 72617473     	csrrci	s0, 0x726, 0x2
+       8: 2e74         	<unknown>
+       a: 7824006f     	j	0x4078c <.symtab+0x4078c>
+       e: 2400         	<unknown>
+      10: 0064         	<unknown>
+      12: 6e72656b     	<unknown>
+      16: 6c65         	<unknown>
+      18: 632e         	<unknown>
+      1a: 7070         	<unknown>
+      1c: 5f00         	<unknown>
+      1e: 765f 5f78 656b       	<unknown>
+      24: 746e         	<unknown>
+      26: 7972         	<unknown>
+      28: 6b5f 7265 656e       	<unknown>
+      2e: 5f6c         	<unknown>
+      30: 616d         	<unknown>
+      32: 6e69         	<unknown>
+      34: 5f00         	<unknown>
+      36: 535f 4144 4154       	<unknown>
+      3c: 425f 4745 4e49       	<unknown>
+      42: 5f5f 5f00 675f       	<unknown>
+      48: 6f6c         	<unknown>
+      4a: 6162         	<unknown>
+      4c: 5f6c         	<unknown>
+      4e: 6f70         	<unknown>
+      50: 6e69         	<unknown>
+      52: 6574         	<unknown>
+      54: 0072         	<unknown>
+      56: 5f5f 7876 635f       	<unknown>
+      5c: 6174         	<unknown>
+      5e: 655f 746e 7972       	<unknown>
+      64: 5f00         	<unknown>
+      66: 425f 5353 455f       	<unknown>
+      6c: 444e         	<unknown>
+      6e: 5f5f 5f00 625f       	<unknown>
+      74: 735f7373     	csrrci	t1, 0x735, 0x1e
+      78: 6174         	<unknown>
+      7a: 7472         	<unknown>
+      7c: 5300         	<unknown>
+      7e: 4154         	<unknown>
+      80: 5452         	<unknown>
+      82: 5055         	<unknown>
+      84: 415f 4444 0052       	<unknown>
+      8a: 5f5f 4144 4154       	<unknown>
+      90: 425f 4745 4e49       	<unknown>
+      96: 5f5f 5f00 6465       	<unknown>
+      9c: 7461         	<unknown>
+      9e: 0061         	<unknown>
+      a0: 5f           	<unknown>
+      a1: 6e65         	<unknown>
+      a3: 0064         	<unknown>
+
+Disassembly of section .shstrtab:
+
+0000000000000000 <.shstrtab>:
+       0: 2e00         	<unknown>
+       2: 746d7973     	csrrci	s2, 0x746, 0x1a
+       6: 6261         	<unknown>
+       8: 2e00         	<unknown>
+       a: 74727473     	csrrci	s0, mseccfg, 0x4
+       e: 6261         	<unknown>
+      10: 2e00         	<unknown>
+      12: 74736873     	csrrsi	a6, mseccfg, 0x6
+      16: 7472         	<unknown>
+      18: 6261         	<unknown>
+      1a: 2e00         	<unknown>
+      1c: 6e69         	<unknown>
+      1e: 7469         	<unknown>
+      20: 2e00         	<unknown>
+      22: 6574         	<unknown>
+      24: 7478         	<unknown>
+      26: 2e00         	<unknown>
+      28: 6d6d6f63     	bltu	s10, s6, 0x706 <.symtab+0x706>
+      2c: 6e65         	<unknown>
+      2e: 0074         	<unknown>
+      30: 722e         	<unknown>
+      32: 7369         	<unknown>
+      34: 612e7663     	bgeu	t3, s2, 0x640 <.symtab+0x640>
+      38: 7474         	<unknown>
+      3a: 6972         	<unknown>
+      3c: 7562         	<unknown>
+      3e: 6574         	<unknown>
+      40: 73           	<unknown>
+      41: 00           	<unknown>

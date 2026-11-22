@@ -1,0 +1,11 @@
++ make -s -C tests/regression/dxa_copy clean
++ CONFIGS=-DVX_CFG_EXT_DXA_ENABLE
++ make -s -C tests/regression/dxa_copy
++ CONFIGS=-DVX_CFG_EXT_DXA_ENABLE
++ timeout 3600 ./ci/blackbox.sh --driver=simx --app=dxa_copy --args=-d1
++ echo 'bb dxa_copy rc=0'
+bb dxa_copy rc=0
++ tail -3
++ grep -E 'PERF: instrs|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx_dxa/bb_dxa_copy.log
+PASSED
+PERF: instrs=1624, cycles=6466, IPC=0.251

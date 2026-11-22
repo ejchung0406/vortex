@@ -1,0 +1,28 @@
+%Warning-WIDTHEXPAND: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_bar-drain-scope/hw/rtl/cache/VX_cache_wrap.sv:139:37: Operator ASSIGNW expects 683 bits on the Assign RHS, but Assign RHS's VARXREF 'req_data' generates 682 bits.
+                                                                                                                                  : ... note: In instance 'VX_tensor_top.l2cache'
+  139 |     assign mem_bus_if[i].req_data   = mem_bus_tmp_if[i].req_data; 
+      |                                     ^
+                      /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_bar-drain-scope/hw/unittest/tensor/VX_tensor_top.sv:546:1: ... note: In file included from 'VX_tensor_top.sv'
+                      ... For warning description see https://verilator.org/warn/WIDTHEXPAND?v=5.050
+                      ... Use "/* verilator lint_off WIDTHEXPAND */" and lint_on around source to disable this message.
+%Warning-WIDTHTRUNC: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_bar-drain-scope/hw/rtl/cache/VX_cache_wrap.sv:139:41: Operator ASSIGNW expects 571 bits on the Assign RHS, but Assign RHS's VARXREF 'rsp_data' generates 572 bits.
+                                                                                                                                 : ... note: In instance 'VX_tensor_top.l2cache'
+  139 |     assign mem_bus_tmp_if[i].rsp_data   = mem_bus_if[i].rsp_data; 
+      |                                         ^
+                     /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_bar-drain-scope/hw/unittest/tensor/VX_tensor_top.sv:546:1: ... note: In file included from 'VX_tensor_top.sv'
+                     ... For warning description see https://verilator.org/warn/WIDTHTRUNC?v=5.050
+                     ... Use "/* verilator lint_off WIDTHTRUNC */" and lint_on around source to disable this message.
+%Warning-UNUSEDPARAM: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_bar-drain-scope/hw/unittest/tensor/VX_tensor_top.sv:59:15: Parameter is not used: 'DC_MEM_PORTS'
+                                                                                                                                       : ... note: In instance 'VX_tensor_top'
+   59 |     parameter DC_MEM_PORTS  = L1_MEM_PORTS,
+      |               ^~~~~~~~~~~~
+                      ... For warning description see https://verilator.org/warn/UNUSEDPARAM?v=5.050
+                      ... Use "/* verilator lint_off UNUSEDPARAM */" and lint_on around source to disable this message.
+%Warning-UNUSEDSIGNAL: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_bar-drain-scope/hw/rtl/mem/VX_mem_bus_if.sv:47:16: Bits of signal are not used: 'rsp_data'[571]
+                                                                                                                                : ... note: In instance 'VX_tensor_top.dcache.g_cache_wrap[0].cache_wrap.g_cache.cache.mem_req_xbar'
+   47 |     rsp_data_t rsp_data;
+      |                ^~~~~~~~
+                       /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_bar-drain-scope/hw/unittest/tensor/VX_tensor_top.sv:137:1: ... note: In file included from 'VX_tensor_top.sv'
+                       ... For warning description see https://verilator.org/warn/UNUSEDSIGNAL?v=5.050
+                       ... Use "/* verilator lint_off UNUSEDSIGNAL */" and lint_on around source to disable this message.
+%Error: Exiting due to 4 warning(s)

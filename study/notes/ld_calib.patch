@@ -1,0 +1,2110 @@
+--- head/VX_config.toml
++++ src_ld/VX_config.toml
+@@ -72,6 +72,12 @@
+ # whether they start in step or staggered, and a CTA doing register work and
+ # barriers beside CTAs streaming global loads goes from 71 to 79 cycles an
+ # iteration (study/results_gpu/h200_borrow_e4_stage8.txt, _probe2.txt).
++# 2: as 1 for the warp's own instructions, but only its own stores have to
++# have left the request queues; other warps' and CTAs' requests, queued or past
++# the queues, do not hold it. Under 1 a stalling barrier beside CTAs that
++# stream loads without barriers waits for a cycle in which every LSU block's
++# queue is empty, which such neighbours almost never leave (tests/regression/
++# smprobe). SimX only.
+ VX_CFG_BAR_DRAIN_SCOPE = 0
+ VX_CFG_MAX_BAR_EVENTS = 32
+ 
+@@ -353,6 +359,11 @@
+ # coalescer channels (uniform loads), and the response returns to all of
+ # them in the same cycle.
+ VX_CFG_DCACHE_READ_MERGE = 1
++# 1: the merge takes any reads of the same line, each port keeping its own
++# tag and word, so the two 32 B words of a 64 B coalesced batch are one bank
++# access instead of two (the RTL cache's READ_MERGE_LINE, which the icache
++# uses). SimX only; 0: same-word reads only.
++VX_CFG_DCACHE_READ_MERGE_LINE = 0
+ 
+ VX_CFG_L1_MEM_PORTS = "expr: min($VX_CFG_DCACHE_NUM_BANKS, $VX_CFG_PLATFORM_MEMORY_NUM_BANKS) if ($VX_CFG_ICACHE_ENABLE or $VX_CFG_DCACHE_ENABLE) else min($VX_CFG_DCACHE_NUM_REQS, $VX_CFG_PLATFORM_MEMORY_NUM_BANKS)"
+ 
+--- head/sim/simx/types.h
++++ src_ld/sim/simx/types.h
+@@ -1563,6 +1563,38 @@
+ 
+ ///////////////////////////////////////////////////////////////////////////////
+ 
++#ifdef PATH_STATS
++// Measurement only: per arbiter output, cycles a request (or response) was
++// passed, and cycles one waited because the next stage refused it.
++struct PathStats {
++  std::string name;
++  std::vector<uint64_t> sent, refused;
++  static std::vector<PathStats*>& registry() {
++    static std::vector<PathStats*> reg;
++    static bool hooked = (std::atexit([] {
++      for (auto* p : registry()) {
++        uint64_t s = 0, r = 0;
++        for (auto v : p->sent) s += v;
++        for (auto v : p->refused) r += v;
++        if (s == 0 && r == 0) continue;
++        std::cout << "PATH: " << p->name << " sent=";
++        for (size_t i = 0; i < p->sent.size(); ++i) std::cout << (i ? "," : "") << p->sent[i];
++        std::cout << " refused=";
++        for (size_t i = 0; i < p->refused.size(); ++i) std::cout << (i ? "," : "") << p->refused[i];
++        std::cout << std::endl;
++      }
++    }), true);
++    (void)hooked;
++    return reg;
++  }
++  PathStats* init(const std::string& n, size_t outs) {
++    name = n; sent.assign(outs, 0); refused.assign(outs, 0);
++    registry().push_back(this);
++    return this;
++  }
++};
++#endif
++
+ template <typename Type>
+ class TxArbiter : public SimObject<TxArbiter<Type>> {
+ public:
+@@ -1629,6 +1661,9 @@
+   uint32_t delay_;
+   uint32_t lg2_num_reqs_;
+   std::vector<Arbiter> arbiters_;
++#ifdef PATH_STATS
++  PathStats* pst_ = (new PathStats())->init(std::string(this->name()) + ".req", Outputs.size());
++#endif
+ 
+   friend class SimObject<TxArbiter<Type>>;
+ };
+@@ -1671,6 +1706,11 @@
+         DT(4, this->name() << " req" << i << "_" << o << ": " << req);
+         req_in.pop();
+         arbiters_.at(o).commit(g);
++      #ifdef PATH_STATS
++        ++pst_->sent[o];
++      } else {
++        ++pst_->refused[o];
++      #endif
+       }
+     }
+   }
+@@ -1910,6 +1950,9 @@
+   typename ReqArb::Ptr arbiter_;
+   uint32_t rsp_delay_;
+   uint32_t lg2_num_reqs_;
++#ifdef PATH_STATS
++  PathStats* pst_ = (new PathStats())->init(std::string(this->name()) + ".rsp", RspIn.size());
++#endif
+ 
+   friend class SimObject<TxRxArbiter<Req, Rsp>>;
+ };
+@@ -1941,6 +1984,11 @@
+       if (RspOut.at(i).try_send(out_rsp, rsp_delay_)) {
+         DT(4, this->name() << " rsp" << o << "_" << i << ": " << out_rsp);
+         rsp_in.pop();
++      #ifdef PATH_STATS
++        ++pst_->sent[o];
++      } else {
++        ++pst_->refused[o];
++      #endif
+       }
+     }
+     idle &= (rsp_in.size() == 0);
+--- head/sim/simx/socket.cpp
++++ src_ld/sim/simx/socket.cpp
+@@ -116,7 +116,7 @@
+       VX_CFG_DCACHE_MRSQ_SIZE != 0,  // memory-response queue
+       true,                          // the socket's registered memory port
+       DCACHE_NEXT_IS_POC,            // next_is_poc
+-      false,                         // line merging
++      VX_CFG_DCACHE_READ_MERGE_LINE != 0, // line merging
+       false,                         // core-request skid
+       VX_CFG_DCACHE_SET_HASH != 0,   // set_hash
+       VX_CFG_DCACHE_CRSQ_SIZE,       // crsq_size
+--- head/sim/simx/sfu_unit.cpp
++++ src_ld/sim/simx/sfu_unit.cpp
+@@ -84,7 +84,15 @@
+ // instructions committed, every block's requests sent and no store in flight
+ // to the data cache or local memory.
+ bool SfuUnit::bar_lsu_drained(const instr_trace_t* trace) const {
+-	if constexpr (VX_CFG_BAR_DRAIN_SCOPE != 0) {
++	if constexpr (VX_CFG_BAR_DRAIN_SCOPE == 2) {
++		// Its own warp only: its instructions committed and its stores sent
++		// from the request queues. Other CTAs' traffic in the queues and past
++		// them no longer holds it (a store's few cycles past the queue are
++		// not waited for).
++		if (!std::get<IntrWctlArgs>(trace->instr_ptr->get_args()).is_bar_arrive) {
++			return !core_->has_pending_instrs(trace->wid) && core_->lsu_warp_stores_sent(trace->wid);
++		}
++	} else if constexpr (VX_CFG_BAR_DRAIN_SCOPE != 0) {
+ 		if (!std::get<IntrWctlArgs>(trace->instr_ptr->get_args()).is_bar_arrive) {
+ 			return !core_->has_pending_instrs(trace->wid) && core_->lsu_sent() && core_->lsu_stores_landed();
+ 		}
+--- head/sim/simx/lsu_unit.h
++++ src_ld/sim/simx/lsu_unit.h
+@@ -99,6 +99,12 @@
+ 	bool drained() const;
+ 	// no block holds a request not yet sent; reads may await their response
+ 	bool sent() const;
++	// no store of this warp waits in a block's request queue
++	bool warp_stores_sent(uint32_t wid) const { return queued_stores_.at(wid) == 0; }
++
++private:
++	// per warp: stores accepted into a request queue and not yet sent from it
++	std::array<uint32_t, VX_CFG_NUM_WARPS> queued_stores_ = {};
+ 
+ protected:
+ 	void on_reset() override;
+--- head/sim/simx/lsu_unit.cpp
++++ src_ld/sim/simx/lsu_unit.cpp
+@@ -517,6 +517,7 @@
+ 		auto copy = new (core_->trace_pool().allocate(1)) instr_trace_t(*trace);
+ 		no_rsp_bufs_.at(b).send(trace, 1);
+ 		trace = copy;
++		++queued_stores_.at(trace->wid);
+ 	}
+ 	state.req_queue.push(trace);
+ 	input.pop();
+@@ -846,6 +847,9 @@
+ 			state.head_staged = false;
+ 		}
+ 		state.req_queue.pop();
++		if (is_write && !is_amo) {
++			--queued_stores_.at(trace->wid);
++		}
+ 		if (is_write) {
+ 			trace->~instr_trace_t();
+ 			core_->trace_pool().deallocate(trace, 1);
+@@ -866,6 +870,23 @@
+ 		auto& state = states_.at(b);
+ 		bool queue_room = !state.req_queue.full();
+ 		uint32_t reads_held = state.pending_reqs.size() + state.staged_reads;
++	#ifdef PATH_STATS
++		{
++			// Summed over the blocks, per tick. sent: ticks, pending entries,
++			// request-queue entries; refused: a trace waiting at the input,
++			// the input held by the pending limit, the queue head held by a
++			// full pending table.
++			static PathStats* pst = (new PathStats())->init(
++				"lsu.ticks,pending_occ,reqq_occ/in_wait,in_pending_full,head_pending_full", 3);
++			++pst->sent[0];
++			pst->sent[1] += state.pending_reqs.size();
++			pst->sent[2] += state.req_queue.size();
++			bool in_wait = !Inputs.at(b).empty();
++			pst->refused[0] += in_wait;
++			pst->refused[1] += in_wait && reads_held >= VX_CFG_LSU_PENDING_SIZE;
++			pst->refused[2] += !state.req_queue.empty() && state.pending_reqs.full();
++		}
++	#endif
+ 		this->arbitrate_results(b);
+ 		this->process_response_step(b);
+ 		this->process_request_step(b);
+--- head/sim/simx/core.h
++++ src_ld/sim/simx/core.h
+@@ -110,6 +110,7 @@
+   bool lsu_drained() const;
+   bool lsu_sent() const;
+   bool lsu_stores_landed() const;
++  bool lsu_warp_stores_sent(uint32_t wid) const;
+ 
+   void barrier_arrive(uint32_t bar_id, uint32_t count, uint32_t wid, bool is_sync_bar);
+ 
+--- head/sim/simx/core.cpp
++++ src_ld/sim/simx/core.cpp
+@@ -768,12 +768,20 @@
+     // with the resolved target.
+     {
+       bool is_rvc = (trace->code & 0x3u) != 0x3u;
++    #ifdef MEAS_FETCH_AHEAD
++      scheduler_->fa_table_[trace->PC] = trace->fetch_stall ? 0 : (is_rvc ? 2 : 4);
++      if (!trace->fetch_ahead)
++    #endif
+       scheduler_->advance_pc(trace, is_rvc ? 2 : 4);
+     }
+ 
+     // Resume warp for non-stalling instructions (ALU, FPU);
+     // stalling instructions (LSU, SFU, TCU, branches) stay suspended until commit
++  #ifdef MEAS_FETCH_AHEAD
++    if (!trace->fetch_stall && !trace->fetch_ahead) {
++  #else
+     if (!trace->fetch_stall) {
++  #endif
+       scheduler_->resume(trace->wid);
+     }
+ 
+@@ -1289,6 +1297,10 @@
+     return std::static_pointer_cast<LsuUnit>(func_units_.at((int)FUType::LSU))->sent();
+   }
+ 
++  bool lsu_warp_stores_sent(uint32_t wid) const {
++    return std::static_pointer_cast<LsuUnit>(func_units_.at((int)FUType::LSU))->warp_stores_sent(wid);
++  }
++
+   // No store is in flight past the LSU blocks' request queues: the local
+   // memory switches, the data-cache coalescers or lane adapters and the local
+   // memory hold none.
+@@ -1607,6 +1619,10 @@
+   return impl_->lsu_stores_landed();
+ }
+ 
++bool Core::lsu_warp_stores_sent(uint32_t wid) const {
++  return impl_->lsu_warp_stores_sent(wid);
++}
++
+ void Core::resume(uint32_t wid) {
+   impl_->scheduler()->resume(wid);
+ }
+--- head/sim/simx/scheduler.h
++++ src_ld/sim/simx/scheduler.h
+@@ -15,6 +15,7 @@
+ 
+ #include <vector>
+ #include <stack>
++#include <unordered_map>
+ #include <queue>
+ #include <array>
+ #include "types.h"
+@@ -135,6 +136,10 @@
+   // Advance the warp's PC by `inc` bytes (called at decode with 2 or 4
+   // depending on is_rvc; mirrors the hardware warp-PC update at decode).
+   void advance_pc(const instr_trace_t* trace, uint32_t inc);
++#ifdef MEAS_FETCH_AHEAD
++  // per PC: the size of a non-stalling instruction decoded there, 0 otherwise
++  std::unordered_map<uint64_t, uint8_t> fa_table_;
++#endif
+   bool running() const;
+   bool wspawn(uint32_t num_warps, Word nextPC);
+   bool setTmask(uint32_t wid, const ThreadMask& tmask);
+--- head/sim/simx/scheduler.cpp
++++ src_ld/sim/simx/scheduler.cpp
+@@ -239,6 +239,20 @@
+     // Branch/JAL/JALR commit later overrides warp.PC with the
+     // resolved target.
+ 
++  #ifdef MEAS_FETCH_AHEAD
++    // Measurement only, an upper bound for attributing the per-warp issue
++    // rate: an instruction this PC decoded before as non-stalling advances
++    // the PC now and leaves the warp schedulable, instead of waiting for
++    // its decode. Not a model of any hardware.
++    {
++      auto it = fa_table_.find(warp.PC);
++      if (it != fa_table_.end() && it->second != 0) {
++        warp.PC += it->second;
++        trace->fetch_ahead = true;
++        return trace;
++      }
++    }
++  #endif
+     // Suspend warp until decode resumes it (non-stalling) or commit (stalling).
+     this->suspend(scheduled_warp);
+   }
+--- head/sim/simx/instr_trace.h
++++ src_ld/sim/simx/instr_trace.h
+@@ -69,6 +69,9 @@
+   bool rsp_last;
+ 
+   bool fetch_stall;
++#ifdef MEAS_FETCH_AHEAD
++  bool fetch_ahead = false;  // measurement only: PC already advanced at schedule
++#endif
+ 
+   // Set by a func-unit when a fetch_stall instruction has resolved; the warp
+   // is released when the trace drains from the FU output (commit fan-in).
+--- head/sim/simx/mem/cache.cpp
++++ src_ld/sim/simx/mem/cache.cpp
+@@ -1004,6 +1004,26 @@
+ 
+     // calculate memory latency
+     perf_stats_.mem_latency += pending_fill_reqs_;
++  #ifdef PATH_STATS
++    {
++      // Per awake bank tick, summed over the banks of the dcaches and of the
++      // L2. sent: ticks, MSHR occupancy, pipe entries; refused: pipe stalled
++      // by its head, forward head held, response queue full, input waiting.
++      static PathStats* pst[2] = {
++        (new PathStats())->init("l1d_bank.ticks,mshr_occ,pipe_occ/pipe_stall,fwd_held,rsp_full,in_wait", 4),
++        (new PathStats())->init("llc_bank.ticks,mshr_occ,pipe_occ/pipe_stall,fwd_held,rsp_full,in_wait", 4)};
++      PathStats* p = config_.is_llc ? pst[1] : (this->name().find("dcache") != std::string::npos ? pst[0] : nullptr);
++      if (p) {
++        ++p->sent[0];
++        p->sent[1] += mshr_.size();
++        p->sent[2] += pipe_req_->size();
++        p->refused[0] += pipe_stall;
++        p->refused[1] += fwd_held_;
++        p->refused[2] += this->core_rsp_out.full();
++        p->refused[3] += !this->core_req_in.empty();
++      }
++    }
++  #endif
+ 
+     // sleep when fully drained: no queued or in-flight input, an empty pipe,
+     // and no replay/forward/flush work. pending_fill_reqs_ == 0 also keeps
+@@ -1271,6 +1291,13 @@
+       // responses from draining — a deadlock. Reserve at admission.
+       bool needs_mshr = !is_amo_passthru;
+       (void)is_amo;
++    #ifdef PATH_STATS
++      // LLC banks, summed: sent = admission checks, MSHR occupancy summed over
++      // them; refused = MSHR full, a miss's fill refused by mem_req_out.
++      static PathStats* llc_pst = (new PathStats())->init("llc_bank.admit(checks,occ_sum)/(mshr_full,memreq_full)", 2);
++      if (config_.is_llc) { ++llc_pst->sent[0]; llc_pst->sent[1] += mshr_occupancy_; }
++      if (config_.is_llc && needs_mshr && mshr_occupancy_ >= mshr_.capacity()) ++llc_pst->refused[0];
++    #endif
+       if (needs_mshr && mshr_occupancy_ >= mshr_.capacity()) {
+         ++perf_stats_.mshr_stalls;
+         return;
+@@ -2208,6 +2235,10 @@
+             return;
+           }
+           if (!fill_pending && !lazy_alloc && !refetch_loop && this->mem_req_out.full()) {
++          #ifdef PATH_STATS
++            static PathStats* llc_mq = (new PathStats())->init("llc_bank.miss_memreq_full", 1);
++            if (config_.is_llc) ++llc_mq->refused[0];
++          #endif
+             return;
+           }
+ 
+@@ -2581,7 +2612,7 @@
+ 
+   MemReq take_token(uint32_t i) {
+     auto req = ReqIn.at(i).peek();
+-    ReqIn.at(i).pop();
++    this->pst_pop(i);
+     return req;
+   }
+ 
+@@ -2619,7 +2650,27 @@
+     return std::min(kMaxFanout, inputs - sl * kMaxFanout);
+   }
+ 
++#ifdef PATH_STATS
++  // Measurement only: per core port, cycles its head request waited and requests accepted.
++  PathStats* pst_ = (new PathStats())->init(std::string(this->name()) + ".in", ReqIn.size());
++  PathStats* pst_bank_ = nullptr;  // per bank: cycles a grant went out / the bank input was full
++  PathStats* pst_cls_[3] = {};
++  struct Head { uint32_t port; uint32_t size; uint32_t bank; };
++  std::vector<Head> pst_head_;
++#endif
++  void pst_pop(uint32_t i) {
++  #ifdef PATH_STATS
++    ++pst_->sent[i];
++  #endif
++    ReqIn.at(i).pop();
++  }
++
+   void on_tick() {
++  #ifdef PATH_STATS
++    for (uint32_t i = 0; i < ReqIn.size(); ++i) {
++      pst_->refused[i] += !ReqIn.at(i).empty();
++    }
++  #endif
+     if (init_cycles_ != 0) {
+       --init_cycles_;
+       return;
+@@ -2737,6 +2788,14 @@
+         }
+         continue;
+       }
++    #ifdef PATH_STATS
++      if (!pst_cls_[0]) {
++        const char* nm[3] = {".held", ".bankfull", ".lost"};
++        for (int k = 0; k < 3; ++k) pst_cls_[k] = (new PathStats())->init(std::string(this->name()) + nm[k], n);
++      }
++      if (hold || this->realign_hold(i)) ++pst_cls_[0]->refused[i];
++      else pst_head_.push_back({i, in.size(), params_.addr_bank_id(req.addr)});
++    #endif
+       if (!hold && !this->realign_hold(i)) {
+         uint32_t b = params_.addr_bank_id(req.addr);
+         want.at(b * slices + i / slice_ports) |= 1u << (i % slice_ports);
+@@ -2755,6 +2814,11 @@
+       for (uint32_t sl = 0; sl < slices; ++sl) {
+         uint32_t slice_want = want.at(b * slices + sl);
+         auto& out = (nl != 0) ? tree_stage_.at(0).at(b * slices + sl) : ReqOut.at(b);
++      #ifdef PATH_STATS
++        if (!pst_bank_) pst_bank_ = (new PathStats())->init(std::string(this->name()) + ".bank", nb);
++        if (slice_want != 0 && out.full()) ++pst_bank_->refused[b];
++        if (slice_want != 0 && !out.full()) ++pst_bank_->sent[b];
++      #endif
+         if (slice_want == 0 || out.full()) {
+           continue;
+         }
+@@ -2776,6 +2840,16 @@
+         collisions_ += wants.at(b) - 1;
+       }
+     }
++  #ifdef PATH_STATS
++    // a wanting port that was not taken: its bank's input was full, or another port won
++    for (auto& h : pst_head_) {
++      auto& out = (nl != 0) ? tree_stage_.at(0).at(h.bank * slices + h.port / slice_ports) : ReqOut.at(h.bank);
++      if (ReqIn.at(h.port).size() == h.size) {
++        ++pst_cls_[out.full() ? 1 : 2]->refused[h.port];
++      }
++    }
++    pst_head_.clear();
++  #endif
+   }
+ 
+   // Offer port i's request, with the ports merged into it, to bank b; the
+@@ -2820,10 +2894,10 @@
+       for (uint64_t f = offer.mask; f != 0; f &= f - 1) {
+         uint32_t port = base + __builtin_ctzll(f);
+         DT(3, this->name() << " read-merge: port=" << port << ", leader=" << i << ", " << ReqIn.at(port).peek());
+-        ReqIn.at(port).pop();
++        this->pst_pop(port);
+       }
+     }
+-    ReqIn.at(i).pop();
++    this->pst_pop(i);
+     *offer.rr = offer.rr_next;
+     collisions_ += offer.collisions;
+     offer.valid = false;
+@@ -2857,14 +2931,14 @@
+       for (uint64_t f = mask; f != 0; f &= f - 1) {
+         uint32_t port = base + __builtin_ctzll(f);
+         DT(3, this->name() << " read-merge: port=" << port << ", leader=" << i << ", " << req);
+-        ReqIn.at(port).pop();
++        this->pst_pop(port);
+       }
+     }
+     uint64_t tag = (((uint64_t(req.tag) << this->merge_bits()) | mask) << lg2_inputs_) | i;
+     __assert((tag >> 32) == 0, "cache bank tag overflow");
+     req.tag = uint32_t(tag);
+     out.send(req, levels_.empty() ? delay_ : 1);
+-    ReqIn.at(i).pop();
++    this->pst_pop(i);
+   }
+ 
+   // A load or store with no flush, IO or local attribute.
+--- head/sim/simx/mem/mmu.h
++++ src_ld/sim/simx/mem/mmu.h
+@@ -114,6 +114,10 @@
+   void report_fault(const MemReq& req);
+ 
+   uint32_t                 num_ports_;
++#ifdef PATH_STATS
++  PathStats* pst_ = nullptr;   // measurement only: per port, translated requests passed / refused downstream
++  PathStats* pst_miss_ = nullptr;
++#endif
+   uint32_t                 client_id_;
+   bool                     exec_side_;
+   // Each response leaves a cycle late through its own stage.
+--- head/sim/simx/mem/mmu.cpp
++++ src_ld/sim/simx/mem/mmu.cpp
+@@ -376,6 +376,12 @@
+     miss.slot = (uint32_t)i;
+     TlbMissOut.send(miss, 1);
+     DT(4, this->name() << " tlb-miss: " << miss);
++  #ifdef PATH_STATS
++    // the miss station's walks: sent[0] counts them, sent[1] the TLB's reads, sent[2] its hits
++    if (!pst_miss_) pst_miss_ = (new PathStats())->init(this->name() + ".miss", num_ports_);
++    ++pst_miss_->sent[0];
++    if (num_ports_ > 2) { pst_miss_->sent[1] = tlb_.reads(); pst_miss_->sent[2] = tlb_.hits(); }
++  #endif
+     e.issued = true;
+     break;
+   }
+@@ -458,10 +464,22 @@
+       MemReq translated = req;
+       translated.addr = (res.ppn << VX_VM_PAGE_LOG2_SIZE) |
+                         (req.addr & ((1ULL << VX_VM_PAGE_LOG2_SIZE) - 1));
++    #ifdef PATH_STATS
++      if (!pst_) pst_ = (new PathStats())->init(this->name() + ".hit", num_ports_);
++    #endif
+       if (!replaying && ReqOut.at(p).try_send(translated)) {
+         ReqIn.at(p).pop();
++      #ifdef PATH_STATS
++        ++pst_->sent[p];
++      } else {
++        ++pst_->refused[p];
++      #endif
+       }
+     } else {
++    #ifdef PATH_STATS
++      if (!pst_miss_) pst_miss_ = (new PathStats())->init(this->name() + ".miss", num_ports_);
++      ++pst_miss_->refused[p];
++    #endif
+       if (selected == num_ports_ || (selected < next_park_port_ && p >= next_park_port_)) {
+         selected = p;
+       }
+diff -ruN head/tests/regression/ldstream/common.h /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/ldstream/common.h
+--- head/tests/regression/ldstream/common.h	1969-12-31 19:00:00.000000000 -0500
++++ /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/ldstream/common.h	2026-11-21 15:29:53.032303044 -0500
+@@ -0,0 +1,20 @@
++#ifndef _COMMON_H_
++#define _COMMON_H_
++
++#include <stdint.h>
++
++typedef struct {
++  uint64_t src_addr;
++  uint64_t sum_addr;     // per thread: the timed sum and the warm-up sum (uint64)
++  uint64_t times_addr;   // per CTA: start, end cycle
++  uint64_t region_steps; // steps of the region a CTA reads (a step is T * bytes)
++  uint64_t base_steps;   // DRAM mode: CTA b starts at b * base_steps; L2 mode 0
++  uint64_t stride_steps; // L2 mode: CTA b starts at step b * stride_steps of the window
++  uint64_t count;        // steps read in the timed part
++  uint32_t warm;         // L2 mode: one untimed pass over the window first
++  uint32_t bytes;        // bytes per load: 4 or 8
++  uint32_t unroll;       // independent loads per step: 1, 2, 4, 8, 16
++  uint32_t lean;         // 1: pointer-advanced loop (see kernel.cpp)
++} kernel_arg_t;
++
++#endif
+diff -ruN head/tests/regression/ldstream/kernel.cpp /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/ldstream/kernel.cpp
+--- head/tests/regression/ldstream/kernel.cpp	1969-12-31 19:00:00.000000000 -0500
++++ /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/ldstream/kernel.cpp	2026-11-21 16:24:40.470276679 -0500
+@@ -0,0 +1,145 @@
++#include <vx_spawn2.h>
++#include <vx_intrinsics.h>
++#include "common.h"
++
++// One CTA per SM streams plain loads, the shape of the H200 probe
++// (gpu/borrow_load.cu): at each step thread t of a T-thread CTA issues U
++// independent loads of B bytes, load u at element (step + u) * T + t, so a
++// step covers T * B contiguous bytes and U * T * B bytes are in flight.
++//   DRAM mode: CTA b reads its own slice of region_steps steps once.
++//   L2 mode:   every CTA reads the same window region_steps steps long,
++//              starting at a different step, after one untimed pass over it.
++// Each thread sums the B-byte words it reads, mod 2^64; the host checks it.
++//   lean = 0: the probe's loop, an index per load wrapped at the region end.
++//   lean = 1: U pointers advanced by U steps (a load, an add and a pointer
++//             add per load), wrapping only between passes: fewer instructions
++//             per load, for separating the issue rate from the memory path.
++// Holds the U loads of a step ahead of their uses: without it the compiler
++// interleaves the adds with the loads, and an in-order warp then waits on an
++// early load's result before issuing the later loads of the same step.
++template <typename T, int U>
++static inline void after_loads(T (&v)[U]) {
++  #pragma unroll
++  for (int u = 0; u < U; ++u)
++    __asm__ volatile ("" : "+r"(v[u]));
++}
++
++template <typename T, int U>
++static inline uint64_t sum_steps(const T* a, uint64_t step, uint64_t region, uint64_t count, uint32_t nt) {
++  uint64_t acc[U];
++  for (int u = 0; u < U; ++u)
++    acc[u] = 0;
++  for (uint64_t i = 0; i < count; i += U) {
++    T v[U];
++    #pragma unroll
++    for (int u = 0; u < U; ++u) {
++      uint64_t st = step + u;
++      if (st >= region) st -= region;
++      v[u] = a[st * nt];
++    }
++    after_loads(v);
++    #pragma unroll
++    for (int u = 0; u < U; ++u)
++      acc[u] += v[u];
++    step += U;
++    if (step >= region) step -= region;
++  }
++  uint64_t r = 0;
++  for (int u = 0; u < U; ++u)
++    r += acc[u];
++  return r;
++}
++
++template <typename T, int U>
++static inline uint64_t sum_lean(const T* a, uint64_t step, uint64_t region, uint64_t count, uint32_t nt) {
++  uint64_t acc[U];
++  for (int u = 0; u < U; ++u)
++    acc[u] = 0;
++  while (count != 0) {
++    // the steps up to the region's end; step and region are multiples of U
++    uint64_t n = region - step;
++    if (n > count) n = count;
++    const T* q[U];
++    #pragma unroll
++    for (int u = 0; u < U; ++u)
++      q[u] = a + (step + u) * nt;
++    const T* end = a + (step + n) * nt;
++    const uint64_t adv = uint64_t(U) * nt;
++    while (q[0] != end) {
++      // every load of the step before any use: an in-order warp would wait
++      // on a load's result before issuing the next
++      T v[U];
++      #pragma unroll
++      for (int u = 0; u < U; ++u)
++        v[u] = *q[u];
++      after_loads(v);
++      #pragma unroll
++      for (int u = 0; u < U; ++u) {
++        acc[u] += v[u];
++        q[u] += adv;
++      }
++    }
++    count -= n;
++    step = 0;
++  }
++  uint64_t r = 0;
++  for (int u = 0; u < U; ++u)
++    r += acc[u];
++  return r;
++}
++
++template <typename T>
++static inline uint64_t sum_any(const T* a, uint64_t step, uint64_t region, uint64_t count, uint32_t nt,
++                               uint32_t unroll, uint32_t lean) {
++  if (lean) {
++    switch (unroll) {
++    case 16: return sum_lean<T, 16>(a, step, region, count, nt);
++    case 8:  return sum_lean<T, 8>(a, step, region, count, nt);
++    case 4:  return sum_lean<T, 4>(a, step, region, count, nt);
++    case 2:  return sum_lean<T, 2>(a, step, region, count, nt);
++    default: return sum_lean<T, 1>(a, step, region, count, nt);
++    }
++  }
++  switch (unroll) {
++  case 16: return sum_steps<T, 16>(a, step, region, count, nt);
++  case 8:  return sum_steps<T, 8>(a, step, region, count, nt);
++  case 4:  return sum_steps<T, 4>(a, step, region, count, nt);
++  case 2:  return sum_steps<T, 2>(a, step, region, count, nt);
++  default: return sum_steps<T, 1>(a, step, region, count, nt);
++  }
++}
++
++static inline uint64_t sum_bytes(uint64_t addr, uint32_t bytes, uint64_t step, uint64_t region, uint64_t count,
++                                 uint32_t nt, uint32_t unroll, uint32_t lean) {
++  if (bytes == 8)
++    return sum_any(reinterpret_cast<const uint64_t*>(addr), step, region, count, nt, unroll, lean);
++  return sum_any(reinterpret_cast<const uint32_t*>(addr), step, region, count, nt, unroll, lean);
++}
++
++__kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
++  const uint32_t t = threadIdx.x, nt = blockDim.x, b = blockIdx.x;
++  const uint32_t B = arg->bytes;
++  const uint64_t region = arg->region_steps;
++  // this thread's first element, in bytes
++  const uint64_t addr = arg->src_addr + (uint64_t(b) * arg->base_steps * nt + t) * B;
++  const uint64_t step0 = (uint64_t(b) * arg->stride_steps) % region;
++  uint64_t warm = 0;
++  if (arg->warm) {
++    // brings the window into the L2; its words are not checked
++    warm = sum_bytes(addr, B, 0, region, region, nt, 1, 0);
++  }
++  __syncthreads();
++  uint64_t t0 = 0;
++  if (t == 0)
++    t0 = csr_read(VX_CSR_MCYCLE);
++  uint64_t s = sum_bytes(addr, B, step0, region, arg->count, nt, arg->unroll, arg->lean);
++  __syncthreads();
++  auto times = reinterpret_cast<uint64_t*>(arg->times_addr);
++  if (t == 0) {
++    times[2 * b] = t0;
++    times[2 * b + 1] = csr_read(VX_CSR_MCYCLE);
++  }
++  // the warm-up pass's sum goes beside the timed one, so it is not optimized away
++  reinterpret_cast<uint64_t*>(arg->sum_addr)[2 * (uint64_t(b) * nt + t)] = s;
++  reinterpret_cast<uint64_t*>(arg->sum_addr)[2 * (uint64_t(b) * nt + t) + 1] = warm;
++}
+diff -ruN head/tests/regression/ldstream/main.cpp /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/ldstream/main.cpp
+--- head/tests/regression/ldstream/main.cpp	1969-12-31 19:00:00.000000000 -0500
++++ /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/ldstream/main.cpp	2026-11-21 15:29:53.036441338 -0500
+@@ -0,0 +1,227 @@
++// Plain-load streaming bandwidth of one SM, in the shape of the H200 probe
++// gpu/borrow_load.cu (see kernel.cpp).
++//
++//   -t T  threads per CTA (one CTA per core unless -g)
++//   -b B  bytes per load, 4 or 8 (the part's kernel loads 16)
++//   -u U  independent loads per thread per step: 1, 2, 4, 8, 16
++//   -m X  DRAM mode: MB each CTA reads once (default)
++//   -w W  L2 mode: every CTA reads the same W-MB window -p times after one
++//         untimed pass
++//   -g G  CTAs (default: one per core)
++//   -l    the lean loop (see kernel.cpp)
++// DRAM mode leaves the buffer unwritten: an upload would leave it in the L2,
++// and unwritten memory reads as one fill value from memory. L2 mode writes
++// a[e] = e.
++//   -a    place the buffer past the heap's first 2 MB, which the superpage
++//         heap maps with 4 KB pages
++// Bytes in flight per SM: U * T * B. Reported: bytes over the cycles between
++// the two CTA barriers around the timed loop, per CTA, as GB/s at 1.98 GHz.
++
++#include <algorithm>
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <iostream>
++#include <unistd.h>
++#include <vector>
++#include <vortex2.h>
++#include "common.h"
++
++#define RT_CHECK(_expr)                                         \
++   do {                                                         \
++     int _ret = _expr;                                          \
++     if (0 == _ret)                                             \
++       break;                                                   \
++     printf("Error: '%s' returned %d!\n", #_expr, (int)_ret);   \
++     cleanup();                                                 \
++     exit(-1);                                                  \
++   } while (false)
++
++const char* kernel_file = "kernel.vxbin";
++uint32_t xT = 1024, xB = 8, xU = 4, xP = 2, xG = 0;
++double xM = 1, xW = 0;
++bool xa = false, xl = false;
++
++vx_device_h device = nullptr;
++vx_buffer_h src_buffer = nullptr, sum_buffer = nullptr, times_buffer = nullptr, pad_buffer = nullptr;
++vx_queue_h  queue   = nullptr;
++vx_module_h module_ = nullptr;
++vx_kernel_h kernel  = nullptr;
++kernel_arg_t kernel_arg = {};
++
++static void show_usage() {
++  std::cout << "Plain-load streaming bandwidth." << std::endl;
++  std::cout << "Usage: [-t threads] [-b 4|8] [-u unroll] [-m MB per CTA] [-w window MB] [-p passes] "
++               "[-g CTAs] [-l] [-a] [-h]" << std::endl;
++}
++
++static void parse_args(int argc, char **argv) {
++  int c;
++  while ((c = getopt(argc, argv, "t:b:u:m:w:p:g:lah")) != -1) {
++    switch (c) {
++    case 't': xT = atoi(optarg); break;
++    case 'b': xB = atoi(optarg); break;
++    case 'u': xU = atoi(optarg); break;
++    case 'm': xM = atof(optarg); break;
++    case 'w': xW = atof(optarg); break;
++    case 'p': xP = atoi(optarg); break;
++    case 'g': xG = atoi(optarg); break;
++    case 'a': xa = true; break;
++    case 'l': xl = true; break;
++    case 'h': show_usage(); exit(0);
++    default:  show_usage(); exit(-1);
++    }
++  }
++  bool u_ok = (xU == 1 || xU == 2 || xU == 4 || xU == 8 || xU == 16);
++  if (!u_ok || (xB != 4 && xB != 8) || xT == 0) {
++    show_usage();
++    exit(-1);
++  }
++}
++
++void cleanup() {
++  if (device) {
++    if (src_buffer) vx_buffer_release(src_buffer);
++    if (sum_buffer) vx_buffer_release(sum_buffer);
++    if (times_buffer) vx_buffer_release(times_buffer);
++    if (pad_buffer) vx_buffer_release(pad_buffer);
++    if (kernel)  vx_kernel_release(kernel);
++    if (module_) vx_module_release(module_);
++    if (queue)   vx_queue_release(queue);
++    vx_device_dump_perf(device, stdout);
++    vx_device_release(device);
++  }
++}
++
++int main(int argc, char *argv[]) {
++  parse_args(argc, argv);
++
++  RT_CHECK(vx_device_open(0, &device));
++  vx_queue_info_t qi = { sizeof(qi), nullptr, VX_QUEUE_PRIORITY_NORMAL, 0 };
++  RT_CHECK(vx_queue_create(device, &qi, &queue));
++
++  uint64_t num_cores;
++  RT_CHECK(vx_device_query(device, VX_CAPS_NUM_CORES, &num_cores));
++  const uint32_t G = xG ? xG : (uint32_t)num_cores;
++  const uint64_t step_bytes = uint64_t(xT) * xB;
++  const bool l2 = xW > 0;
++  uint64_t region, base_steps, stride_steps, count, buf_bytes;
++  if (l2) {
++    region = uint64_t(xW * (1 << 20)) / step_bytes / xU * xU;
++    base_steps = 0;
++    stride_steps = region / G / xU * xU;
++    count = region * xP;
++    buf_bytes = region * step_bytes;
++  } else {
++    region = uint64_t(xM * (1 << 20)) / step_bytes / xU * xU;
++    base_steps = region;
++    stride_steps = 0;
++    count = region;
++    buf_bytes = region * step_bytes * G;
++  }
++  count -= count % xU;
++  printf("LDSTREAM: ctas=%u threads=%u bytes=%u unroll=%u kb_in_flight=%llu mode=%s lean=%d region_steps=%llu "
++         "count=%llu buffer=%llu\n", G, xT, xB, xU, (unsigned long long)(xU * step_bytes / 1024),
++         l2 ? "l2" : "dram", xl ? 1 : 0, (unsigned long long)region, (unsigned long long)count,
++         (unsigned long long)buf_bytes);
++
++  if (xa) {
++    RT_CHECK(vx_buffer_create(device, 2u << 20, VX_MEM_READ, &pad_buffer));
++  }
++  std::vector<uint32_t> h_src(buf_bytes / 4);
++  for (size_t e = 0; e < h_src.size(); ++e)
++    h_src[e] = (uint32_t)e;
++  const uint64_t threads = uint64_t(G) * xT;
++  RT_CHECK(vx_buffer_create(device, buf_bytes, VX_MEM_READ, &src_buffer));
++  RT_CHECK(vx_buffer_address(src_buffer, &kernel_arg.src_addr));
++  RT_CHECK(vx_buffer_create(device, threads * 16, VX_MEM_WRITE, &sum_buffer));
++  RT_CHECK(vx_buffer_address(sum_buffer, &kernel_arg.sum_addr));
++  RT_CHECK(vx_buffer_create(device, G * 16, VX_MEM_WRITE, &times_buffer));
++  RT_CHECK(vx_buffer_address(times_buffer, &kernel_arg.times_addr));
++  if (l2) {
++    RT_CHECK(vx_enqueue_write(queue, src_buffer, 0, h_src.data(), buf_bytes, 0, nullptr, nullptr));
++  } else {
++    uint32_t fill = 0;
++    vx_event_h fill_ev = nullptr;
++    RT_CHECK(vx_enqueue_read(queue, &fill, src_buffer, 0, sizeof(fill), 0, nullptr, &fill_ev));
++    RT_CHECK(vx_event_wait_value(fill_ev, 1, VX_TIMEOUT_INFINITE));
++    vx_event_release(fill_ev);
++    for (auto& w : h_src) w = fill;
++  }
++
++  kernel_arg.region_steps = region;
++  kernel_arg.base_steps = base_steps;
++  kernel_arg.stride_steps = stride_steps;
++  kernel_arg.count = count;
++  kernel_arg.warm = l2 ? 1 : 0;
++  kernel_arg.bytes = xB;
++  kernel_arg.unroll = xU;
++  kernel_arg.lean = xl ? 1 : 0;
++
++  RT_CHECK(vx_module_load_file(device, kernel_file, &module_));
++  RT_CHECK(vx_module_get_kernel(module_, "main", &kernel));
++  vx_event_h launch_ev = nullptr, read_ev = nullptr, tread_ev = nullptr;
++  vx_launch_info_t li = {};
++  li.struct_size  = sizeof(li);
++  li.kernel       = kernel;
++  li.args_host    = &kernel_arg;
++  li.args_size    = sizeof(kernel_arg);
++  li.ndim         = 1;
++  li.grid_dim[0]  = G;
++  li.block_dim[0] = xT;
++  RT_CHECK(vx_enqueue_launch(queue, &li, 0, nullptr, &launch_ev));
++  std::vector<uint64_t> h_sum(threads * 2);
++  std::vector<uint64_t> h_t(G * 2);
++  RT_CHECK(vx_enqueue_read(queue, h_sum.data(), sum_buffer, 0, threads * 16, 1, &launch_ev, &read_ev));
++  RT_CHECK(vx_enqueue_read(queue, h_t.data(), times_buffer, 0, G * 16, 1, &read_ev, &tread_ev));
++  RT_CHECK(vx_event_wait_value(tread_ev, 1, VX_TIMEOUT_INFINITE));
++  vx_event_release(tread_ev);
++  vx_event_release(read_ev);
++  vx_event_release(launch_ev);
++
++  // Each thread's words: element (base + st) * T + t of B bytes, st over its steps.
++  uint64_t errors = 0;
++  const uint32_t wpl = xB / 4;
++  auto word = [&](uint64_t e) -> uint64_t {
++    return (wpl == 2) ? (uint64_t(h_src[e + 1]) << 32 | h_src[e]) : h_src[e];
++  };
++  for (uint32_t b = 0; b < G; ++b) {
++    for (uint32_t t = 0; t < xT; ++t) {
++      uint64_t s = 0;
++      uint64_t st = (uint64_t(b) * stride_steps) % region;
++      for (uint64_t i = 0; i < count; ++i) {
++        uint64_t e = ((uint64_t(b) * base_steps + st) * xT + t) * wpl;
++        s += word(e);
++        if (++st == region) st = 0;
++      }
++      uint64_t got = h_sum[2 * (uint64_t(b) * xT + t)];
++      if (got != s) {
++        if (errors < 10)
++          printf("*** error: cta=%u thread=%u expected=%llu actual=%llu\n", b, t,
++                 (unsigned long long)s, (unsigned long long)got);
++        ++errors;
++      }
++    }
++  }
++
++  double sum_gbs = 0, min_cyc = 1e30, max_cyc = 0;
++  const double bytes_cta = double(count) * step_bytes;
++  for (uint32_t b = 0; b < G; ++b) {
++    double cyc = double(h_t[2 * b + 1] - h_t[2 * b]);
++    sum_gbs += bytes_cta / cyc * 1.98;
++    min_cyc = std::min(min_cyc, cyc);
++    max_cyc = std::max(max_cyc, cyc);
++  }
++  printf("LDSTREAM_CYCLES: min=%.0f max=%.0f bytes_per_cta=%.0f\n", min_cyc, max_cyc, bytes_cta);
++  printf("LDSTREAM_B_PER_CLOCK_PER_SM: %.2f\n", sum_gbs / G / 1.98);
++  printf("LDSTREAM_GBS_PER_SM: %.1f (at 1980 MHz) aggregate=%.1f\n", sum_gbs / G, sum_gbs);
++
++  cleanup();
++  if (errors != 0) {
++    std::cout << "Found " << errors << " errors!" << std::endl;
++    return 1;
++  }
++  std::cout << "PASSED!" << std::endl;
++  return 0;
++}
+diff -ruN head/tests/regression/ldstream/Makefile /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/ldstream/Makefile
+--- head/tests/regression/ldstream/Makefile	1969-12-31 19:00:00.000000000 -0500
++++ /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/ldstream/Makefile	2026-11-21 15:11:46.585203215 -0500
+@@ -0,0 +1,16 @@
++ROOT_DIR := $(realpath ../../..)
++include $(ROOT_DIR)/config.mk
++
++PROJECT := ldstream
++
++SRC_DIR := $(VORTEX_HOME)/tests/regression/$(PROJECT)
++
++SRCS := $(SRC_DIR)/main.cpp
++
++VX_SRCS := $(SRC_DIR)/kernel.cpp
++
++OPTS ?= -t1024 -b8 -u4 -m1
++
++KERNEL_LIB := vortex2
++
++include ../common.mk
+diff -ruN head/tests/regression/smprobe/common.h /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/smprobe/common.h
+--- head/tests/regression/smprobe/common.h	1969-12-31 19:00:00.000000000 -0500
++++ /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/smprobe/common.h	2026-11-21 17:32:31.954478893 -0500
+@@ -0,0 +1,27 @@
++#ifndef _COMMON_H_
++#define _COMMON_H_
++
++#include <stdint.h>
++
++#define PROBE_SMEM_BAR  0
++#define PROBE_BAR_ONLY  1
++#define PROBE_SMEM_ONLY 2
++
++#define NEIGH_IDLE      0
++#define NEIGH_LOADS     1
++#define NEIGH_LOADS_BAR 2
++
++typedef struct {
++  uint64_t src_addr;    // the neighbours' stream, nchunks chunks of 8 KB
++  uint64_t flag_addr;   // the probe sets it when done; the neighbours stop
++  uint64_t itcyc_addr;  // probe: cycles of each iteration
++  uint64_t sums_addr;   // one word per thread
++  uint32_t nchunks;
++  uint32_t probe_kind;
++  uint32_t neighbours;
++  uint32_t probe_iters;
++  uint32_t delay;       // cycles the probe waits before its first iteration
++  uint32_t max_neigh;   // a neighbour stops after this many iterations even if the probe runs on
++} kernel_arg_t;
++
++#endif
+diff -ruN head/tests/regression/smprobe/kernel.cpp /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/smprobe/kernel.cpp
+--- head/tests/regression/smprobe/kernel.cpp	1969-12-31 19:00:00.000000000 -0500
++++ /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/smprobe/kernel.cpp	2026-11-21 17:32:31.962277063 -0500
+@@ -0,0 +1,87 @@
++#include <vx_spawn2.h>
++#include <vx_intrinsics.h>
++#include "common.h"
++
++// Shared-memory access beside streaming neighbours, the shape of the H200
++// probe (gpu/borrow_e4.cu --mode probe): 16 CTAs of 128 threads on one SM.
++// CTA 0 is the probe; after a delay it runs probe_iters iterations of
++//   smem_bar:  store 16 B to shared memory, barrier, read another thread's
++//              16 B (t + 37 mod 128), barrier
++//   bar_only:  register work and two barriers
++//   smem_only: store 16 B and read back its own first 8 B, no barrier
++// and times each with mcycle. The other CTAs are neighbours until the probe
++// is done: idle (exit at once), loads (each iteration 8 KB of a stream, a
++// thread's 8 loads 1 KB apart; no barrier), or loads_bar (the loads stored to
++// shared memory, barrier, another thread's words read, barrier). The part
++// loads 16 B per thread four times; here 8 B eight times moves the same 8 KB.
++struct alignas(16) quad { uint32_t x, y, z, w; };
++
++static inline uint64_t now() { return csr_read(VX_CSR_MCYCLE); }
++
++__kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
++  const uint32_t t = threadIdx.x, b = blockIdx.x;
++  auto flag = reinterpret_cast<volatile uint32_t*>(arg->flag_addr);
++  uint32_t acc = 0;
++  if (b == 0) {
++    auto sh = reinterpret_cast<volatile quad*>(__local_mem());
++    auto itcyc = reinterpret_cast<uint32_t*>(arg->itcyc_addr);
++    const uint64_t d0 = now();
++    while (now() - d0 < arg->delay) {}
++    __syncthreads();
++    for (uint32_t it = 0; it < arg->probe_iters; ++it) {
++      const uint64_t c0 = now();
++      if (arg->probe_kind == PROBE_SMEM_BAR) {
++        sh[t].x = acc + it; sh[t].y = t; sh[t].z = it; sh[t].w = 0;
++        __syncthreads();
++        const uint32_t o = (t + 37) & 127;
++        acc += sh[o].x + sh[o].y;
++        __syncthreads();
++      } else if (arg->probe_kind == PROBE_BAR_ONLY) {
++        acc = acc * 3 + it;
++        __syncthreads();
++        acc ^= t;
++        __syncthreads();
++      } else {
++        sh[t].x = acc + it; sh[t].y = t; sh[t].z = it; sh[t].w = 0;
++        acc += sh[t].x + sh[t].y;
++      }
++      if (t == 0)
++        itcyc[it] = uint32_t(now() - c0);
++    }
++    __syncthreads();
++    if (t == 0) {
++      *flag = 1;
++      vx_fence();
++    }
++  } else if (arg->neighbours != NEIGH_IDLE) {
++    auto sh = reinterpret_cast<volatile uint64_t*>(__local_mem());
++    auto src = reinterpret_cast<const volatile uint64_t*>(arg->src_addr);
++    const bool bar = (arg->neighbours == NEIGH_LOADS_BAR);
++    for (uint32_t it = 0; *flag == 0 && it < arg->max_neigh; ++it) {
++      const uint64_t chunk = (uint64_t(it) * gridDim.x + b) % arg->nchunks;
++      const volatile uint64_t* q = src + chunk * 1024 + t;
++      uint64_t v[8];
++      #pragma unroll
++      for (int u = 0; u < 8; ++u)
++        v[u] = q[u * 128];
++      if (bar) {
++        #pragma unroll
++        for (int u = 0; u < 8; ++u)
++          sh[u * 128 + t] = v[u];
++        __syncthreads();
++        const uint32_t o = (t + 37) & 127;
++        #pragma unroll
++        for (int u = 0; u < 8; ++u) {
++          uint64_t w = sh[u * 128 + o];
++          acc += uint32_t(w) + uint32_t(w >> 32);
++        }
++        __syncthreads();
++      } else {
++        #pragma unroll
++        for (int u = 0; u < 8; ++u)
++          acc += uint32_t(v[u]) + uint32_t(v[u] >> 32);
++      }
++    }
++  }
++  reinterpret_cast<uint32_t*>(arg->sums_addr)[uint64_t(b) * blockDim.x + t] = acc;
++}
+diff -ruN head/tests/regression/smprobe/main.cpp /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/smprobe/main.cpp
+--- head/tests/regression/smprobe/main.cpp	1969-12-31 19:00:00.000000000 -0500
++++ /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/smprobe/main.cpp	2026-11-21 17:33:31.177948424 -0500
+@@ -0,0 +1,144 @@
++// Shared-memory probe beside streaming neighbours (see kernel.cpp).
++//
++//   -k 0|1|2   probe: smem_bar, bar_only, smem_only
++//   -n 0|1|2   neighbours: idle, loads, loads_bar
++//   -i N       probe iterations (the first quarter is not counted)
++//   -c CTAs    per SM, the probe included (default 16)
++//   -d cycles  probe delay before its first iteration (default 20000)
++//   -s MB      the neighbours' stream (default 32, past the 8.25 MB L2)
++//   -N iters   a neighbour stops after this many iterations (default: when the probe is done)
++// Reported: percentiles of the probe's cycles per iteration.
++
++#include <algorithm>
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <iostream>
++#include <unistd.h>
++#include <vector>
++#include <vortex2.h>
++#include "common.h"
++
++#define RT_CHECK(_expr)                                         \
++   do {                                                         \
++     int _ret = _expr;                                          \
++     if (0 == _ret)                                             \
++       break;                                                   \
++     printf("Error: '%s' returned %d!\n", #_expr, (int)_ret);   \
++     cleanup();                                                 \
++     exit(-1);                                                  \
++   } while (false)
++
++const char* kernel_file = "kernel.vxbin";
++uint32_t xk = 0, xn = 0, xi = 200, xc = 16, xd = 20000, xs = 32, xN = 0xffffffff;
++
++vx_device_h device = nullptr;
++vx_buffer_h src_buffer = nullptr, flag_buffer = nullptr, it_buffer = nullptr, sum_buffer = nullptr;
++vx_queue_h  queue   = nullptr;
++vx_module_h module_ = nullptr;
++vx_kernel_h kernel  = nullptr;
++kernel_arg_t kernel_arg = {};
++
++static void show_usage() {
++  std::cout << "Usage: [-k probe 0..2] [-n neighbours 0..2] [-i iters] [-c CTAs] [-d delay] [-s stream MB] [-N neighbour iters] [-h]"
++            << std::endl;
++}
++
++static void parse_args(int argc, char **argv) {
++  int c;
++  while ((c = getopt(argc, argv, "k:n:i:c:d:s:N:h")) != -1) {
++    switch (c) {
++    case 'k': xk = atoi(optarg); break;
++    case 'n': xn = atoi(optarg); break;
++    case 'i': xi = atoi(optarg); break;
++    case 'c': xc = atoi(optarg); break;
++    case 'd': xd = atoi(optarg); break;
++    case 's': xs = atoi(optarg); break;
++    case 'N': xN = atoi(optarg); break;
++    case 'h': show_usage(); exit(0);
++    default:  show_usage(); exit(-1);
++    }
++  }
++  if (xk > 2 || xn > 2 || xi < 8 || xc < 1) {
++    show_usage();
++    exit(-1);
++  }
++}
++
++void cleanup() {
++  if (device) {
++    if (src_buffer) vx_buffer_release(src_buffer);
++    if (flag_buffer) vx_buffer_release(flag_buffer);
++    if (it_buffer) vx_buffer_release(it_buffer);
++    if (sum_buffer) vx_buffer_release(sum_buffer);
++    if (kernel)  vx_kernel_release(kernel);
++    if (module_) vx_module_release(module_);
++    if (queue)   vx_queue_release(queue);
++    vx_device_dump_perf(device, stdout);
++    vx_device_release(device);
++  }
++}
++
++static double pct(std::vector<double> v, double q) {
++  std::sort(v.begin(), v.end());
++  return v[std::min(v.size() - 1, size_t(q * v.size()))];
++}
++
++int main(int argc, char *argv[]) {
++  parse_args(argc, argv);
++  RT_CHECK(vx_device_open(0, &device));
++  vx_queue_info_t qi = { sizeof(qi), nullptr, VX_QUEUE_PRIORITY_NORMAL, 0 };
++  RT_CHECK(vx_queue_create(device, &qi, &queue));
++
++  const uint32_t T = 128;
++  const uint64_t src_bytes = uint64_t(xs) << 20;
++  // The stream is never written: its lines come from memory as one fill value.
++  RT_CHECK(vx_buffer_create(device, src_bytes, VX_MEM_READ, &src_buffer));
++  RT_CHECK(vx_buffer_address(src_buffer, &kernel_arg.src_addr));
++  RT_CHECK(vx_buffer_create(device, 64, VX_MEM_READ | VX_MEM_WRITE, &flag_buffer));
++  RT_CHECK(vx_buffer_address(flag_buffer, &kernel_arg.flag_addr));
++  RT_CHECK(vx_buffer_create(device, xi * 4, VX_MEM_WRITE, &it_buffer));
++  RT_CHECK(vx_buffer_address(it_buffer, &kernel_arg.itcyc_addr));
++  RT_CHECK(vx_buffer_create(device, xc * T * 4, VX_MEM_WRITE, &sum_buffer));
++  RT_CHECK(vx_buffer_address(sum_buffer, &kernel_arg.sums_addr));
++  uint32_t zero[16] = {};
++  RT_CHECK(vx_enqueue_write(queue, flag_buffer, 0, zero, sizeof(zero), 0, nullptr, nullptr));
++  kernel_arg.nchunks = uint32_t(src_bytes / 8192);
++  kernel_arg.probe_kind = xk;
++  kernel_arg.neighbours = xn;
++  kernel_arg.probe_iters = xi;
++  kernel_arg.delay = xd;
++  kernel_arg.max_neigh = xN;
++
++  RT_CHECK(vx_module_load_file(device, kernel_file, &module_));
++  RT_CHECK(vx_module_get_kernel(module_, "main", &kernel));
++  vx_event_h launch_ev = nullptr, read_ev = nullptr;
++  vx_launch_info_t li = {};
++  li.struct_size  = sizeof(li);
++  li.kernel       = kernel;
++  li.args_host    = &kernel_arg;
++  li.args_size    = sizeof(kernel_arg);
++  li.ndim         = 1;
++  li.grid_dim[0]  = xc;
++  li.block_dim[0] = T;
++  li.lmem_size    = 8192;
++  RT_CHECK(vx_enqueue_launch(queue, &li, 0, nullptr, &launch_ev));
++  std::vector<uint32_t> h_it(xi);
++  RT_CHECK(vx_enqueue_read(queue, h_it.data(), it_buffer, 0, xi * 4, 1, &launch_ev, &read_ev));
++  RT_CHECK(vx_event_wait_value(read_ev, 1, VX_TIMEOUT_INFINITE));
++  vx_event_release(read_ev);
++  vx_event_release(launch_ev);
++
++  std::vector<double> v;
++  for (uint32_t i = xi / 4; i < xi; ++i)
++    v.push_back(h_it[i]);
++  const char* kinds[] = {"smem_bar", "bar_only", "smem_only"};
++  const char* neighs[] = {"idle", "loads", "loads_bar"};
++  double total = 0;
++  for (auto x : h_it) total += x;
++  printf("SMPROBE: probe_kind=%s neighbours=%s ctas=%u iters=%u probe_iter_cycles: p25=%.0f p50=%.0f p75=%.0f p95=%.0f max=%.0f all_iters=%.0f\n",
++         kinds[xk], neighs[xn], xc, xi, pct(v, .25), pct(v, .5), pct(v, .75), pct(v, .95), pct(v, 1.0), total);
++  cleanup();
++  std::cout << "PASSED!" << std::endl;
++  return 0;
++}
+diff -ruN head/tests/regression/smprobe/Makefile /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/smprobe/Makefile
+--- head/tests/regression/smprobe/Makefile	1969-12-31 19:00:00.000000000 -0500
++++ /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/smprobe/Makefile	2026-11-21 15:21:05.124763692 -0500
+@@ -0,0 +1,16 @@
++ROOT_DIR := $(realpath ../../..)
++include $(ROOT_DIR)/config.mk
++
++PROJECT := smprobe
++
++SRC_DIR := $(VORTEX_HOME)/tests/regression/$(PROJECT)
++
++SRCS := $(SRC_DIR)/main.cpp
++
++VX_SRCS := $(SRC_DIR)/kernel.cpp
++
++OPTS ?= -k0 -n1 -i200
++
++KERNEL_LIB := vortex2
++
++include ../common.mk
+diff -ruN head/tests/regression/gemm_tmem_decode/common.h /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/gemm_tmem_decode/common.h
+--- head/tests/regression/gemm_tmem_decode/common.h	1969-12-31 19:00:00.000000000 -0500
++++ /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/gemm_tmem_decode/common.h	2026-11-21 15:51:55.651781082 -0500
+@@ -0,0 +1,85 @@
++#ifndef _COMMON_H_
++#define _COMMON_H_
++
++#include <stdint.h>
++
++#ifndef ITYPE
++#define ITYPE fp16
++#endif
++
++#ifndef OTYPE
++#define OTYPE fp32
++#endif
++
++// Accumulator registers of an epilogue transfer.
++#define GEMM_NRC 32
++
++// Columns of one tc.mma (the N tile of a CTA), at most 128 fragments. A CTA
++// keeps two tiles' accumulators in TMEM, so one drains while the next fills.
++#ifndef TILE_N
++#define TILE_N 512
++#endif
++
++// tc.mma K steps per pipeline stage.
++#ifndef KSTEPS
++#define KSTEPS 1
++#endif
++
++// Pipeline stages: buffers of a stage's A and W slabs in shared memory.
++#ifndef PIPE
++#define PIPE 5
++#endif
++
++// Bytes of W one staging transfer (or one load-staging pass) moves.
++#ifndef XFER
++#define XFER (TILE_N * 32)
++#endif
++
++// How W sits in global memory:
++#define LAYOUT_PACKED 0  // [N/TILE_N][K/kstep][TILE_N][kstep]: a stage is one contiguous run
++#define LAYOUT_NK16   1  // W[N][K]: rows of one K step (32 B), each 64 B line read twice
++#define LAYOUT_NK32   2  // W[N][K]: rows of two K steps (one 64 B line), read once
++#define LAYOUT_KN     3  // W[K][N]: transposed by the DXA's K-major scatter
++#ifndef LAYOUT
++#define LAYOUT LAYOUT_PACKED
++#endif
++
++// How a stage reaches shared memory: 0 the DXA, 1 loads by LOAD_WARPS warps.
++#ifndef STAGE_LOAD
++#define STAGE_LOAD 0
++#endif
++
++#ifndef LOAD_WARPS
++#define LOAD_WARPS 16
++#endif
++
++// 1: the DXA producer and the MMA warp run the ring unrolled by PIPE (fewer
++// instructions per stage); 0: the loop indexes the ring with g % PIPE.
++#ifndef LEAN_ISSUE
++#define LEAN_ISSUE 0
++#endif
++
++// Warps that read the stages with loads instead of the tensor engine (0: the engine).
++#ifndef CONSUME_WARPS
++#define CONSUME_WARPS 0
++#endif
++
++// Shared memory starts with the CTA's TMEM column, padded to a bank row.
++#define TMEM_SLOT_BYTES 128
++
++// Warps: 0 the DXA producer, 1 the MMA issuer, 4..7 the epilogue (warp r
++// drains TCU block r % 4), from 8 the loaders when STAGE_LOAD.
++#define EPI_WARP0  4
++#define LOAD_WARP0 8
++
++typedef struct {
++  uint32_t M, N, K;
++  uint32_t passes;       // times the CTAs walk the N tiles (a copy that re-reads W from the L2)
++  uint64_t A_addr;      // [K/kstep][M][kstep]
++  uint64_t W_addr;      // LAYOUT
++  uint64_t C_addr;      // [16 * ceil(M / 16)][N] fp32
++  uint64_t times_addr;  // per tile: core, multiply begin, multiply end, epilogue end;
++                        // then per CTA: begin, end
++} kernel_arg_t;
++
++#endif
+diff -ruN head/tests/regression/gemm_tmem_decode/kernel.cpp /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/gemm_tmem_decode/kernel.cpp
+--- head/tests/regression/gemm_tmem_decode/kernel.cpp	1969-12-31 19:00:00.000000000 -0500
++++ /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/gemm_tmem_decode/kernel.cpp	2026-11-21 15:51:55.631358320 -0500
+@@ -0,0 +1,380 @@
++#include "common.h"
++#include <vx_spawn2.h>
++#include <vx_tensor.h>
++#include <vx_tmem.h>
++#include <vx_intrinsics.h>
++#include <vx_dxa.h>
++#include <vx_barrier.h>
++
++// Decode-shaped C = A W: a few rows of A (M <= 64, the 64 lanes of one
++// tc.mma; lanes past M compute on whatever shared memory holds and are not
++// stored) against a weight matrix W read once. A persistent CTA computes N
++// tiles cta, cta + grid, ..., each TILE_N columns over all of K, into one of
++// two TMEM accumulator buffers, so the epilogue of a tile overlaps the next
++// tile's multiplies. Each pipeline stage holds KSTEPS K steps of A and of the
++// tile's W, staged by the DXA (warp 0) or by loads (the loader warps); warp 1
++// issues one tc.mma per K step. In shared memory a K step of A is M rows of
++// 32 bytes and a K step of W is TILE_N rows of 32 bytes (LAYOUT_NK32: rows of
++// 64 bytes holding two K steps). NO_MMA (a measurement of the staging
++// alone) releases each stage without multiplying. CONSUME_WARPS > 0 replaces
++// the tensor engine with that many warps that read each stage of W with loads
++// and checksum it (READ_ONLY: the stages are not refilled, the warps only read).
++namespace vt = vortex::tensor;
++namespace tm = vortex::tmem;
++using ctx = vt::wgmma_context<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, false, GEMM_NRC>;
++using wg_cfg = vt::wgmma_config_t<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, GEMM_NRC>;
++
++[[maybe_unused]] constexpr uint32_t kDescA = 0;
++constexpr uint32_t kDescW = 1;
++
++constexpr uint32_t kBlocks   = VX_CFG_NUM_TCU_BLOCKS;
++constexpr uint32_t kStepK    = wg_cfg::fedpK * wg_cfg::i_ratio;  // K elements of one tc.mma
++constexpr uint32_t kStepRow  = wg_cfg::fedpK * 4;          // bytes of one row's K step
++constexpr uint32_t kRowBytes = (LAYOUT == LAYOUT_NK32) ? 2 * kStepRow : kStepRow;
++constexpr uint32_t kStageW   = KSTEPS * TILE_N * kStepRow;
++[[maybe_unused]] constexpr uint32_t kXfers = kStageW / XFER;  // W transfers per stage
++constexpr uint32_t kNFrag    = TILE_N / wg_cfg::tcN;
++
++static_assert(kBlocks * wg_cfg::xtileM == 64, "a tc.mma covers 64 rows");
++static_assert(kNFrag <= 128 && TILE_N % ctx::xtileN == 0, "TILE_N: at most 128 fragments, whole transfers");
++static_assert(2 * TILE_N <= VX_CFG_TCU_TMEM_COLS, "two accumulator buffers exceed TMEM");
++static_assert(2 * PIPE + 4 <= VX_CFG_NUM_BARRIERS, "not enough barriers for PIPE");
++static_assert(kStageW % XFER == 0 && XFER % kRowBytes == 0, "XFER: whole rows, divides a stage");
++static_assert(LAYOUT != LAYOUT_NK32 || KSTEPS % 2 == 0, "LAYOUT_NK32 stages K steps in pairs");
++static_assert(!STAGE_LOAD || LAYOUT == LAYOUT_PACKED, "load staging copies the packed layout");
++static_assert(!(STAGE_LOAD != 0 && CONSUME_WARPS != 0), "the loaders and the consumers share warp ranks");
++static_assert(CONSUME_WARPS == 0 || LAYOUT == LAYOUT_PACKED, "the consumers checksum the packed layout");
++static_assert(LEAN_ISSUE == 0 || LAYOUT == LAYOUT_PACKED, "the lean producer issues the packed layout");
++static_assert(sizeof(ctx::output_t) == sizeof(float), "the epilogue stores fp32 lanes");
++
++typedef uint64_t __attribute__((may_alias)) word_t;
++
++__kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
++  const uint32_t warp_rank = threadIdx.x / VX_CFG_NUM_THREADS;
++  const uint32_t num_warps = blockDim.x / VX_CFG_NUM_THREADS;
++  const uint32_t M = arg->M, N = arg->N;
++  const uint32_t k_steps = arg->K / kStepK;
++  const uint32_t num_stages = k_steps / KSTEPS;
++  const uint32_t num_tiles = N / TILE_N;
++  const uint32_t total_tiles = num_tiles * arg->passes;
++  const uint32_t cta = blockIdx.x;
++  // The A region holds what the 64 lanes of the last K step read: lanes past
++  // M must not read W, which the tile buffer fetches at the same time.
++  const uint32_t stage_a = ((KSTEPS - 1) * M * kStepRow + 64 * kStepRow + 127) / 128 * 128;
++  const uint32_t stage_bytes = stage_a + kStageW;
++  // Epilogue warps with lanes below M, and the participants of the barriers
++  // between the stagers and the MMA warp.
++  const uint32_t epi = (M + wg_cfg::xtileM - 1) / wg_cfg::xtileM;
++  const uint32_t stagers = STAGE_LOAD ? LOAD_WARPS : 1;
++  // The other side of the stage barriers: the MMA warp, or the consumer warps.
++  const uint32_t takers = CONSUME_WARPS ? CONSUME_WARPS : 1;
++
++  auto lmem = reinterpret_cast<uint8_t*>(__local_mem());
++  auto tmem_slot = reinterpret_cast<volatile uint32_t*>(lmem);
++  uint8_t* stages = lmem + TMEM_SLOT_BYTES;
++
++  const uint32_t cta_id = get_local_group_id();
++  auto full_bar  = [&](uint32_t s) { return cta_id | (s << 8); };
++  auto empty_bar = [&](uint32_t s) { return cta_id | ((PIPE + s) << 8); };
++  auto acc_empty = [&](uint32_t b) { return cta_id | ((2 * PIPE + b) << 8); };
++  const uint32_t acc_full = cta_id | ((2 * PIPE + 2) << 8);
++  const uint32_t sync_bar = cta_id | ((2 * PIPE + 3) << 8);
++
++  auto pT = reinterpret_cast<uint64_t*>(arg->times_addr);
++  auto pCta = pT + 4 * total_tiles + 2 * cta;
++  if (warp_rank == 0) {
++    uint32_t col = tm::alloc(2 * TILE_N);
++    if (vx_thread_id() == 0) {
++      *tmem_slot = col;
++      pCta[0] = csr_read(VX_CSR_MCYCLE);
++    }
++  }
++  vx_barrier(sync_bar, num_warps);
++  const uint32_t taddr = *tmem_slot;
++
++#if LEAN_ISSUE
++  if (warp_rank == 0 && !STAGE_LOAD) {
++    // DXA producer with the ring unrolled by PIPE, so a stage's barriers and
++    // buffer are constants and the source coordinate advances by one add: a
++    // lone warp issues one instruction per schedule-to-decode round trip
++    // (about 10 cycles), so the instructions per transfer set its rate.
++    constexpr uint32_t kStageCoord = kStageW / XFER;
++    uint32_t tile = cta, i = 0, ks0 = 0, g = 0;
++    uint32_t coord = (tile % num_tiles) * num_stages * kStageCoord;
++    bool wrapped = false;
++    while (tile < total_tiles) {
++      #pragma unroll
++      for (uint32_t s = 0; s < PIPE; ++s) {
++        if (tile >= total_tiles) break;
++        if (wrapped) {
++          int phase = vx_barrier_arrive(empty_bar(s), takers + 1);
++          vx_barrier_wait(empty_bar(s), phase);
++        }
++        uint8_t* buf = stages + s * stage_bytes;
++      #if defined(READ_ONLY)
++        (void)buf;  // the stages keep what they hold
++      #elif defined(NO_MMA) || CONSUME_WARPS
++        vx_barrier_expect_tx(full_bar(s), kXfers);
++      #else
++        vx_barrier_expect_tx(full_bar(s), 1 + kXfers);
++        vx_dxa_issue_2d_wg(kDescA, full_bar(s), buf, 0, ks0);
++      #endif
++      #ifndef READ_ONLY
++        #pragma unroll
++        for (uint32_t q = 0; q < kXfers; ++q) {
++          vx_dxa_issue_2d_wg(kDescW, full_bar(s), buf + stage_a + q * XFER, 0, coord + q);
++        }
++      #endif
++        vx_barrier_arrive(full_bar(s), takers + 1);
++        ++g;
++        coord += kStageCoord;
++        ks0 += KSTEPS;
++        if (++i == num_stages) {
++          i = 0;
++          ks0 = 0;
++          tile += gridDim.x;
++          coord = (tile % num_tiles) * num_stages * kStageCoord;
++        }
++      }
++      wrapped = true;
++    }
++    (void)ks0;    // the A coordinate, unused when only W is staged
++    (void)coord;  // and the W coordinate, when nothing is
++    for (uint32_t i = (g > PIPE) ? (g - PIPE) : 0; i < g; ++i) {
++      int phase = vx_barrier_arrive(empty_bar(i % PIPE), takers + 1);
++      vx_barrier_wait(empty_bar(i % PIPE), phase);
++    }
++  } else
++#endif
++  if (warp_rank == 0 && !STAGE_LOAD) {
++    // DXA producer: one transfer of A and kXfers of W per stage.
++    uint32_t g = 0;
++    for (uint32_t tile = cta; tile < total_tiles; tile += gridDim.x) {
++      for (uint32_t i = 0; i < num_stages; ++i, ++g) {
++        uint32_t s = g % PIPE;
++        if (g >= PIPE) {
++          int phase = vx_barrier_arrive(empty_bar(s), takers + 1);
++          vx_barrier_wait(empty_bar(s), phase);
++        }
++        uint8_t* buf = stages + s * stage_bytes;
++        const uint32_t ks0 = i * KSTEPS;
++      #if defined(READ_ONLY)
++        // The stages keep what they hold: the consumers measure reads alone.
++      #elif defined(NO_MMA) || CONSUME_WARPS
++        // Staging alone: the transfers of W only, as a copy of W.
++        vx_barrier_expect_tx(full_bar(s), kXfers);
++      #else
++        vx_barrier_expect_tx(full_bar(s), 1 + kXfers);
++        vx_dxa_issue_2d_wg(kDescA, full_bar(s), buf, 0, ks0);
++      #endif
++      #ifdef READ_ONLY
++        for (uint32_t q = 0; q < 0; ++q) {
++      #else
++        for (uint32_t q = 0; q < kXfers; ++q) {
++      #endif
++          uint8_t* dst = buf + stage_a + q * XFER;
++        #if LAYOUT == LAYOUT_PACKED
++          vx_dxa_issue_2d_wg(kDescW, full_bar(s), dst, 0, (((tile % num_tiles) * k_steps + ks0) * TILE_N * kStepRow + q * XFER) / XFER);
++        #else
++          // Transfer q: rows p * (XFER / kRowBytes) on of its K step (pair) j.
++          constexpr uint32_t kPer = TILE_N * kRowBytes / XFER;
++          constexpr uint32_t kRows = XFER / kRowBytes;
++          const uint32_t j = q / kPer, n0 = (tile % num_tiles) * TILE_N + (q % kPer) * kRows;
++          #if LAYOUT == LAYOUT_NK16
++          vx_dxa_issue_3d_wg(kDescW, full_bar(s), dst, 0, n0, ks0 + j);
++          #elif LAYOUT == LAYOUT_NK32
++          vx_dxa_issue_3d_wg(kDescW, full_bar(s), dst, 0, n0, ks0 / 2 + j);
++          #else
++          vx_dxa_issue_2d_wg(kDescW, full_bar(s), dst, n0, (ks0 + j) * kStepK);
++          #endif
++        #endif
++        }
++        vx_barrier_arrive(full_bar(s), takers + 1);
++      }
++    }
++    for (uint32_t i = (g > PIPE) ? (g - PIPE) : 0; i < g; ++i) {
++      int phase = vx_barrier_arrive(empty_bar(i % PIPE), takers + 1);
++      vx_barrier_wait(empty_bar(i % PIPE), phase);
++    }
++  } else if (STAGE_LOAD && warp_rank >= LOAD_WARP0) {
++    // Loaders: thread t copies words t, t + T, ... of the stage, every load
++    // of the stage before its stores.
++    constexpr uint32_t kT = LOAD_WARPS * VX_CFG_NUM_THREADS;
++    constexpr uint32_t kWords = kStageW / sizeof(word_t) / kT;
++    static_assert(kStageW % (sizeof(word_t) * kT) == 0, "a stage is whole words per loader thread");
++    const uint32_t t = threadIdx.x - LOAD_WARP0 * VX_CFG_NUM_THREADS;
++    const uint32_t a_words = KSTEPS * M * kStepRow / sizeof(word_t);
++    auto pA = reinterpret_cast<const word_t*>(arg->A_addr);
++    auto pW = reinterpret_cast<const word_t*>(arg->W_addr);
++    uint32_t g = 0;
++    for (uint32_t tile = cta; tile < total_tiles; tile += gridDim.x) {
++      for (uint32_t i = 0; i < num_stages; ++i, ++g) {
++        uint32_t s = g % PIPE;
++        if (g >= PIPE) {
++          int phase = vx_barrier_arrive(empty_bar(s), LOAD_WARPS + 1);
++          vx_barrier_wait(empty_bar(s), phase);
++        }
++        auto dst = reinterpret_cast<word_t*>(stages + s * stage_bytes);
++        const uint32_t ks0 = i * KSTEPS;
++        auto src = pW + size_t((tile % num_tiles) * k_steps + ks0) * TILE_N * kStepRow / sizeof(word_t) + t;
++        word_t v[kWords];
++        #pragma unroll
++        for (uint32_t w = 0; w < kWords; ++w) {
++          v[w] = src[w * kT];
++        }
++        word_t a = (t < a_words) ? pA[size_t(ks0) * M * kStepRow / sizeof(word_t) + t] : 0;
++        #pragma unroll
++        for (uint32_t w = 0; w < kWords; ++w) {
++          dst[stage_a / sizeof(word_t) + t + w * kT] = v[w];
++        }
++        if (t < a_words) {
++          dst[t] = a;
++        }
++        vx_barrier_arrive(full_bar(s), LOAD_WARPS + 1);
++      }
++    }
++    for (uint32_t i = (g > PIPE) ? (g - PIPE) : 0; i < g; ++i) {
++      int phase = vx_barrier_arrive(empty_bar(i % PIPE), LOAD_WARPS + 1);
++      vx_barrier_wait(empty_bar(i % PIPE), phase);
++    }
++  } else if (CONSUME_WARPS != 0 && warp_rank >= LOAD_WARP0) {
++    // Consumers: thread t reads words t, t + T, ... of each stage of W and
++    // XORs them; the checksum goes to C for the host to check.
++    constexpr uint32_t kT = CONSUME_WARPS * VX_CFG_NUM_THREADS;
++    const uint32_t t = threadIdx.x - LOAD_WARP0 * VX_CFG_NUM_THREADS;
++    word_t sum = 0;
++    uint32_t g = 0;
++    for (uint32_t tile = cta; tile < total_tiles; tile += gridDim.x) {
++      for (uint32_t i = 0; i < num_stages; ++i, ++g) {
++        uint32_t s = g % PIPE;
++        int phase = vx_barrier_arrive(full_bar(s), takers + 1);
++        vx_barrier_wait(full_bar(s), phase);
++        if (i == 0 && t == 0) {
++          pT[4 * tile + 0] = vx_core_id();
++          pT[4 * tile + 1] = csr_read(VX_CSR_MCYCLE);
++        }
++        auto w = reinterpret_cast<const volatile word_t*>(stages + s * stage_bytes + stage_a);
++        #pragma unroll 4
++        for (uint32_t j = t; j < kStageW / sizeof(word_t); j += kT) {
++          sum ^= w[j];
++        }
++        vx_barrier_arrive(empty_bar(s), takers + 1);
++      }
++      if (t == 0) {
++        pT[4 * tile + 2] = csr_read(VX_CSR_MCYCLE);
++        pT[4 * tile + 3] = pT[4 * tile + 2];
++      }
++    }
++    reinterpret_cast<word_t*>(arg->C_addr)[cta * kT + t] = sum;
++#if LEAN_ISSUE
++  } else if (warp_rank == 1 && CONSUME_WARPS == 0) {
++    // MMA issuer, the ring unrolled by PIPE as in the producer.
++    const uint32_t base = tm::smem_offset(stages);
++    uint32_t tile = cta, i = 0, j = 0, d_col = taddr;
++    while (tile < total_tiles) {
++      #pragma unroll
++      for (uint32_t s = 0; s < PIPE; ++s) {
++        if (tile >= total_tiles) break;
++        if (i == 0) {
++          d_col = taddr + (j % 2) * TILE_N;
++          if (j >= 2) {
++            int phase = vx_barrier_arrive(acc_empty(j % 2), epi + 1);
++            vx_barrier_wait(acc_empty(j % 2), phase);
++          }
++        }
++        int phase = vx_barrier_arrive(full_bar(s), stagers + 1);
++        vx_barrier_wait(full_bar(s), phase);
++        if (i == 0 && vx_thread_id() == 0) {
++          pT[4 * tile + 0] = vx_core_id();
++          pT[4 * tile + 1] = csr_read(VX_CSR_MCYCLE);
++        }
++      #ifndef NO_MMA
++        const uint32_t a_off = base + s * stage_bytes;
++        const uint32_t w_off = a_off + stage_a;
++        #pragma unroll
++        for (uint32_t k = 0; k < KSTEPS; ++k) {
++          const uint32_t w_k = (LAYOUT == LAYOUT_NK32) ? (k / 2) * TILE_N * kRowBytes + (k % 2) * kStepRow
++                                                       : k * TILE_N * kStepRow;
++          tm::mma(tm::make_idesc<vt::ITYPE>(kNFrag, d_col, i == 0 && k == 0),
++                  tm::smem_desc(a_off + k * M * kStepRow, kStepRow), tm::smem_desc(w_off + w_k, kRowBytes));
++        }
++      #else
++        (void)base; (void)d_col;
++      #endif
++        tm::commit(empty_bar(s), stagers + 1);
++        if (++i == num_stages) {
++          i = 0;
++          tm::commit(acc_full, epi + 1);
++          tile += gridDim.x;
++          ++j;
++        }
++      }
++    }
++#endif
++  } else if (warp_rank == 1 && CONSUME_WARPS == 0 && LEAN_ISSUE == 0) {
++    // MMA issuer: one tc.mma per K step into the tile's accumulator buffer,
++    // which the epilogue must have drained two tiles ago.
++    const uint32_t base = tm::smem_offset(stages);
++    uint32_t g = 0, j = 0;
++    for (uint32_t tile = cta; tile < total_tiles; tile += gridDim.x, ++j) {
++      const uint32_t d_col = taddr + (j % 2) * TILE_N;
++      if (j >= 2) {
++        int phase = vx_barrier_arrive(acc_empty(j % 2), epi + 1);
++        vx_barrier_wait(acc_empty(j % 2), phase);
++      }
++      for (uint32_t i = 0; i < num_stages; ++i, ++g) {
++        uint32_t s = g % PIPE;
++        int phase = vx_barrier_arrive(full_bar(s), stagers + 1);
++        vx_barrier_wait(full_bar(s), phase);
++        if (i == 0 && vx_thread_id() == 0) {
++          pT[4 * tile + 0] = vx_core_id();
++          pT[4 * tile + 1] = csr_read(VX_CSR_MCYCLE);
++        }
++        const uint32_t a_off = base + s * stage_bytes;
++        const uint32_t w_off = a_off + stage_a;
++      #ifndef NO_MMA
++        #pragma unroll
++        for (uint32_t k = 0; k < KSTEPS; ++k) {
++          const uint32_t w_k = (LAYOUT == LAYOUT_NK32) ? (k / 2) * TILE_N * kRowBytes + (k % 2) * kStepRow
++                                                       : k * TILE_N * kStepRow;
++          tm::mma(tm::make_idesc<vt::ITYPE>(kNFrag, d_col, i == 0 && k == 0),
++                  tm::smem_desc(a_off + k * M * kStepRow, kStepRow), tm::smem_desc(w_off + w_k, kRowBytes));
++        }
++      #else
++        (void)a_off; (void)w_off; (void)d_col;
++      #endif
++        tm::commit(empty_bar(s), stagers + 1);
++      }
++      tm::commit(acc_full, epi + 1);
++    }
++  } else if (CONSUME_WARPS == 0 && warp_rank >= EPI_WARP0 && warp_rank < EPI_WARP0 + epi) {
++    // Epilogue: this warp's block's lanes of the tile's buffer, rows below M
++    // only (C has rows up to the block's last lane).
++    const uint32_t lane = tm::warp_lane();
++    uint32_t j = 0;
++    for (uint32_t tile = cta; tile < total_tiles; tile += gridDim.x, ++j) {
++      vx_barrier(acc_full, epi + 1);
++      if (warp_rank == EPI_WARP0 && vx_thread_id() == 0) {
++        pT[4 * tile + 2] = csr_read(VX_CSR_MCYCLE);
++      }
++      auto pC = reinterpret_cast<ctx::output_t*>(arg->C_addr) + size_t(lane) * N + (tile % num_tiles) * TILE_N;
++      for (uint32_t c = 0; c < TILE_N; c += ctx::xtileN) {
++        ctx::fragment_acc frag;
++        tm::load<tm::FRAGMENT>(frag, tm::make_taddr(lane, taddr + (j % 2) * TILE_N + c));
++        ctx::store_matrix_sync(pC + c, frag, N);
++      }
++      vx_barrier_arrive(acc_empty(j % 2), epi + 1);
++      if (warp_rank == EPI_WARP0 && vx_thread_id() == 0) {
++        pT[4 * tile + 3] = csr_read(VX_CSR_MCYCLE);
++      }
++    }
++  }
++
++  vx_barrier(sync_bar, num_warps);
++  if (warp_rank == 0) {
++    tm::dealloc(taddr, 2 * TILE_N);
++    if (vx_thread_id() == 0) {
++      pCta[1] = csr_read(VX_CSR_MCYCLE);
++    }
++  }
++}
+diff -ruN head/tests/regression/gemm_tmem_decode/main.cpp /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/gemm_tmem_decode/main.cpp
+--- head/tests/regression/gemm_tmem_decode/main.cpp	1969-12-31 19:00:00.000000000 -0500
++++ /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/gemm_tmem_decode/main.cpp	2026-11-21 15:51:55.642496841 -0500
+@@ -0,0 +1,364 @@
++#include "common.h"
++#include <algorithm>
++#include <cmath>
++#include <iostream>
++#include <rvfloats.h>
++#include <string>
++#include <string.h>
++#include <tensor_cfg.h>
++#include <type_traits>
++#include <unistd.h>
++#include <util.h>
++#include <vector>
++#include <vortex2.h>
++#include <dxa.h>
++
++#define MAX_ERRORS 100
++
++#define RT_CHECK(_expr)                                      \
++  do {                                                       \
++    int _ret = _expr;                                        \
++    if (0 == _ret)                                           \
++      break;                                                 \
++    printf("Error: '%s' returned %d!\n", #_expr, (int)_ret); \
++    cleanup();                                               \
++    exit(-1);                                                \
++  } while (false)
++
++using namespace vortex;
++namespace vt = tensor;
++
++static_assert(std::is_same<vt::ITYPE, vt::fp16>::value, "gemm_tmem_decode generates fp16 operands");
++static_assert(std::is_same<vt::OTYPE, vt::fp32>::value, "gemm_tmem_decode accumulates in fp32");
++
++using cfg = vt::wgmma_config_t<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, GEMM_NRC>;
++using itype_t = vt::ITYPE::dtype;
++
++constexpr uint32_t kStepK   = cfg::fedpK * cfg::i_ratio;
++constexpr uint32_t kStepRow = kStepK * sizeof(itype_t);
++constexpr uint32_t kStageW  = KSTEPS * TILE_N * kStepRow;
++
++// The drift of the tensor core's fp32 accumulation from a double reference
++// tracks K (sgemm_tcu_tmem's bound).
++static uint32_t float_ulp(uint32_t K) {
++  return std::max<uint32_t>(8, K / 5);
++}
++
++const char *kernel_file = "kernel.vxbin";
++uint32_t xm = 16;
++uint32_t xn = 8192;
++uint32_t xk = 4096;
++uint32_t xP = 1;  // passes over the N tiles
++bool xa = false;  // place the buffers past the heap's first 2 MB
++
++vx_device_h device = nullptr;
++vx_buffer_h A_buffer = nullptr;
++vx_buffer_h W_buffer = nullptr;
++vx_buffer_h C_buffer = nullptr;
++vx_buffer_h T_buffer = nullptr;
++vx_buffer_h pad_buffer = nullptr;
++vx_queue_h  queue = nullptr;
++vx_module_h module_ = nullptr;
++vx_kernel_h kernel = nullptr;
++kernel_arg_t kernel_arg = {};
++
++static void show_usage() {
++  std::cout << "Vortex tensor-memory decode GEMM." << std::endl;
++  std::cout << "Usage: [-m M (1..64)] [-n N] [-k K] [-P passes over W] [-a: buffers past the first 2 MB] [-h: help]" << std::endl;
++}
++
++static void parse_args(int argc, char **argv) {
++  int c;
++  while ((c = getopt(argc, argv, "m:n:k:P:ah")) != -1) {
++    switch (c) {
++    case 'm': xm = atoi(optarg); break;
++    case 'n': xn = atoi(optarg); break;
++    case 'k': xk = atoi(optarg); break;
++    case 'P': xP = atoi(optarg); break;
++    case 'a': xa = true; break;
++    case 'h': show_usage(); exit(0); break;
++    default:  show_usage(); exit(-1);
++    }
++  }
++}
++
++void cleanup() {
++  if (device) {
++    if (A_buffer) vx_buffer_release(A_buffer);
++    if (W_buffer) vx_buffer_release(W_buffer);
++    if (C_buffer) vx_buffer_release(C_buffer);
++    if (T_buffer) vx_buffer_release(T_buffer);
++    if (pad_buffer) vx_buffer_release(pad_buffer);
++    if (kernel)  vx_kernel_release(kernel);
++    if (module_) vx_module_release(module_);
++    if (queue)   vx_queue_release(queue);
++    vx_device_dump_perf(device, stdout);
++    vx_device_release(device);
++  }
++}
++
++static void reject(const std::string& msg) {
++  std::cout << "Error: " << msg << "!" << std::endl;
++  cleanup();
++  exit(-1);
++}
++
++int main(int argc, char *argv[]) {
++  parse_args(argc, argv);
++  std::srand(50);
++
++  RT_CHECK(vx_device_open(0, &device));
++  vx_queue_info_t qi = { sizeof(qi), nullptr, VX_QUEUE_PRIORITY_NORMAL, 0 };
++  RT_CHECK(vx_queue_create(device, &qi, &queue));
++
++  uint64_t isa_flags, NT, issue_width, num_cores, lmem_bytes;
++  RT_CHECK(vx_device_query(device, VX_CAPS_ISA_FLAGS, &isa_flags));
++  RT_CHECK(vx_device_query(device, VX_CAPS_NUM_THREADS, &NT));
++  RT_CHECK(vx_device_query(device, VX_CAPS_ISSUE_WIDTH, &issue_width));
++  RT_CHECK(vx_device_query(device, VX_CAPS_NUM_CORES, &num_cores));
++  RT_CHECK(vx_device_query(device, VX_CAPS_LOCAL_MEM_SIZE, &lmem_bytes));
++  if ((isa_flags & VX_ISA_EXT_TCU) == 0 || (isa_flags & VX_ISA_EXT_DXA) == 0)
++    reject("needs the TCU and DXA extensions");
++  if (NT != VX_CFG_NUM_THREADS)
++    reject("device warp size must match VX_CFG_NUM_THREADS");
++  if (issue_width * cfg::xtileM != 64)
++    reject("a tc.mma must cover 64 rows (4 TCU blocks)");
++
++  const uint32_t M = xm, N = xn, K = xk;
++  if (M < 1 || M > 64)
++    reject("M must be 1..64, the lanes of one tc.mma");
++  if (N % TILE_N != 0)
++    reject("N must be a multiple of TILE_N = " + std::to_string(TILE_N));
++  if (K % (KSTEPS * kStepK) != 0)
++    reject("K must be a multiple of KSTEPS * " + std::to_string(kStepK));
++  const uint32_t k_steps = K / kStepK;
++  const uint32_t num_tiles = N / TILE_N;
++  const uint32_t total_tiles = num_tiles * xP;
++  if (num_tiles < num_cores)
++    reject("N must give every core a tile: at least " + std::to_string(num_cores * TILE_N));
++  const uint32_t stage_a = ((KSTEPS - 1) * M * kStepRow + 64 * kStepRow + 127) / 128 * 128;
++  const uint32_t lmem_size = TMEM_SLOT_BYTES + PIPE * (stage_a + kStageW);
++  if (lmem_size > lmem_bytes)
++    reject("PIPE stages exceed the local memory");
++  // One persistent CTA per core: its two accumulator buffers take TMEM.
++  const uint32_t num_ctas = num_cores;
++  const uint32_t c_rows = (M + cfg::xtileM - 1) / cfg::xtileM * cfg::xtileM;
++  const uint32_t warps = STAGE_LOAD ? (LOAD_WARP0 + LOAD_WARPS) : CONSUME_WARPS ? (LOAD_WARP0 + CONSUME_WARPS) : LOAD_WARP0;
++  const double w_bytes = double(N) * K * sizeof(itype_t);
++  printf("GEMM_DECODE: M=%u N=%u K=%u tile_n=%u ksteps=%u pipe=%u xfer=%u xfers_per_stage=%u layout=%u "
++         "stage=%s warps=%u stage_bytes=%u lmem=%u tiles=%u ctas=%u cores=%u weight_bytes=%.0f\n",
++         M, N, K, TILE_N, KSTEPS, PIPE, XFER, kStageW / XFER, LAYOUT, STAGE_LOAD ? "load" : "dxa",
++         warps, stage_a + kStageW, lmem_size, num_tiles, num_ctas, (uint32_t)num_cores, w_bytes);
++
++  // A is packed by K step, [K/kstep][M][kstep]; W is the logical [K][N] in
++  // the device layout LAYOUT.
++  std::vector<itype_t> h_A(size_t(M) * K), h_W(size_t(K) * N);
++  for (auto& v : h_A) v = rv_ftoh_s(bit_cast<uint32_t>(float(rand()) / RAND_MAX), 0, nullptr);
++  for (auto& v : h_W) v = rv_ftoh_s(bit_cast<uint32_t>(float(rand()) / RAND_MAX), 0, nullptr);
++  std::vector<itype_t> h_Ap(h_A.size()), h_Wd(h_W.size());
++  for (uint32_t m = 0; m < M; ++m)
++    for (uint32_t k = 0; k < K; ++k)
++      h_Ap[(size_t(k / kStepK) * M + m) * kStepK + k % kStepK] = h_A[size_t(m) * K + k];
++  for (uint32_t k = 0; k < K; ++k) {
++    for (uint32_t n = 0; n < N; ++n) {
++      size_t idx;
++      if (LAYOUT == LAYOUT_PACKED)
++        idx = ((size_t(n / TILE_N) * k_steps + k / kStepK) * TILE_N + n % TILE_N) * kStepK + k % kStepK;
++      else if (LAYOUT == LAYOUT_KN)
++        idx = size_t(k) * N + n;
++      else
++        idx = size_t(n) * K + k;
++      h_Wd[idx] = h_W[size_t(k) * N + n];
++    }
++  }
++
++  if (xa) {
++    // The heap starts below the first 2 MB boundary, which the superpage heap
++    // (VORTEX_VM_MEGAPAGE_HEAP) maps with 4 KB pages; a GPU driver backs a
++    // large allocation with 2 MB pages throughout.
++    RT_CHECK(vx_buffer_create(device, 2u << 20, VX_MEM_READ, &pad_buffer));
++  }
++  RT_CHECK(vx_buffer_create(device, h_Ap.size() * sizeof(itype_t), VX_MEM_READ, &A_buffer));
++  RT_CHECK(vx_buffer_address(A_buffer, &kernel_arg.A_addr));
++  RT_CHECK(vx_buffer_create(device, h_Wd.size() * sizeof(itype_t), VX_MEM_READ, &W_buffer));
++  RT_CHECK(vx_buffer_address(W_buffer, &kernel_arg.W_addr));
++  RT_CHECK(vx_buffer_create(device, size_t(c_rows) * N * sizeof(float), VX_MEM_WRITE, &C_buffer));
++  RT_CHECK(vx_buffer_address(C_buffer, &kernel_arg.C_addr));
++  const uint32_t num_times = 4 * total_tiles + 2 * num_ctas;
++  RT_CHECK(vx_buffer_create(device, num_times * sizeof(uint64_t), VX_MEM_WRITE, &T_buffer));
++  RT_CHECK(vx_buffer_address(T_buffer, &kernel_arg.times_addr));
++  RT_CHECK(vx_enqueue_write(queue, A_buffer, 0, h_Ap.data(), h_Ap.size() * sizeof(itype_t), 0, nullptr, nullptr));
++  RT_CHECK(vx_enqueue_write(queue, W_buffer, 0, h_Wd.data(), h_Wd.size() * sizeof(itype_t), 0, nullptr, nullptr));
++
++  kernel_arg.M = M;
++  kernel_arg.N = N;
++  kernel_arg.K = K;
++  kernel_arg.passes = xP;
++
++  if (!STAGE_LOAD) {
++    // A: KSTEPS K steps of M rows, one contiguous run.
++    RT_CHECK(vortex::dxa::program_2d(device, 0, kernel_arg.A_addr,
++      /*size0=*/M * kStepK, /*size1=*/k_steps, /*stride0_bytes=*/M * kStepRow,
++      /*tile0=*/M * kStepK, /*tile1=*/KSTEPS, /*elem_bytes=*/sizeof(itype_t)));
++    // W: one transfer is XFER bytes of a stage, landing as rows of the K step.
++    if (LAYOUT == LAYOUT_PACKED) {
++      RT_CHECK(vortex::dxa::program_2d(device, 1, kernel_arg.W_addr,
++        /*size0=*/XFER / sizeof(itype_t), /*size1=*/uint32_t(w_bytes / XFER), /*stride0_bytes=*/XFER,
++        /*tile0=*/XFER / sizeof(itype_t), /*tile1=*/1, /*elem_bytes=*/sizeof(itype_t)));
++    } else if (LAYOUT == LAYOUT_NK16 || LAYOUT == LAYOUT_NK32) {
++      // (elements of a row, n, K step or pair): rows of 32 or 64 bytes.
++      const uint32_t row = (LAYOUT == LAYOUT_NK32) ? 2 * kStepK : kStepK;
++      RT_CHECK(vortex::dxa::program_3d(device, 1, kernel_arg.W_addr,
++        /*size0=*/row, /*size1=*/N, /*size2=*/K / row,
++        /*stride0_bytes=*/K * sizeof(itype_t), /*stride1_bytes=*/row * sizeof(itype_t),
++        /*tile0=*/row, /*tile1=*/XFER / (row * sizeof(itype_t)), /*tile2=*/1, /*elem_bytes=*/sizeof(itype_t)));
++    } else {
++      // W[K][N]: (n, k) tiles scattered K-major, n's K step 32 bytes apart.
++      RT_CHECK(vortex::dxa::program_2d(device, 1, kernel_arg.W_addr,
++        /*size0=*/N, /*size1=*/K, /*stride0_bytes=*/N * sizeof(itype_t),
++        /*tile0=*/XFER / kStepRow, /*tile1=*/kStepK, /*elem_bytes=*/sizeof(itype_t)));
++      RT_CHECK(vortex::dxa::set_layout(device, 1, vortex::dxa::Layout::KMajor, /*rank=*/2, sizeof(itype_t)));
++    }
++  }
++
++  RT_CHECK(vx_module_load_file(device, kernel_file, &module_));
++  RT_CHECK(vx_module_get_kernel(module_, "main", &kernel));
++
++  std::vector<float> h_C(size_t(c_rows) * N);
++  std::vector<uint64_t> h_T(num_times);
++
++  vx_launch_info_t li = {};
++  li.struct_size  = sizeof(li);
++  li.kernel       = kernel;
++  li.args_host    = &kernel_arg;
++  li.args_size    = sizeof(kernel_arg);
++  li.ndim         = 2;
++  li.grid_dim[0]  = num_ctas;
++  li.grid_dim[1]  = 1;
++  li.block_dim[0] = warps * NT;
++  li.block_dim[1] = 1;
++  li.lmem_size    = lmem_size;
++  li.tmem_cols    = 2 * TILE_N;
++
++  vx_event_h launch_ev = nullptr, read_ev = nullptr, t_ev = nullptr;
++  RT_CHECK(vx_enqueue_launch(queue, &li, 0, nullptr, &launch_ev));
++  RT_CHECK(vx_enqueue_read(queue, h_C.data(), C_buffer, 0, h_C.size() * sizeof(float), 1, &launch_ev, &read_ev));
++  RT_CHECK(vx_enqueue_read(queue, h_T.data(), T_buffer, 0, h_T.size() * sizeof(uint64_t), 1, &read_ev, &t_ev));
++  RT_CHECK(vx_event_wait_value(t_ev, 1, VX_TIMEOUT_INFINITE));
++  vx_event_release(t_ev);
++  vx_event_release(read_ev);
++  vx_event_release(launch_ev);
++
++  {
++    // The multiply phase of a tile runs from its first stage landing to its
++    // last multiply completing; per core the union of its tiles' phases.
++    // With several passes, also the passes after the first, which find W in the L2.
++    uint64_t first = UINT64_MAX, last = 0;
++    for (uint32_t c = 0; c < num_ctas; ++c) {
++      first = std::min(first, h_T[4 * total_tiles + 2 * c]);
++      last = std::max(last, h_T[4 * total_tiles + 2 * c + 1]);
++    }
++    auto union_cycles = [&](uint32_t t0) {
++      uint64_t mult = 0;
++      for (uint32_t core = 0; core < num_cores; ++core) {
++        std::vector<std::pair<uint64_t, uint64_t>> iv;
++        for (uint32_t t = t0; t < total_tiles; ++t) {
++          if (h_T[4 * t] == core)
++            iv.push_back({h_T[4 * t + 1], h_T[4 * t + 2]});
++        }
++        std::sort(iv.begin(), iv.end());
++        uint64_t lo = iv.empty() ? 0 : iv[0].first, hi = lo;
++        for (auto& p : iv) {
++          if (p.first > hi) {
++            mult += hi - lo;
++            lo = p.first;
++          }
++          hi = std::max(hi, p.second);
++        }
++        mult += hi - lo;
++      }
++      return mult;
++    };
++    uint64_t mult = union_cycles(0);
++    uint64_t span = last - first;
++    double bytes = w_bytes * xP;
++    double per_mult = bytes / mult, per_kernel = bytes / (double(num_cores) * span);
++    printf("DECODE_CYCLES: span=%lu multiply=%lu (summed over cores)\n", span, mult);
++    printf("DECODE_W_BYTES_PER_CLOCK_PER_SM: multiply=%.2f kernel=%.2f\n", per_mult, per_kernel);
++    printf("DECODE_W_GBS_PER_SM: multiply=%.1f kernel=%.1f total_kernel=%.1f (at %d MHz)\n",
++           per_mult * VX_CFG_PLATFORM_CLOCK_RATE / 1000.0, per_kernel * VX_CFG_PLATFORM_CLOCK_RATE / 1000.0,
++           bytes / span * VX_CFG_PLATFORM_CLOCK_RATE / 1000.0, VX_CFG_PLATFORM_CLOCK_RATE);
++    if (xP > 1) {
++      uint64_t later = union_cycles(num_tiles);
++      printf("DECODE_W_BYTES_PER_CLOCK_PER_SM_LATER_PASSES: multiply=%.2f\n", w_bytes * (xP - 1) / later);
++    }
++  }
++
++  int errors = 0;
++  uint32_t max_ulp = 0;
++  const uint32_t ulp_bound = float_ulp(K);
++#if defined(NO_MMA) || defined(READ_ONLY)
++  std::cout << "staging or reads only, C not checked" << std::endl;
++  if (false)
++#elif CONSUME_WARPS
++  {
++    // Each consumer thread's XOR of its words of every stage of its CTA's tiles.
++    constexpr uint32_t kT = CONSUME_WARPS * VX_CFG_NUM_THREADS;
++    const uint32_t stage_words = kStageW / 8, num_stages = k_steps / KSTEPS;
++    auto words = reinterpret_cast<const uint64_t*>(h_Wd.data());
++    std::vector<uint64_t> got(num_ctas * kT);
++    memcpy(got.data(), h_C.data(), got.size() * 8);  // the consumers' checksums, at the start of C
++    for (uint32_t c = 0; c < num_ctas; ++c) {
++      for (uint32_t t = 0; t < kT; ++t) {
++        uint64_t x = 0;
++        for (uint32_t tile = c; tile < total_tiles; tile += num_ctas)
++          for (uint32_t i = 0; i < num_stages; ++i) {
++            size_t base = (size_t((tile % num_tiles) * k_steps + i * KSTEPS) * TILE_N * kStepRow) / 8;
++            for (uint32_t j = t; j < stage_words; j += kT) x ^= words[base + j];
++          }
++        if (got[c * kT + t] != x) {
++          if (errors < MAX_ERRORS) printf("*** error: checksum cta=%u thread=%u\n", c, t);
++          ++errors;
++        }
++      }
++    }
++  }
++  if (false)
++#endif
++  {
++    std::vector<float> fW(h_W.size());
++    for (size_t i = 0; i < h_W.size(); ++i) fW[i] = bit_cast<float>(rv_htof_s(h_W[i], 0, nullptr));
++    std::vector<double> acc(N);
++    for (uint32_t m = 0; m < M; ++m) {
++      std::fill(acc.begin(), acc.end(), 0.0);
++      for (uint32_t k = 0; k < K; ++k) {
++        double a = bit_cast<float>(rv_htof_s(h_A[size_t(m) * K + k], 0, nullptr));
++        const float* pW = &fW[size_t(k) * N];
++        for (uint32_t n = 0; n < N; ++n)
++          acc[n] += a * pW[n];
++      }
++      for (uint32_t n = 0; n < N; ++n) {
++        float expected = float(acc[n]);
++        float actual = h_C[size_t(m) * N + n];
++        int32_t d = std::abs(bit_cast<int32_t>(actual) - bit_cast<int32_t>(expected));
++        max_ulp = std::max<uint32_t>(max_ulp, d);
++        if (d > (int32_t)ulp_bound) {
++          if (errors < MAX_ERRORS)
++            printf("*** error: [%u,%u] expected=%f, actual=%f\n", m, n, expected, actual);
++          ++errors;
++        }
++      }
++    }
++  }
++  printf("reference drift: max=%u ULP, bound=%u ULP (K=%u)\n", max_ulp, ulp_bound, K);
++
++  cleanup();
++
++  if (errors != 0) {
++    std::cout << "Found " << errors << " / " << size_t(M) * N << " errors!" << std::endl;
++    std::cout << "FAILED!" << std::endl;
++    return 1;
++  }
++  std::cout << "PASSED!" << std::endl;
++  return 0;
++}
+diff -ruN head/tests/regression/gemm_tmem_decode/Makefile /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/gemm_tmem_decode/Makefile
+--- head/tests/regression/gemm_tmem_decode/Makefile	1969-12-31 19:00:00.000000000 -0500
++++ /storage/project/r-hkim358-0/echung67/vortex-exp/src_ld/tests/regression/gemm_tmem_decode/Makefile	2026-11-21 15:51:55.660957447 -0500
+@@ -0,0 +1,23 @@
++ROOT_DIR := $(realpath ../../..)
++include $(ROOT_DIR)/config.mk
++
++CONFIGS := $(if $(findstring -DVX_CFG_EXT_TCU_ENABLE,$(CONFIGS)),$(CONFIGS),$(CONFIGS) -DVX_CFG_EXT_TCU_ENABLE)
++CONFIGS := $(if $(findstring -DVX_CFG_EXT_DXA_ENABLE,$(CONFIGS)),$(CONFIGS),$(CONFIGS) -DVX_CFG_EXT_DXA_ENABLE)
++CONFIGS := $(if $(findstring -DVX_CFG_TCU_WGMMA_ENABLE,$(CONFIGS)),$(CONFIGS),$(CONFIGS) -DVX_CFG_TCU_WGMMA_ENABLE)
++CONFIGS := $(if $(findstring -DVX_CFG_TCU_TMEM_ENABLE,$(CONFIGS)),$(CONFIGS),$(CONFIGS) -DVX_CFG_TCU_TMEM_ENABLE)
++
++PROJECT := gemm_tmem_decode
++
++SRC_DIR := $(VORTEX_HOME)/tests/regression/$(PROJECT)
++
++SRCS := $(SRC_DIR)/main.cpp $(SW_COMMON_DIR)/rvfloats.cpp $(SW_COMMON_DIR)/softfloat_ext.cpp
++
++VX_SRCS := $(SRC_DIR)/kernel.cpp
++
++CXXFLAGS += -I$(THIRD_PARTY_DIR)/softfloat/source/include
++
++LDFLAGS += $(THIRD_PARTY_DIR)/softfloat/build/Linux-x86_64-GCC/softfloat.a
++
++KERNEL_LIB := vortex2
++
++include ../common.mk

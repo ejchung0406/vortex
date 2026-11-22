@@ -1,0 +1,1 @@
+bb: CONFIGS=-DVX_CFG_DCACHE_NUM_BANKS=4 ./ci/blackbox.sh --driver=simx --app=bwstream --cores=1 --warps=64 --threads=32 --args='-n64 -r1 -p0 -u4 -b32'

@@ -1,0 +1,8 @@
+name=par_q1_rtl_k4_p16
+src_rev=
+src_dirty=0
+host=atl1-1-01-002-23-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_L2_ENABLE -DVX_CFG_EXT_DXA_ENABLE 
+blackbox=--driver=rtlsim --app=bwstream_dxa --perf=16 --cores=4 --args=-e1024 -n16 -g8 -d4 -c0
+rc=0
+wall_s=451

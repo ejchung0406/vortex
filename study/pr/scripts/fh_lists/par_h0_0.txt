@@ -1,0 +1,26 @@
+pr_fh_parity-vecadd_h0|simx|vecadd|-n16384||-DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-lazy-fetch_h0|simx|lazy_fetch|||-DVX_CFG_DCACHE_LAZY_FETCH=1 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-sgemm_h0|simx|sgemm|-n64||-DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-sgemv_h0|simx|sgemv|-m512 -n512||-DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-sgemm-mc64_h0|simx|sgemm|-n64|--cores=2 --l2cache|-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-chase-l2link_h0|simx|chase|-b262144 -w1 -i512|--l2cache|-DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-chase-l1link_h0|simx|chase|-b8192 -w1 -i512||-DVX_CFG_L1_LINK_LATENCY=20 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-sgemm-fw4_h0|simx|sgemm|-n128||-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_WIDTH=4 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-printf-iw2_h0|simx|printf|||-DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-printf-ss2_h0|simx|printf||--cores=2 --l2cache|-DVX_CFG_SOCKET_SIZE=2 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-lmem-access_h0|simx|lmem_access|||-DVX_CFG_NUM_THREADS=16 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-lmem-access-amo-iw2_h0|simx|lmem_access|-n16 -s||-DVX_CFG_NUM_THREADS=16 -DVX_CFG_EXT_A_ENABLE -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-ldst-wide-lanes_h0|simx|ldst_wide|||-DVX_CFG_NUM_THREADS=16 -DVX_CFG_EXT_LDST_WIDE_ENABLE -DVX_CFG_NUM_LSU_LANES=4 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-mixfu-simd_h0|simx|mixfu|-n40 -i64||-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_SIMD_WIDTH=8 -DVX_CFG_NUM_ALU_LANES=4 -DVX_CFG_NUM_FPU_LANES=4 -DVX_CFG_NUM_LSU_LANES=4 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-mixfu-div_h0|simx|mixfu|-n40 -i32||-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_ALU_LANES=8 -DVX_CFG_NUM_FPU_LANES=8 -DVX_CFG_NUM_LSU_LANES=8 -DMIXFU_DIV -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-ldst-matrix_h0|simx|ldst_matrix|||-DVX_CFG_NUM_THREADS=8 -DVX_CFG_EXT_LDST_MATRIX_ENABLE -DVX_CFG_EXT_LDST_WIDE_ENABLE -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_TYPE_DPI -DVX_CFG_TCU_SPARSE_ENABLE -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-sgemm2-lmem_h0|simx|sgemm2|-n32 -t4||-DVX_CFG_NUM_THREADS=16 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-sgemm2-lmem-wide_h0|simx|sgemm2|-n32 -t4||-DVX_CFG_NUM_THREADS=16 -DVX_CFG_EXT_LDST_WIDE_ENABLE -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-stencil3d_h0|simx|stencil3d|-n32||-DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_parity-raycast-nt16_h0|simx|raycast|||-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_model_parity-async-gbarrier_h0|simx|async_gbarrier||--cores=2|-DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_model_parity-dogfood-cp-llc_h0|simx|dogfood|-n16 -xbar -xgbar|--cores=4 --l2cache|-DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_model_parity-sgemm-cp-llc-17_h0|simx|sgemm|-n32|--cores=2 --l2cache|-DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=8 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_model_parity-flush-chain_h0|simx|flush_coherence|-n2048 -r16 -c|--cores=4 --l2cache|-DVX_CFG_SOCKET_SIZE=1 -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_model_parity-copy-mcast_h0|simx|dxa_copy_mcast|||-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_DCACHE_FWD_HOLD=0
+pr_fh_model_parity-sgemm2-dxa-mcast_h0|simx|sgemm2_dxa_mcast|-n128||-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_DCACHE_FWD_HOLD=0

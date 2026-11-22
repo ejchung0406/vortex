@@ -1,0 +1,8 @@
+name=ld_mst_fa_k4
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-16-1.pace.gatech.edu
+xconf=-DPATH_STATS
+blackbox=--driver=simx --app=ldstream --perf=7 --profile=h200s --cores=4 --args=-t1024 -b8 -u8 -m16 -a
+rc=0
+wall_s=386

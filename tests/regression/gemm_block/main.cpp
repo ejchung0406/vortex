@@ -594,6 +594,8 @@ int main(int argc, char *argv[]) {
     reject("-s must be 0 (load) or 1 (dxa)");
   if (xs == STAGE_DXA && (isa_flags & VX_ISA_EXT_DXA) == 0)
     reject("-s 1 needs the DXA extension");
+  if (xo != ROLE_NONE && (isa_flags & VX_ISA_STD_A) == 0)
+    reject("-o needs the A extension: the idle role polls with an atomic");
 
   uint64_t NT, num_warps, num_cores, lmem_bytes;
   RT_CHECK(vx_device_query(device, VX_CAPS_NUM_THREADS, &NT));

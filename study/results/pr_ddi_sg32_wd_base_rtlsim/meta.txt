@@ -1,0 +1,7 @@
+side=base
+xlen=64
+xconf=-DVX_CFG_EXT_DXA_ENABLE
+app=sgemm2_dxa args=-n32 -t4 -m1 appconf=0
+host=atl1-1-02-005-6-2.pace.gatech.edu
+rc=0
+wall_s=5

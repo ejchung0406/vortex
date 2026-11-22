@@ -1,0 +1,9 @@
+gemm_block_s0 rc=0 1 instrs=1216384, cycles=765626 staging=load grid=16 warps_per_cta=4 cta_cols=64 chunk_k=32 chunk_bytes=4096 depth=1 lmem_per_cta=4096 cta_slots_per_core=16 
+war_order rc=0 1 instrs=341824, cycles=358274 
+tmem_roof_n512 rc=0 1 instrs=11405, cycles=132934 TMEM_FLOPS_PER_CYCLE: 3703.9 
+tmem_roof_n64 rc=0 1 instrs=4649, cycles=44302 TMEM_FLOPS_PER_CYCLE: 1184.6 
+tmem_roof_n128 rc=0 1 instrs=5621, cycles=50721 TMEM_FLOPS_PER_CYCLE: 2369.2 
+bwstream_n64_b32 rc=0 1 instrs=26368, cycles=49943 cores=1 warps=64 threads=32 grid=64 steps=64 pattern=coalesced unroll=1 bytes=524288 
+bwstream_dxa_e64_g1 rc=0 1 instrs=12414, cycles=167685 cores=1 warps=64 threads=32 slots=64 grid=1 tile_elems=64 tiles=256 depth=4 consume=0 pattern=dxa unroll=4 bytes=65536 
+bwstream_dxa_e4096_g1 rc=0 1 instrs=3198, cycles=46383 cores=1 warps=64 threads=32 slots=3 grid=1 tile_elems=4096 tiles=64 depth=4 consume=0 pattern=dxa unroll=4 bytes=1048576 
+done

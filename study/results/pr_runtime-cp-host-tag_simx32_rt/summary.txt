@@ -1,0 +1,15 @@
+base runtime build rc=0
+base test build rc=0
+-DVX_CFG_MEM_ADDR_WIDTH=32 -DVX_CFG_XLEN=32 
+/var/lib/slurm/slurmd/job15982845/slurm_script: line 27: 2354709 Segmentation fault      VORTEX_DRIVER=simx timeout 600 ./tests/runtime/test_host_alias > "$OUT/${v}_host_alias_$i.log" 2>&1
+base host_alias run 1 rc=139 device buffer [0x30000, 0x4030000), host heap at 0x5c53b0 
+/var/lib/slurm/slurmd/job15982845/slurm_script: line 27: 2354715 Segmentation fault      VORTEX_DRIVER=simx timeout 600 ./tests/runtime/test_host_alias > "$OUT/${v}_host_alias_$i.log" 2>&1
+base host_alias run 2 rc=139 device buffer [0x30000, 0x4030000), host heap at 0x5c53b0 
+/var/lib/slurm/slurmd/job15982845/slurm_script: line 27: 2354721 Segmentation fault      VORTEX_DRIVER=simx timeout 600 ./tests/runtime/test_host_alias > "$OUT/${v}_host_alias_$i.log" 2>&1
+base host_alias run 3 rc=139 device buffer [0x30000, 0x4030000), host heap at 0x5c53b0 
+pr runtime build rc=0
+pr test build rc=0
+-DVX_CFG_MEM_ADDR_WIDTH=32 -DVX_CFG_XLEN=32 
+pr host_alias run 1 rc=0 device buffer [0x30000, 0x4030000), host heap at 0x5c5400 PASSED 
+pr host_alias run 2 rc=0 device buffer [0x30000, 0x4030000), host heap at 0x5c5400 PASSED 
+pr host_alias run 3 rc=0 device buffer [0x30000, 0x4030000), host heap at 0x5c5400 PASSED 

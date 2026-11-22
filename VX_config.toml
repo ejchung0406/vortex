@@ -63,11 +63,14 @@ VX_CFG_NUM_BARRIERS = 8
 # What a barrier waits for in the LSU before its arrival counts. 0: every
 # request of the core, queued or a read awaiting its response, whatever warp
 # made it. 1: for a barrier that stalls its warp (vx_barrier, vx_barrier_wait),
-# the warp's own instructions committed, its loads answered, no LSU block
-# holding a request not yet sent, and no store in flight to the data cache or
-# local memory, so the warp's stores have landed; the reads other warps and
-# CTAs have outstanding no longer hold it. An arrive (vx_barrier_arrive,
-# expect_tx), after which its warp runs on, waits as 0. 1 is what an H200 does:
+# the warp's own instructions committed, so its loads are answered; and, of
+# every warp of the core and loads as well as stores, no request still queued
+# in an LSU block and none on its way to the data cache (coalescer, lane
+# adapter, flush port, the core's dMMU lanes, the link) or a store to local
+# memory. A read waiting at the caches or memory no longer holds it; requests
+# other CTAs still have queued or on that path do. An arrive
+# (vx_barrier_arrive, expect_tx), after which its warp runs on, waits as 0.
+# 1 is what an H200 does:
 # 16 CTAs of an SM staging with loads take 2503-2536 cycles an iteration
 # whether they start in step or staggered, and a CTA doing register work and
 # barriers beside CTAs streaming global loads goes from 71 to 79 cycles an

@@ -1,0 +1,8 @@
+name=bwco2_k4bw_r5
+src_rev=
+src_dirty=0
+host=atl1-1-02-007-13-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DMTILES=4 -DPROFILE_ENABLE 
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=4 --args=-m64 -k1024 -t1 -n8192 -b2 -s0 -r5 -o1
+rc=0
+wall_s=1234

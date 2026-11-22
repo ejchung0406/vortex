@@ -1,0 +1,535 @@
+### ncu ncu_by Sat Nov 21 10:11:29 PM EST 2026 metrics: lts__cycles_elapsed.avg,lts__xbar2lts_cycles_active.avg,lts__xbar2lts_cycles_active.max,lts__cycles_active.avg,lts__lts2xbar_cycles_active.avg,lts__lts2xbar_cycles_active.max,lts__ltcfabric2lts_cycles_active.avg,lts__ltcfabric2lts_cycles_stalled.avg,lts__ltcfabric2lts_cycles_stalled.max,lts__ltcfabric2ltc_cycles_active.avg,lts__t_requests_srcunit_tex_op_read.sum,lts__t_requests_srcunit_ltcfabric.sum,lts__t_sector_op_read_hit_rate.pct,dram__bytes_read.sum,lts__d_sectors_fill_device.sum
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 725296 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12270 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=291 p50=431 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 1
+R s=ncu_by t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=126.4 nv_pw_max=126.8 nv_temp=28 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=1.87 sum_gbs=11.2 min=1.87 max=1.87 mhz_med=1980 bpc_med=0.94 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:1.9:1980 16:1.9:1980 4:1.9:1980 20:1.9:1980 14:1.9:1980 30:1.9:1980
+  g=byB mode=1 n=8 med_gbs=1.87 sum_gbs=14.9 min=1.86 max=1.87 mhz_med=1980 bpc_med=0.94 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:1.9:1977 18:1.9:1977 6:1.9:1980 22:1.9:1980 8:1.9:1980 24:1.9:1980 10:1.9:1980 26:1.9:1980
+SUMS s=ncu_by trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=126.4 [126.4-126.4] reasons=0x0
+SUMG s=ncu_by g=byA mode=1 n=6 trials=1 med_gbs=1.87 [1.87-1.87] sum_gbs=11.2 [11.2-11.2] mhz=1980 [1980-1980] bpc=0.942 [0.942-0.942]
+SUMG s=ncu_by g=byB mode=1 n=8 trials=1 med_gbs=1.87 [1.87-1.87] sum_gbs=14.9 [14.9-14.9] mhz=1980 [1980-1980] bpc=0.942 [0.942-0.942]
+==PROF== Disconnected from process 725296
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 725388 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12273 lowconf=1 errs=0 blocksA=3145472 blocksB=3145472 sample_lat p10=275 p25=290 p50=432 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 2
+R s=ncu_by t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=411.8 nv_pw_max=411.9 nv_temp=31 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=196.12 sum_gbs=1176.6 min=195.78 max=196.35 mhz_med=1980 bpc_med=99.05 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:196.3:1980 16:196.1:1980 4:195.8:1980 20:196.0:1980 14:196.3:1980 30:196.1:1980
+  g=byB mode=1 n=8 med_gbs=195.01 sum_gbs=1559.9 min=194.60 max=195.36 mhz_med=1980 bpc_med=98.49 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:194.8:1980 18:194.6:1980 6:195.4:1980 22:195.1:1980 8:195.1:1980 24:194.9:1980 10:195.0:1980 26:195.0:1980
+SUMS s=ncu_by trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=411.8 [411.8-411.8] reasons=0x0
+SUMG s=ncu_by g=byA mode=1 n=6 trials=1 med_gbs=196.12 [196.12-196.12] sum_gbs=1176.6 [1176.6-1176.6] mhz=1980 [1980-1980] bpc=99.050 [99.050-99.050]
+SUMG s=ncu_by g=byB mode=1 n=8 trials=1 med_gbs=195.01 [195.01-195.01] sum_gbs=1559.9 [1559.9-1559.9] mhz=1980 [1980-1980] bpc=98.491 [98.491-98.491]
+==PROF== Disconnected from process 725388
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 725417 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12276 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=291 p50=432 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 3
+R s=ncu_by t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=26 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=408.7 nv_pw_max=409.6 nv_temp=32 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=196.13 sum_gbs=1176.3 min=195.60 max=196.36 mhz_med=1980 bpc_med=99.06 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:196.4:1980 16:196.1:1980 4:195.6:1980 20:195.8:1980 14:196.3:1980 30:196.1:1980
+  g=byB mode=1 n=8 med_gbs=194.97 sum_gbs=1559.9 min=194.56 max=195.42 mhz_med=1980 bpc_med=98.47 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:195.4:1980 18:195.2:1980 6:195.4:1980 22:195.2:1980 8:194.7:1980 24:194.6:1980 10:194.8:1980 26:194.7:1980
+SUMS s=ncu_by trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=408.7 [408.7-408.7] reasons=0x0
+SUMG s=ncu_by g=byA mode=1 n=6 trials=1 med_gbs=196.13 [196.13-196.13] sum_gbs=1176.3 [1176.3-1176.3] mhz=1980 [1980-1980] bpc=99.055 [99.055-99.055]
+SUMG s=ncu_by g=byB mode=1 n=8 trials=1 med_gbs=194.97 [194.97-194.97] sum_gbs=1559.9 [1559.9-1559.9] mhz=1980 [1980-1980] bpc=98.473 [98.473-98.473]
+==PROF== Disconnected from process 725417
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 725458 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12277 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=431 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 4
+R s=ncu_by t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=409.6 nv_pw_max=410.2 nv_temp=32 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=196.11 sum_gbs=1176.3 min=195.67 max=196.30 mhz_med=1980 bpc_med=99.04 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:195.9:1980 16:195.7:1980 4:196.1:1980 20:196.3:1980 14:196.3:1980 30:196.1:1980
+  g=byB mode=1 n=8 med_gbs=195.01 sum_gbs=1558.7 min=193.94 max=195.32 mhz_med=1980 bpc_med=98.49 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:194.2:1980 18:193.9:1980 6:195.3:1980 22:195.2:1980 8:195.1:1980 24:195.0:1980 10:195.0:1980 26:195.0:1980
+SUMS s=ncu_by trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=409.6 [409.6-409.6] reasons=0x0
+SUMG s=ncu_by g=byA mode=1 n=6 trials=1 med_gbs=196.11 [196.11-196.11] sum_gbs=1176.3 [1176.3-1176.3] mhz=1980 [1980-1980] bpc=99.044 [99.044-99.044]
+SUMG s=ncu_by g=byB mode=1 n=8 trials=1 med_gbs=195.01 [195.01-195.01] sum_gbs=1558.7 [1558.7-1558.7] mhz=1980 [1980-1980] bpc=98.490 [98.490-98.490]
+==PROF== Disconnected from process 725458
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 725475 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12273 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=430 p75=465 p90=482
+==PROF== Profiling "k_bys": Application replay pass 5
+R s=ncu_by t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=380.8 nv_pw_max=410.9 nv_temp=32 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=196.05 sum_gbs=1176.0 min=195.59 max=196.31 mhz_med=1980 bpc_med=99.02 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:195.8:1980 16:195.6:1980 4:196.0:1980 20:196.2:1980 14:196.3:1980 30:196.1:1980
+  g=byB mode=1 n=8 med_gbs=195.04 sum_gbs=1560.3 min=194.66 max=195.43 mhz_med=1980 bpc_med=98.50 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:194.8:1980 18:194.7:1980 6:195.4:1980 22:195.2:1980 8:195.1:1980 24:195.0:1980 10:195.0:1980 26:195.0:1980
+SUMS s=ncu_by trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=380.8 [380.8-380.8] reasons=0x0
+SUMG s=ncu_by g=byA mode=1 n=6 trials=1 med_gbs=196.05 [196.05-196.05] sum_gbs=1176.0 [1176.0-1176.0] mhz=1980 [1980-1980] bpc=99.017 [99.017-99.017]
+SUMG s=ncu_by g=byB mode=1 n=8 trials=1 med_gbs=195.04 [195.04-195.04] sum_gbs=1560.3 [1560.3-1560.3] mhz=1980 [1980-1980] bpc=98.504 [98.504-98.504]
+==PROF== Disconnected from process 725475
+==PROF== Creating report from application replay data: 0%.......100%
+[725296] bys_lab@127.0.0.1
+  k_bys(KP) (132, 1, 1)x(32, 1, 1), Context 1, Stream 13, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------------------- ----------- --------------
+    Metric Name                             Metric Unit   Metric Value
+    --------------------------------------- ----------- --------------
+    dram__bytes_read.sum                          Gbyte         820.97
+    lts__cycles_active.avg                        cycle 512,736,098.09
+    lts__cycles_elapsed.avg                       cycle    513,266,073
+    lts__d_sectors_fill_device.sum               sector 25,655,208,798
+    lts__ltcfabric2ltc_cycles_active.avg          cycle 362,027,476.84
+    lts__ltcfabric2lts_cycles_active.avg          cycle 186,780,056.65
+    lts__ltcfabric2lts_cycles_stalled.avg         cycle  86,623,909.22
+    lts__ltcfabric2lts_cycles_stalled.max         cycle    104,202,225
+    lts__lts2xbar_cycles_active.avg               cycle 272,906,437.61
+    lts__lts2xbar_cycles_active.max               cycle    311,216,893
+    lts__t_requests_srcunit_ltcfabric.sum       request  6,410,384,240
+    lts__t_requests_srcunit_tex_op_read.sum     request  6,410,285,986
+    lts__t_sector_op_read_hit_rate.pct                %           0.00
+    lts__xbar2lts_cycles_active.avg               cycle  65,752,360.10
+    lts__xbar2lts_cycles_active.max               cycle     74,585,544
+    --------------------------------------- ----------- --------------
+
+exit=0
+### ncu ncu_agg Sat Nov 21 10:11:38 PM EST 2026 metrics: lts__cycles_elapsed.avg,lts__xbar2lts_cycles_active.avg,lts__xbar2lts_cycles_active.max,lts__cycles_active.avg,lts__lts2xbar_cycles_active.avg,lts__lts2xbar_cycles_active.max,lts__ltcfabric2lts_cycles_active.avg,lts__ltcfabric2lts_cycles_stalled.avg,lts__ltcfabric2lts_cycles_stalled.max,lts__ltcfabric2ltc_cycles_active.avg,lts__t_requests_srcunit_tex_op_read.sum,lts__t_requests_srcunit_ltcfabric.sum,lts__t_sector_op_read_hit_rate.pct,dram__bytes_read.sum,lts__d_sectors_fill_device.sum
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 725612 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12276 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=431 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 1
+R s=ncu_agg t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=125.9 nv_pw_max=127.6 nv_temp=29 nv_reasons=0x0
+  g=agg mode=1 n=16 med_gbs=1.87 sum_gbs=29.9 min=1.86 max=1.87 mhz_med=1980 bpc_med=0.94 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:1.9:1980 13:1.9:1980 28:1.9:1980 29:1.9:1980 44:1.9:1980 45:1.9:1980 60:1.9:1980 61:1.9:1980 74:1.9:1980 75:1.9:1980 88:1.9:1980 89:1.9:1980 102:1.9:1980 103:1.9:1980 116:1.9:1980 117:1.9:1980
+SUMS s=ncu_agg trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=125.9 [125.9-125.9] reasons=0x0
+SUMG s=ncu_agg g=agg mode=1 n=16 trials=1 med_gbs=1.87 [1.87-1.87] sum_gbs=29.9 [29.9-29.9] mhz=1980 [1980-1980] bpc=0.942 [0.942-0.942]
+==PROF== Disconnected from process 725612
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 725715 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12275 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=432 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 2
+R s=ncu_agg t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=292.6 nv_pw_max=293.1 nv_temp=31 nv_reasons=0x0
+  g=agg mode=1 n=16 med_gbs=80.38 sum_gbs=1285.6 min=80.10 max=80.59 mhz_med=1980 bpc_med=40.60 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:80.4:1980 13:80.4:1980 28:80.2:1980 29:80.4:1980 44:80.1:1980 45:80.2:1980 60:80.4:1980 61:80.5:1980 74:80.4:1980 75:80.4:1980 88:80.2:1980 89:80.1:1980 102:80.6:1980 103:80.5:1980 116:80.4:1980 117:80.4:1980
+SUMS s=ncu_agg trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=292.6 [292.6-292.6] reasons=0x0
+SUMG s=ncu_agg g=agg mode=1 n=16 trials=1 med_gbs=80.38 [80.38-80.38] sum_gbs=1285.6 [1285.6-1285.6] mhz=1980 [1980-1980] bpc=40.596 [40.596-40.596]
+==PROF== Disconnected from process 725715
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 725851 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12272 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=431 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 3
+R s=ncu_agg t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=290.4 nv_pw_max=291.1 nv_temp=31 nv_reasons=0x0
+  g=agg mode=1 n=16 med_gbs=80.38 sum_gbs=1285.6 min=80.10 max=80.60 mhz_med=1980 bpc_med=40.59 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:80.4:1980 13:80.4:1980 28:80.2:1980 29:80.3:1980 44:80.1:1980 45:80.2:1980 60:80.4:1980 61:80.5:1980 74:80.4:1980 75:80.4:1980 88:80.3:1980 89:80.1:1980 102:80.6:1980 103:80.5:1980 116:80.4:1980 117:80.4:1980
+SUMS s=ncu_agg trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=290.4 [290.4-290.4] reasons=0x0
+SUMG s=ncu_agg g=agg mode=1 n=16 trials=1 med_gbs=80.38 [80.38-80.38] sum_gbs=1285.6 [1285.6-1285.6] mhz=1980 [1980-1980] bpc=40.595 [40.595-40.595]
+==PROF== Disconnected from process 725851
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 725959 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12274 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=429 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 4
+R s=ncu_agg t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=26 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=290.7 nv_pw_max=291.1 nv_temp=31 nv_reasons=0x0
+  g=agg mode=1 n=16 med_gbs=80.39 sum_gbs=1285.7 min=80.10 max=80.59 mhz_med=1980 bpc_med=40.60 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:80.4:1980 13:80.4:1980 28:80.2:1980 29:80.3:1980 44:80.1:1980 45:80.2:1980 60:80.4:1980 61:80.5:1980 74:80.4:1980 75:80.4:1980 88:80.3:1980 89:80.1:1980 102:80.6:1980 103:80.5:1980 116:80.4:1980 117:80.4:1980
+SUMS s=ncu_agg trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=290.7 [290.7-290.7] reasons=0x0
+SUMG s=ncu_agg g=agg mode=1 n=16 trials=1 med_gbs=80.39 [80.39-80.39] sum_gbs=1285.7 [1285.7-1285.7] mhz=1980 [1980-1980] bpc=40.601 [40.601-40.601]
+==PROF== Disconnected from process 725959
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 726058 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12275 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=431 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 5
+R s=ncu_agg t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=26 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=290.6 nv_pw_max=290.8 nv_temp=31 nv_reasons=0x0
+  g=agg mode=1 n=16 med_gbs=80.37 sum_gbs=1285.6 min=80.09 max=80.60 mhz_med=1980 bpc_med=40.59 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:80.4:1980 13:80.4:1980 28:80.2:1980 29:80.4:1980 44:80.1:1980 45:80.2:1980 60:80.4:1980 61:80.5:1980 74:80.3:1980 75:80.4:1980 88:80.2:1980 89:80.1:1980 102:80.6:1980 103:80.5:1980 116:80.4:1980 117:80.4:1980
+SUMS s=ncu_agg trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=290.6 [290.6-290.6] reasons=0x0
+SUMG s=ncu_agg g=agg mode=1 n=16 trials=1 med_gbs=80.37 [80.37-80.37] sum_gbs=1285.6 [1285.6-1285.6] mhz=1980 [1980-1980] bpc=40.593 [40.593-40.593]
+==PROF== Disconnected from process 726058
+==PROF== Creating report from application replay data: 0%.......100%
+[725612] bys_lab@127.0.0.1
+  k_bys(KP) (132, 1, 1)x(32, 1, 1), Context 1, Stream 13, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------------------- ----------- --------------
+    Metric Name                             Metric Unit   Metric Value
+    --------------------------------------- ----------- --------------
+    dram__bytes_read.sum                          Gbyte         385.68
+    lts__cycles_active.avg                        cycle 512,864,214.94
+    lts__cycles_elapsed.avg                       cycle    513,403,126
+    lts__d_sectors_fill_device.sum               sector 12,052,590,949
+    lts__ltcfabric2ltc_cycles_active.avg          cycle 185,882,217.22
+    lts__ltcfabric2lts_cycles_active.avg          cycle  96,174,089.60
+    lts__ltcfabric2lts_cycles_stalled.avg         cycle  21,921,166.24
+    lts__ltcfabric2lts_cycles_stalled.max         cycle     46,173,050
+    lts__lts2xbar_cycles_active.avg               cycle 128,231,347.41
+    lts__lts2xbar_cycles_active.max               cycle    257,530,897
+    lts__t_requests_srcunit_ltcfabric.sum       request  3,013,334,203
+    lts__t_requests_srcunit_tex_op_read.sum     request  3,013,292,971
+    lts__t_sector_op_read_hit_rate.pct                %           0.01
+    lts__xbar2lts_cycles_active.avg               cycle  31,325,213.09
+    lts__xbar2lts_cycles_active.max               cycle     63,849,432
+    --------------------------------------- ----------- --------------
+
+exit=0
+### ncu ncu_by_agg Sat Nov 21 10:11:47 PM EST 2026 metrics: lts__cycles_elapsed.avg,lts__xbar2lts_cycles_active.avg,lts__xbar2lts_cycles_active.max,lts__cycles_active.avg,lts__lts2xbar_cycles_active.avg,lts__lts2xbar_cycles_active.max,lts__ltcfabric2lts_cycles_active.avg,lts__ltcfabric2lts_cycles_stalled.avg,lts__ltcfabric2lts_cycles_stalled.max,lts__ltcfabric2ltc_cycles_active.avg,lts__t_requests_srcunit_tex_op_read.sum,lts__t_requests_srcunit_ltcfabric.sum,lts__t_sector_op_read_hit_rate.pct,dram__bytes_read.sum,lts__d_sectors_fill_device.sum
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 726206 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12272 lowconf=1 errs=0 blocksA=3145472 blocksB=3145472 sample_lat p10=275 p25=290 p50=431 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 1
+R s=ncu_by_agg t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=26 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=133.5 nv_pw_max=135.1 nv_temp=29 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=1.87 sum_gbs=11.2 min=1.87 max=1.87 mhz_med=1980 bpc_med=0.94 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:1.9:1980 16:1.9:1980 4:1.9:1980 20:1.9:1980 14:1.9:1980 30:1.9:1980
+  g=byB mode=1 n=8 med_gbs=1.87 sum_gbs=14.9 min=1.86 max=1.87 mhz_med=1980 bpc_med=0.94 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:1.9:1977 18:1.9:1977 6:1.9:1980 22:1.9:1980 8:1.9:1980 24:1.9:1980 10:1.9:1980 26:1.9:1980
+  g=agg mode=1 n=16 med_gbs=1.87 sum_gbs=29.9 min=1.86 max=1.87 mhz_med=1980 bpc_med=0.94 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:1.9:1980 13:1.9:1980 28:1.9:1980 29:1.9:1980 44:1.9:1980 45:1.9:1980 60:1.9:1980 61:1.9:1980 74:1.9:1980 75:1.9:1980 88:1.9:1980 89:1.9:1980 102:1.9:1980 103:1.9:1980 116:1.9:1980 117:1.9:1980
+SUMS s=ncu_by_agg trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=133.5 [133.5-133.5] reasons=0x0
+SUMG s=ncu_by_agg g=byA mode=1 n=6 trials=1 med_gbs=1.87 [1.87-1.87] sum_gbs=11.2 [11.2-11.2] mhz=1980 [1980-1980] bpc=0.942 [0.942-0.942]
+SUMG s=ncu_by_agg g=byB mode=1 n=8 trials=1 med_gbs=1.87 [1.87-1.87] sum_gbs=14.9 [14.9-14.9] mhz=1980 [1980-1980] bpc=0.942 [0.942-0.942]
+SUMG s=ncu_by_agg g=agg mode=1 n=16 trials=1 med_gbs=1.87 [1.87-1.87] sum_gbs=29.9 [29.9-29.9] mhz=1980 [1980-1980] bpc=0.942 [0.942-0.942]
+==PROF== Disconnected from process 726206
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 726309 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12275 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=431 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 2
+R s=ncu_by_agg t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=414.8 nv_pw_max=415.6 nv_temp=32 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=88.40 sum_gbs=530.4 min=88.31 max=88.47 mhz_med=1980 bpc_med=44.65 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:88.5:1980 16:88.4:1980 4:88.4:1980 20:88.4:1980 14:88.4:1980 30:88.3:1980
+  g=byB mode=1 n=8 med_gbs=106.06 sum_gbs=848.6 min=106.00 max=106.17 mhz_med=1980 bpc_med=53.57 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:106.2:1980 18:106.1:1980 6:106.1:1980 22:106.1:1980 8:106.1:1980 24:106.0:1980 10:106.0:1980 26:106.0:1980
+  g=agg mode=1 n=16 med_gbs=79.91 sum_gbs=1278.7 min=79.81 max=80.09 mhz_med=1980 bpc_med=40.36 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:79.9:1980 13:79.9:1980 28:79.8:1980 29:79.8:1980 44:79.8:1980 45:79.8:1980 60:80.0:1980 61:80.0:1980 74:79.9:1980 75:79.9:1980 88:79.9:1980 89:79.9:1980 102:80.1:1980 103:80.0:1980 116:80.0:1980 117:80.0:1980
+SUMS s=ncu_by_agg trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=414.8 [414.8-414.8] reasons=0x0
+SUMG s=ncu_by_agg g=byA mode=1 n=6 trials=1 med_gbs=88.40 [88.40-88.40] sum_gbs=530.4 [530.4-530.4] mhz=1980 [1980-1980] bpc=44.647 [44.647-44.647]
+SUMG s=ncu_by_agg g=byB mode=1 n=8 trials=1 med_gbs=106.06 [106.06-106.06] sum_gbs=848.6 [848.6-848.6] mhz=1980 [1980-1980] bpc=53.571 [53.571-53.571]
+SUMG s=ncu_by_agg g=agg mode=1 n=16 trials=1 med_gbs=79.91 [79.91-79.91] sum_gbs=1278.7 [1278.7-1278.7] mhz=1980 [1980-1980] bpc=40.357 [40.357-40.357]
+==PROF== Disconnected from process 726309
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 726403 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12270 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=429 p75=465 p90=482
+==PROF== Profiling "k_bys": Application replay pass 3
+R s=ncu_by_agg t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=411.6 nv_pw_max=412.2 nv_temp=33 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=88.39 sum_gbs=530.3 min=88.29 max=88.47 mhz_med=1980 bpc_med=44.64 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:88.5:1980 16:88.4:1980 4:88.4:1980 20:88.4:1980 14:88.4:1980 30:88.3:1980
+  g=byB mode=1 n=8 med_gbs=105.96 sum_gbs=847.9 min=105.94 max=106.07 mhz_med=1980 bpc_med=53.52 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:106.1:1980 18:106.0:1980 6:106.0:1980 22:106.0:1980 8:106.0:1980 24:106.0:1980 10:106.0:1980 26:105.9:1980
+  g=agg mode=1 n=16 med_gbs=79.90 sum_gbs=1278.6 min=79.80 max=80.07 mhz_med=1980 bpc_med=40.35 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:79.9:1980 13:79.9:1980 28:79.8:1980 29:79.8:1980 44:79.8:1980 45:79.8:1980 60:80.0:1980 61:80.0:1980 74:79.9:1980 75:79.9:1980 88:79.9:1980 89:79.9:1980 102:80.1:1980 103:80.0:1980 116:79.9:1980 117:80.0:1980
+SUMS s=ncu_by_agg trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=411.6 [411.6-411.6] reasons=0x0
+SUMG s=ncu_by_agg g=byA mode=1 n=6 trials=1 med_gbs=88.39 [88.39-88.39] sum_gbs=530.3 [530.3-530.3] mhz=1980 [1980-1980] bpc=44.640 [44.640-44.640]
+SUMG s=ncu_by_agg g=byB mode=1 n=8 trials=1 med_gbs=105.96 [105.96-105.96] sum_gbs=847.9 [847.9-847.9] mhz=1980 [1980-1980] bpc=53.524 [53.524-53.524]
+SUMG s=ncu_by_agg g=agg mode=1 n=16 trials=1 med_gbs=79.90 [79.90-79.90] sum_gbs=1278.6 [1278.6-1278.6] mhz=1980 [1980-1980] bpc=40.355 [40.355-40.355]
+==PROF== Disconnected from process 726403
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 726509 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12278 lowconf=1 errs=0 blocksA=3145472 blocksB=3145472 sample_lat p10=275 p25=290 p50=430 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 4
+R s=ncu_by_agg t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=410.9 nv_pw_max=410.9 nv_temp=33 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=88.42 sum_gbs=530.4 min=88.31 max=88.47 mhz_med=1980 bpc_med=44.65 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:88.5:1980 16:88.4:1980 4:88.4:1980 20:88.4:1980 14:88.4:1980 30:88.3:1980
+  g=byB mode=1 n=8 med_gbs=105.96 sum_gbs=847.8 min=105.92 max=106.06 mhz_med=1980 bpc_med=53.52 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:106.1:1980 18:106.0:1980 6:106.0:1980 22:105.9:1980 8:106.0:1980 24:105.9:1980 10:106.0:1980 26:105.9:1980
+  g=agg mode=1 n=16 med_gbs=79.90 sum_gbs=1278.6 min=79.81 max=80.08 mhz_med=1980 bpc_med=40.35 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:79.9:1980 13:79.9:1980 28:79.8:1980 29:79.8:1980 44:79.8:1980 45:79.8:1980 60:80.0:1980 61:80.0:1980 74:79.9:1980 75:79.9:1980 88:79.9:1980 89:79.9:1980 102:80.1:1980 103:80.0:1980 116:79.9:1980 117:80.0:1980
+SUMS s=ncu_by_agg trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=410.9 [410.9-410.9] reasons=0x0
+SUMG s=ncu_by_agg g=byA mode=1 n=6 trials=1 med_gbs=88.42 [88.42-88.42] sum_gbs=530.4 [530.4-530.4] mhz=1980 [1980-1980] bpc=44.654 [44.654-44.654]
+SUMG s=ncu_by_agg g=byB mode=1 n=8 trials=1 med_gbs=105.96 [105.96-105.96] sum_gbs=847.8 [847.8-847.8] mhz=1980 [1980-1980] bpc=53.521 [53.521-53.521]
+SUMG s=ncu_by_agg g=agg mode=1 n=16 trials=1 med_gbs=79.90 [79.90-79.90] sum_gbs=1278.6 [1278.6-1278.6] mhz=1980 [1980-1980] bpc=40.353 [40.353-40.353]
+==PROF== Disconnected from process 726509
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 726612 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12276 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=432 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 5
+R s=ncu_by_agg t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=26 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=410.5 nv_pw_max=411.1 nv_temp=33 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=88.35 sum_gbs=530.0 min=88.24 max=88.41 mhz_med=1980 bpc_med=44.62 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:88.4:1980 16:88.3:1980 4:88.4:1980 20:88.3:1980 14:88.4:1980 30:88.2:1980
+  g=byB mode=1 n=8 med_gbs=106.01 sum_gbs=848.2 min=105.96 max=106.10 mhz_med=1980 bpc_med=53.54 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:106.1:1980 18:106.0:1980 6:106.1:1980 22:106.0:1980 8:106.1:1980 24:106.0:1980 10:106.0:1980 26:106.0:1980
+  g=agg mode=1 n=16 med_gbs=79.89 sum_gbs=1278.4 min=79.79 max=80.07 mhz_med=1980 bpc_med=40.35 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:79.9:1980 13:79.9:1980 28:79.8:1980 29:79.8:1980 44:79.8:1980 45:79.8:1980 60:80.0:1980 61:80.0:1980 74:79.9:1980 75:79.9:1980 88:79.8:1980 89:79.9:1980 102:80.1:1980 103:80.0:1980 116:79.9:1980 117:80.0:1980
+SUMS s=ncu_by_agg trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=410.5 [410.5-410.5] reasons=0x0
+SUMG s=ncu_by_agg g=byA mode=1 n=6 trials=1 med_gbs=88.35 [88.35-88.35] sum_gbs=530.0 [530.0-530.0] mhz=1980 [1980-1980] bpc=44.619 [44.619-44.619]
+SUMG s=ncu_by_agg g=byB mode=1 n=8 trials=1 med_gbs=106.01 [106.01-106.01] sum_gbs=848.2 [848.2-848.2] mhz=1980 [1980-1980] bpc=53.540 [53.540-53.540]
+SUMG s=ncu_by_agg g=agg mode=1 n=16 trials=1 med_gbs=79.89 [79.89-79.89] sum_gbs=1278.4 [1278.4-1278.4] mhz=1980 [1980-1980] bpc=40.349 [40.349-40.349]
+==PROF== Disconnected from process 726612
+==PROF== Creating report from application replay data: 0%.......100%
+[726206] bys_lab@127.0.0.1
+  k_bys(KP) (132, 1, 1)x(32, 1, 1), Context 1, Stream 13, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------------------- ----------- --------------
+    Metric Name                             Metric Unit   Metric Value
+    --------------------------------------- ----------- --------------
+    dram__bytes_read.sum                          Gbyte         797.32
+    lts__cycles_active.avg                        cycle 512,629,524.99
+    lts__cycles_elapsed.avg                       cycle    513,147,169
+    lts__d_sectors_fill_device.sum               sector 24,916,201,931
+    lts__ltcfabric2ltc_cycles_active.avg          cycle 354,145,386.88
+    lts__ltcfabric2lts_cycles_active.avg          cycle 183,151,473.66
+    lts__ltcfabric2lts_cycles_stalled.avg         cycle  86,243,766.78
+    lts__ltcfabric2lts_cycles_stalled.max         cycle    127,928,760
+    lts__lts2xbar_cycles_active.avg               cycle 264,990,961.97
+    lts__lts2xbar_cycles_active.max               cycle    363,011,297
+    lts__t_requests_srcunit_ltcfabric.sum       request  6,227,075,003
+    lts__t_requests_srcunit_tex_op_read.sum     request  6,226,987,994
+    lts__t_sector_op_read_hit_rate.pct                %           0.00
+    lts__xbar2lts_cycles_active.avg               cycle  63,022,559.01
+    lts__xbar2lts_cycles_active.max               cycle     85,987,312
+    --------------------------------------- ----------- --------------
+
+exit=0
+### ncu ncu_by_aggL2 Sat Nov 21 10:11:55 PM EST 2026 metrics: lts__cycles_elapsed.avg,lts__xbar2lts_cycles_active.avg,lts__xbar2lts_cycles_active.max,lts__cycles_active.avg,lts__lts2xbar_cycles_active.avg,lts__lts2xbar_cycles_active.max,lts__ltcfabric2lts_cycles_active.avg,lts__ltcfabric2lts_cycles_stalled.avg,lts__ltcfabric2lts_cycles_stalled.max,lts__ltcfabric2ltc_cycles_active.avg,lts__t_requests_srcunit_tex_op_read.sum,lts__t_requests_srcunit_ltcfabric.sum,lts__t_sector_op_read_hit_rate.pct,dram__bytes_read.sum,lts__d_sectors_fill_device.sum
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 726777 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12275 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=430 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 1
+R s=ncu_by_aggL2 t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=131.5 nv_pw_max=131.8 nv_temp=30 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=1.87 sum_gbs=11.2 min=1.87 max=1.87 mhz_med=1980 bpc_med=0.94 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:1.9:1980 16:1.9:1980 4:1.9:1980 20:1.9:1980 14:1.9:1980 30:1.9:1980
+  g=byB mode=1 n=8 med_gbs=1.87 sum_gbs=14.9 min=1.86 max=1.87 mhz_med=1980 bpc_med=0.94 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:1.9:1978 18:1.9:1978 6:1.9:1980 22:1.9:1980 8:1.9:1980 24:1.9:1980 10:1.9:1980 26:1.9:1980
+  g=agg mode=1 n=16 med_gbs=1.86 sum_gbs=29.8 min=1.86 max=1.87 mhz_med=1980 bpc_med=0.94 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:1.9:1980 13:1.9:1980 28:1.9:1980 29:1.9:1980 44:1.9:1980 45:1.9:1980 60:1.9:1980 61:1.9:1980 74:1.9:1980 75:1.9:1980 88:1.9:1980 89:1.9:1980 102:1.9:1980 103:1.9:1980 116:1.9:1980 117:1.9:1980
+SUMS s=ncu_by_aggL2 trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=131.5 [131.5-131.5] reasons=0x0
+SUMG s=ncu_by_aggL2 g=byA mode=1 n=6 trials=1 med_gbs=1.87 [1.87-1.87] sum_gbs=11.2 [11.2-11.2] mhz=1980 [1980-1980] bpc=0.942 [0.942-0.942]
+SUMG s=ncu_by_aggL2 g=byB mode=1 n=8 trials=1 med_gbs=1.87 [1.87-1.87] sum_gbs=14.9 [14.9-14.9] mhz=1980 [1980-1980] bpc=0.942 [0.942-0.942]
+SUMG s=ncu_by_aggL2 g=agg mode=1 n=16 trials=1 med_gbs=1.86 [1.86-1.86] sum_gbs=29.8 [29.8-29.8] mhz=1980 [1980-1980] bpc=0.942 [0.942-0.942]
+==PROF== Disconnected from process 726777
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 726946 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12273 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=431 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 2
+R s=ncu_by_aggL2 t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=388.8 nv_pw_max=389.4 nv_temp=32 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=90.55 sum_gbs=542.9 min=90.22 max=90.65 mhz_med=1980 bpc_med=45.73 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:90.3:1980 16:90.2:1980 4:90.7:1980 20:90.6:1980 14:90.6:1980 30:90.5:1980
+  g=byB mode=1 n=8 med_gbs=198.48 sum_gbs=1587.0 min=197.89 max=198.61 mhz_med=1980 bpc_med=100.24 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:198.2:1980 18:197.9:1980 6:198.5:1980 22:198.3:1980 8:198.6:1980 24:198.5:1980 10:198.5:1980 26:198.5:1980
+  g=agg mode=1 n=16 med_gbs=79.55 sum_gbs=1272.6 min=78.86 max=80.21 mhz_med=1980 bpc_med=40.18 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:79.9:1980 13:79.9:1980 28:80.1:1980 29:80.2:1980 44:79.1:1980 45:79.3:1980 60:79.6:1980 61:79.6:1980 74:79.5:1980 75:79.5:1980 88:78.9:1980 89:79.2:1980 102:79.7:1980 103:79.6:1980 116:79.4:1980 117:79.3:1980
+SUMS s=ncu_by_aggL2 trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=388.8 [388.8-388.8] reasons=0x0
+SUMG s=ncu_by_aggL2 g=byA mode=1 n=6 trials=1 med_gbs=90.55 [90.55-90.55] sum_gbs=542.9 [542.9-542.9] mhz=1980 [1980-1980] bpc=45.731 [45.731-45.731]
+SUMG s=ncu_by_aggL2 g=byB mode=1 n=8 trials=1 med_gbs=198.48 [198.48-198.48] sum_gbs=1587.0 [1587.0-1587.0] mhz=1980 [1980-1980] bpc=100.241 [100.241-100.241]
+SUMG s=ncu_by_aggL2 g=agg mode=1 n=16 trials=1 med_gbs=79.55 [79.55-79.55] sum_gbs=1272.6 [1272.6-1272.6] mhz=1980 [1980-1980] bpc=40.175 [40.175-40.175]
+==PROF== Disconnected from process 726946
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 727118 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12277 lowconf=1 errs=0 blocksA=3145472 blocksB=3145472 sample_lat p10=275 p25=290 p50=432 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 3
+R s=ncu_by_aggL2 t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=386.3 nv_pw_max=387.1 nv_temp=33 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=90.97 sum_gbs=545.4 min=90.63 max=91.09 mhz_med=1980 bpc_med=45.94 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:90.7:1980 16:90.6:1980 4:91.1:1980 20:91.0:1980 14:91.0:1980 30:90.9:1980
+  g=byB mode=1 n=8 med_gbs=198.67 sum_gbs=1588.8 min=198.20 max=198.89 mhz_med=1980 bpc_med=100.34 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:198.8:1980 18:198.5:1980 6:198.8:1980 22:198.6:1980 8:198.9:1980 24:198.7:1980 10:198.2:1980 26:198.2:1980
+  g=agg mode=1 n=16 med_gbs=79.54 sum_gbs=1272.6 min=78.83 max=80.20 mhz_med=1980 bpc_med=40.17 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:79.9:1980 13:79.9:1980 28:80.1:1980 29:80.2:1980 44:79.1:1980 45:79.2:1980 60:79.6:1980 61:79.6:1980 74:79.5:1980 75:79.5:1980 88:78.8:1980 89:79.2:1980 102:79.7:1980 103:79.5:1980 116:79.4:1980 117:79.3:1980
+SUMS s=ncu_by_aggL2 trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=386.3 [386.3-386.3] reasons=0x0
+SUMG s=ncu_by_aggL2 g=byA mode=1 n=6 trials=1 med_gbs=90.97 [90.97-90.97] sum_gbs=545.4 [545.4-545.4] mhz=1980 [1980-1980] bpc=45.944 [45.944-45.944]
+SUMG s=ncu_by_aggL2 g=byB mode=1 n=8 trials=1 med_gbs=198.67 [198.67-198.67] sum_gbs=1588.8 [1588.8-1588.8] mhz=1980 [1980-1980] bpc=100.339 [100.339-100.339]
+SUMG s=ncu_by_aggL2 g=agg mode=1 n=16 trials=1 med_gbs=79.54 [79.54-79.54] sum_gbs=1272.6 [1272.6-1272.6] mhz=1980 [1980-1980] bpc=40.173 [40.173-40.173]
+==PROF== Disconnected from process 727118
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 727279 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12278 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=428 p75=465 p90=482
+==PROF== Profiling "k_bys": Application replay pass 4
+R s=ncu_by_aggL2 t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=386.2 nv_pw_max=387.1 nv_temp=33 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=90.66 sum_gbs=543.6 min=90.30 max=90.77 mhz_med=1980 bpc_med=45.79 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:90.4:1980 16:90.3:1980 4:90.8:1980 20:90.7:1980 14:90.7:1980 30:90.6:1980
+  g=byB mode=1 n=8 med_gbs=198.36 sum_gbs=1587.4 min=197.92 max=198.94 mhz_med=1980 bpc_med=100.18 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:198.2:1979 18:197.9:1979 6:198.9:1980 22:198.7:1980 8:198.7:1980 24:198.5:1980 10:198.2:1980 26:198.2:1980
+  g=agg mode=1 n=16 med_gbs=79.54 sum_gbs=1272.5 min=78.84 max=80.20 mhz_med=1980 bpc_med=40.17 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:79.9:1980 13:79.8:1980 28:80.1:1980 29:80.2:1980 44:79.1:1980 45:79.2:1980 60:79.6:1980 61:79.6:1980 74:79.5:1980 75:79.5:1980 88:78.8:1980 89:79.2:1980 102:79.6:1980 103:79.5:1980 116:79.4:1980 117:79.3:1980
+SUMS s=ncu_by_aggL2 trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=386.2 [386.2-386.2] reasons=0x0
+SUMG s=ncu_by_aggL2 g=byA mode=1 n=6 trials=1 med_gbs=90.66 [90.66-90.66] sum_gbs=543.6 [543.6-543.6] mhz=1980 [1980-1980] bpc=45.787 [45.787-45.787]
+SUMG s=ncu_by_aggL2 g=byB mode=1 n=8 trials=1 med_gbs=198.36 [198.36-198.36] sum_gbs=1587.4 [1587.4-1587.4] mhz=1980 [1980-1980] bpc=100.184 [100.184-100.184]
+SUMG s=ncu_by_aggL2 g=agg mode=1 n=16 trials=1 med_gbs=79.54 [79.54-79.54] sum_gbs=1272.5 [1272.5-1272.5] mhz=1980 [1980-1980] bpc=40.170 [40.170-40.170]
+==PROF== Disconnected from process 727279
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 727428 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12274 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=274 p25=290 p50=430 p75=465 p90=482
+==PROF== Profiling "k_bys": Application replay pass 5
+R s=ncu_by_aggL2 t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=386.7 nv_pw_max=387.4 nv_temp=33 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=90.79 sum_gbs=544.4 min=90.46 max=90.91 mhz_med=1980 bpc_med=45.85 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:90.6:1980 16:90.5:1980 4:90.9:1980 20:90.9:1980 14:90.8:1980 30:90.7:1980
+  g=byB mode=1 n=8 med_gbs=198.50 sum_gbs=1588.3 min=198.32 max=198.75 mhz_med=1980 bpc_med=100.26 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:198.7:1979 18:198.5:1979 6:198.6:1980 22:198.3:1980 8:198.7:1980 24:198.5:1980 10:198.5:1980 26:198.5:1980
+  g=agg mode=1 n=16 med_gbs=79.55 sum_gbs=1272.7 min=78.86 max=80.21 mhz_med=1980 bpc_med=40.18 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:79.9:1980 13:79.9:1980 28:80.1:1980 29:80.2:1980 44:79.1:1980 45:79.3:1980 60:79.6:1980 61:79.6:1980 74:79.5:1980 75:79.5:1980 88:78.9:1980 89:79.2:1980 102:79.7:1980 103:79.6:1980 116:79.4:1980 117:79.3:1980
+SUMS s=ncu_by_aggL2 trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=386.7 [386.7-386.7] reasons=0x0
+SUMG s=ncu_by_aggL2 g=byA mode=1 n=6 trials=1 med_gbs=90.79 [90.79-90.79] sum_gbs=544.4 [544.4-544.4] mhz=1980 [1980-1980] bpc=45.854 [45.854-45.854]
+SUMG s=ncu_by_aggL2 g=byB mode=1 n=8 trials=1 med_gbs=198.50 [198.50-198.50] sum_gbs=1588.3 [1588.3-1588.3] mhz=1980 [1980-1980] bpc=100.261 [100.261-100.261]
+SUMG s=ncu_by_aggL2 g=agg mode=1 n=16 trials=1 med_gbs=79.55 [79.55-79.55] sum_gbs=1272.7 [1272.7-1272.7] mhz=1980 [1980-1980] bpc=40.177 [40.177-40.177]
+==PROF== Disconnected from process 727428
+==PROF== Creating report from application replay data: 0%.......100%
+[726777] bys_lab@127.0.0.1
+  k_bys(KP) (132, 1, 1)x(32, 1, 1), Context 1, Stream 13, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------------------- ----------- --------------
+    Metric Name                             Metric Unit   Metric Value
+    --------------------------------------- ----------- --------------
+    dram__bytes_read.sum                          Gbyte         638.99
+    lts__cycles_active.avg                        cycle 512,787,917.46
+    lts__cycles_elapsed.avg                       cycle    513,309,751
+    lts__d_sectors_fill_device.sum               sector 19,968,289,717
+    lts__ltcfabric2ltc_cycles_active.avg          cycle 292,256,899.95
+    lts__ltcfabric2lts_cycles_active.avg          cycle 150,938,164.30
+    lts__ltcfabric2lts_cycles_stalled.avg         cycle  55,057,682.82
+    lts__ltcfabric2lts_cycles_stalled.max         cycle     86,721,503
+    lts__lts2xbar_cycles_active.avg               cycle 339,783,744.02
+    lts__lts2xbar_cycles_active.max               cycle    367,825,413
+    lts__t_requests_srcunit_ltcfabric.sum       request  4,994,559,095
+    lts__t_requests_srcunit_tex_op_read.sum     request  7,976,935,390
+    lts__t_sector_op_read_hit_rate.pct                %          28.48
+    lts__xbar2lts_cycles_active.avg               cycle  81,302,888.31
+    lts__xbar2lts_cycles_active.max               cycle     88,087,651
+    --------------------------------------- ----------- --------------
+
+exit=0
+### ncu ncu_by_aggp95 Sat Nov 21 10:12:04 PM EST 2026 metrics: lts__cycles_elapsed.avg,lts__xbar2lts_cycles_active.avg,lts__xbar2lts_cycles_active.max,lts__cycles_active.avg,lts__lts2xbar_cycles_active.avg,lts__lts2xbar_cycles_active.max,lts__ltcfabric2lts_cycles_active.avg,lts__ltcfabric2lts_cycles_stalled.avg,lts__ltcfabric2lts_cycles_stalled.max,lts__ltcfabric2ltc_cycles_active.avg,lts__t_requests_srcunit_tex_op_read.sum,lts__t_requests_srcunit_ltcfabric.sum,lts__t_sector_op_read_hit_rate.pct,dram__bytes_read.sum,lts__d_sectors_fill_device.sum
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 727660 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12277 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=431 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 1
+R s=ncu_by_aggp95 t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=131.7 nv_pw_max=133.8 nv_temp=30 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=1.87 sum_gbs=11.2 min=1.87 max=1.87 mhz_med=1980 bpc_med=0.94 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:1.9:1980 16:1.9:1980 4:1.9:1980 20:1.9:1980 14:1.9:1980 30:1.9:1980
+  g=byB mode=1 n=8 med_gbs=1.87 sum_gbs=14.9 min=1.86 max=1.87 mhz_med=1980 bpc_med=0.94 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:1.9:1978 18:1.9:1978 6:1.9:1980 22:1.9:1980 8:1.9:1980 24:1.9:1980 10:1.9:1980 26:1.9:1980
+  g=agg mode=1 n=16 med_gbs=0.99 sum_gbs=15.8 min=0.99 max=0.99 mhz_med=1980 bpc_med=0.50 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:1.0:1980 13:1.0:1980 28:1.0:1980 29:1.0:1980 44:1.0:1980 45:1.0:1980 60:1.0:1980 61:1.0:1980 74:1.0:1980 75:1.0:1980 88:1.0:1980 89:1.0:1980 102:1.0:1980 103:1.0:1980 116:1.0:1980 117:1.0:1980
+SUMS s=ncu_by_aggp95 trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=131.7 [131.7-131.7] reasons=0x0
+SUMG s=ncu_by_aggp95 g=byA mode=1 n=6 trials=1 med_gbs=1.87 [1.87-1.87] sum_gbs=11.2 [11.2-11.2] mhz=1980 [1980-1980] bpc=0.942 [0.942-0.942]
+SUMG s=ncu_by_aggp95 g=byB mode=1 n=8 trials=1 med_gbs=1.87 [1.87-1.87] sum_gbs=14.9 [14.9-14.9] mhz=1980 [1980-1980] bpc=0.942 [0.942-0.942]
+SUMG s=ncu_by_aggp95 g=agg mode=1 n=16 trials=1 med_gbs=0.99 [0.99-0.99] sum_gbs=15.8 [15.8-15.8] mhz=1980 [1980-1980] bpc=0.499 [0.499-0.499]
+==PROF== Disconnected from process 727660
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 727870 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12272 lowconf=1 errs=0 blocksA=3145472 blocksB=3145472 sample_lat p10=275 p25=290 p50=430 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 2
+R s=ncu_by_aggp95 t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=490.8 nv_pw_max=492.2 nv_temp=33 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=166.82 sum_gbs=1001.1 min=166.74 max=166.98 mhz_med=1980 bpc_med=84.26 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:167.0:1980 16:166.8:1980 4:166.7:1980 20:166.8:1980 14:166.9:1980 30:166.8:1980
+  g=byB mode=1 n=8 med_gbs=174.32 sum_gbs=1394.7 min=174.15 max=174.60 mhz_med=1980 bpc_med=88.05 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:174.6:1978 18:174.3:1978 6:174.6:1980 22:174.3:1980 8:174.3:1980 24:174.2:1980 10:174.2:1979 26:174.2:1979
+  g=agg mode=1 n=16 med_gbs=76.03 sum_gbs=1216.4 min=76.03 max=76.03 mhz_med=1980 bpc_med=38.40 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:76.0:1980 13:76.0:1980 28:76.0:1980 29:76.0:1980 44:76.0:1980 45:76.0:1980 60:76.0:1980 61:76.0:1980 74:76.0:1980 75:76.0:1980 88:76.0:1980 89:76.0:1980 102:76.0:1980 103:76.0:1980 116:76.0:1980 117:76.0:1980
+SUMS s=ncu_by_aggp95 trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=490.8 [490.8-490.8] reasons=0x0
+SUMG s=ncu_by_aggp95 g=byA mode=1 n=6 trials=1 med_gbs=166.82 [166.82-166.82] sum_gbs=1001.1 [1001.1-1001.1] mhz=1980 [1980-1980] bpc=84.262 [84.262-84.262]
+SUMG s=ncu_by_aggp95 g=byB mode=1 n=8 trials=1 med_gbs=174.32 [174.32-174.32] sum_gbs=1394.7 [1394.7-1394.7] mhz=1980 [1980-1980] bpc=88.052 [88.052-88.052]
+SUMG s=ncu_by_aggp95 g=agg mode=1 n=16 trials=1 med_gbs=76.03 [76.03-76.03] sum_gbs=1216.4 [1216.4-1216.4] mhz=1980 [1980-1980] bpc=38.400 [38.400-38.400]
+==PROF== Disconnected from process 727870
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 728070 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12275 lowconf=1 errs=0 blocksA=3145472 blocksB=3145472 sample_lat p10=275 p25=290 p50=431 p75=466 p90=482
+==PROF== Profiling "k_bys": Application replay pass 3
+R s=ncu_by_aggp95 t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=488.9 nv_pw_max=491.2 nv_temp=33 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=166.77 sum_gbs=1000.4 min=166.43 max=166.96 mhz_med=1980 bpc_med=84.23 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:166.6:1980 16:166.4:1980 4:166.8:1980 20:167.0:1980 14:166.9:1980 30:166.7:1980
+  g=byB mode=1 n=8 med_gbs=174.37 sum_gbs=1395.3 min=174.32 max=174.58 mhz_med=1980 bpc_med=88.07 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:174.6:1980 18:174.3:1980 6:174.6:1980 22:174.3:1980 8:174.5:1980 24:174.3:1980 10:174.3:1980 26:174.4:1980
+  g=agg mode=1 n=16 med_gbs=76.03 sum_gbs=1216.4 min=76.03 max=76.03 mhz_med=1980 bpc_med=38.40 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:76.0:1980 13:76.0:1980 28:76.0:1980 29:76.0:1980 44:76.0:1980 45:76.0:1980 60:76.0:1980 61:76.0:1980 74:76.0:1980 75:76.0:1980 88:76.0:1980 89:76.0:1980 102:76.0:1980 103:76.0:1980 116:76.0:1980 117:76.0:1980
+SUMS s=ncu_by_aggp95 trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=488.9 [488.9-488.9] reasons=0x0
+SUMG s=ncu_by_aggp95 g=byA mode=1 n=6 trials=1 med_gbs=166.77 [166.77-166.77] sum_gbs=1000.4 [1000.4-1000.4] mhz=1980 [1980-1980] bpc=84.227 [84.227-84.227]
+SUMG s=ncu_by_aggp95 g=byB mode=1 n=8 trials=1 med_gbs=174.37 [174.37-174.37] sum_gbs=1395.3 [1395.3-1395.3] mhz=1980 [1980-1980] bpc=88.066 [88.066-88.066]
+SUMG s=ncu_by_aggp95 g=agg mode=1 n=16 trials=1 med_gbs=76.03 [76.03-76.03] sum_gbs=1216.4 [1216.4-1216.4] mhz=1980 [1980-1980] bpc=38.398 [38.398-38.398]
+==PROF== Disconnected from process 728070
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 728216 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12273 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=275 p25=290 p50=431 p75=466 p90=483
+==PROF== Profiling "k_bys": Application replay pass 4
+R s=ncu_by_aggp95 t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=489.4 nv_pw_max=491.6 nv_temp=34 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=166.82 sum_gbs=1001.1 min=166.68 max=167.07 mhz_med=1980 bpc_med=84.26 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:167.1:1980 16:166.9:1980 4:166.7:1980 20:166.8:1980 14:166.9:1980 30:166.8:1980
+  g=byB mode=1 n=8 med_gbs=174.33 sum_gbs=1395.0 min=174.18 max=174.63 mhz_med=1980 bpc_med=88.04 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:174.6:1980 18:174.3:1980 6:174.6:1980 22:174.3:1980 8:174.3:1980 24:174.2:1980 10:174.3:1980 26:174.3:1980
+  g=agg mode=1 n=16 med_gbs=76.03 sum_gbs=1216.4 min=76.03 max=76.03 mhz_med=1980 bpc_med=38.40 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:76.0:1980 13:76.0:1980 28:76.0:1980 29:76.0:1980 44:76.0:1980 45:76.0:1980 60:76.0:1980 61:76.0:1980 74:76.0:1980 75:76.0:1980 88:76.0:1980 89:76.0:1980 102:76.0:1980 103:76.0:1980 116:76.0:1980 117:76.0:1980
+SUMS s=ncu_by_aggp95 trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=489.4 [489.4-489.4] reasons=0x0
+SUMG s=ncu_by_aggp95 g=byA mode=1 n=6 trials=1 med_gbs=166.82 [166.82-166.82] sum_gbs=1001.1 [1001.1-1001.1] mhz=1980 [1980-1980] bpc=84.255 [84.255-84.255]
+SUMG s=ncu_by_aggp95 g=byB mode=1 n=8 trials=1 med_gbs=174.33 [174.33-174.33] sum_gbs=1395.0 [1395.0-1395.0] mhz=1980 [1980-1980] bpc=88.045 [88.045-88.045]
+SUMG s=ncu_by_aggp95 g=agg mode=1 n=16 trials=1 med_gbs=76.03 [76.03-76.03] sum_gbs=1216.4 [1216.4-1216.4] mhz=1980 [1980-1980] bpc=38.398 [38.398-38.398]
+==PROF== Disconnected from process 728216
+plan=/tmp/echung67/bys/plans/bys_ncu.plan scenarios=1 max_trials=1 nomask=1
+==PROF== Connected to process 728392 (/tmp/echung67/bys/bys_lab)
+buf=0x154ca0000000 gib=24.00 align_2MB=yes zones probe=0 gran=8388608 main=16777216 write=17179869184 cold=19327352832 end=25769803776
+nvml: bus=0000:3B:00.0 power_limit_w=560 interval_ms=10
+classify warm_sm=0 read_sm=2 thr=380 pages=12288 conf1=12274 lowconf=0 errs=0 blocksA=3145728 blocksB=3145728 sample_lat p10=274 p25=290 p50=429 p75=465 p90=482
+==PROF== Profiling "k_bys": Application replay pass 5
+R s=ncu_by_aggp95 t=0 ok=1 missing=0 wrong_sm=0 errs=0 nv_n=27 nv_sm_med=1980 nv_sm_min=1980 nv_sm_max=1980 nv_pw_mean=488.9 nv_pw_max=489.5 nv_temp=34 nv_reasons=0x0
+  g=byA mode=1 n=6 med_gbs=166.80 sum_gbs=1001.0 min=166.73 max=166.97 mhz_med=1980 bpc_med=84.24 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 0:167.0:1980 16:166.8:1980 4:166.7:1980 20:166.8:1980 14:167.0:1980 30:166.7:1980
+  g=byB mode=1 n=8 med_gbs=174.39 sum_gbs=1395.2 min=174.15 max=174.63 mhz_med=1980 bpc_med=88.07 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 2:174.6:1980 18:174.3:1980 6:174.6:1980 22:174.4:1980 8:174.5:1980 24:174.4:1980 10:174.2:1980 26:174.2:1980
+  g=agg mode=1 n=16 med_gbs=76.03 sum_gbs=1216.4 min=76.03 max=76.03 mhz_med=1980 bpc_med=38.40 seg_gbs=0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+    u 12:76.0:1980 13:76.0:1980 28:76.0:1980 29:76.0:1980 44:76.0:1980 45:76.0:1980 60:76.0:1980 61:76.0:1980 74:76.0:1980 75:76.0:1980 88:76.0:1980 89:76.0:1980 102:76.0:1980 103:76.0:1980 116:76.0:1980 117:76.0:1980
+SUMS s=ncu_by_aggp95 trials_ok=1 nv_sm_mhz=1980 [1980-1980] nv_pw=488.9 [488.9-488.9] reasons=0x0
+SUMG s=ncu_by_aggp95 g=byA mode=1 n=6 trials=1 med_gbs=166.80 [166.80-166.80] sum_gbs=1001.0 [1001.0-1001.0] mhz=1980 [1980-1980] bpc=84.241 [84.241-84.241]
+SUMG s=ncu_by_aggp95 g=byB mode=1 n=8 trials=1 med_gbs=174.39 [174.39-174.39] sum_gbs=1395.2 [1395.2-1395.2] mhz=1980 [1980-1980] bpc=88.073 [88.073-88.073]
+SUMG s=ncu_by_aggp95 g=agg mode=1 n=16 trials=1 med_gbs=76.03 [76.03-76.03] sum_gbs=1216.4 [1216.4-1216.4] mhz=1980 [1980-1980] bpc=38.398 [38.398-38.398]
+==PROF== Disconnected from process 728392
+==PROF== Creating report from application replay data: 0%.......100%
+[727660] bys_lab@127.0.0.1
+  k_bys(KP) (132, 1, 1)x(32, 1, 1), Context 1, Stream 13, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------------------- ----------- --------------
+    Metric Name                             Metric Unit   Metric Value
+    --------------------------------------- ----------- --------------
+    dram__bytes_read.sum                          Tbyte           1.08
+    lts__cycles_active.avg                        cycle 512,570,079.82
+    lts__cycles_elapsed.avg                       cycle    513,087,154
+    lts__d_sectors_fill_device.sum               sector 33,864,967,444
+    lts__ltcfabric2ltc_cycles_active.avg          cycle 440,994,132.62
+    lts__ltcfabric2lts_cycles_active.avg          cycle 229,853,821.19
+    lts__ltcfabric2lts_cycles_stalled.avg         cycle 162,414,072.30
+    lts__ltcfabric2lts_cycles_stalled.max         cycle    215,110,819
+    lts__lts2xbar_cycles_active.avg               cycle 360,271,122.72
+    lts__lts2xbar_cycles_active.max               cycle    442,640,655
+    lts__t_requests_srcunit_ltcfabric.sum       request  8,492,733,346
+    lts__t_requests_srcunit_tex_op_read.sum     request  8,466,876,160
+    lts__t_sector_op_read_hit_rate.pct                %           0.00
+    lts__xbar2lts_cycles_active.avg               cycle  84,815,090.30
+    lts__xbar2lts_cycles_active.max               cycle    105,470,250
+    --------------------------------------- ----------- --------------
+
+exit=0

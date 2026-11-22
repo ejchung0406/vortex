@@ -1,0 +1,9 @@
+name=pr_bds_base_bslot_rtlsim
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_bar-drain-scope_base
+src_rev=ccf811e1196d7aa2aa2f8a3ada77797c1ff6333d
+host=atl1-1-02-010-10-2.pace.gatech.edu
+xlen=64
+xconf=-DVX_CFG_NUM_WARPS=2
+blackbox=--driver=rtlsim --app=bar_slot_phase
+rc=0
+wall_s=38

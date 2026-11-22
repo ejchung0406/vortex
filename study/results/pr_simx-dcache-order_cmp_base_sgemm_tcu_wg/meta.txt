@@ -1,0 +1,8 @@
+name=pr_simx-dcache-order_cmp_base_sgemm_tcu_wg
+src_rev=
+src_dirty=0
+host=atl1-1-02-010-11-1.pace.gatech.edu
+xconf=-DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
+blackbox=--driver=simx --app=sgemm_tcu --perf=7
+rc=0
+wall_s=166

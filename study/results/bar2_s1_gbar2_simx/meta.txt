@@ -1,0 +1,8 @@
+name=bar2_s1_gbar2_simx
+src_rev=
+src_dirty=0
+host=atl1-1-02-010-12-2.pace.gatech.edu
+xconf= -DVX_CFG_BAR_DRAIN_SCOPE=1
+blackbox=--driver=simx --app=async_gbarrier --perf=1 --cores=2
+rc=0
+wall_s=152

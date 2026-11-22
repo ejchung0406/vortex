@@ -1,0 +1,89 @@
+CONFIGS=-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_DXA_CORES=8 -DVX_CFG_DXA_MAX_INFLIGHT=256 -DPERF_ENABLE
+Running: CONFIGS="-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_DXA_CORES=8 -DVX_CFG_DXA_MAX_INFLIGHT=256 -DPERF_ENABLE" make -C "./ci/../tests/regression/dxa_copy" runtime-rtlsim > /dev/null
+%Warning-SELRANGE: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_gmem_req.sv:308:70: [3:8] Slice range has ascending bit ordering, perhaps you wanted [8:3]
+                                                                                                                                      : ... note: In instance 'rtlsim_shim.vortex.g_clusters[0].cluster.g_sockets[0].socket.dxa_core.g_workers[7].worker.gmem_req'
+  308 |                             logic [$bits(mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W])-1:0] __unused = mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W]; 
+      |                                                                      ^
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_worker.sv:196:1: ... note: In file included from 'VX_dxa_worker.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_core.sv:170:1: ... note: In file included from 'VX_dxa_core.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_socket.sv:806:1: ... note: In file included from 'VX_socket.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_cluster.sv:436:1: ... note: In file included from 'VX_cluster.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/Vortex.sv:451:1: ... note: In file included from 'Vortex.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/sim/rtlsim/rtlsim_shim.sv:97:1: ... note: In file included from 'rtlsim_shim.sv'
+                   ... For warning description see https://verilator.org/warn/SELRANGE?v=5.050
+                   ... Use "/* verilator lint_off SELRANGE */" and lint_on around source to disable this message.
+%Warning-SELRANGE: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_gmem_req.sv:308:70: Extracting 6 bits from only 4 bit number
+                                                                                                                                      : ... note: In instance 'rtlsim_shim.vortex.g_clusters[0].cluster.g_sockets[0].socket.dxa_core.g_workers[7].worker.gmem_req'
+  308 |                             logic [$bits(mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W])-1:0] __unused = mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W]; 
+      |                                                                      ^
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_worker.sv:196:1: ... note: In file included from 'VX_dxa_worker.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_core.sv:170:1: ... note: In file included from 'VX_dxa_core.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_socket.sv:806:1: ... note: In file included from 'VX_socket.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_cluster.sv:436:1: ... note: In file included from 'VX_cluster.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/Vortex.sv:451:1: ... note: In file included from 'Vortex.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/sim/rtlsim/rtlsim_shim.sv:97:1: ... note: In file included from 'rtlsim_shim.sv'
+%Warning-SELRANGE: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_gmem_req.sv:308:70: Selection index out of range: 13:8 outside 3:0
+                                                                                                                                      : ... note: In instance 'rtlsim_shim.vortex.g_clusters[0].cluster.g_sockets[0].socket.dxa_core.g_workers[7].worker.gmem_req'
+  308 |                             logic [$bits(mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W])-1:0] __unused = mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W]; 
+      |                                                                      ^
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_worker.sv:196:1: ... note: In file included from 'VX_dxa_worker.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_core.sv:170:1: ... note: In file included from 'VX_dxa_core.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_socket.sv:806:1: ... note: In file included from 'VX_socket.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_cluster.sv:436:1: ... note: In file included from 'VX_cluster.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/Vortex.sv:451:1: ... note: In file included from 'Vortex.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/sim/rtlsim/rtlsim_shim.sv:97:1: ... note: In file included from 'rtlsim_shim.sv'
+%Warning-SELRANGE: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_gmem_req.sv:308:70: Selection index out of range: 5:0 outside 3:0
+                                                                                                                                      : ... note: In instance 'rtlsim_shim.vortex.g_clusters[0].cluster.g_sockets[0].socket.dxa_core.g_workers[7].worker.gmem_req'
+  308 |                             logic [$bits(mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W])-1:0] __unused = mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W]; 
+      |                                                                      ^
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_worker.sv:196:1: ... note: In file included from 'VX_dxa_worker.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_core.sv:170:1: ... note: In file included from 'VX_dxa_core.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_socket.sv:806:1: ... note: In file included from 'VX_socket.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_cluster.sv:436:1: ... note: In file included from 'VX_cluster.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/Vortex.sv:451:1: ... note: In file included from 'Vortex.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/sim/rtlsim/rtlsim_shim.sv:97:1: ... note: In file included from 'rtlsim_shim.sv'
+%Warning-SELRANGE: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_gmem_req.sv:308:141: [3:8] Slice range has ascending bit ordering, perhaps you wanted [8:3]
+                                                                                                                                       : ... note: In instance 'rtlsim_shim.vortex.g_clusters[0].cluster.g_sockets[0].socket.dxa_core.g_workers[7].worker.gmem_req'
+  308 |                             logic [$bits(mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W])-1:0] __unused = mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W]; 
+      |                                                                                                                                             ^
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_worker.sv:196:1: ... note: In file included from 'VX_dxa_worker.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_core.sv:170:1: ... note: In file included from 'VX_dxa_core.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_socket.sv:806:1: ... note: In file included from 'VX_socket.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_cluster.sv:436:1: ... note: In file included from 'VX_cluster.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/Vortex.sv:451:1: ... note: In file included from 'Vortex.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/sim/rtlsim/rtlsim_shim.sv:97:1: ... note: In file included from 'rtlsim_shim.sv'
+%Warning-SELRANGE: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_gmem_req.sv:308:141: Extracting 6 bits from only 4 bit number
+                                                                                                                                       : ... note: In instance 'rtlsim_shim.vortex.g_clusters[0].cluster.g_sockets[0].socket.dxa_core.g_workers[7].worker.gmem_req'
+  308 |                             logic [$bits(mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W])-1:0] __unused = mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W]; 
+      |                                                                                                                                             ^
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_worker.sv:196:1: ... note: In file included from 'VX_dxa_worker.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_core.sv:170:1: ... note: In file included from 'VX_dxa_core.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_socket.sv:806:1: ... note: In file included from 'VX_socket.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_cluster.sv:436:1: ... note: In file included from 'VX_cluster.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/Vortex.sv:451:1: ... note: In file included from 'Vortex.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/sim/rtlsim/rtlsim_shim.sv:97:1: ... note: In file included from 'rtlsim_shim.sv'
+%Warning-SELRANGE: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_gmem_req.sv:308:141: Selection index out of range: 13:8 outside 3:0
+                                                                                                                                       : ... note: In instance 'rtlsim_shim.vortex.g_clusters[0].cluster.g_sockets[0].socket.dxa_core.g_workers[7].worker.gmem_req'
+  308 |                             logic [$bits(mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W])-1:0] __unused = mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W]; 
+      |                                                                                                                                             ^
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_worker.sv:196:1: ... note: In file included from 'VX_dxa_worker.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_core.sv:170:1: ... note: In file included from 'VX_dxa_core.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_socket.sv:806:1: ... note: In file included from 'VX_socket.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_cluster.sv:436:1: ... note: In file included from 'VX_cluster.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/Vortex.sv:451:1: ... note: In file included from 'Vortex.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/sim/rtlsim/rtlsim_shim.sv:97:1: ... note: In file included from 'rtlsim_shim.sv'
+%Warning-SELRANGE: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_gmem_req.sv:308:141: Selection index out of range: 5:0 outside 3:0
+                                                                                                                                       : ... note: In instance 'rtlsim_shim.vortex.g_clusters[0].cluster.g_sockets[0].socket.dxa_core.g_workers[7].worker.gmem_req'
+  308 |                             logic [$bits(mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W])-1:0] __unused = mem_bus_w.req_data.tag.value[GMEM_TAG_VALUEW-1:TAG_W]; 
+      |                                                                                                                                             ^
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_worker.sv:196:1: ... note: In file included from 'VX_dxa_worker.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/dxa/VX_dxa_core.sv:170:1: ... note: In file included from 'VX_dxa_core.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_socket.sv:806:1: ... note: In file included from 'VX_socket.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/VX_cluster.sv:436:1: ... note: In file included from 'VX_cluster.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/hw/rtl/Vortex.sv:451:1: ... note: In file included from 'Vortex.sv'
+                   /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width_base/sim/rtlsim/rtlsim_shim.sv:97:1: ... note: In file included from 'rtlsim_shim.sv'
+%Error: Exiting due to 8 warning(s)
+make[2]: *** [Makefile:229: /tmp/echung67/vx_15977564_3099251/sw/runtime/librtlsim.so] Error 1
+make[1]: *** [Makefile:42: /tmp/echung67/vx_15977564_3099251/sw/runtime/librtlsim.so] Error 2
+make: *** [../common.mk:241: runtime-rtlsim] Error 2
+Error building driver: rtlsim (via ./ci/../tests/regression/dxa_copy)

@@ -1,0 +1,187 @@
+# warp_rate (tests/regression/warp_rate), SimX h200s, 1 core, 32 iterations; cyc = core cycles (mcycle)
+## base (3c2c5e51c + test)
+kind                 n   1 warp: cyc/iter cyc/instr IPC | core IPC W=1,2,4,8,16,32,64
+int_dep             130     1898.3   14.60 0.068 |  0.07  0.14  0.27  0.55  1.09  1.30  1.32
+int_ind4            130     1527.3   11.75 0.085 |  0.09     -     -     -     -     -     -
+int_ind8            130     1535.0   11.81 0.085 |  0.08  0.17  0.34  0.69  1.26  1.31  1.32
+fma_dep             130     2765.0   21.27 0.047 |  0.05  0.09  0.19  0.38  0.75  1.50  2.91
+fma_ind4            130     2835.3   21.81 0.046 |  0.05     -     -     -     -     -     -
+fma_ind8            130     2803.5   21.57 0.046 |  0.05  0.09  0.19  0.37  0.74  1.48  2.77
+br_every1           130     3118.1   23.99 0.042 |  0.04  0.08  0.17  0.34  0.67  1.27  1.30
+br_every4           130     1932.6   14.87 0.067 |  0.07     -     -     -     -     -     -
+br_every16          130     1644.6   12.65 0.079 |  0.08     -     -     -     -     -     -
+lds_own             258     3002.6   11.64 0.086 |  0.09  0.17  0.35  0.69  0.98  1.00  1.00
+lds_chase           130     3403.9   26.18 0.038 |  0.04     -     -     -     -     -     -
+sts_own             130     1544.7   11.88 0.084 |  0.08  0.17  0.25  0.25  0.25  0.25  0.25
+lds_nouse           130     1546.0   11.89 0.084 |  0.08  0.17  0.34  0.49  0.50  0.50  0.51
+## prototype, defaults (FETCH_INFLIGHT=1, FFLAGS_ACCUM=0): identical to base, W=1 all kinds (cycles and register hash)
+kind                 n   1 warp: cyc/iter cyc/instr IPC | core IPC W=1,2,4,8,16,32,64
+int_dep             130     1898.3   14.60 0.068 |  0.07     -     -     -     -     -     -
+int_ind4            130     1527.3   11.75 0.085 |  0.09     -     -     -     -     -     -
+int_ind8            130     1535.0   11.81 0.085 |  0.08     -     -     -     -     -     -
+fma_dep             130     2765.0   21.27 0.047 |  0.05     -     -     -     -     -     -
+fma_ind4            130     2835.3   21.81 0.046 |  0.05     -     -     -     -     -     -
+fma_ind8            130     2803.5   21.57 0.046 |  0.05     -     -     -     -     -     -
+br_every1           130     3118.1   23.99 0.042 |  0.04     -     -     -     -     -     -
+br_every4           130     1932.6   14.87 0.067 |  0.07     -     -     -     -     -     -
+br_every16          130     1644.6   12.65 0.079 |  0.08     -     -     -     -     -     -
+lds_own             258     3002.6   11.64 0.086 |  0.09     -     -     -     -     -     -
+lds_chase           130     3403.9   26.18 0.038 |  0.04     -     -     -     -     -     -
+sts_own             130     1544.7   11.88 0.084 |  0.08     -     -     -     -     -     -
+lds_nouse           130     1546.0   11.89 0.084 |  0.08     -     -     -     -     -     -
+## prototype FETCH_INFLIGHT=4
+kind                 n   1 warp: cyc/iter cyc/instr IPC | core IPC W=1,2,4,8,16,32,64
+int_dep             130     1883.1   14.49 0.069 |  0.07  0.14  0.28  0.55  1.10  1.30  1.32
+int_ind4            130      552.5    4.25 0.235 |  0.24     -     -     -     -     -     -
+int_ind8            130      499.8    3.84 0.260 |  0.26  0.52  1.04  0.76  1.27  1.31  1.32
+fma_dep             130     2751.8   21.17 0.047 |  0.05  0.09  0.19  0.38  0.75  1.50  2.91
+fma_ind4            130     2822.7   21.71 0.046 |  0.05     -     -     -     -     -     -
+fma_ind8            130     2791.5   21.47 0.047 |  0.05  0.09  0.19  0.37  0.74  1.48  2.76
+br_every1           130     3081.8   23.71 0.042 |  0.04  0.08  0.17  0.34  0.67  1.28  1.30
+br_every4           130     1151.1    8.85 0.113 |  0.11     -     -     -     -     -     -
+br_every16          130      714.2    5.49 0.182 |  0.18     -     -     -     -     -     -
+lds_own             258     1653.8    6.41 0.156 |  0.16  0.30  0.60  0.76  0.98  1.00  1.00
+lds_chase           130     3401.9   26.17 0.038 |  0.04     -     -     -     -     -     -
+sts_own             130      854.8    6.58 0.152 |  0.15  0.24  0.25  0.25  0.25  0.25  0.25
+lds_nouse           130      859.5    6.61 0.151 |  0.15  0.24  0.47  0.49  0.50  0.51  0.51
+## prototype FETCH_INFLIGHT=4 FFLAGS_ACCUM=1
+kind                 n   1 warp: cyc/iter cyc/instr IPC | core IPC W=1,2,4,8,16,32,64
+int_dep             130     1883.1   14.49 0.069 |  0.07  0.14  0.28  0.55  1.10  1.31  1.32
+int_ind4            130      552.5    4.25 0.235 |  0.24     -     -     -     -     -     -
+int_ind8            130      499.8    3.84 0.260 |  0.26  0.52  1.04  0.76  1.28  1.31  1.32
+fma_dep             130     2751.8   21.17 0.047 |  0.05  0.09  0.19  0.38  0.75  1.50  2.90
+fma_ind4            130      802.5    6.17 0.162 |  0.16     -     -     -     -     -     -
+fma_ind8            130      498.5    3.83 0.261 |  0.26  0.53  1.06  0.76  1.48  2.92  3.02
+br_every1           130     3081.8   23.71 0.042 |  0.04  0.08  0.17  0.34  0.67  1.28  1.30
+br_every4           130     1151.1    8.85 0.113 |  0.11     -     -     -     -     -     -
+br_every16          130      714.2    5.49 0.182 |  0.18     -     -     -     -     -     -
+lds_own             258     1653.8    6.41 0.156 |  0.16  0.30  0.60  0.76  0.98  1.00  1.00
+lds_chase           130     3401.9   26.17 0.038 |  0.04     -     -     -     -     -     -
+sts_own             130      854.8    6.58 0.152 |  0.15  0.24  0.25  0.25  0.25  0.25  0.25
+lds_nouse           130      859.5    6.61 0.151 |  0.15  0.24  0.47  0.49  0.50  0.51  0.51
+## FETCH_INFLIGHT=2 (W=1)
+kind                 n   1 warp: cyc/iter cyc/instr IPC | core IPC W=1,2,4,8,16,32,64
+int_ind4            130      749.0    5.76 0.174 |  0.17     -     -     -     -     -     -
+int_ind8            130      756.9    5.82 0.172 |  0.17     -     -     -     -     -     -
+br_every4           130     1285.5    9.89 0.101 |  0.10     -     -     -     -     -     -
+br_every16          130      902.7    6.94 0.144 |  0.14     -     -     -     -     -     -
+lds_own             258     1753.8    6.80 0.147 |  0.15     -     -     -     -     -     -
+sts_own             130      858.8    6.61 0.151 |  0.15     -     -     -     -     -     -
+lds_nouse           130      873.4    6.72 0.149 |  0.15     -     -     -     -     -     -
+## FETCH_INFLIGHT=8 IBUF_SIZE=8 (W=1)
+kind                 n   1 warp: cyc/iter cyc/instr IPC | core IPC W=1,2,4,8,16,32,64
+int_dep             130     1871.0   14.39 0.069 |  0.07     -     -     -     -     -     -
+int_ind4            130      549.5    4.23 0.237 |  0.24     -     -     -     -     -     -
+int_ind8            130      487.7    3.75 0.267 |  0.27     -     -     -     -     -     -
+fma_dep             130     2733.4   21.03 0.048 |  0.05     -     -     -     -     -     -
+fma_ind4            130     2801.2   21.55 0.046 |  0.05     -     -     -     -     -     -
+fma_ind8            130     2770.0   21.31 0.047 |  0.05     -     -     -     -     -     -
+br_every1           130     3062.8   23.56 0.042 |  0.04     -     -     -     -     -     -
+br_every4           130     1144.8    8.81 0.114 |  0.11     -     -     -     -     -     -
+br_every16          130      704.1    5.42 0.185 |  0.18     -     -     -     -     -     -
+lds_own             258     1638.3    6.35 0.157 |  0.16     -     -     -     -     -     -
+lds_chase           130     3375.9   25.97 0.039 |  0.04     -     -     -     -     -     -
+sts_own             130      842.5    6.48 0.154 |  0.15     -     -     -     -     -     -
+lds_nouse           130      851.6    6.55 0.153 |  0.15     -     -     -     -     -     -
+## earlier policy (fetch ahead whenever no warp without a fetch in flight wants the port; p3), FETCH_INFLIGHT=4
+kind                 n   1 warp: cyc/iter cyc/instr IPC | core IPC W=1,2,4,8,16,32,64
+int_dep             130     1883.1   14.49 0.069 |  0.07  0.14  0.28  0.55  1.10  1.30  1.20
+int_ind4            130      552.5    4.25 0.235 |  0.24     -     -     -     -     -     -
+int_ind8            130      499.8    3.84 0.260 |  0.26  0.52  1.04  1.20  1.28  1.31  1.31
+fma_dep             130     2751.8   21.17 0.047 |  0.05  0.09  0.19  0.38  0.76  1.50  2.84
+fma_ind4            130     2822.7   21.71 0.046 |  0.05     -     -     -     -     -     -
+fma_ind8            130     2791.5   21.47 0.047 |  0.05  0.09  0.19  0.37  0.74  1.48  2.23
+br_every1           130     3081.8   23.71 0.042 |  0.04  0.08  0.17  0.34  0.55  1.27  1.30
+br_every4           130     1151.1    8.85 0.113 |  0.11     -     -     -     -     -     -
+br_every16          130      714.2    5.49 0.182 |  0.18     -     -     -     -     -     -
+lds_own             258     1653.8    6.41 0.156 |  0.16  0.30  0.60  0.95  0.99  1.00  1.00
+lds_chase           130     3401.9   26.17 0.038 |  0.04     -     -     -     -     -     -
+sts_own             130      854.8    6.58 0.152 |  0.15  0.24  0.25  0.25  0.25  0.25  0.25
+lds_nouse           130      859.5    6.61 0.151 |  0.15  0.24  0.47  0.50  0.50  0.50  0.51
+## rtlsim vs simx, 8 warps x 8 threads, no profile, ISSUE_WIDTH=4 (cyc per iteration of the slowest warp)
+kind=int_dep W=1 cyc_per_iter_warp=1383.12	cyc_per_iter_warp=1383.12
+kind=int_dep W=2 cyc_per_iter_warp=1359.75	cyc_per_iter_warp=1359.75
+kind=int_dep W=4 cyc_per_iter_warp=1360.25	cyc_per_iter_warp=1360.25
+kind=int_dep W=8 cyc_per_iter_warp=1361.00	cyc_per_iter_warp=1361.00
+kind=int_ind4 W=1 cyc_per_iter_warp=1370.25	cyc_per_iter_warp=1370.25
+kind=int_ind4 W=2 cyc_per_iter_warp=1348.38	cyc_per_iter_warp=1348.38
+kind=int_ind4 W=4 cyc_per_iter_warp=1348.38	cyc_per_iter_warp=1348.38
+kind=int_ind4 W=8 cyc_per_iter_warp=1349.12	cyc_per_iter_warp=1349.12
+kind=int_ind8 W=1 cyc_per_iter_warp=1379.38	cyc_per_iter_warp=1379.38
+kind=int_ind8 W=2 cyc_per_iter_warp=1355.88	cyc_per_iter_warp=1355.88
+kind=int_ind8 W=4 cyc_per_iter_warp=1356.50	cyc_per_iter_warp=1356.50
+kind=int_ind8 W=8 cyc_per_iter_warp=1357.38	cyc_per_iter_warp=1357.38
+kind=fma_dep W=1 cyc_per_iter_warp=2607.88	cyc_per_iter_warp=2607.88
+kind=fma_dep W=2 cyc_per_iter_warp=2603.12	cyc_per_iter_warp=2603.12
+kind=fma_dep W=4 cyc_per_iter_warp=2603.12	cyc_per_iter_warp=2603.12
+kind=fma_dep W=8 cyc_per_iter_warp=2603.38	cyc_per_iter_warp=2603.38
+kind=fma_ind4 W=1 cyc_per_iter_warp=2679.25	cyc_per_iter_warp=2679.25
+kind=fma_ind4 W=2 cyc_per_iter_warp=2674.25	cyc_per_iter_warp=2674.25
+kind=fma_ind4 W=4 cyc_per_iter_warp=2674.25	cyc_per_iter_warp=2674.25
+kind=fma_ind4 W=8 cyc_per_iter_warp=2674.50	cyc_per_iter_warp=2674.50
+kind=fma_ind8 W=1 cyc_per_iter_warp=2682.38	cyc_per_iter_warp=2682.38
+kind=fma_ind8 W=2 cyc_per_iter_warp=2677.38	cyc_per_iter_warp=2677.38
+kind=fma_ind8 W=4 cyc_per_iter_warp=2677.38	cyc_per_iter_warp=2677.38
+kind=fma_ind8 W=8 cyc_per_iter_warp=2677.62	cyc_per_iter_warp=2677.62
+kind=br_every1 W=1 cyc_per_iter_warp=2425.38	cyc_per_iter_warp=2425.38
+kind=br_every1 W=2 cyc_per_iter_warp=2402.38	cyc_per_iter_warp=2402.38
+kind=br_every1 W=4 cyc_per_iter_warp=2402.38	cyc_per_iter_warp=2402.38
+kind=br_every1 W=8 cyc_per_iter_warp=2403.75	cyc_per_iter_warp=2403.75
+kind=br_every4 W=1 cyc_per_iter_warp=1644.50	cyc_per_iter_warp=1644.50
+kind=br_every4 W=2 cyc_per_iter_warp=1621.75	cyc_per_iter_warp=1621.75
+kind=br_every4 W=4 cyc_per_iter_warp=1622.50	cyc_per_iter_warp=1622.50
+kind=br_every4 W=8 cyc_per_iter_warp=1623.00	cyc_per_iter_warp=1623.00
+kind=br_every16 W=1 cyc_per_iter_warp=1449.38	cyc_per_iter_warp=1449.38
+kind=br_every16 W=2 cyc_per_iter_warp=1425.88	cyc_per_iter_warp=1425.88
+kind=br_every16 W=4 cyc_per_iter_warp=1425.88	cyc_per_iter_warp=1425.88
+kind=br_every16 W=8 cyc_per_iter_warp=1426.38	cyc_per_iter_warp=1426.38
+kind=lds_own W=1 cyc_per_iter_warp=2689.50	cyc_per_iter_warp=2689.50
+kind=lds_own W=2 cyc_per_iter_warp=2651.00	cyc_per_iter_warp=2651.00
+kind=lds_own W=4 cyc_per_iter_warp=2651.00	cyc_per_iter_warp=2651.00
+kind=lds_own W=8 cyc_per_iter_warp=2651.62	cyc_per_iter_warp=2651.62
+kind=lds_chase W=1 cyc_per_iter_warp=2746.62	cyc_per_iter_warp=2746.62
+kind=lds_chase W=2 cyc_per_iter_warp=2742.50	cyc_per_iter_warp=2742.50
+kind=lds_chase W=4 cyc_per_iter_warp=2742.50	cyc_per_iter_warp=2742.50
+kind=lds_chase W=8 cyc_per_iter_warp=2742.75	cyc_per_iter_warp=2742.75
+kind=sts_own W=1 cyc_per_iter_warp=1385.38	cyc_per_iter_warp=1385.38
+kind=sts_own W=2 cyc_per_iter_warp=1362.25	cyc_per_iter_warp=1362.25
+kind=sts_own W=4 cyc_per_iter_warp=1362.25	cyc_per_iter_warp=1362.25
+kind=sts_own W=8 cyc_per_iter_warp=1362.88	cyc_per_iter_warp=1362.88
+kind=lds_nouse W=1 cyc_per_iter_warp=1388.12	cyc_per_iter_warp=1388.12
+kind=lds_nouse W=2 cyc_per_iter_warp=1369.12	cyc_per_iter_warp=1369.12
+kind=lds_nouse W=4 cyc_per_iter_warp=1369.25	cyc_per_iter_warp=1369.25
+kind=lds_nouse W=8 cyc_per_iter_warp=1369.75	cyc_per_iter_warp=1369.75
+## rtlsim vs simx, ISSUE_WIDTH=2
+kind=int_dep W=1 cyc_per_iter_warp=1247.12	cyc_per_iter_warp=1248.50
+kind=int_dep W=8 cyc_per_iter_warp=1237.12	cyc_per_iter_warp=1237.88
+kind=int_ind8 W=1 cyc_per_iter_warp=1243.75	cyc_per_iter_warp=1245.12
+kind=int_ind8 W=8 cyc_per_iter_warp=1230.88	cyc_per_iter_warp=1232.50
+kind=fma_dep W=1 cyc_per_iter_warp=2602.50	cyc_per_iter_warp=2602.88
+kind=fma_dep W=8 cyc_per_iter_warp=3617.38	cyc_per_iter_warp=3617.75
+kind=fma_ind8 W=1 cyc_per_iter_warp=2677.00	cyc_per_iter_warp=2677.62
+kind=fma_ind8 W=8 cyc_per_iter_warp=3627.88	cyc_per_iter_warp=3628.50
+kind=br_every1 W=1 cyc_per_iter_warp=2288.00	cyc_per_iter_warp=2290.38
+kind=br_every1 W=8 cyc_per_iter_warp=2271.00	cyc_per_iter_warp=2273.50
+kind=br_every4 W=1 cyc_per_iter_warp=1505.25	cyc_per_iter_warp=1506.88
+kind=br_every4 W=8 cyc_per_iter_warp=1504.25	cyc_per_iter_warp=1505.62
+kind=lds_own W=1 cyc_per_iter_warp=2431.00	cyc_per_iter_warp=2433.62
+kind=lds_own W=8 cyc_per_iter_warp=2401.38	cyc_per_iter_warp=2403.75
+kind=lds_chase W=1 cyc_per_iter_warp=2739.88	cyc_per_iter_warp=2740.50
+kind=lds_chase W=8 cyc_per_iter_warp=2737.38	cyc_per_iter_warp=2738.00
+kind=sts_own W=1 cyc_per_iter_warp=1249.38	cyc_per_iter_warp=1251.00
+kind=sts_own W=8 cyc_per_iter_warp=1232.38	cyc_per_iter_warp=1233.88
+## p5 FETCH_INFLIGHT=4 FFLAGS_ACCUM=1 (final patch)
+kind                 n   1 warp: cyc/iter cyc/instr IPC | core IPC W=1,2,4,8,16,32,64
+int_dep             130     1883.1   14.49 0.069 |  0.07  0.14  0.28  0.55  1.10  1.31  1.32
+int_ind4            130      552.5    4.25 0.235 |  0.24     -     -     -     -     -     -
+int_ind8            130      499.8    3.84 0.260 |  0.26  0.52  1.04  0.76  1.28  1.31  1.32
+fma_dep             130     2751.8   21.17 0.047 |  0.05     -     -     -     -     -     -
+fma_ind4            130      802.5    6.17 0.162 |  0.16     -     -     -     -     -     -
+fma_ind8            130      499.5    3.84 0.260 |  0.26  0.53  1.05  0.76  1.48  2.92  3.01
+br_every1           130     3081.8   23.71 0.042 |  0.04  0.08  0.17  0.34  0.67  1.28  1.30
+br_every4           130     1151.1    8.85 0.113 |  0.11     -     -     -     -     -     -
+br_every16          130      714.2    5.49 0.182 |  0.18     -     -     -     -     -     -
+lds_own             258     1653.8    6.41 0.156 |  0.16  0.30  0.60  0.76  0.98  1.00  1.00
+lds_chase           130     3401.9   26.17 0.038 |  0.04     -     -     -     -     -     -
+sts_own             130      854.8    6.58 0.152 |  0.15  0.24  0.25  0.25  0.25  0.25  0.25
+lds_nouse           130      859.5    6.61 0.151 |  0.15  0.24  0.47  0.49  0.50  0.51  0.51

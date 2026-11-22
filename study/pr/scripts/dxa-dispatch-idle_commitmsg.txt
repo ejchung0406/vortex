@@ -1,0 +1,28 @@
+dxa: dispatch prefers a worker with no transfer running
+
+A DXA worker takes a new request as soon as its setup stage is free, which
+is while its previous transfer is still draining: the setup engine prepares
+the next transfer in the background. The dispatch took the lowest-numbered
+ready worker, so a request that arrived while worker 0 was copying was set
+up on worker 0 and waited for that copy, while higher-numbered workers sat
+idle.
+
+The dispatch now takes the lowest-numbered ready worker that has no
+transfer running, and only when there is none the lowest-numbered ready
+worker as before. Each worker exports its setup stage's transfer-idle state
+for this. SimX's setup step makes the same choice in two passes over the
+workers: idle workers start or take a request first, and only then is a
+request set up behind a running transfer. With one worker (the default
+below nine cores) both models behave exactly as before.
+
+Measured at XLEN 64, one core, upstream/master -> this change:
+  rtlsim sgemm2_dxa -n32 -t4 -m1, 4 workers: 203,317 -> 202,352 cycles
+  (8 workers the same); SimX 204,066 -> 202,987.
+  1 worker: dxa_copy -d1, dxa_copy -d1 -t0 4, dxa_copy_mcast and
+  sgemm2_dxa identical to the cycle on both drivers.
+
+A model_parity case runs sgemm2_dxa at four workers, so the gate sees the
+choice; every existing DXA case runs one worker.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01S5PBErhG8sHe1yUkDDxz1o

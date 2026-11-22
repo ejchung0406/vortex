@@ -1,0 +1,909 @@
+--- a/VX_config.toml
++++ b/VX_config.toml
+@@ -371,6 +371,21 @@
+ # throughput, so an L2 hit's round trip grows by twice it. It stands for a
+ # large GPU's SM-to-L2 network, which L2_LATENCY (the bank pipeline) is not.
+ VX_CFG_L2_LINK_LATENCY = 0
++# SimX only (prototype): SM groups (a GPC) between the sockets and the L2. With
++# NOC_GROUP_SIZE sockets per group, each socket port crosses NOC_SM_LATENCY
++# cycles to its group's switch, which passes up to NOC_UPLINK_PORTS lines per
++# cycle each way (a power of two), the port chosen by line address, and with
++# NOC_UPLINK_BYTES != 0 at most that many bytes a cycle each way in all, over
++# NOC_UPLINK_LATENCY cycles to the L2. The switch and the byte gate add a cycle
++# each, so the defaults keep the L2 link's round trip. 0 keeps every socket
++# port's private link to the L2.
++VX_CFG_NOC_GROUP_SIZE = 0
++VX_CFG_NOC_UPLINK_PORTS = "expr: pow(2, clog2(max(1, $VX_CFG_NOC_GROUP_SIZE * $VX_CFG_L1_MEM_PORTS)))"
++VX_CFG_NOC_UPLINK_BYTES = 0
++# 0: the byte limit counts responses (return side), 1: requests.
++VX_CFG_NOC_UPLINK_GATE_REQ = 0
++VX_CFG_NOC_SM_LATENCY = "expr: $VX_CFG_L2_LINK_LATENCY // 2"
++VX_CFG_NOC_UPLINK_LATENCY = "expr: max(0, $VX_CFG_L2_LINK_LATENCY - $VX_CFG_NOC_SM_LATENCY - 1 - int($VX_CFG_NOC_UPLINK_BYTES != 0))"
+ VX_CFG_L2_MRSQ_SIZE = 4
+ VX_CFG_L2_MREQ_SIZE = 0
+ VX_CFG_L2_CRSQ_SIZE = 0
+--- a/VX_types.toml
++++ b/VX_types.toml
+@@ -138,7 +138,11 @@
+ VX_DCR_KMU_CLUSTER_DIM_Z= 0x023
+ # TMEM columns a CTA may allocate (tensor-memory builds; 0 = none)
+ VX_DCR_KMU_TMEM_COLS    = 0x024
+-VX_DCR_KMU_STATE_END    = 0x025
++# Cores the KMU must not send CTAs to, 32 per word (bit c of word w = core
++# 32w + c), as the TPC disable mask of a launch on the part; all 0 = every core
++VX_DCR_KMU_CORE_DISABLE0 = 0x025
++VX_DCR_KMU_CORE_DISABLE_WORDS = 8
++VX_DCR_KMU_STATE_END    = 0x02D
+ 
+ # DXA descriptor DCR mapping
+ # access pattern:
+--- a/sim/simx/constants.h
++++ b/sim/simx/constants.h
+@@ -112,7 +112,16 @@
+ 
+ // Demand clients of the cluster L2 (sockets and gfx caches), excluding the
+ // walker's PTE-fetch slot.
+-inline constexpr uint32_t VX_CFG_L2_DEMAND_REQS  = NUM_SOCKETS * VX_CFG_L1_MEM_PORTS;
++// With SM groups the L2 sees each group's uplink ports instead of every
++// socket port.
++inline constexpr uint32_t NOC_NUM_GROUPS = (VX_CFG_NOC_GROUP_SIZE != 0)
++    ? (NUM_SOCKETS + VX_CFG_NOC_GROUP_SIZE - 1) / __MAX(VX_CFG_NOC_GROUP_SIZE, 1) : 0;
++inline constexpr uint32_t VX_CFG_L2_DEMAND_REQS  = (VX_CFG_NOC_GROUP_SIZE != 0)
++    ? NOC_NUM_GROUPS * VX_CFG_NOC_UPLINK_PORTS
++    : NUM_SOCKETS * VX_CFG_L1_MEM_PORTS;
++#if (VX_CFG_NOC_GROUP_SIZE != 0) && (defined(VX_CFG_EXT_OM_ENABLE) || defined(VX_CFG_EXT_RASTER_ENABLE))
++#error "NOC_GROUP_SIZE is modelled without the cluster-resident gfx caches"
++#endif
+ #ifdef VX_CFG_VM_ENABLE
+ // With one cluster, an L2 and no L3, the cluster L2 is the LLC and carries
+ // the device walker's PTE fetches on one extra client slot; in every other
+--- a/sim/simx/cluster.cpp
++++ b/sim/simx/cluster.cpp
+@@ -14,6 +14,8 @@
+ #include "cluster.h"
+ #include <algorithm>
+ #include "delay_buffer.h"
++#include "noc_uplink.h"
++#include "noc_order.h"
+ #include "socket.h"
+ #include "core.h"
+ #include "local_mem.h"
+@@ -189,6 +191,102 @@
+       l2cache_->core_rsp_out.at(i).bind(&l2arb->RspIn.at(i));
+     }
+ #else
++  #if VX_CFG_NOC_GROUP_SIZE != 0
++    // SM groups: a group's socket ports reach its switch over the SM link; the
++    // switch passes NOC_UPLINK_PORTS lines per cycle each way, each request on
++    // the uplink port its line address selects (so one address keeps one path),
++    // round-robin among the group's ports; responses return by tag, one per
++    // socket port per cycle.
++    static_assert(ispow2(VX_CFG_NOC_UPLINK_PORTS) && VX_CFG_NOC_UPLINK_PORTS <= 64,
++                  "NOC_UPLINK_PORTS must be a power of two up to 64");
++    auto bind_delay = [&](const char* kind, uint32_t idx, uint32_t latency,
++                          SimChannel<MemReq>& req_src, SimChannel<MemReq>& req_dst,
++                          SimChannel<MemRsp>& rsp_src, SimChannel<MemRsp>& rsp_dst) {
++      if (latency != 0) {
++        snprintf(sname, 100, "%s-%s-req%d", name.c_str(), kind, idx);
++        auto req_link = DelayBuffer<MemReq>::Create(sname, latency);
++        snprintf(sname, 100, "%s-%s-rsp%d", name.c_str(), kind, idx);
++        auto rsp_link = DelayBuffer<MemRsp>::Create(sname, latency);
++        req_src.bind(&req_link->In);
++        req_link->Out.bind(&req_dst);
++        rsp_src.bind(&rsp_link->In);
++        rsp_link->Out.bind(&rsp_dst);
++      } else {
++        req_src.bind(&req_dst);
++        rsp_src.bind(&rsp_dst);
++      }
++    };
++    constexpr uint32_t kUplinks = VX_CFG_NOC_UPLINK_PORTS;
++    constexpr uint32_t kLineBits = log2ceil(VX_CFG_L1_LINE_SIZE);
++    constexpr uint32_t kSelBits = log2ceil(kUplinks);
++    auto uplink_sel = [](const MemReq& req) -> uint32_t {
++      uint64_t line = req.addr >> kLineBits;
++      uint64_t h = line;
++      if constexpr (kSelBits != 0) {
++        for (uint64_t x = line >> kSelBits; x != 0; x >>= kSelBits)
++          h ^= x;
++      }
++      return uint32_t(h & (kUplinks - 1));
++    };
++    // A request also crosses the port-order stage and the lane tap (a cycle
++    // each), which its uplink delay gives back so both directions keep the
++    // link latency.
++    constexpr uint32_t kUpReqLatency = (VX_CFG_NOC_UPLINK_LATENCY > 2) ? (VX_CFG_NOC_UPLINK_LATENCY - 2) : 1;
++    for (uint32_t g = 0; g < NOC_NUM_GROUPS; ++g) {
++      uint32_t first = g * VX_CFG_NOC_GROUP_SIZE;
++      uint32_t count = std::min<uint32_t>(VX_CFG_NOC_GROUP_SIZE, sockets_per_cluster - first);
++      uint32_t inputs = count * VX_CFG_L1_MEM_PORTS;
++      snprintf(sname, 100, "%s-noc-group%d", name.c_str(), g);
++      auto xbar = MemCrossBar::Create(sname, ArbiterType::RoundRobin,
++                                      inputs, kUplinks, uplink_sel, 1, 1);
++      snprintf(sname, 100, "%s-noc-order%d", name.c_str(), g);
++      auto order = NocPortOrder::Create(sname, inputs, kUplinks);
++      for (uint32_t i = 0; i < count; ++i) {
++        for (uint32_t j = 0; j < VX_CFG_L1_MEM_PORTS; ++j) {
++          uint32_t in = i * VX_CFG_L1_MEM_PORTS + j;
++          uint32_t port = (first + i) * VX_CFG_L1_MEM_PORTS + j;
++          bind_delay("noc-sm", port, VX_CFG_NOC_SM_LATENCY,
++                     sockets_.at(first + i)->mem_req_out.at(j), order->ReqIn.at(in),
++                     xbar->RspOut.at(in), sockets_.at(first + i)->mem_rsp_in.at(j));
++          order->ReqOut.at(in).bind(&xbar->ReqIn.at(in));
++        }
++      }
++    #if VX_CFG_NOC_UPLINK_BYTES != 0
++      snprintf(sname, 100, "%s-noc-uplink%d", name.c_str(), g);
++      auto gate = NocUplink::Create(sname, kUplinks, VX_CFG_NOC_UPLINK_BYTES, VX_CFG_L1_LINE_SIZE,
++                                    VX_CFG_NOC_UPLINK_GATE_REQ != 0);
++    #endif
++      for (uint32_t u = 0; u < kUplinks; ++u) {
++        uint32_t l2_port = g * kUplinks + u;
++      #if VX_CFG_NOC_UPLINK_BYTES != 0
++        xbar->ReqOut.at(u).bind(&gate->ReqIn.at(u));
++        gate->RspOut.at(u).bind(&xbar->RspIn.at(u));
++        auto& lane_req = gate->ReqOut.at(u);
++        auto& lane_rsp = gate->RspIn.at(u);
++      #else
++        auto& lane_req = xbar->ReqOut.at(u);
++        auto& lane_rsp = xbar->RspIn.at(u);
++      #endif
++        snprintf(sname, 100, "%s-noc-tap%d", name.c_str(), l2_port);
++        auto tap = NocLaneTap::Create(sname, log2ceil(inputs));
++        snprintf(sname, 100, "%s-noc-up-req%d", name.c_str(), l2_port);
++        auto up_req = DelayBuffer<MemReq>::Create(sname, kUpReqLatency);
++        lane_req.bind(&up_req->In);
++        up_req->Out.bind(&tap->In);
++        tap->Out.bind(&l2cache_->core_req_in.at(l2_port));
++        tap->Delivered.bind(&order->Delivered.at(u));
++        if constexpr (VX_CFG_NOC_UPLINK_LATENCY != 0) {
++          snprintf(sname, 100, "%s-noc-up-rsp%d", name.c_str(), l2_port);
++          auto up_rsp = DelayBuffer<MemRsp>::Create(sname, VX_CFG_NOC_UPLINK_LATENCY);
++          l2cache_->core_rsp_out.at(l2_port).bind(&up_rsp->In);
++          up_rsp->Out.bind(&lane_rsp);
++        } else {
++          l2cache_->core_rsp_out.at(l2_port).bind(&lane_rsp);
++        }
++      }
++    }
++    __unused(bind_l2_link);
++  #else
+     // No cluster-resident gfx caches: direct sockets → L2.
+     for (uint32_t i = 0; i < sockets_per_cluster; ++i) {
+       for (uint32_t j = 0; j < VX_CFG_L1_MEM_PORTS; ++j) {
+@@ -197,6 +295,7 @@
+                      l2cache_->core_rsp_out.at(port), sockets_.at(i)->mem_rsp_in.at(j));
+       }
+     }
++  #endif // SM groups
+ #endif // cluster-resident gfx caches
+ 
+ #ifdef VX_CFG_VM_ENABLE
+--- a/sim/simx/types.h
++++ b/sim/simx/types.h
+@@ -1995,6 +1995,7 @@
+           [lg2_inputs = lg2_inputs_](const typename ReqXbar::RspType& xbar_rsp) {
+             Req req(xbar_rsp.data);
+             if (lg2_inputs != 0) {
++              __assert((uint64_t(req.tag) >> (32 - lg2_inputs)) == 0, "crossbar input bits overflow the tag");
+               req.tag = (req.tag << lg2_inputs) | xbar_rsp.input;
+             }
+             return req;
+--- a/sim/simx/noc_uplink.h
++++ b/sim/simx/noc_uplink.h
+@@ -0,0 +1,121 @@
++// Copyright © 2019-2026
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++// http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++#pragma once
++
++#include <algorithm>
++#include <cstdint>
++#include <vector>
++#include "types.h"
++
++namespace vortex {
++
++// An SM group's uplink to the L2. Together its ports pass at most
++// `bytes_per_cycle` bytes of lines a cycle, counted on one side: on the return
++// side (every response costs a line, requests pass free) or on the request side
++// (every request costs a line, responses pass free). On the H200 the per-GPC
++// limit is the same for DRAM and L2-resident data and for local or remote
++// pages, so it counts unique lines; and a saturated GPC slows SMs in other
++// GPCs, which a return-side limit does when its backlog waits in the L2 banks'
++// shared response queues and a request-side one does not. The credit grows by
++// bytes_per_cycle a cycle up to one line per port beyond it, so the long-run
++// rate is exact and a burst after an idle spell is at most one line per port.
++// Ports take turns round-robin from where the last cycle's grants ended; a
++// port passes at most one packet a cycle each way, a cycle after its grant.
++class NocUplink : public SimObject<NocUplink> {
++public:
++  using Ptr = std::shared_ptr<NocUplink>;
++
++  std::vector<SimChannel<MemReq>> ReqIn;
++  std::vector<SimChannel<MemReq>> ReqOut;
++  std::vector<SimChannel<MemRsp>> RspIn;
++  std::vector<SimChannel<MemRsp>> RspOut;
++
++  NocUplink(const SimContext& ctx, const char* name, uint32_t ports,
++            uint32_t bytes_per_cycle, uint32_t line_size, bool request_side)
++    : SimObject<NocUplink>(ctx, name)
++    , ReqIn(ports, this)
++    , ReqOut(ports, this)
++    , RspIn(ports, this)
++    , RspOut(ports, this)
++    , rate_(bytes_per_cycle)
++    , line_(line_size)
++    , cap_(uint64_t(bytes_per_cycle) + uint64_t(ports) * line_size)
++    , request_side_(request_side) {
++    __assert(bytes_per_cycle != 0, "an uplink gate needs a rate");
++  }
++
++protected:
++  void on_reset() {
++    credit_ = cap_;
++    req_rr_ = rsp_rr_ = 0;
++    last_cycle_ = 0;
++  }
++
++  void on_tick() {
++    uint64_t now = SimPlatform::instance().cycles();
++    credit_ = std::min<uint64_t>(cap_, credit_ + (now - last_cycle_) * rate_);
++    last_cycle_ = now;
++
++    uint32_t P = ReqIn.size();
++    uint32_t req_cost = request_side_ ? line_ : 0;
++    uint32_t rsp_cost = request_side_ ? 0 : line_;
++    uint32_t start = req_rr_;
++    for (uint32_t k = 0; k < P && credit_ >= req_cost; ++k) {
++      uint32_t p = (start + k) % P;
++      auto& in = ReqIn.at(p);
++      if (in.empty())
++        continue;
++      if (ReqOut.at(p).try_send(in.peek(), 1)) {
++        in.pop();
++        credit_ -= req_cost;
++        req_rr_ = (p + 1) % P;
++      }
++    }
++    start = rsp_rr_;
++    for (uint32_t k = 0; k < P && credit_ >= rsp_cost; ++k) {
++      uint32_t p = (start + k) % P;
++      auto& in = RspIn.at(p);
++      if (in.empty())
++        continue;
++      if (RspOut.at(p).try_send(in.peek(), 1)) {
++        in.pop();
++        credit_ -= rsp_cost;
++        rsp_rr_ = (p + 1) % P;
++      }
++    }
++
++    // size() counts packets still on their way in: their send already woke us.
++    bool idle = true;
++    for (uint32_t p = 0; p < P; ++p) {
++      idle &= (ReqIn.at(p).size() == 0) && (RspIn.at(p).size() == 0);
++    }
++    if (idle) {
++      this->tick_sleep();
++    }
++  }
++
++private:
++  uint32_t rate_;
++  uint32_t line_;
++  uint64_t cap_;
++  bool request_side_;
++  uint64_t credit_ = 0;
++  uint32_t req_rr_ = 0;
++  uint32_t rsp_rr_ = 0;
++  uint64_t last_cycle_ = 0;
++
++  friend class SimObject<NocUplink>;
++};
++
++} // namespace vortex
+--- a/sim/simx/noc_order.h
++++ b/sim/simx/noc_order.h
+@@ -0,0 +1,130 @@
++// Copyright © 2019-2026
++//
++// Licensed under the Apache License, Version 2.0 (the "License");
++// you may not use this file except in compliance with the License.
++// You may obtain a copy of the License at
++// http://www.apache.org/licenses/LICENSE-2.0
++//
++// Unless required by applicable law or agreed to in writing, software
++// distributed under the License is distributed on an "AS IS" BASIS,
++// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++// See the License for the specific language governing permissions and
++// limitations under the License.
++
++#pragma once
++
++#include <cstdint>
++#include <vector>
++#include "types.h"
++
++namespace vortex {
++
++// Keeps a socket port's flush tokens (fences) in order with its other requests
++// across an SM group's address-hashed uplink lanes. The L2 serves a token when
++// it heads the input it arrived on and holds every input's cacheable requests
++// meanwhile; with one private link per port that orders the token behind the
++// port's earlier requests and ahead of its later ones. Across lanes it does
++// not, so each port counts its requests between here and the L2: a token waits
++// until the port has none left in flight, and the port's later requests wait
++// until the token has reached the L2. Requests of one address share a lane, so
++// same-address order (atomics, LR/SC, a load behind a store) holds without this.
++class NocPortOrder : public SimObject<NocPortOrder> {
++public:
++  using Ptr = std::shared_ptr<NocPortOrder>;
++
++  std::vector<SimChannel<MemReq>>   ReqIn;
++  std::vector<SimChannel<MemReq>>   ReqOut;
++  // one per lane: the switch input index of each request that reached the L2
++  std::vector<SimChannel<uint32_t>> Delivered;
++
++  NocPortOrder(const SimContext& ctx, const char* name, uint32_t ports, uint32_t lanes)
++    : SimObject<NocPortOrder>(ctx, name)
++    , ReqIn(ports, this)
++    , ReqOut(ports, this)
++    , Delivered(lanes, this)
++    , in_flight_(ports, 0)
++    , token_out_(ports, false)
++  {}
++
++protected:
++  void on_reset() {
++    std::fill(in_flight_.begin(), in_flight_.end(), 0);
++    std::fill(token_out_.begin(), token_out_.end(), false);
++  }
++
++  void on_tick() {
++    for (auto& d : Delivered) {
++      while (!d.empty()) {
++        uint32_t p = d.peek();
++        d.pop();
++        __assert(in_flight_.at(p) != 0, "a delivery the port did not send");
++        if (--in_flight_.at(p) == 0) {
++          token_out_.at(p) = false;
++        }
++      }
++    }
++    bool busy = false;
++    for (uint32_t p = 0, n = ReqIn.size(); p < n; ++p) {
++      auto& in = ReqIn.at(p);
++      busy |= (in.size() != 0) || (in_flight_.at(p) != 0);
++      if (in.empty() || token_out_.at(p))
++        continue;
++      bool token = in.peek().flags.flush;
++      if (token && in_flight_.at(p) != 0)
++        continue;
++      if (ReqOut.at(p).try_send(in.peek(), 1)) {
++        in.pop();
++        ++in_flight_.at(p);
++        token_out_.at(p) = token;
++      }
++    }
++    if (!busy) {
++      this->tick_sleep();
++    }
++  }
++
++private:
++  std::vector<uint32_t> in_flight_;
++  std::vector<bool>     token_out_;
++
++  friend class SimObject<NocPortOrder>;
++};
++
++// Last stage of an uplink lane before the L2: passes each request on and
++// reports the switch input it came from (the low tag bits the switch added).
++class NocLaneTap : public SimObject<NocLaneTap> {
++public:
++  using Ptr = std::shared_ptr<NocLaneTap>;
++
++  SimChannel<MemReq>   In;
++  SimChannel<MemReq>   Out;
++  SimChannel<uint32_t> Delivered;
++
++  NocLaneTap(const SimContext& ctx, const char* name, uint32_t input_bits)
++    : SimObject<NocLaneTap>(ctx, name)
++    , In(this)
++    , Out(this)
++    , Delivered(this)
++    , mask_((1u << input_bits) - 1)
++  {}
++
++protected:
++  void on_reset() {}
++
++  void on_tick() {
++    if (!In.empty() && Out.try_send(In.peek(), 1)) {
++      Delivered.send(In.peek().tag & mask_, 1);
++      In.pop();
++    }
++    if (In.size() == 0) {
++      this->tick_sleep();
++    }
++  }
++
++private:
++  uint32_t mask_;
++
++  friend class SimObject<NocLaneTap>;
++};
++
++} // namespace vortex
+--- a/sim/simx/kmu/kmu.h
++++ b/sim/simx/kmu/kmu.h
+@@ -116,6 +116,9 @@
+   uint32_t cluster_core_;
+   // CTAs sent but not yet admitted by each core's dispatcher.
+   std::vector<uint32_t> inflight_;
++  // Cores masked off for launches (VX_DCR_KMU_CORE_DISABLE*); persists like
++  // the rest of the kernel descriptor.
++  uint32_t core_disable_[VX_DCR_KMU_CORE_DISABLE_WORDS];
+ 
+   friend class SimObject<Kmu>;
+ };
+--- a/sim/simx/kmu/kmu.cpp
++++ b/sim/simx/kmu/kmu.cpp
+@@ -34,6 +34,8 @@
+   , cluster_core_(0)
+   , inflight_(num_cores, 0)
+ {
++  __assert(num_cores <= 32 * VX_DCR_KMU_CORE_DISABLE_WORDS, "core-disable mask too narrow");
++  for (auto& w : core_disable_) w = 0;
+   block_dim_[0]    = block_dim_[1]    = block_dim_[2]    = 1;
+   grid_dim_[0]     = grid_dim_[1]     = grid_dim_[2]     = 1;
+   cluster_dim_[0]  = cluster_dim_[1]  = cluster_dim_[2]  = 1;
+@@ -84,7 +86,12 @@
+   case VX_DCR_KMU_CLUSTER_DIM_X: cluster_dim_[0] = value; break;
+   case VX_DCR_KMU_CLUSTER_DIM_Y: cluster_dim_[1] = value; break;
+   case VX_DCR_KMU_CLUSTER_DIM_Z: cluster_dim_[2] = value; break;
+-  default: break;
++  default:
++    if (addr >= VX_DCR_KMU_CORE_DISABLE0
++     && addr < VX_DCR_KMU_CORE_DISABLE0 + VX_DCR_KMU_CORE_DISABLE_WORDS) {
++      core_disable_[addr - VX_DCR_KMU_CORE_DISABLE0] = value;
++    }
++    break;
+   }
+ }
+ 
+@@ -129,7 +136,8 @@
+   // transport has room and the core holds fewer than LAUNCH_CREDITS CTAs it
+   // has not yet admitted.
+   auto lane_ready = [&](uint32_t c) {
+-    return !bus_out.at(c).full() && inflight_[c] < LAUNCH_CREDITS;
++    bool disabled = (core_disable_[c / 32] >> (c % 32)) & 1;
++    return !disabled && !bus_out.at(c).full() && inflight_[c] < LAUNCH_CREDITS;
+   };
+   uint32_t target = num_cores;
+   if (cluster_locked_) {
+--- a/tests/regression/bwstream/main.cpp
++++ b/tests/regression/bwstream/main.cpp
+@@ -6,6 +6,7 @@
+ // bytes read are grid * threads * steps * 4. Read the bandwidth from the perf
+ // report (--perf=7): memory reads over cycles.
+ 
++#include <algorithm>
+ #include <cstdint>
+ #include <cstdio>
+ #include <cstdlib>
+@@ -13,6 +14,7 @@
+ #include <unistd.h>
+ #include <vector>
+ #include <vortex2.h>
++#include <VX_types.h>
+ #include "common.h"
+ 
+ #define RT_CHECK(_expr)                                         \
+@@ -32,6 +34,9 @@
+ uint32_t pattern = BWSTREAM_COALESCED;
+ uint32_t unroll  = 1;
+ uint32_t block_warps = 1;
++const char* core_list = nullptr;
++bool timing = false;
++vx_buffer_h timing_buffer = nullptr;
+ 
+ vx_device_h device = nullptr;
+ vx_buffer_h src_buffer = nullptr;
+@@ -44,12 +49,13 @@
+ static void show_usage() {
+   std::cout << "Vortex streaming-read bandwidth probe." << std::endl;
+   std::cout << "Usage: [-n steps] [-r rounds] [-g grid] [-p 0:coalesced|1:rows] "
+-               "[-u unroll] [-b block warps] [-k kernel] [-h]" << std::endl;
++               "[-u unroll] [-b block warps] [-M cores, e.g. 0,2,8-11: launch only on these] [-T: per-core rates] "
++               "[-k kernel] [-h]" << std::endl;
+ }
+ 
+ static void parse_args(int argc, char **argv) {
+   int c;
+-  while ((c = getopt(argc, argv, "n:r:g:p:u:b:k:h")) != -1) {
++  while ((c = getopt(argc, argv, "n:r:g:p:u:b:M:Tk:h")) != -1) {
+     switch (c) {
+     case 'n': steps   = atoi(optarg); break;
+     case 'r': rounds  = atoi(optarg); break;
+@@ -57,6 +63,8 @@
+     case 'p': pattern = atoi(optarg); break;
+     case 'u': unroll  = atoi(optarg); break;
+     case 'b': block_warps = atoi(optarg); break;
++    case 'M': core_list = optarg; break;
++    case 'T': timing = true; break;
+     case 'k': kernel_file = optarg; break;
+     case 'h': show_usage(); exit(0);
+     default:  show_usage(); exit(-1);
+@@ -73,6 +81,7 @@
+   if (device) {
+     if (src_buffer) vx_buffer_release(src_buffer);
+     if (out_buffer) vx_buffer_release(out_buffer);
++    if (timing_buffer) vx_buffer_release(timing_buffer);
+     if (kernel)  vx_kernel_release(kernel);
+     if (module_) vx_module_release(module_);
+     if (queue)   vx_queue_release(queue);
+@@ -81,6 +90,21 @@
+   }
+ }
+ 
++// Cores named by a list such as "0,2,8-11" (or "0+2+8-11", which survives
++// comma-separated environment lists); all when none is given.
++static std::vector<bool> parse_cores(const char* list, uint32_t num_cores) {
++  std::vector<bool> on(num_cores, list == nullptr);
++  for (const char* p = list; p && *p;) {
++    char* e;
++    uint32_t a = strtoul(p, &e, 10), b = a;
++    if (*e == '-') b = strtoul(e + 1, &e, 10);
++    for (uint32_t c = a; c <= b && c < num_cores; ++c) on[c] = true;
++    p = (*e == ',' || *e == '+') ? e + 1 : e;
++    if (*e != ',' && *e != '+' && *e != 0) break;
++  }
++  return on;
++}
++
+ int main(int argc, char *argv[]) {
+   parse_args(argc, argv);
+ 
+@@ -93,14 +117,26 @@
+   RT_CHECK(vx_device_query(device, VX_CAPS_NUM_THREADS, &num_threads));
+   RT_CHECK(vx_device_query(device, VX_CAPS_NUM_WARPS, &num_warps));
+   RT_CHECK(vx_device_query(device, VX_CAPS_NUM_CORES, &num_cores));
++  // Restrict the launch to the listed cores (the KMU skips disabled ones).
++  auto cores_on = parse_cores(core_list, (uint32_t)num_cores);
++  uint32_t active_cores = 0;
++  for (uint32_t w = 0; core_list && w < VX_DCR_KMU_CORE_DISABLE_WORDS; ++w) {
++    uint32_t bits = 0;
++    for (uint32_t b = 0; b < 32; ++b) {
++      uint32_t c = 32 * w + b;
++      if (c < num_cores && !cores_on[c]) bits |= 1u << b;
++    }
++    RT_CHECK(vx_enqueue_dcr_write(queue, VX_DCR_KMU_CORE_DISABLE0 + w, bits, 0, nullptr, nullptr));
++  }
++  for (bool on : cores_on) active_cores += on;
+   if (grid == 0)
+-    grid = (uint32_t)(num_cores * num_warps) * rounds;
++    grid = (uint32_t)(active_cores * num_warps) * rounds;
+ 
+   uint64_t total_threads = (uint64_t)grid * num_threads;
+   uint64_t src_size = total_threads * steps * sizeof(float);
+   uint64_t out_size = total_threads * sizeof(float);
+-  printf("cores=%u warps=%u threads=%u grid=%u steps=%u pattern=%s unroll=%u bytes=%llu\n",
+-         (unsigned)num_cores, (unsigned)num_warps, (unsigned)num_threads, grid, steps,
++  printf("cores=%u active_cores=%u warps=%u threads=%u grid=%u steps=%u pattern=%s unroll=%u bytes=%llu\n",
++         (unsigned)num_cores, active_cores, (unsigned)num_warps, (unsigned)num_threads, grid, steps,
+          pattern == BWSTREAM_ROWS ? "rows" : "coalesced", unroll,
+          (unsigned long long)src_size);
+ 
+@@ -130,6 +166,10 @@
+   RT_CHECK(vx_module_get_kernel(module_, "main", &kernel));
+ 
+   vx_event_h launch_ev = nullptr, read_ev = nullptr;
++  if (timing) {
++    RT_CHECK(vx_buffer_create(device, 3 * (uint64_t)grid * sizeof(uint64_t), VX_MEM_WRITE, &timing_buffer));
++    RT_CHECK(vx_buffer_address(timing_buffer, &kernel_arg.timing_addr));
++  }
+   vx_launch_info_t li = {};
+   li.struct_size  = sizeof(li);
+   li.kernel       = kernel;
+@@ -146,6 +186,28 @@
+   vx_event_release(read_ev);
+   vx_event_release(launch_ev);
+ 
++  if (timing) {
++    // Per core: its CTAs' bytes over the span from its first start to its last end.
++    std::vector<uint64_t> tm(3 * (uint64_t)grid, 0);
++    vx_event_h tm_ev = nullptr;
++    RT_CHECK(vx_enqueue_read(queue, tm.data(), timing_buffer, 0, tm.size() * sizeof(uint64_t), 0, nullptr, &tm_ev));
++    RT_CHECK(vx_event_wait_value(tm_ev, 1, VX_TIMEOUT_INFINITE));
++    vx_event_release(tm_ev);
++    std::vector<uint64_t> first(num_cores, ~0ull), last(num_cores, 0), bytes(num_cores, 0);
++    for (uint64_t g = 0; g < grid; ++g) {
++      uint64_t c = tm[3 * g];
++      if (c >= num_cores) continue;
++      first[c] = std::min(first[c], tm[3 * g + 1]);
++      last[c] = std::max(last[c], tm[3 * g + 2]);
++      bytes[c] += (uint64_t)steps * num_threads * sizeof(float);
++    }
++    for (uint64_t c = 0; c < num_cores; ++c)
++      if (bytes[c] != 0)
++        printf("core_rate: core=%llu bytes=%llu start=%llu end=%llu B_per_cycle=%.2f\n",
++               (unsigned long long)c, (unsigned long long)bytes[c], (unsigned long long)first[c],
++               (unsigned long long)last[c], double(bytes[c]) / double(last[c] - first[c]));
++  }
++
+   // Every element reads as `fill`: redo the kernel's accumulation in its order.
+   volatile float part = 0.0f;
+   for (uint32_t i = 0; i < steps / unroll; ++i)
+--- a/tests/regression/bwstream/kernel.cpp
++++ b/tests/regression/bwstream/kernel.cpp
+@@ -47,10 +47,15 @@
+   uint32_t W = (arg->pattern == BWSTREAM_ROWS || arg->block_warps == 0) ? 1 : arg->block_warps;
+   const float* base = src + (uint64_t)(blockIdx.x / W) * W * steps * T + (uint64_t)(blockIdx.x % W) * T;
+ 
++  const uint64_t c0 = arg->timing_addr ? vx_rdcycle() : 0;
+   float s;
+   if (arg->pattern == BWSTREAM_ROWS)
+     s = sum_unrolled(base + (uint64_t)t * steps, steps, 1, arg->unroll);
+   else
+     s = sum_unrolled(base + t, steps, W * T, arg->unroll);
+   out[gid] = s + (float)(gid + 1);
++  if (arg->timing_addr && t == 0) {
++    auto tm = reinterpret_cast<uint64_t*>(arg->timing_addr) + 3 * blockIdx.x;
++    tm[0] = vx_core_id(); tm[1] = c0; tm[2] = vx_rdcycle();
++  }
+ }
+--- a/tests/regression/bwstream/common.h
++++ b/tests/regression/bwstream/common.h
+@@ -13,6 +13,7 @@
+   uint32_t pattern;
+   uint32_t unroll;   // 1, 2, 4 or 8
+   uint32_t block_warps; // coalesced: warps (CTAs) sharing one slice, 1 = each its own
++  uint64_t timing_addr; // nonzero: thread 0 of each CTA stores {core, start, end} cycles
+ } kernel_arg_t;
+ 
+ #endif
+--- a/tests/regression/bwstream_dxa/main.cpp
++++ b/tests/regression/bwstream_dxa/main.cpp
+@@ -36,10 +36,15 @@
+ uint32_t grid    = 0;
+ uint32_t depth   = 1;
+ uint32_t consume = 1;
++uint32_t latency = 0;
++const char* core_list = nullptr;
++bool timing = false;
++vx_buffer_h timing_buffer = nullptr;
+ 
+ vx_device_h device = nullptr;
+ vx_buffer_h src_buffer = nullptr;
+ vx_buffer_h out_buffer = nullptr;
++vx_buffer_h lat_buffer = nullptr;
+ vx_queue_h  queue   = nullptr;
+ vx_module_h module_ = nullptr;
+ vx_kernel_h kernel  = nullptr;
+@@ -48,12 +53,13 @@
+ static void show_usage() {
+   std::cout << "Vortex DXA streaming-read bandwidth probe." << std::endl;
+   std::cout << "Usage: [-e tile elements] [-n tiles per CTA] [-r rounds] [-g grid] "
+-               "[-d buffers 1..8] [-c 0|1 consume] [-k kernel] [-h]" << std::endl;
++               "[-d buffers 1..8] [-c 0|1 consume] [-l stride: time single copies] "
++               "[-M cores, e.g. 0,2,8-11: launch only on these] [-T: per-core rates] [-k kernel] [-h]" << std::endl;
+ }
+ 
+ static void parse_args(int argc, char **argv) {
+   int c;
+-  while ((c = getopt(argc, argv, "e:n:r:g:d:c:k:h")) != -1) {
++  while ((c = getopt(argc, argv, "e:n:r:g:d:c:l:M:Tk:h")) != -1) {
+     switch (c) {
+     case 'e': tile_elems = atoi(optarg); break;
+     case 'n': tiles   = atoi(optarg); break;
+@@ -61,6 +67,9 @@
+     case 'g': grid    = atoi(optarg); break;
+     case 'd': depth   = atoi(optarg); break;
+     case 'c': consume = atoi(optarg); break;
++    case 'l': latency = atoi(optarg); break;
++    case 'M': core_list = optarg; break;
++    case 'T': timing = true; break;
+     case 'k': kernel_file = optarg; break;
+     case 'h': show_usage(); exit(0);
+     default:  show_usage(); exit(-1);
+@@ -76,6 +85,8 @@
+   if (device) {
+     if (src_buffer) vx_buffer_release(src_buffer);
+     if (out_buffer) vx_buffer_release(out_buffer);
++    if (timing_buffer) vx_buffer_release(timing_buffer);
++    if (lat_buffer) vx_buffer_release(lat_buffer);
+     if (kernel)  vx_kernel_release(kernel);
+     if (module_) vx_module_release(module_);
+     if (queue)   vx_queue_release(queue);
+@@ -84,6 +95,21 @@
+   }
+ }
+ 
++// Cores named by a list such as "0,2,8-11" (or "0+2+8-11", which survives
++// comma-separated environment lists); all when none is given.
++static std::vector<bool> parse_cores(const char* list, uint32_t num_cores) {
++  std::vector<bool> on(num_cores, list == nullptr);
++  for (const char* p = list; p && *p;) {
++    char* e;
++    uint32_t a = strtoul(p, &e, 10), b = a;
++    if (*e == '-') b = strtoul(e + 1, &e, 10);
++    for (uint32_t c = a; c <= b && c < num_cores; ++c) on[c] = true;
++    p = (*e == ',' || *e == '+') ? e + 1 : e;
++    if (*e != ',' && *e != '+' && *e != 0) break;
++  }
++  return on;
++}
++
+ int main(int argc, char *argv[]) {
+   parse_args(argc, argv);
+ 
+@@ -114,11 +140,23 @@
+   uint32_t local_mem = depth * tile_elems * sizeof(float);
+   RT_CHECK(vx_check_occupancy(device, (uint32_t)num_threads, local_mem));
+   uint64_t slots = std::min<uint64_t>(num_warps, lmem_bytes / local_mem);
++  // Restrict the launch to the listed cores (the KMU skips disabled ones).
++  auto cores_on = parse_cores(core_list, (uint32_t)num_cores);
++  uint32_t active_cores = 0;
++  for (uint32_t w = 0; core_list && w < VX_DCR_KMU_CORE_DISABLE_WORDS; ++w) {
++    uint32_t bits = 0;
++    for (uint32_t b = 0; b < 32; ++b) {
++      uint32_t c = 32 * w + b;
++      if (c < num_cores && !cores_on[c]) bits |= 1u << b;
++    }
++    RT_CHECK(vx_enqueue_dcr_write(queue, VX_DCR_KMU_CORE_DISABLE0 + w, bits, 0, nullptr, nullptr));
++  }
++  for (bool on : cores_on) active_cores += on;
+   if (grid == 0)
+-    grid = (uint32_t)(num_cores * slots) * rounds;
++    grid = latency ? 1 : (uint32_t)(active_cores * slots) * rounds;
+ 
+   uint64_t total_threads = (uint64_t)grid * num_threads;
+-  uint64_t total_elems = (uint64_t)grid * tiles * tile_elems;
++  uint64_t total_elems = (uint64_t)grid * tiles * tile_elems * (latency ? latency : 1);
+   uint64_t src_size = total_elems * sizeof(float);
+   uint64_t out_size = total_threads * sizeof(float);
+   if (total_elems > 0xffffffffull) {
+@@ -127,9 +165,9 @@
+     return -1;
+   }
+   printf("cores=%u warps=%u threads=%u slots=%u grid=%u tile_elems=%u tiles=%u depth=%u consume=%u "
+-         "pattern=dxa unroll=%u bytes=%llu\n",
++         "pattern=dxa unroll=%u bytes=%llu active_cores=%u latency=%u\n",
+          (unsigned)num_cores, (unsigned)num_warps, (unsigned)num_threads, (unsigned)slots, grid,
+-         tile_elems, tiles, depth, consume, depth, (unsigned long long)src_size);
++         tile_elems, tiles, depth, consume, depth, (unsigned long long)src_size, active_cores, latency);
+ 
+   uint64_t src_addr = 0;
+   RT_CHECK(vx_buffer_create(device, src_size, VX_MEM_READ, &src_buffer));
+@@ -140,6 +178,11 @@
+   kernel_arg.tiles      = tiles;
+   kernel_arg.depth      = depth;
+   kernel_arg.consume    = consume;
++  kernel_arg.latency    = latency;
++  if (latency) {
++    RT_CHECK(vx_buffer_create(device, 2 * tiles * sizeof(uint64_t), VX_MEM_WRITE, &lat_buffer));
++    RT_CHECK(vx_buffer_address(lat_buffer, &kernel_arg.lat_addr));
++  }
+ 
+   // Unwritten device memory reads as one fill value; fetch it to predict the sums.
+   float fill = 0.0f;
+@@ -157,6 +200,10 @@
+   RT_CHECK(vx_module_get_kernel(module_, "main", &kernel));
+ 
+   vx_event_h launch_ev = nullptr, read_ev = nullptr;
++  if (timing) {
++    RT_CHECK(vx_buffer_create(device, 3 * (uint64_t)grid * sizeof(uint64_t), VX_MEM_WRITE, &timing_buffer));
++    RT_CHECK(vx_buffer_address(timing_buffer, &kernel_arg.timing_addr));
++  }
+   vx_launch_info_t li = {};
+   li.struct_size  = sizeof(li);
+   li.kernel       = kernel;
+@@ -174,9 +221,42 @@
+   vx_event_release(read_ev);
+   vx_event_release(launch_ev);
+ 
++  if (timing) {
++    // Per core: its CTAs' bytes over the span from its first start to its last end.
++    std::vector<uint64_t> tm(3 * (uint64_t)grid, 0);
++    vx_event_h tm_ev = nullptr;
++    RT_CHECK(vx_enqueue_read(queue, tm.data(), timing_buffer, 0, tm.size() * sizeof(uint64_t), 0, nullptr, &tm_ev));
++    RT_CHECK(vx_event_wait_value(tm_ev, 1, VX_TIMEOUT_INFINITE));
++    vx_event_release(tm_ev);
++    std::vector<uint64_t> first(num_cores, ~0ull), last(num_cores, 0), bytes(num_cores, 0);
++    for (uint64_t g = 0; g < grid; ++g) {
++      uint64_t c = tm[3 * g];
++      if (c >= num_cores) continue;
++      first[c] = std::min(first[c], tm[3 * g + 1]);
++      last[c] = std::max(last[c], tm[3 * g + 2]);
++      bytes[c] += (uint64_t)tiles * tile_elems * sizeof(float);
++    }
++    for (uint64_t c = 0; c < num_cores; ++c)
++      if (bytes[c] != 0)
++        printf("core_rate: core=%llu bytes=%llu start=%llu end=%llu B_per_cycle=%.2f\n",
++               (unsigned long long)c, (unsigned long long)bytes[c], (unsigned long long)first[c],
++               (unsigned long long)last[c], double(bytes[c]) / double(last[c] - first[c]));
++  }
++
++  if (latency) {
++    std::vector<uint64_t> lat(2 * tiles, 0);
++    vx_event_h lat_ev = nullptr;
++    RT_CHECK(vx_enqueue_read(queue, lat.data(), lat_buffer, 0, lat.size() * sizeof(uint64_t), 0, nullptr, &lat_ev));
++    RT_CHECK(vx_event_wait_value(lat_ev, 1, VX_TIMEOUT_INFINITE));
++    vx_event_release(lat_ev);
++    for (uint32_t i = 0; i < tiles; ++i)
++      printf("latency: tile=%u bytes=%u cold=%llu warm=%llu\n", i, tile_elems * 4,
++             (unsigned long long)lat[2 * i], (unsigned long long)lat[2 * i + 1]);
++  }
++
+   // Every element reads as `fill`: redo the kernel's accumulation in its order.
+   volatile float sum = 0.0f;
+-  for (uint64_t i = 0; i < (uint64_t)tiles * (consume ? tile_elems / num_threads : 1); ++i)
++  for (uint64_t i = 0; i < (uint64_t)tiles * (latency ? 2 : (consume ? tile_elems / num_threads : 1)); ++i)
+     sum = sum + fill;
+ 
+   uint64_t errors = 0;
+--- a/tests/regression/bwstream_dxa/kernel.cpp
++++ b/tests/regression/bwstream_dxa/kernel.cpp
+@@ -40,6 +40,29 @@
+   };
+ 
+   float s = 0.0f;
++  if (arg->latency) {
++    // One copy at a time into slot 0: tile i (latency tiles apart, so a new
++    // DRAM row) cold, then the same tile again from the L2.
++    auto lat = reinterpret_cast<uint64_t*>(arg->lat_addr);
++    for (uint32_t i = 0; i < tiles; ++i) {
++      for (uint32_t rep = 0; rep < 2; ++rep) {
++        const uint64_t c0 = vx_rdcycle();
++        if (is_dxa_warp) {
++          bar[0].expect_tx(1);
++          vx_dxa_issue_1d_wg(kDescSrc, bar[0].id(), shmem, first * arg->latency + i * arg->latency * tile);
++        }
++        bar[0].arrive_and_wait();
++        const uint64_t c1 = vx_rdcycle();
++        s += shmem[t];
++        bar[0].arrive_and_wait();
++        if (blockIdx.x == 0 && t == 0)
++          lat[2 * i + rep] = c1 - c0;
++      }
++    }
++    out[gid] = s + (float)(gid + 1);
++    return;
++  }
++  const uint64_t c0 = arg->timing_addr ? vx_rdcycle() : 0;
+   for (uint32_t j = 0; j + 1 < depth && j < tiles; ++j)
+     issue(j);
+   for (uint32_t i = 0; i < tiles; ++i) {
+@@ -58,4 +81,8 @@
+     bar[cur].arrive_and_wait();
+   }
+   out[gid] = s + (float)(gid + 1);
++  if (arg->timing_addr && t == 0) {
++    auto tm = reinterpret_cast<uint64_t*>(arg->timing_addr) + 3 * blockIdx.x;
++    tm[0] = vx_core_id(); tm[1] = c0; tm[2] = vx_rdcycle();
++  }
+ }
+--- a/tests/regression/bwstream_dxa/common.h
++++ b/tests/regression/bwstream_dxa/common.h
+@@ -9,6 +9,9 @@
+   uint32_t tiles;       // tiles per CTA
+   uint32_t depth;       // tile buffers per CTA: transfers outstanding at once (1..8)
+   uint32_t consume;     // 1: sum the whole tile, 0: read one word of it
++  uint32_t latency;     // 1: CTA 0 times each tile's copy, cold then again warm
++  uint64_t lat_addr;    // 2 * tiles cycle counts (latency mode)
++  uint64_t timing_addr; // nonzero: thread 0 of each CTA stores {core, start, end} cycles
+ } kernel_arg_t;
+ 
+ #endif

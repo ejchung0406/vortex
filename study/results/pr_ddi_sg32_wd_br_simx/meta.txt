@@ -1,0 +1,5 @@
+side=br
+xlen=64
+xconf=-DVX_CFG_EXT_DXA_ENABLE
+app=sgemm2_dxa args=-n32 -t4 -m1 appconf=0
+rc=0

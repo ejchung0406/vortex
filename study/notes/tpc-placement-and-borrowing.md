@@ -484,6 +484,16 @@ every shape.
 
 **Launch order and compute ILP (32 FMA warps, W)**: MEM GB/s / CMP ratio.
 
+> CORRECTION 2026-11-21: do not quote the table below. Checked against
+> `results_gpu/h200_tpc_coresid*.txt`: no `ilp=1` run exists in any raw file,
+> and the 32-warp rows of `h200_tpc_coresid2.txt` read CMP first, ILP 2 =
+> 25.0 / 1.003 (table: 38.9) and MEM first, ILP 4 = 12.1 / 1.000 (table: 20.5).
+> Where the table's other cells came from is not known. Raw values, W kernel,
+> by FMA warps 8 / 16 / 24 / 32: MEM first ILP 4 = 40.8 / 60.0 / 42.6 / 12.1
+> GB/s; CMP first ILP 2 = 1283.0 (cmp 0.920) / 22.7 / 35.1 / 25.0. So with 8
+> FMA warps at ILP 2 the memory job keeps its full rate even when launched
+> last. To be re-measured with 1 s windows and >= 5 trials.
+
 | | ILP 4 | ILP 2 | ILP 1 |
 |---|---|---|---|
 | CMP first | 17.5 / 0.999 | 38.9 / 1.003 | 83.9 / 0.998 |

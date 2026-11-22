@@ -1,0 +1,21 @@
+SASS instructions per loop iteration (executed), one warp: cycles/iteration, cycles/instr, instr/cycle;
+then SM instructions per cycle (warps on the SM x instr / SM span) for W = 1,2,4,8,16,32,64
+int_dep                n=131  1 warp:    634.1 cyc/iter   4.84 cyc/instr  0.21 IPC | SM IPC:  0.21  0.41  0.83  1.64  2.95  3.56  3.58
+int_ind4               n=131  1 warp:    184.1 cyc/iter   1.40 cyc/instr  0.71 IPC | SM IPC:  0.71  1.42  2.85  3.31  3.52  3.58  3.58
+int_ind8               n=131  1 warp:    158.1 cyc/iter   1.21 cyc/instr  0.83 IPC | SM IPC:  0.83  1.66  3.32  3.59  3.59  3.58  3.58
+fma_dep                n=131  1 warp:    519.1 cyc/iter   3.96 cyc/instr  0.25 IPC | SM IPC:  0.25  0.50  1.01  2.00  3.95  3.95  3.98
+fma_ind4               n=131  1 warp:    140.1 cyc/iter   1.07 cyc/instr  0.94 IPC | SM IPC:  0.94  1.87  3.74  4.00  4.00  4.00  4.00
+fma_ind8               n=131  1 warp:    140.1 cyc/iter   1.07 cyc/instr  0.94 IPC | SM IPC:  0.94  1.87  3.74  4.00  4.00  4.00  4.00
+br_every1              n=133  1 warp:   1434.0 cyc/iter  10.78 cyc/instr  0.09 IPC | SM IPC:  0.09  0.19  0.37  0.56  0.89  1.17  1.16
+br_every4              n=133  1 warp:    516.1 cyc/iter   3.88 cyc/instr  0.26 IPC | SM IPC:  0.26  0.52  1.03  1.68  2.69  3.48  3.69
+br_every16             n=133  1 warp:    283.1 cyc/iter   2.13 cyc/instr  0.47 IPC | SM IPC:  0.47  0.94  1.88  2.93  3.64  3.75  3.76
+lds_own                n=195  1 warp:    638.0 cyc/iter   3.27 cyc/instr  0.31 IPC | SM IPC:  0.31  0.61  1.21  1.52  1.52  1.52  1.52
+lds_chase              n=131  1 warp:   2944.1 cyc/iter  22.47 cyc/instr  0.04 IPC | SM IPC:  0.04  0.09  0.18  0.36  0.71  1.02  1.02
+sts_own                n=131  1 warp:    521.0 cyc/iter   3.98 cyc/instr  0.25 IPC | SM IPC:  0.25  0.50  1.01  1.02  1.02  1.02  1.02
+tma_producer           n= 49  1 warp:    289.5 cyc/iter   5.91 cyc/instr  0.17 IPC | SM IPC:  0.17  0.34  0.68  1.27  2.21  2.72  2.62
+producer_alu_only      n= 11  1 warp:     31.1 cyc/iter   2.82 cyc/instr  0.35 IPC | SM IPC:  0.35  0.71  1.42  2.13  2.77  2.84  2.85
+lds_own16              n=195  1 warp:    620.0 cyc/iter   3.18 cyc/instr  0.31 IPC | SM IPC:  0.31  0.63  1.25  1.52  1.52  1.52  1.52
+producer_arrive_only   n= 27  1 warp:    170.5 cyc/iter   6.32 cyc/instr  0.16 IPC | SM IPC:  0.16  0.32  0.63  1.22  1.86  1.94  1.89
+arrive_no_wait         n= 15  1 warp:     39.0 cyc/iter   2.60 cyc/instr  0.38 IPC | SM IPC:  0.38  0.77  1.54  2.31  2.75  2.11  2.11
+try_wait_only          n= 22  1 warp:    159.5 cyc/iter   7.25 cyc/instr  0.14 IPC | SM IPC:  0.14  0.28  0.55  1.02  1.90  2.69  2.71
+fma_int_mix            n=131  1 warp:    165.1 cyc/iter   1.26 cyc/instr  0.79 IPC | SM IPC:  0.79  1.59  3.17  3.52  3.52  3.54  3.54

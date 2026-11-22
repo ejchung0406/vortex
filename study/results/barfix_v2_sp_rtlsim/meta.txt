@@ -1,0 +1,8 @@
+name=barfix_v2_sp_rtlsim
+src_rev=
+src_dirty=0
+host=atl1-1-03-004-14-1.pace.gatech.edu
+xconf=-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_TCU_SPARSE_ENABLE -DVX_CFG_TCU_FEDP2K -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=8 -DWGMMA_RS -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1 -DVX_CFG_BAR_DRAIN_SCOPE=1
+blackbox=--driver=rtlsim --app=sgemm_tcu_wg_sp --perf=7 --args=-m 128 -n 128 -k 128
+rc=0
+wall_s=1780

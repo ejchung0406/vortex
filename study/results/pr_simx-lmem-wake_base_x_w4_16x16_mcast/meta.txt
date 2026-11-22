@@ -1,0 +1,8 @@
+name=pr_simx-lmem-wake_base_x_w4_16x16_mcast
+src_rev=
+src_dirty=0
+host=atl1-1-01-004-11-2.pace.gatech.edu
+xconf=-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_DXA_CORES=4 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16
+blackbox=--driver=simx --app=dxa_copy_mcast --perf=6 --cores=1 --args=-r16 -c16 -R16 -C16
+rc=0
+wall_s=176

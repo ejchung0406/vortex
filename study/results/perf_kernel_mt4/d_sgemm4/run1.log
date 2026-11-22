@@ -1,0 +1,13 @@
+sgemm vortex2: 128x128
+Elapsed: 7224 ms
+PERF: core0: lmem: reqs=0, bank_stalls=0 (utility=0%)
+PERF: core0: coalescer: misses=0
+PERF: core1: lmem: reqs=0, bank_stalls=0 (utility=0%)
+PERF: core1: coalescer: misses=0
+PERF: core2: lmem: reqs=0, bank_stalls=0 (utility=0%)
+PERF: core2: coalescer: misses=0
+PERF: core3: lmem: reqs=0, bank_stalls=0 (utility=0%)
+PERF: core3: coalescer: misses=0
+PERF: memory: reqs=21 (r=9, w=12), lat=3.3 cyc, bank_st=0 (utility=100%)
+PERF: instrs=2486400, cycles=1453274, IPC=1.711
+PASSED!

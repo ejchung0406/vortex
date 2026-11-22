@@ -1,0 +1,8 @@
+name=noc_g2s_off_bw_all
+src_rev=
+src_dirty=0
+host=atl1-1-02-002-15-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_L2_SIZE=10485760 -DVX_CFG_L2_NUM_WAYS=20
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200s --cores=32 --args=-n512 -r1 -p0 -u4 -b32
+rc=0
+wall_s=1238

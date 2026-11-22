@@ -1,0 +1,9 @@
+name=pr_fh_sw_sgemv_x16_h0
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_knob
+xlen=64
+host=atl1-1-02-006-20-2.pace.gatech.edu
+configs=-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_DCACHE_FWD_HOLD=0
+blackbox=--driver=simx --app=sgemv --args=-m512 -n512
+PERF: instrs=79104, cycles=357656
+wall_s=173
+rc=0

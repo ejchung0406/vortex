@@ -1,0 +1,9 @@
+name=pr_fh_parity-stencil3d_rtl
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_base
+xlen=64
+host=atl1-1-02-008-9-2.pace.gatech.edu
+configs=
+blackbox=--driver=rtlsim --app=stencil3d --args=-n32
+PERF: instrs=1802272, cycles=4266374
+wall_s=56
+rc=0

@@ -1,0 +1,8 @@
+name=barfix_smm_s0_k0_n1_rtlsim
+src_rev=
+src_dirty=0
+host=atl1-1-03-004-1-2.pace.gatech.edu
+xconf=-DVX_CFG_NUM_WARPS=32 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=0
+blackbox=--driver=rtlsim --app=smprobe --perf=7 --args=-k0 -n1 -i50 -c4 -s4 -d2000
+rc=0
+wall_s=273

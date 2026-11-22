@@ -1,0 +1,838 @@
+diff -ruN '--exclude=third_party' a/sim/simx/core.cpp b/sim/simx/core.cpp
+--- a/sim/simx/core.cpp	2026-11-21 12:10:06.000000000 -0500
++++ b/sim/simx/core.cpp	2026-11-21 16:12:52.970546094 -0500
+@@ -555,7 +555,9 @@
+       auto& fetch_latch = fetch_latch_.at(f);
+       WarpMask warp_mask;
+       for (uint32_t w = f; w < VX_CFG_NUM_WARPS; w += VX_CFG_FETCH_WIDTH) {
+-        if (all_full || !ibuf_full_r_.at(w)) {
++        // fetch ahead stays within the warp's buffer slots
++        bool overflow_ok = all_full && (VX_CFG_FETCH_INFLIGHT == 1 || scheduler_->warp(w).fetch_inflight == 0);
++        if (overflow_ok || !ibuf_full_r_.at(w)) {
+           warp_mask.set(w);
+         }
+       }
+@@ -582,7 +584,9 @@
+       ++perf_stats_.sched_idle;
+     }
+     for (uint32_t w = 0; w < VX_CFG_NUM_WARPS; ++w) {
+-      ibuf_full_r_.at(w) = (ibuf_inflight_.at(w) == VX_CFG_IBUF_SIZE);
++      // with fetch ahead an overflow pick may take a warp past its slots
++      ibuf_full_r_.at(w) = (VX_CFG_FETCH_INFLIGHT > 1) ? (ibuf_inflight_.at(w) >= VX_CFG_IBUF_SIZE)
++                                                       : (ibuf_inflight_.at(w) == VX_CFG_IBUF_SIZE);
+       ibuf_queue_full_r_.at(w) = (ibuf_queued_.at(w) >= VX_CFG_IBUF_SIZE);
+     }
+ 
+@@ -618,8 +622,24 @@
+   #endif
+     auto& icache_req = (f == 0) ? icache_flush_buf_->In : icache_port;
+ 
++    // A fetch of a squashed stream leaves at the icache output, needing no
++    // buffer slot.
++    bool rsp_dropped = false;
++    if (VX_CFG_FETCH_INFLIGHT > 1 && !icache_rsp.empty()) {
++      auto& mem_rsp = icache_rsp.peek();
++      auto trace = pending_icache.at(mem_rsp.tag);
++      if (!scheduler_->fetch_current(trace)) {
++        DT(3, simobject_->name() << " icache-rsp drop: " << *trace);
++        pending_icache.release(mem_rsp.tag);
++        icache_rsp.pop();
++        --pending_ifetches_;
++        this->fetch_drop(trace, false);
++        rsp_dropped = true;
++      }
++    }
++
+     // handle icache response — extract instruction word from the TLM line payload
+-    if (!icache_rsp.empty()){
++    if (!rsp_dropped && !icache_rsp.empty()){
+       auto& mem_rsp = icache_rsp.peek();
+       auto trace = pending_icache.at(mem_rsp.tag);
+       assert(mem_rsp.data && "icache response must carry line payload");
+@@ -734,6 +754,23 @@
+ 
+     auto trace = decode_latch.peek();
+ 
++    if (VX_CFG_FETCH_INFLIGHT > 1) {
++      // A fetch is decoded only at its warp's PC: one of a squashed stream is
++      // dropped, and one that overtook an older fetch is dropped and restarts
++      // the stream there.
++      bool current = scheduler_->fetch_current(trace);
++      if (!current || trace->PC != scheduler_->warp(trace->wid).PC) {
++        DT(3, simobject_->name() << "-pipeline decode drop: " << *trace);
++        if (current) {
++          scheduler_->fetch_squash(trace->wid);
++        }
++        this->fetch_drop(trace, true);
++        decode_latch.pop();
++        return;
++      }
++      scheduler_->fetch_retire(trace->wid);
++    }
++
+     // the icache response took the buffer slot this instruction lands in
+     auto& ibuffer = ibuffers_.at(trace->wid);
+     assert(!ibuffer->full());
+@@ -773,7 +810,14 @@
+ 
+     // Resume warp for non-stalling instructions (ALU, FPU);
+     // stalling instructions (LSU, SFU, TCU, branches) stay suspended until commit
+-    if (!trace->fetch_stall) {
++    if (VX_CFG_FETCH_INFLIGHT > 1) {
++      // A stalling instruction holds its warp from here, and what was fetched
++      // behind it is dropped.
++      if (trace->fetch_stall) {
++        scheduler_->fetch_squash(trace->wid);
++        scheduler_->suspend(trace->wid);
++      }
++    } else if (!trace->fetch_stall) {
+       scheduler_->resume(trace->wid);
+     }
+ 
+@@ -1002,6 +1046,22 @@
+     }
+   }
+ 
++  // A dropped fetch leaves the front end: its buffer slot and pending count
++  // return; `queued` when it had reached the decode latch.
++  void fetch_drop(instr_trace_t* trace, bool queued) {
++    uint32_t wid = trace->wid;
++    scheduler_->fetch_retire(wid);
++    this->pending_remove(wid);
++    assert(ibuf_inflight_.at(wid) > 0);
++    --ibuf_inflight_.at(wid);
++    if (queued) {
++      assert(ibuf_queued_.at(wid) > 0);
++      --ibuf_queued_.at(wid);
++    }
++    trace->~instr_trace_t();
++    trace_pool_.deallocate(trace, 1);
++  }
++
+   void ibuf_release(uint32_t wid) {
+     assert(ibuf_inflight_.at(wid) > 0);
+     --ibuf_inflight_.at(wid);
+@@ -1358,6 +1418,7 @@
+   }
+   void dtm_set_pc(uint32_t wid, Word pc) {
+     scheduler_->warp(wid).PC = pc;
++    scheduler_->fetch_squash(wid);
+   }
+   Word dtm_get_ireg(uint32_t wid, uint32_t reg) {
+     return operands_.at(wid % VX_CFG_ISSUE_WIDTH)->dtm_ireg(wid, reg);
+diff -ruN '--exclude=third_party' a/sim/simx/instr_trace.h b/sim/simx/instr_trace.h
+--- a/sim/simx/instr_trace.h	2026-11-21 12:10:06.000000000 -0500
++++ b/sim/simx/instr_trace.h	2026-11-21 15:02:21.954677224 -0500
+@@ -79,6 +79,9 @@
+   // Cycle the instruction entered its warp's instruction buffer.
+   uint64_t ibuf_time;
+ 
++  // The warp's fetch epoch at the pick; decode drops a fetch of an older one.
++  uint32_t fetch_epoch;
++
+   instr_trace_t(uint64_t uuid)
+     : uuid(uuid)
+     , cid(0)
+@@ -104,6 +107,7 @@
+     , fetch_stall(false)
+     , resume_warp(false)
+     , ibuf_time(0)
++    , fetch_epoch(0)
+     , log_once_(false)
+   {}
+ 
+@@ -133,6 +137,7 @@
+     , fetch_stall(rhs.fetch_stall)
+     , resume_warp(rhs.resume_warp)
+     , ibuf_time(rhs.ibuf_time)
++    , fetch_epoch(rhs.fetch_epoch)
+     , log_once_(false)
+   {}
+ 
+diff -ruN '--exclude=third_party' a/sim/simx/scheduler.cpp b/sim/simx/scheduler.cpp
+--- a/sim/simx/scheduler.cpp	2026-11-21 12:10:06.000000000 -0500
++++ b/sim/simx/scheduler.cpp	2026-11-21 16:12:52.974954613 -0500
+@@ -37,6 +37,11 @@
+   , PC(0)
+   , uuid(0)
+   , mscratch(0)
++  , fetch_PC(0)
++  , fetch_epoch(0)
++  , fetch_inflight(0)
++  , fetch_resync(true)
++  , fetch_squash_pending(false)
+   , cta_csrs()
+ {
+ }
+@@ -54,6 +59,10 @@
+   this->mepc    = 0;
+   this->mcause  = 0;
+   this->mtval   = 0;
++  // fetch_epoch keeps counting, so a fetch from before the reset stays stale
++  this->fetch_inflight = 0;
++  this->fetch_resync   = true;
++  this->fetch_squash_pending = false;
+   // Register files live in OpcUnit and are reset there.
+ }
+ 
+@@ -117,6 +126,7 @@
+   // the kernel's per-CTA dispatch window — a fixed 20-byte (5-instruction)
+   // sequence that reloads the entry pointer and kargs before re-calling.
+   warp.PC       = rec.do_init ? rec.PC : (warp.PC - 20);
++  warp.fetch_resync = true;
+   warp.tmask    = rec.tmask;
+   warp.mscratch = rec.mscratch;
+ 
+@@ -180,6 +190,7 @@
+     for (uint32_t i = 1; i < wspawn_.num_warps; ++i) {
+       auto& warp = warps_.at(i);
+       warp.PC = wspawn_.nextPC;
++      warp.fetch_resync = true;
+       warp.tmask.set(0);
+       warp.mscratch = spawning_mscratch;
+       active_warps_.set(i);
+@@ -194,6 +205,17 @@
+ }
+ 
+ bool Scheduler::has_ready(const WarpMask& warp_mask) const {
++  if (VX_CFG_FETCH_INFLIGHT > 1) {
++    for (size_t wid = 0, nw = VX_CFG_NUM_WARPS; wid < nw; ++wid) {
++      if (active_warps_.test(wid) && !stalled_warps_.test(wid) && warp_mask.test(wid)
++       && (warps_.at(wid).fetch_inflight == 0
++        || (warps_.at(wid).fetch_inflight < VX_CFG_FETCH_INFLIGHT && this->fetch_alone(wid)
++         && this->fetch_page_ok(wid)))) {
++        return true;
++      }
++    }
++    return false;
++  }
+   return (active_warps_ & ~stalled_warps_ & warp_mask).any();
+ }
+ 
+@@ -202,11 +224,25 @@
+ 
+   // pick next ready warp
+   for (size_t wid = 0, nw = VX_CFG_NUM_WARPS; wid < nw; ++wid) {
+-    if (active_warps_.test(wid) && !stalled_warps_.test(wid) && warp_mask.test(wid)) {
++    if (active_warps_.test(wid) && !stalled_warps_.test(wid) && warp_mask.test(wid)
++     && (VX_CFG_FETCH_INFLIGHT == 1 || warps_.at(wid).fetch_inflight == 0)) {
+       scheduled_warp = wid;
+       break;
+     }
+   }
++  // A warp fetches ahead only while it is the one runnable warp of its frontend
++  // slice: with others runnable they fill its gaps, and the fetches it would
++  // drop at its next branch would take icache bandwidth from them.
++  if (VX_CFG_FETCH_INFLIGHT > 1 && scheduled_warp == -1) {
++    for (size_t wid = 0, nw = VX_CFG_NUM_WARPS; wid < nw; ++wid) {
++      if (active_warps_.test(wid) && !stalled_warps_.test(wid) && warp_mask.test(wid)
++       && warps_.at(wid).fetch_inflight < VX_CFG_FETCH_INFLIGHT
++       && this->fetch_alone(wid) && this->fetch_page_ok(wid)) {
++        scheduled_warp = wid;
++        break;
++      }
++    }
++  }
+ 
+   instr_trace_t* trace = nullptr;
+   if (scheduled_warp != -1) {
+@@ -231,16 +267,28 @@
+     trace->cid    = core_->id();
+     trace->wid    = scheduled_warp;
+     trace->cta_id = warp.cta_csrs.cta_id;
+-    trace->PC     = warp.PC;
+     trace->tmask  = warp.tmask;
+ 
+     // PC is advanced at decode (+2 for RVC, +4 otherwise) — matches
+     // the hardware warp-PC update at decode.
+     // Branch/JAL/JALR commit later overrides warp.PC with the
+     // resolved target.
+-
+-    // Suspend warp until decode resumes it (non-stalling) or commit (stalling).
+-    this->suspend(scheduled_warp);
++    if (VX_CFG_FETCH_INFLIGHT > 1) {
++      // Fetch ahead: the warp stays schedulable and fetches the next word; decode
++      // suspends it at a stalling instruction.
++      if (warp.fetch_resync) {
++        warp.fetch_PC = warp.PC;
++        warp.fetch_resync = false;
++      }
++      trace->PC          = warp.fetch_PC;
++      trace->fetch_epoch = warp.fetch_epoch;
++      warp.fetch_PC += 4;
++      ++warp.fetch_inflight;
++    } else {
++      trace->PC = warp.PC;
++      // Suspend warp until decode resumes it (non-stalling) or commit (stalling).
++      this->suspend(scheduled_warp);
++    }
+   }
+ 
+   return trace;
+@@ -252,6 +300,15 @@
+   // becomes visible to the pick loop next cycle — so a warp released as its
+   // instruction resolves is never re-scheduled the same cycle.
+   stalled_warps_ = stalled_warps_next_;
++  if (VX_CFG_FETCH_INFLIGHT > 1) {
++    for (auto& warp : warps_) {
++      if (warp.fetch_squash_pending) {
++        ++warp.fetch_epoch;
++        warp.fetch_resync = true;
++        warp.fetch_squash_pending = false;
++      }
++    }
++  }
+   cta_active_view_ = active_warps_;
+   for (uint32_t i = 0; i < cta_fire_cnt_; ++i) {
+     cta_active_view_.set(cta_fire_wids_[i]);
+@@ -315,6 +372,45 @@
+   DT(3, core_->name() << " warp-state: wid=" << wid << ", stalled=false");
+ }
+ 
++#if (VX_CFG_FETCH_INFLIGHT > 1) && defined(VX_CFG_EXT_C_ENABLE)
++#error "VX_CFG_FETCH_INFLIGHT > 1 fetches 4-byte words ahead, which compressed instructions break"
++#endif
++
++bool Scheduler::fetch_alone(uint32_t wid) const {
++  for (uint32_t w = wid % VX_CFG_FETCH_WIDTH; w < VX_CFG_NUM_WARPS; w += VX_CFG_FETCH_WIDTH) {
++    if (w != wid && active_warps_.test(w) && !stalled_warps_.test(w)) {
++      return false;
++    }
++  }
++  return true;
++}
++
++// A fetch ahead does not enter a new page: a fetch that is later dropped must
++// not take a translation fault, which the icache MMU reports and never answers.
++bool Scheduler::fetch_page_ok(uint32_t wid) const {
++#ifdef VX_CFG_VM_ENABLE
++  auto& warp = warps_.at(wid);
++  return warp.fetch_resync || (warp.fetch_PC & ((Word(1) << VX_VM_PAGE_LOG2_SIZE) - 1)) != 0;
++#else
++  __unused (wid);
++  return true;
++#endif
++}
++
++bool Scheduler::fetch_current(const instr_trace_t* trace) const {
++  return trace->fetch_epoch == warps_.at(trace->wid).fetch_epoch;
++}
++
++void Scheduler::fetch_retire(uint32_t wid) {
++  auto& warp = warps_.at(wid);
++  assert(warp.fetch_inflight > 0);
++  --warp.fetch_inflight;
++}
++
++void Scheduler::fetch_squash(uint32_t wid) {
++  warps_.at(wid).fetch_squash_pending = true;
++}
++
+ void Scheduler::advance_pc(const instr_trace_t* trace, uint32_t inc) {
+   warps_.at(trace->wid).PC += inc;
+ }
+diff -ruN '--exclude=third_party' a/sim/simx/scheduler.h b/sim/simx/scheduler.h
+--- a/sim/simx/scheduler.h	2026-11-21 12:10:06.000000000 -0500
++++ b/sim/simx/scheduler.h	2026-11-21 16:12:52.980791478 -0500
+@@ -85,6 +85,16 @@
+   // Per-warp MSCRATCH (holds kernel arg pointer, set at CTA dispatch)
+   Word                              mscratch;
+ 
++  // Sequential fetch ahead (FETCH_INFLIGHT > 1): the next fetch address, the
++  // epoch that retires older fetches, and the fetches not yet decoded. PC stays
++  // the architectural next PC, advanced at decode. A squash is registered like
++  // the stall: a pick in its cycle still carries the old epoch.
++  Word                              fetch_PC;
++  uint32_t                          fetch_epoch;
++  uint32_t                          fetch_inflight;
++  bool                              fetch_resync;
++  bool                              fetch_squash_pending;
++
+   // Per-warp machine-mode trap CSRs. Synchronous ECALL/EBREAK traps
+   // redirect the warp PC to mtvec and snapshot the faulting PC/cause
+   // here; MRET restores the PC from mepc. See Scheduler::raise_trap.
+@@ -136,6 +146,18 @@
+   // depending on is_rvc; mirrors the hardware warp-PC update at decode).
+   void advance_pc(const instr_trace_t* trace, uint32_t inc);
+   bool running() const;
++
++  // Fetch ahead (FETCH_INFLIGHT > 1). A fetch of the warp's current stream is
++  // kept; a fetch leaves the front end once decoded or dropped; a squash drops
++  // the warp's fetches in flight and restarts its stream at its PC.
++  bool fetch_current(const instr_trace_t* trace) const;
++  // whether wid is the only runnable warp of its frontend slice
++  bool fetch_alone(uint32_t wid) const;
++  // whether wid's next fetch ahead stays in the page of its last fetch
++  bool fetch_page_ok(uint32_t wid) const;
++  void fetch_retire(uint32_t wid);
++  void fetch_squash(uint32_t wid);
++
+   bool wspawn(uint32_t num_warps, Word nextPC);
+   bool setTmask(uint32_t wid, const ThreadMask& tmask);
+ 
+diff -ruN '--exclude=third_party' a/sim/simx/scoreboard.cpp b/sim/simx/scoreboard.cpp
+--- a/sim/simx/scoreboard.cpp	2026-11-21 12:10:06.000000000 -0500
++++ b/sim/simx/scoreboard.cpp	2026-11-21 15:29:33.028109816 -0500
+@@ -19,7 +19,8 @@
+ Scoreboard::Scoreboard(const SimContext& ctx, const char* name)
+   : SimObject<Scoreboard>(ctx, name)
+   , in_use_regs_(VX_CFG_NUM_WARPS)
+-  , in_use_fcsr_(VX_CFG_NUM_WARPS, 0) {
++  , in_use_fcsr_(VX_CFG_NUM_WARPS, 0)
++  , fflags_accums_(VX_CFG_NUM_WARPS, 0) {
+   for (auto& in_use_reg : in_use_regs_) {
+     in_use_reg.resize((int)RegType::Count);
+   }
+@@ -36,6 +37,7 @@
+     }
+   }
+   std::fill(in_use_fcsr_.begin(), in_use_fcsr_.end(), 0);
++  std::fill(fflags_accums_.begin(), fflags_accums_.end(), 0);
+   owners_.clear();
+   commit_counts_.clear();
+   pending_releases_.clear();
+@@ -45,7 +47,10 @@
+   uint64_t now = SimPlatform::instance().cycles();
+   while (!pending_releases_.empty() && pending_releases_.front().due <= now) {
+     auto& r = pending_releases_.front();
+-    if (r.fcsr != 0) {
++    if (r.accum) {
++      assert(fflags_accums_.at(r.wid) > 0);
++      --fflags_accums_.at(r.wid);
++    } else if (r.fcsr != 0) {
+       in_use_fcsr_.at(r.wid) &= ~r.fcsr;
+     } else {
+       owners_.erase(get_reg_id(r.reg, r.wid));
+@@ -58,11 +63,20 @@
+   }
+ }
+ 
++bool Scoreboard::fflags_accumulates(const instr_trace_t* trace) {
++  return VX_CFG_FFLAGS_ACCUM && trace->fu_type == FUType::FPU
++      && trace->instr_ptr->fcsr_writes() == Instr::FCSR_FFLAGS;
++}
++
+ bool Scoreboard::in_use(instr_trace_t* trace) const {
+   auto& instr = *trace->instr_ptr;
+   if (in_use_fcsr_.at(trace->wid) & (instr.fcsr_reads() | instr.fcsr_writes())) {
+     return true;
+   }
++  if (VX_CFG_FFLAGS_ACCUM && !fflags_accumulates(trace) && (instr.fcsr_reads() | instr.fcsr_writes())
++   && fflags_accums_.at(trace->wid) != 0) {
++    return true;
++  }
+   if (trace->wb) {
+     assert(trace->dst_reg.type != RegType::None);
+     if (in_use_regs_.at(trace->wid).at((int)trace->dst_reg.type).test(trace->dst_reg.idx)) {
+@@ -115,12 +129,16 @@
+   assert(in_use_regs_.at(trace->wid).at((int)trace->dst_reg.type).test(trace->dst_reg.idx));
+   assert(owners_.count(reg_id) != 0);
+   commit_counts_.erase(reg_id);
+-  pending_releases_.push_back({trace->wid, trace->dst_reg, 0,
++  pending_releases_.push_back({trace->wid, trace->dst_reg, 0, false,
+                                SimPlatform::instance().cycles() + kReleaseDelay});
+   this->tick_wake();
+ }
+ 
+ void Scoreboard::reserve_fcsr(instr_trace_t* trace) {
++  if (fflags_accumulates(trace)) {
++    ++fflags_accums_.at(trace->wid);
++    return;
++  }
+   uint8_t fields = trace->instr_ptr->fcsr_writes();
+   assert((in_use_fcsr_.at(trace->wid) & fields) == 0);
+   in_use_fcsr_.at(trace->wid) |= fields;
+@@ -128,8 +146,9 @@
+ 
+ void Scoreboard::release_fcsr(instr_trace_t* trace) {
+   uint8_t fields = trace->instr_ptr->fcsr_writes();
+-  assert((in_use_fcsr_.at(trace->wid) & fields) == fields);
+-  pending_releases_.push_back({trace->wid, {RegType::None, 0}, fields,
++  bool accum = fflags_accumulates(trace);
++  assert(accum || (in_use_fcsr_.at(trace->wid) & fields) == fields);
++  pending_releases_.push_back({trace->wid, {RegType::None, 0}, fields, accum,
+                                SimPlatform::instance().cycles() + kReleaseDelay});
+   this->tick_wake();
+ }
+diff -ruN '--exclude=third_party' a/sim/simx/scoreboard.h b/sim/simx/scoreboard.h
+--- a/sim/simx/scoreboard.h	2026-11-21 12:10:06.000000000 -0500
++++ b/sim/simx/scoreboard.h	2026-11-21 15:29:33.024520186 -0500
+@@ -56,7 +56,9 @@
+ 
+   // FCSR fields (Instr::FCSR_*) the instruction writes: claimed at
+   // issue, freed on the same schedule as a destination register once the
+-  // instruction's last packet commits.
++  // instruction's last packet commits. With FFLAGS_ACCUM a floating-point
++  // operation's flags are an accumulation, counted instead of claimed: it
++  // waits only for CSR accesses of the FCSR, and those wait for it.
+   void reserve_fcsr(instr_trace_t* trace);
+   void release_fcsr(instr_trace_t* trace);
+ 
+@@ -73,15 +75,19 @@
+   // register, and the issue stage reads a registered readiness.
+   static constexpr uint32_t kReleaseDelay = 2;
+ 
++  static bool fflags_accumulates(const instr_trace_t* trace);
++
+   struct pending_release_t {
+     uint32_t wid;
+     RegOpd   reg;
+     uint8_t  fcsr;
++    bool     accum;
+     uint64_t due;
+   };
+ 
+   std::vector<std::vector<RegMask>> in_use_regs_;
+   std::vector<uint8_t> in_use_fcsr_;
++  std::vector<uint32_t> fflags_accums_;
+   std::deque<pending_release_t> pending_releases_;
+   std::unordered_map<uint32_t, instr_trace_t*> owners_;
+   std::unordered_map<uint32_t, uint32_t> commit_counts_;
+diff -ruN '--exclude=third_party' a/tests/regression/warp_rate/common.h b/tests/regression/warp_rate/common.h
+--- a/tests/regression/warp_rate/common.h	1969-12-31 19:00:00.000000000 -0500
++++ b/tests/regression/warp_rate/common.h	2026-11-21 14:44:58.724033342 -0500
+@@ -0,0 +1,29 @@
++#ifndef _COMMON_H_
++#define _COMMON_H_
++
++#include <stdint.h>
++
++// Instruction classes; each loop iteration is one inline-asm block whose
++// instruction count is checked in the kernel disassembly.
++#define WR_INT_DEP     0  // 128 dependent adds
++#define WR_INT_IND4    1  // 128 adds on 4 independent chains
++#define WR_INT_IND8    2  // 128 adds on 8 independent chains
++#define WR_FMA_DEP     3  // 128 dependent fmadd.s
++#define WR_FMA_IND4    4  // 128 fmadd.s on 4 chains
++#define WR_FMA_IND8    5  // 128 fmadd.s on 8 chains
++#define WR_BR1         6  // 128 taken branches
++#define WR_BR4         7  // 32 x (3 adds + taken branch)
++#define WR_BR16        8  // 8 x (15 adds + taken branch)
++#define WR_LDS_OWN     9  // 16 x (8 loads of the thread's own shared word + 8 xors)
++#define WR_LDS_CHASE  10  // 128 dependent shared loads (self pointer)
++#define WR_STS_OWN    11  // 128 stores of the thread's own shared word
++#define WR_LDS_NOUSE  12  // 128 shared loads into 8 rotating registers, never read
++#define WR_NKINDS     13
++
++typedef struct {
++  uint32_t kind;
++  uint32_t iters;
++  uint64_t out_addr;  // per warp: start cycle, end cycle
++} kernel_arg_t;
++
++#endif
+diff -ruN '--exclude=third_party' a/tests/regression/warp_rate/kernel.cpp b/tests/regression/warp_rate/kernel.cpp
+--- a/tests/regression/warp_rate/kernel.cpp	1969-12-31 19:00:00.000000000 -0500
++++ b/tests/regression/warp_rate/kernel.cpp	2026-11-21 15:19:24.302297233 -0500
+@@ -0,0 +1,122 @@
++#include <vx_spawn2.h>
++#include <vx_intrinsics.h>
++#include "common.h"
++
++#define R2(x) x x
++#define R4(x) R2(x) R2(x)
++#define R8(x) R4(x) R4(x)
++#define R16(x) R8(x) R8(x)
++#define R32(x) R16(x) R16(x)
++#define R64(x) R32(x) R32(x)
++#define R128(x) R64(x) R64(x)
++
++#define IADD4 "add %0, %0, %8\n\tadd %1, %1, %8\n\tadd %2, %2, %8\n\tadd %3, %3, %8\n\t"
++#define IADD8 IADD4 "add %4, %4, %8\n\tadd %5, %5, %8\n\tadd %6, %6, %8\n\tadd %7, %7, %8\n\t"
++#define FMA4 "fmadd.s %0, %0, %8, %9\n\tfmadd.s %1, %1, %8, %9\n\tfmadd.s %2, %2, %8, %9\n\tfmadd.s %3, %3, %8, %9\n\t"
++#define FMA8 FMA4 "fmadd.s %4, %4, %8, %9\n\tfmadd.s %5, %5, %8, %9\n\tfmadd.s %6, %6, %8, %9\n\tfmadd.s %7, %7, %8, %9\n\t"
++// taken branch over one never-executed add (%9 != 0 at run time)
++#define BRSKIP "bnez %9, 1f\n\taddi %4, %4, 1\n1:\n\t"
++#define A1 "add %1, %1, %8\n\t"
++#define A2 "add %2, %2, %8\n\t"
++#define A3 "add %3, %3, %8\n\t"
++#define A0 "add %0, %0, %8\n\t"
++#define BLK4 A1 A2 A3 BRSKIP
++#define BLK16 A0 A1 A2 A3 A0 A1 A2 A3 A0 A1 A2 A3 A0 A1 A2 BRSKIP
++#define LDS8 "lw %0, 0(%12)\n\tlw %1, 0(%12)\n\tlw %2, 0(%12)\n\tlw %3, 0(%12)\n\t" \
++             "lw %4, 0(%12)\n\tlw %5, 0(%12)\n\tlw %6, 0(%12)\n\tlw %7, 0(%12)\n\t" \
++             "xor %8, %8, %0\n\txor %8, %8, %1\n\txor %9, %9, %2\n\txor %9, %9, %3\n\t" \
++             "xor %10, %10, %4\n\txor %10, %10, %5\n\txor %11, %11, %6\n\txor %11, %11, %7\n\t"
++#define LDN8 "lw %0, 0(%8)\n\tlw %1, 0(%8)\n\tlw %2, 0(%8)\n\tlw %3, 0(%8)\n\t" \
++             "lw %4, 0(%8)\n\tlw %5, 0(%8)\n\tlw %6, 0(%8)\n\tlw %7, 0(%8)\n\t"
++
++__kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
++  const uint32_t kind = arg->kind, iters = arg->iters;
++  const uint32_t t = threadIdx.x;
++  auto out = reinterpret_cast<uint64_t*>(arg->out_addr);
++  auto lmem = reinterpret_cast<uintptr_t*>(__local_mem());
++  uintptr_t myword = (uintptr_t)(lmem + t);
++  lmem[t] = myword;   // self pointer for the chase
++  size_t y = 3 + (kind & 1), nz = 1 + (t & 1);
++  size_t a0 = t, a1 = t + 1, a2 = t + 2, a3 = t + 3, a4 = t + 4, a5 = t + 5, a6 = t + 6, a7 = t + 7;
++  size_t b0 = 0, b1 = 0, b2 = 0, b3 = 0;
++  float f0 = 1.f + t, f1 = f0 + 1, f2 = f0 + 2, f3 = f0 + 3, f4 = f0 + 4, f5 = f0 + 5, f6 = f0 + 6, f7 = f0 + 7;
++  float fa = 0.999f, fb = 1e-3f;
++  if (kind == WR_LDS_CHASE) a0 = myword;
++  // opaque to the compiler, so it keeps them in registers instead of reloading them in the loop
++  __asm__ volatile("" : "+f"(fa), "+f"(fb), "+r"(y), "+r"(nz));
++  __syncthreads();
++
++  uint64_t c0 = csr_read(VX_CSR_MCYCLE);
++  switch (kind) {
++  case WR_INT_DEP:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R128("add %0, %0, %1\n\t") : "+r"(a0) : "r"(y));
++    break;
++  case WR_INT_IND4:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R32(IADD4) : "+r"(a0), "+r"(a1), "+r"(a2), "+r"(a3), "+r"(a4), "+r"(a5), "+r"(a6), "+r"(a7) : "r"(y));
++    break;
++  case WR_INT_IND8:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R16(IADD8) : "+r"(a0), "+r"(a1), "+r"(a2), "+r"(a3), "+r"(a4), "+r"(a5), "+r"(a6), "+r"(a7) : "r"(y));
++    break;
++  case WR_FMA_DEP:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R128("fmadd.s %0, %0, %1, %2\n\t") : "+f"(f0) : "f"(fa), "f"(fb));
++    break;
++  case WR_FMA_IND4:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R32(FMA4) : "+f"(f0), "+f"(f1), "+f"(f2), "+f"(f3), "+f"(f4), "+f"(f5), "+f"(f6), "+f"(f7) : "f"(fa), "f"(fb));
++    break;
++  case WR_FMA_IND8:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R16(FMA8) : "+f"(f0), "+f"(f1), "+f"(f2), "+f"(f3), "+f"(f4), "+f"(f5), "+f"(f6), "+f"(f7) : "f"(fa), "f"(fb));
++    break;
++  case WR_BR1:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R128(BRSKIP) : "+r"(a0), "+r"(a1), "+r"(a2), "+r"(a3), "+r"(a4), "+r"(a5), "+r"(a6), "+r"(a7) : "r"(y), "r"(nz));
++    break;
++  case WR_BR4:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R32(BLK4) : "+r"(a0), "+r"(a1), "+r"(a2), "+r"(a3), "+r"(a4), "+r"(a5), "+r"(a6), "+r"(a7) : "r"(y), "r"(nz));
++    break;
++  case WR_BR16:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R8(BLK16) : "+r"(a0), "+r"(a1), "+r"(a2), "+r"(a3), "+r"(a4), "+r"(a5), "+r"(a6), "+r"(a7) : "r"(y), "r"(nz));
++    break;
++  case WR_LDS_OWN:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R16(LDS8) : "=&r"(a0), "=&r"(a1), "=&r"(a2), "=&r"(a3), "=&r"(a4), "=&r"(a5), "=&r"(a6), "=&r"(a7),
++                       "+r"(b0), "+r"(b1), "+r"(b2), "+r"(b3) : "r"(myword) : "memory");
++    break;
++  case WR_LDS_CHASE:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R128("ld %0, 0(%0)\n\t") : "+r"(a0) :: "memory");
++    break;
++  case WR_STS_OWN:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R128("sw %1, 0(%0)\n\t") :: "r"(myword), "r"(a1) : "memory");
++    break;
++  case WR_LDS_NOUSE:
++    for (uint32_t i = 0; i < iters; ++i)
++      __asm__ volatile(R16(LDN8) : "=&r"(a0), "=&r"(a1), "=&r"(a2), "=&r"(a3), "=&r"(a4), "=&r"(a5), "=&r"(a6), "=&r"(a7) : "r"(myword) : "memory");
++    break;
++  default:
++    break;
++  }
++  uint64_t c1 = csr_read(VX_CSR_MCYCLE);
++
++  // every thread's final registers, which the host hashes: a run that executed
++  // a different instruction stream gives a different hash
++  float fv = f0 + f1 + f2 + f3 + f4 + f5 + f6 + f7;
++  uint32_t fbits;
++  __builtin_memcpy(&fbits, &fv, sizeof(fbits));
++  uint32_t nw = blockDim.x / vx_num_threads();
++  out[2 * nw + t] = (a0 ^ (a1 << 1) ^ (a2 << 2) ^ (a3 << 3) ^ (a4 << 4) ^ (a5 << 5) ^ (a6 << 6) ^ (a7 << 7)
++                     ^ (b0 << 8) ^ (b1 << 9) ^ (b2 << 10) ^ (b3 << 11)) + fbits;
++  if ((t % vx_num_threads()) == 0) {
++    uint32_t w = t / vx_num_threads();
++    out[2 * w] = c0;
++    out[2 * w + 1] = c1;
++  }
++}
+diff -ruN '--exclude=third_party' a/tests/regression/warp_rate/main.cpp b/tests/regression/warp_rate/main.cpp
+--- a/tests/regression/warp_rate/main.cpp	1969-12-31 19:00:00.000000000 -0500
++++ b/tests/regression/warp_rate/main.cpp	2026-11-21 15:19:24.308052559 -0500
+@@ -0,0 +1,142 @@
++// Issue rate of one warp, and of W warps sharing one core, by instruction
++// class. One CTA of W warps runs `iters` iterations of one inline-asm block
++// (common.h lists the classes); each warp reads mcycle around its loop.
++// Prints the slowest warp's own loop time and the core span (first warp's
++// start to last warp's end) per iteration.
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <iostream>
++#include <unistd.h>
++#include <vector>
++#include <vortex2.h>
++#include "common.h"
++
++#define RT_CHECK(_expr)                                         \
++   do {                                                         \
++     int _ret = _expr;                                          \
++     if (0 == _ret)                                             \
++       break;                                                   \
++     printf("Error: '%s' returned %d!\n", #_expr, (int)_ret);   \
++     cleanup();                                                 \
++     exit(-1);                                                  \
++   } while (false)
++
++static const char* kNames[WR_NKINDS] = {
++  "int_dep", "int_ind4", "int_ind8", "fma_dep", "fma_ind4", "fma_ind8",
++  "br_every1", "br_every4", "br_every16", "lds_own", "lds_chase", "sts_own", "lds_nouse"};
++
++const char* kernel_file = "kernel.vxbin";
++uint32_t kind  = 0;
++uint32_t warps = 1;
++uint32_t iters = 64;
++
++vx_device_h device = nullptr;
++vx_buffer_h out_buffer = nullptr;
++vx_queue_h  queue   = nullptr;
++vx_module_h module_ = nullptr;
++vx_kernel_h kernel  = nullptr;
++kernel_arg_t kernel_arg = {};
++
++static void show_usage() {
++  std::cout << "Usage: [-k kind 0.." << WR_NKINDS - 1 << "] [-w warps] [-i iterations] [-h]" << std::endl;
++}
++
++static void parse_args(int argc, char **argv) {
++  int c;
++  while ((c = getopt(argc, argv, "k:w:i:h")) != -1) {
++    switch (c) {
++    case 'k': kind  = atoi(optarg); break;
++    case 'w': warps = atoi(optarg); break;
++    case 'i': iters = atoi(optarg); break;
++    case 'h': show_usage(); exit(0);
++    default:  show_usage(); exit(-1);
++    }
++  }
++  if (kind >= WR_NKINDS || warps == 0 || iters == 0) {
++    show_usage();
++    exit(-1);
++  }
++}
++
++void cleanup() {
++  if (device) {
++    if (out_buffer) vx_buffer_release(out_buffer);
++    if (kernel)  vx_kernel_release(kernel);
++    if (module_) vx_module_release(module_);
++    if (queue)   vx_queue_release(queue);
++    vx_device_dump_perf(device, stdout);
++    vx_device_release(device);
++  }
++}
++
++int main(int argc, char *argv[]) {
++  parse_args(argc, argv);
++  RT_CHECK(vx_device_open(0, &device));
++  vx_queue_info_t qi = { sizeof(qi), nullptr, VX_QUEUE_PRIORITY_NORMAL, 0 };
++  RT_CHECK(vx_queue_create(device, &qi, &queue));
++
++  uint64_t num_threads, num_warps;
++  RT_CHECK(vx_device_query(device, VX_CAPS_NUM_THREADS, &num_threads));
++  RT_CHECK(vx_device_query(device, VX_CAPS_NUM_WARPS, &num_warps));
++  if (warps > num_warps) {
++    std::cout << "Error: " << warps << " warps > " << num_warps << " per core" << std::endl;
++    return -1;
++  }
++
++  uint64_t nthreads = warps * num_threads;
++  uint64_t out_size = (warps * 2 + nthreads) * sizeof(uint64_t);
++  RT_CHECK(vx_buffer_create(device, out_size, VX_MEM_WRITE, &out_buffer));
++  RT_CHECK(vx_buffer_address(out_buffer, &kernel_arg.out_addr));
++  kernel_arg.kind  = kind;
++  kernel_arg.iters = iters;
++
++  RT_CHECK(vx_module_load_file(device, kernel_file, &module_));
++  RT_CHECK(vx_module_get_kernel(module_, "main", &kernel));
++
++  vx_event_h launch_ev = nullptr, read_ev = nullptr;
++  vx_launch_info_t li = {};
++  li.struct_size  = sizeof(li);
++  li.kernel       = kernel;
++  li.args_host    = &kernel_arg;
++  li.args_size    = sizeof(kernel_arg);
++  li.ndim         = 1;
++  li.grid_dim[0]  = 1;
++  li.block_dim[0] = warps * (uint32_t)num_threads;
++  li.lmem_size    = warps * (uint32_t)num_threads * sizeof(uint64_t);
++  RT_CHECK(vx_enqueue_launch(queue, &li, 0, nullptr, &launch_ev));
++
++  std::vector<uint64_t> h_out(warps * 2 + nthreads, 0);
++  RT_CHECK(vx_enqueue_read(queue, h_out.data(), out_buffer, 0, out_size, 1, &launch_ev, &read_ev));
++  RT_CHECK(vx_event_wait_value(read_ev, 1, VX_TIMEOUT_INFINITE));
++  vx_event_release(read_ev);
++  vx_event_release(launch_ev);
++
++  uint64_t lo = UINT64_MAX, hi = 0, worst = 0;
++  int errors = 0;
++  for (uint32_t w = 0; w < warps; ++w) {
++    uint64_t c0 = h_out[2 * w], c1 = h_out[2 * w + 1];
++    if (c1 <= c0) {
++      printf("*** error: warp %u start=%llu end=%llu\n", w, (unsigned long long)c0, (unsigned long long)c1);
++      ++errors;
++      continue;
++    }
++    lo = std::min(lo, c0);
++    hi = std::max(hi, c1);
++    worst = std::max(worst, c1 - c0);
++  }
++  uint64_t hash = 1469598103934665603ull;
++  for (uint64_t i = 0; i < nthreads; ++i)
++    hash = (hash ^ h_out[warps * 2 + i]) * 1099511628211ull;
++  if (errors == 0) {
++    printf("kind=%s W=%u iters=%u cyc_per_iter_warp=%.2f cyc_per_iter_sm=%.2f hash=%016llx\n", kNames[kind], warps, iters,
++           (double)worst / iters, (double)(hi - lo) / iters, (unsigned long long)hash);
++  }
++  cleanup();
++  if (errors != 0) {
++    std::cout << "Found " << errors << " errors!" << std::endl;
++    return 1;
++  }
++  std::cout << "PASSED!" << std::endl;
++  return 0;
++}
+diff -ruN '--exclude=third_party' a/tests/regression/warp_rate/Makefile b/tests/regression/warp_rate/Makefile
+--- a/tests/regression/warp_rate/Makefile	1969-12-31 19:00:00.000000000 -0500
++++ b/tests/regression/warp_rate/Makefile	2026-11-21 14:44:58.716550036 -0500
+@@ -0,0 +1,16 @@
++ROOT_DIR := $(realpath ../../..)
++include $(ROOT_DIR)/config.mk
++
++PROJECT := warp_rate
++
++SRC_DIR := $(VORTEX_HOME)/tests/regression/$(PROJECT)
++
++SRCS := $(SRC_DIR)/main.cpp
++
++VX_SRCS := $(SRC_DIR)/kernel.cpp
++
++OPTS ?= -k0 -w1 -i64
++
++KERNEL_LIB := vortex2
++
++include ../common.mk
+diff -ruN '--exclude=third_party' a/VX_config.toml b/VX_config.toml
+--- a/VX_config.toml	2026-11-21 12:10:06.000000000 -0500
++++ b/VX_config.toml	2026-11-21 15:29:33.036166145 -0500
+@@ -76,6 +76,19 @@
+ VX_CFG_MAX_BAR_EVENTS = 32
+ 
+ VX_CFG_IBUF_SIZE = 4
++# SimX only: instructions one warp may have between its fetch pick and decode.
++# 1 stalls the warp from its pick until decode, or for a branch or warp-control
++# instruction until that resolves. More fetches the warp sequentially ahead:
++# decode drops the younger fetches when it finds a stalling instruction or an
++# instruction out of order, and the warp refetches from its PC once released.
++# The instruction buffer (IBUF_SIZE) bounds it as well.
++VX_CFG_FETCH_INFLIGHT = 1
++# SimX only: 1 treats a floating-point operation's exception flags as an
++# accumulation (sticky OR), so a warp's FP operations no longer wait for each
++# other's flags; CSR accesses of fflags, frm or fcsr still wait for them, and
++# they for those. 0 serializes the flag writes, one FP operation of a warp at a
++# time, as the RTL scoreboard does with XREG_0.
++VX_CFG_FFLAGS_ACCUM = 0
+ VX_CFG_DISPATCH_QUEUE_SIZE = 4
+ # A power of two: a warp's issue slice is the low bits of its id.
+ VX_CFG_ISSUE_WIDTH = "expr: pow(2, clog2(up($VX_CFG_NUM_WARPS / 16)))"

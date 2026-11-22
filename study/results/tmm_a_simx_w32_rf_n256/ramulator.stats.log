@@ -1,0 +1,104 @@
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 947
+  total_num_read_requests: 202
+  memory_system_cycles: 32058
+  DRAM:
+    impl: HBM2
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Generic
+    id: Channel 0
+    avg_read_latency_0: 16.0742569
+    read_queue_len_avg_0: 0.0926757753
+    write_queue_len_0: 9393
+    queue_len_0: 12364
+    num_other_reqs_0: 0
+    num_write_reqs_0: 962
+    read_latency_0: 3247
+    priority_queue_len_avg_0: 0
+    row_hits_0: 992
+    priority_queue_len_0: 0
+    row_misses_0: 32
+    row_conflicts_0: 94
+    read_row_misses_0: 30
+    queue_len_avg_0: 0.385675967
+    read_row_conflicts_core_0: 16
+    read_row_hits_0: 156
+    write_queue_len_avg_0: 0.293000191
+    read_row_conflicts_0: 16
+    write_row_misses_0: 2
+    write_row_conflicts_0: 78
+    read_queue_len_0: 2971
+    write_row_hits_0: 836
+    read_row_hits_core_0: 156
+    read_row_misses_core_0: 30
+    num_read_reqs_0: 202
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 946
+  total_num_read_requests: 194
+  memory_system_cycles: 32058
+  DRAM:
+    impl: HBM2
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Generic
+    id: Channel 0
+    avg_read_latency_0: 15.9536085
+    read_queue_len_avg_0: 0.0884958506
+    write_queue_len_0: 9402
+    queue_len_0: 12239
+    num_other_reqs_0: 0
+    num_write_reqs_0: 961
+    read_latency_0: 3095
+    priority_queue_len_avg_0: 0
+    row_hits_0: 984
+    priority_queue_len_0: 0
+    row_misses_0: 32
+    row_conflicts_0: 92
+    read_row_misses_0: 30
+    queue_len_avg_0: 0.38177678
+    read_row_conflicts_core_0: 13
+    read_row_hits_0: 151
+    write_queue_len_avg_0: 0.293280929
+    read_row_conflicts_0: 13
+    write_row_misses_0: 2
+    write_row_conflicts_0: 79
+    read_queue_len_0: 2837
+    write_row_hits_0: 833
+    read_row_hits_core_0: 151
+    read_row_misses_core_0: 30
+    num_read_reqs_0: 194
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+

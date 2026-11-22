@@ -1,0 +1,8 @@
+name=bar_neg_wgss_simx
+src_rev=
+src_dirty=0
+host=atl1-1-02-018-24-1.pace.gatech.edu
+xconf=-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_FETCH_WIDTH=2 -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=8 -DWGMMA_SS -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1
+blackbox=--driver=simx --app=sgemm_tcu_wg --perf=1
+rc=0
+wall_s=169

@@ -1,0 +1,8 @@
+name=tmm_a_simx_h2_wg_roof
+src_rev=
+src_dirty=0
+host=atl1-1-02-007-14-2.pace.gatech.edu
+xconf=-DVX_CFG_TCU_FEDP2K -DPROFILE_ENABLE
+blackbox=--driver=simx --app=tcu_roof --perf=11 --profile=h200s --cores=1 --args=-m1 -i16 -g1
+rc=0
+wall_s=213

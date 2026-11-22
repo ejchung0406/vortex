@@ -1,0 +1,8 @@
+name=barfix_stress_simx
+src_rev=
+src_dirty=0
+host=atl1-1-02-002-24-1.pace.gatech.edu
+xconf=-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1 -DVX_CFG_DCACHE_NUM_BANKS=1 -DVX_CFG_DCACHE_MSHR_SIZE=4
+blackbox=--driver=simx --app=bar_vis --perf=7 --args=-w4 -r64 -s1 -d0
+rc=0
+wall_s=164

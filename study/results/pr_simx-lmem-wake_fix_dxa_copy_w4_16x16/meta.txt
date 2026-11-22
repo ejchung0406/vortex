@@ -1,0 +1,8 @@
+name=pr_simx-lmem-wake_fix_dxa_copy_w4_16x16
+src_rev=
+src_dirty=0
+host=atl1-1-02-008-2-1.pace.gatech.edu
+xconf=-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_DXA_CORES=4 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16
+blackbox=--driver=simx --app=dxa_copy --perf=6 --cores=1 --args=-d2 -s0 128 -s1 128 -t0 8 -t1 8
+rc=0
+wall_s=161

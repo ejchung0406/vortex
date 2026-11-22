@@ -1,0 +1,146 @@
+CONFIGS=-DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1 -DVX_CFG_NUM_CORES=1 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=4
+Running: CONFIGS="-DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1 -DVX_CFG_NUM_CORES=1 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=4" make -C "./ci/../tests/regression/sgemm2_tcu" runtime-simx > /dev/null
+which: no ccache in (/storage/home/hcoda1/7/echung67/.local/bin:/usr/local/pace-apps/manual/packages/xalt/xalt/bin:/usr/local/pace-apps/manual/packages/uv/0.9.17:/opt/pace-common/bin:/opt/slurm/current/bin:/storage/home/hcoda1/7/echung67/.nvm/versions/node/v24.15.0/bin:/storage/home/hcoda1/7/echung67/.local/bin:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/mvapich2-2.3.7-1-qv3gjagtbx5e3rlbdy6iy2sfczryftyt/bin:/opt/pmix/4.2.6/bin:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/iozone/bin:/storage/home/hcoda1/7/echung67/bin:/storage/home/hcoda1/7/echung67/bin)
+Running: OPTS="-m16 -n256 -k512 -w1" CONFIGS="-DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1 -DVX_CFG_NUM_CORES=1 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=4" make -C "./ci/../tests/regression/sgemm2_tcu" run-simx
+make: Entering directory '/tmp/echung67/vx_15977892_1383393/tests/regression/sgemm2_tcu'
+CONFIGS="-DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1 -DVX_CFG_NUM_CORES=1 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=4 -DWGMMA_RS"     make -C /tmp/echung67/vx_15977892_1383393/sw/runtime/stub DESTDIR=/tmp/echung67/vx_15977892_1383393/sw/runtime
+make[1]: Entering directory '/tmp/echung67/vx_15977892_1383393/sw/runtime/stub'
+make[1]: Nothing to be done for 'all'.
+make[1]: Leaving directory '/tmp/echung67/vx_15977892_1383393/sw/runtime/stub'
+CONFIGS="-DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1 -DVX_CFG_NUM_CORES=1 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=4 -DWGMMA_RS"     make -C /tmp/echung67/vx_15977892_1383393/sw/runtime/simx DESTDIR=/tmp/echung67/vx_15977892_1383393/sw/runtime
+make[1]: Entering directory '/tmp/echung67/vx_15977892_1383393/sw/runtime/simx'
+DESTDIR=/tmp/echung67/vx_15977892_1383393/sw/runtime make -C /tmp/echung67/vx_15977892_1383393/sim/simx /tmp/echung67/vx_15977892_1383393/sw/runtime/libsimx.so
+make[2]: Entering directory '/tmp/echung67/vx_15977892_1383393/sim/simx'
+which: no ccache in (/storage/home/hcoda1/7/echung67/.local/bin:/usr/local/pace-apps/manual/packages/xalt/xalt/bin:/usr/local/pace-apps/manual/packages/uv/0.9.17:/opt/pace-common/bin:/opt/slurm/current/bin:/storage/home/hcoda1/7/echung67/.nvm/versions/node/v24.15.0/bin:/storage/home/hcoda1/7/echung67/.local/bin:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/mvapich2-2.3.7-1-qv3gjagtbx5e3rlbdy6iy2sfczryftyt/bin:/opt/pmix/4.2.6/bin:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/iozone/bin:/storage/home/hcoda1/7/echung67/bin:/storage/home/hcoda1/7/echung67/bin)
+make[2]: Leaving directory '/tmp/echung67/vx_15977892_1383393/sim/simx'
+make[1]: Leaving directory '/tmp/echung67/vx_15977892_1383393/sw/runtime/simx'
+LD_LIBRARY_PATH=/tmp/echung67/vx_15977892_1383393/sw/runtime:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/boost-1.86.0-ctvuqdbnk462qizlnak3nv35j4vke2mu/lib:/opt/slurm/current/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/mvapich2-2.3.7-1-qv3gjagtbx5e3rlbdy6iy2sfczryftyt/lib:/opt/slurm/current/lib:/opt/pmix/4.2.6/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/libpciaccess-0.17-pjfe4ct4gfm5k26s36hmewhbz4k232dl/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/lib64:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/zlib-1.2.13-3qhjpij2pji47kfanmlflvwk5ljcn5lh/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/mpc-1.3.1-3zvixith5i243hwiill4exyu3lf2q6ad/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/mpfr-4.2.0-tox4bdsc25zr763rnq5gzlukfbvw7uj7/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/gmp-6.2.1-n7dzsse5e3f6w5z6q6cuqursydg6yypo/lib:: VORTEX_DRIVER=simx ./sgemm2_tcu -m16 -n256 -k512 -w1
+open device connection
+input data type: fp16 (id=2)
+output data type: fp32 (id=0)
+WMMA Core Dimension: M=4, N=2, K=2
+WMMA Per-Warp Tile: M=8, N=8, K=16
+WMMA CTA Tile: M=8, N=8, K=16
+Grid dimension: 32x2
+Block dimension: 8x1
+matrix A: 16x512
+matrix B: 512x256
+matrix C: 16x256
+allocate device memory
+A_addr=0x30000
+B_addr=0x34000
+C_addr=0x74000
+upload matrix A buffer
+upload matrix B buffer
+load kernel module
+start device
+download destination buffer
+wait for completion
+Elapsed time: 9619 ms
+verify result
+*** error: [0] expected=124.857254, actual=124.856850
+*** error: [1] expected=121.466942, actual=121.466576
+*** error: [2] expected=131.565109, actual=131.564682
+*** error: [3] expected=128.270050, actual=128.269684
+*** error: [4] expected=124.379395, actual=124.379021
+*** error: [5] expected=129.668762, actual=129.668350
+*** error: [6] expected=122.929337, actual=122.928970
+*** error: [7] expected=130.732620, actual=130.732224
+*** error: [8] expected=124.294334, actual=124.293938
+*** error: [9] expected=126.363686, actual=126.363297
+*** error: [10] expected=122.579315, actual=122.578949
+*** error: [11] expected=118.616257, actual=118.615906
+*** error: [12] expected=125.756645, actual=125.756256
+*** error: [13] expected=130.750443, actual=130.750031
+*** error: [14] expected=132.557236, actual=132.556808
+*** error: [15] expected=123.145912, actual=123.145493
+*** error: [16] expected=119.806915, actual=119.806557
+*** error: [17] expected=126.997208, actual=126.996857
+*** error: [18] expected=130.780228, actual=130.779816
+*** error: [19] expected=124.361282, actual=124.360893
+*** error: [20] expected=129.900482, actual=129.900070
+*** error: [21] expected=125.485542, actual=125.485107
+*** error: [22] expected=121.786201, actual=121.785828
+*** error: [23] expected=127.539314, actual=127.538925
+*** error: [24] expected=133.239914, actual=133.239517
+*** error: [25] expected=122.115860, actual=122.115479
+*** error: [26] expected=134.695084, actual=134.694702
+*** error: [27] expected=125.915176, actual=125.914764
+*** error: [28] expected=121.474495, actual=121.474136
+*** error: [29] expected=121.525826, actual=121.525421
+*** error: [30] expected=130.440643, actual=130.440201
+*** error: [31] expected=125.838234, actual=125.837822
+*** error: [32] expected=117.892693, actual=117.892288
+*** error: [33] expected=121.513702, actual=121.513359
+*** error: [34] expected=129.795486, actual=129.795090
+*** error: [35] expected=119.618088, actual=119.617691
+*** error: [36] expected=119.246819, actual=119.246475
+*** error: [37] expected=118.961227, actual=118.960869
+*** error: [38] expected=121.954254, actual=121.953880
+*** error: [39] expected=114.953621, actual=114.953262
+*** error: [40] expected=125.888718, actual=125.888298
+*** error: [41] expected=128.740616, actual=128.740219
+*** error: [42] expected=128.364380, actual=128.363998
+*** error: [43] expected=130.524124, actual=130.523743
+*** error: [44] expected=128.143524, actual=128.143143
+*** error: [45] expected=120.919586, actual=120.919167
+*** error: [46] expected=127.715134, actual=127.714737
+*** error: [47] expected=129.004623, actual=129.004242
+*** error: [48] expected=127.042816, actual=127.042458
+*** error: [49] expected=126.990280, actual=126.989929
+*** error: [50] expected=129.424591, actual=129.424240
+*** error: [51] expected=125.361862, actual=125.361481
+*** error: [52] expected=128.926056, actual=128.925659
+*** error: [53] expected=127.985191, actual=127.984840
+*** error: [54] expected=126.522705, actual=126.522316
+*** error: [55] expected=131.187332, actual=131.186890
+*** error: [56] expected=125.404747, actual=125.404373
+*** error: [57] expected=127.340561, actual=127.340202
+*** error: [58] expected=129.052582, actual=129.052200
+*** error: [59] expected=127.345009, actual=127.344635
+*** error: [60] expected=120.345871, actual=120.345474
+*** error: [61] expected=124.917580, actual=124.917198
+*** error: [62] expected=129.839386, actual=129.838959
+*** error: [63] expected=125.950096, actual=125.949730
+*** error: [64] expected=121.133759, actual=121.133392
+*** error: [65] expected=129.529144, actual=129.528778
+*** error: [66] expected=134.358932, actual=134.358536
+*** error: [67] expected=129.968079, actual=129.967667
+*** error: [68] expected=127.395172, actual=127.394798
+*** error: [69] expected=125.993095, actual=125.992714
+*** error: [70] expected=125.200768, actual=125.200356
+*** error: [71] expected=131.047897, actual=131.047501
+*** error: [72] expected=122.070953, actual=122.070587
+*** error: [73] expected=128.553848, actual=128.553497
+*** error: [74] expected=128.623260, actual=128.622849
+*** error: [75] expected=128.957840, actual=128.957428
+*** error: [76] expected=123.011307, actual=123.010910
+*** error: [77] expected=126.724838, actual=126.724442
+*** error: [78] expected=128.178680, actual=128.178268
+*** error: [79] expected=126.227211, actual=126.226814
+*** error: [80] expected=122.830971, actual=122.830559
+*** error: [81] expected=128.599228, actual=128.598816
+*** error: [82] expected=127.937286, actual=127.936935
+*** error: [83] expected=127.203148, actual=127.202782
+*** error: [84] expected=125.318466, actual=125.318077
+*** error: [85] expected=123.763756, actual=123.763367
+*** error: [86] expected=120.805588, actual=120.805222
+*** error: [87] expected=127.821693, actual=127.821327
+*** error: [88] expected=124.045876, actual=124.045532
+*** error: [89] expected=125.625839, actual=125.625458
+*** error: [90] expected=122.992981, actual=122.992584
+*** error: [91] expected=125.814461, actual=125.814072
+*** error: [92] expected=127.946426, actual=127.946106
+*** error: [93] expected=128.819962, actual=128.819550
+*** error: [94] expected=126.071396, actual=126.070999
+*** error: [95] expected=128.028290, actual=128.027924
+*** error: [96] expected=126.650848, actual=126.650497
+*** error: [97] expected=125.739883, actual=125.739487
+*** error: [98] expected=123.921661, actual=123.921272
+*** error: [99] expected=125.145416, actual=125.145081
+cleanup
+PERF: instrs=1049312, cycles=2708745, IPC=0.387
+Found 4096 / 4096 errors!
+FAILED!
+make: *** [../common.mk:245: run-simx] Error 1
+make: Leaving directory '/tmp/echung67/vx_15977892_1383393/tests/regression/sgemm2_tcu'

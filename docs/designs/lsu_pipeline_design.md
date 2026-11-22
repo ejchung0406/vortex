@@ -365,10 +365,32 @@ DCACHE_NUM_REQS = NUM_LSU_BLOCKS × DCACHE_CHANNELS
 
 ### 5.4 Busy reporting
 
-The block reports **empty** only when no store is in flight anywhere on the
-global path — not in the coalescer, and not in the adapter's request buffer.
-That signal folds into the core's `busy`, so the end-of-kernel cache flush is
-ordered strictly behind the last store.
+The block reports **empty** only when no request is in flight on its part of
+the global path — not in the coalescer, and not in the adapter's request
+buffer. That signal folds into the core's `busy`, so the end-of-kernel cache
+flush is ordered strictly behind the last store.
+
+Past the block a request can still be held, in three places:
+
+| stage | reported by |
+|---|---|
+| a flush lane's `VX_dcr_flush` request buffer | `VX_mem_unit`'s `busy` |
+| the socket dMMU's lanes of this core (VM) | the socket's per-lane idle: `dcache_path_drained` for the flush, `dcache_req_path_drained` (requests only) for the barrier |
+| the link to the dcache (`L1_LINK_LATENCY != 0`) | the same |
+
+A barrier at `VX_CFG_BAR_DRAIN_SCOPE=1` waits for all of them, and the local
+memory's inputs, as `lsu_store_landed`. None of these terms tells a load from
+a store, except that local memory counts stores only, and the link term
+counts requests only. The dcache does not order its ports with each other:
+its request crossbar arbitrates round-robin, which is why the barrier waits
+until the store is accepted. Two stages still hold requests from different
+ports apart after accepting them, so one accepted first can reach its bank
+second: a shared dcache's core arbiter (`VX_cache_cluster`, one buffered
+arbiter per lane when the dcache has more cores than units), and a sliced
+request crossbar (more than 1.5 x `MAX_FANOUT` ports per dcache). The barrier
+does not see them. The release-to-load path is longer than they hold a
+request while the bank keeps up; a bank stalled on full MSHRs can hold one
+longer. Scope 0 has the same exposure, at every stage past the schedulers.
 
 ---
 

@@ -1,0 +1,76 @@
++ run demo --app=demo
++ tag=demo
++ shift
++ timeout 5400 ./ci/blackbox.sh --driver=rtlsim --app=demo
++ echo 'bb demo rc=0'
+bb demo rc=0
++ tail -3
++ grep -E 'PERF: instrs|cycles=|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_pr_rtlsim/bb_demo.log
+PERF: instrs=2468, cycles=6423, IPC=0.384
+PASSED!
++ make -s -C tests/runtime test_host_alias
++ for i in 1 2 3
++ VORTEX_DRIVER=rtlsim
++ LD_LIBRARY_PATH=/tmp/echung67/vx_15977752_468803/sw/runtime
++ timeout 1800 ./tests/runtime/test_host_alias
++ echo 'host_alias run 1 rc=0'
+host_alias run 1 rc=0
++ tail -3 /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_pr_rtlsim/host_alias_1.log
+CONFIGS: num_threads=4, num_warps=4, num_cores=1, num_clusters=1, socket_size=1, local_mem_base=0x1fffc0000, num_barriers=8
+device buffer [0x30000, 0x4030000), host heap at 0x57d320
+PASSED
++ for i in 1 2 3
++ VORTEX_DRIVER=rtlsim
++ LD_LIBRARY_PATH=/tmp/echung67/vx_15977752_468803/sw/runtime
++ timeout 1800 ./tests/runtime/test_host_alias
++ echo 'host_alias run 2 rc=0'
+host_alias run 2 rc=0
++ tail -3 /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_pr_rtlsim/host_alias_2.log
+CONFIGS: num_threads=4, num_warps=4, num_cores=1, num_clusters=1, socket_size=1, local_mem_base=0x1fffc0000, num_barriers=8
+device buffer [0x30000, 0x4030000), host heap at 0x57d320
+PASSED
++ for i in 1 2 3
++ VORTEX_DRIVER=rtlsim
++ LD_LIBRARY_PATH=/tmp/echung67/vx_15977752_468803/sw/runtime
++ timeout 1800 ./tests/runtime/test_host_alias
++ echo 'host_alias run 3 rc=0'
+host_alias run 3 rc=0
++ tail -3 /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_pr_rtlsim/host_alias_3.log
+CONFIGS: num_threads=4, num_warps=4, num_cores=1, num_clusters=1, socket_size=1, local_mem_base=0x1fffc0000, num_barriers=8
+device buffer [0x30000, 0x4030000), host heap at 0x57d320
+PASSED
++ run sgemm16 --app=sgemm --args=-n16
++ tag=sgemm16
++ shift
++ timeout 5400 ./ci/blackbox.sh --driver=rtlsim --app=sgemm --args=-n16
++ echo 'bb sgemm16 rc=0'
+bb sgemm16 rc=0
++ tail -3
++ grep -E 'PERF: instrs|cycles=|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_pr_rtlsim/bb_sgemm16.log
+PERF: instrs=7520, cycles=18398, IPC=0.409
+PASSED!
++ make -s -C tests/regression/dxa_copy clean
++ CONFIGS=-DVX_CFG_EXT_DXA_ENABLE
++ make -s -C tests/regression/dxa_copy
++ CONFIGS=-DVX_CFG_EXT_DXA_ENABLE
++ run dxa_copy --app=dxa_copy --args=-d1
++ tag=dxa_copy
++ shift
++ timeout 5400 ./ci/blackbox.sh --driver=rtlsim --app=dxa_copy --args=-d1
++ echo 'bb dxa_copy rc=0'
+bb dxa_copy rc=0
++ tail -3
++ grep -E 'PERF: instrs|cycles=|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_pr_rtlsim/bb_dxa_copy.log
+PASSED
+PERF: instrs=1624, cycles=6470, IPC=0.251
++ run vecadd --app=vecadd
++ tag=vecadd
++ shift
++ timeout 5400 ./ci/blackbox.sh --driver=rtlsim --app=vecadd
++ echo 'bb vecadd rc=0'
+bb vecadd rc=0
++ tail -3
++ grep -E 'PERF: instrs|cycles=|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_pr_rtlsim/bb_vecadd.log
+PERF: instrs=512, cycles=1641, IPC=0.312
+PASSED!
++ exit 0

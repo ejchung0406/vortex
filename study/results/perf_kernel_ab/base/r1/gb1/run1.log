@@ -1,0 +1,43 @@
+open device connection
+SIMX-MT: unregistered cross-domain edge: cluster0-socket0-unit_mmu -> cluster0-l2tlb
+SIMX-MT: unregistered cross-domain edge: cluster0-socket0-core0-dcache_mmu -> cluster0-l2tlb
+SIMX-MT: unregistered cross-domain edge: cluster0-socket0-core0-icache_mmu -> cluster0-l2tlb
+SIMX-MT: unregistered cross-domain edge: cluster0-l2tlb -> cluster0-socket0-unit_mmu
+SIMX-MT: unregistered cross-domain edge: cluster0-l2tlb -> cluster0-socket0-core0-dcache_mmu
+SIMX-MT: unregistered cross-domain edge: cluster0-l2tlb -> cluster0-socket0-core0-icache_mmu
+SIMX-MT: parallel execution disabled until every cross-domain edge carries a registered stage
+[VM] Heap mapped with superpages
+VMManager Initialization...
+input data type: fp16 (id=2)
+output data type: fp32 (id=0)
+WMMA Core Dimension: M=8, N=4, K=4
+WMMA Tile Dimension: M=16, N=16, K=32
+matrix A: 16x4096
+matrix B: 4096x1024
+matrix C: 16x1024
+staging=dxa grid=16 warps_per_cta=4 cta_cols=64 chunk_k=32 chunk_bytes=4096 depth=2 lmem_per_cta=8192 cta_slots_per_core=16
+allocate device memory
+A_addr=0x30000
+B_addr=0x50000
+C_addr=0x850000
+upload matrix A buffer
+upload matrix B buffer
+load kernel module
+launch kernel
+download destination buffer
+wait for completion
+[VXDRV] Warning: CP has not retired a command in 10s.
+[VXDRV]   Q_SEQNUM=48 target=49 CP_CTRL=0x00000001 CP_STATUS=0x00000001 Q_ERROR=0x00000000
+[VXDRV]   RING_BASE=0x4000000002065900 HEAD_ADDR=0x4000000002075980 CMPL_ADDR=0x4000000002075a80
+[VXDRV]   RING_SIZE_LOG2=16 Q_CONTROL=0x00000001 Q_TAIL=0x0000000000000c40
+[VXDRV]   The ring was accepted but nothing is executing. Set VORTEX_CP_POLL_TIMEOUT_S=<sec> to abort instead of spinning.
+Elapsed time: 36631 ms
+TCU_CYCLES: max=642071 (across 16 blocks)
+verify result
+cleanup
+PERF: core0: lmem: reqs=2097152, bank_stalls=0 (utility=100%)
+PERF: core0: coalescer: misses=0
+PERF: core0: vm: tlb_reads=1248346, hit=99%, evicts=0, ptw_walks=474, ptw_avg_lat=97.60
+PERF: memory: reqs=267683 (r=133291, w=134392), lat=365.6 cyc, bank_st=417 (utility=100%)
+PERF: instrs=814144, cycles=647264, IPC=1.258
+PASSED!

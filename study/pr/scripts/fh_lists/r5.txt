@@ -1,0 +1,3 @@
+pr_fh_parity-sgemm-mc64_rtl|rtlsim|sgemm|-n64|--cores=2 --l2cache|-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8
+pr_fh_parity-vecadd-lazy-l2_rtl|rtlsim|vecadd|-n16384|--l2cache|-DVX_CFG_L2_LAZY_FETCH=1
+pr_fh_parity-raycast-mc_rtl|rtlsim|raycast||--cores=4 --l2cache|

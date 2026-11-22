@@ -1,0 +1,8 @@
+CONFIGS=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_L2_SIZE=20971520 -DVX_CFG_L2_NUM_WAYS=20 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=32 -DVX_CFG_PLATFORM_MEMORY_PEAK_BW=1600000 -DVX_CFG_L2_NUM_BANKS=32 -DPERF_ENABLE -DVX_CFG_NUM_CORES=32
+Running: CONFIGS="-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_L2_SIZE=20971520 -DVX_CFG_L2_NUM_WAYS=20 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=32 -DVX_CFG_PLATFORM_MEMORY_PEAK_BW=1600000 -DVX_CFG_L2_NUM_BANKS=32 -DPERF_ENABLE -DVX_CFG_NUM_CORES=32" make -C "./ci/../tests/regression/bwstream_dxa" runtime-simx > /dev/null
+shell-init: error retrieving current directory: getcwd: cannot access parent directories: No such file or directory
+make: getcwd: No such file or directory
+make[2]: *** /tmp/echung67/vx_15978717_982641/sim/simx: No such file or directory.  Stop.
+make[1]: *** [Makefile:38: /tmp/echung67/vx_15978717_982641/sw/runtime/libsimx.so] Error 2
+make: *** [../common.mk:241: runtime-simx] Error 2
+Error building driver: simx (via ./ci/../tests/regression/bwstream_dxa)

@@ -1,0 +1,8 @@
+name=barm_s0_mt1_s1_d4
+src_rev=
+src_dirty=0
+host=atl1-1-02-005-7-1.pace.gatech.edu
+xconf=-DMTILES=1 -DPROFILE_ENABLE -DVX_CFG_BAR_DRAIN_SCOPE=0
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=1 --args=-m16 -n1024 -k4096 -s1 -d4
+rc=0
+wall_s=262

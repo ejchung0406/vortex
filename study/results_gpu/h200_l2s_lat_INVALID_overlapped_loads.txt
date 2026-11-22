@@ -1,0 +1,200 @@
+# fine sm=0 warm=none window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --warm none --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm0_warmnone.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=0 warm=none off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=499 p75=705 p95=797 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm0_warmnone.u16
+exit=0 secs=0.8
+# fine sm=0 warm=self window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --warm self --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm0_warmself.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=0 warm=self off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=264 p75=297 p95=316 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm0_warmself.u16
+exit=0 secs=0.6
+# fine sm=0 warm=14 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --warm 14 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm0_warm14.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=0 warm=14 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=263 p75=297 p95=316 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm0_warm14.u16
+exit=0 secs=0.6
+# fine sm=2 warm=none window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 2 --warm none --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm2_warmnone.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=2 warm=none off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=495 p75=702 p95=796 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm2_warmnone.u16
+exit=0 secs=0.6
+# fine sm=2 warm=self window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 2 --warm self --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm2_warmself.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=2 warm=self off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=261 p75=292 p95=312 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm2_warmself.u16
+exit=0 secs=0.6
+# fine sm=2 warm=0 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 2 --warm 0 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm2_warm0.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=2 warm=0 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=262 p75=292 p95=312 clock_mhz=1978 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm2_warm0.u16
+exit=0 secs=0.6
+# fine sm=2 warm=14 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 2 --warm 14 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm2_warm14.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=2 warm=14 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=261 p75=293 p95=312 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm2_warm14.u16
+exit=0 secs=0.6
+# fine sm=4 warm=none window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 4 --warm none --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm4_warmnone.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=4 warm=none off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=494 p75=703 p95=792 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm4_warmnone.u16
+exit=0 secs=0.6
+# fine sm=4 warm=self window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 4 --warm self --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm4_warmself.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=4 warm=self off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=263 p75=292 p95=312 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm4_warmself.u16
+exit=0 secs=1.1
+# fine sm=4 warm=0 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 4 --warm 0 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm4_warm0.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=4 warm=0 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=263 p75=428 p95=484 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm4_warm0.u16
+exit=0 secs=0.6
+# fine sm=4 warm=14 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 4 --warm 14 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm4_warm14.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=4 warm=14 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=263 p75=427 p95=484 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm4_warm14.u16
+exit=0 secs=0.7
+# fine sm=6 warm=none window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 6 --warm none --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm6_warmnone.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=6 warm=none off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=494 p75=703 p95=798 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm6_warmnone.u16
+exit=0 secs=0.6
+# fine sm=6 warm=self window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 6 --warm self --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm6_warmself.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=6 warm=self off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=261 p75=293 p95=313 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm6_warmself.u16
+exit=0 secs=0.6
+# fine sm=6 warm=0 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 6 --warm 0 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm6_warm0.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=6 warm=0 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=261 p75=429 p95=486 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm6_warm0.u16
+exit=0 secs=0.6
+# fine sm=6 warm=14 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 6 --warm 14 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm6_warm14.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=6 warm=14 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=260 p75=431 p95=486 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm6_warm14.u16
+exit=0 secs=0.6
+# fine sm=8 warm=none window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 8 --warm none --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm8_warmnone.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=8 warm=none off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=498 p75=703 p95=794 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm8_warmnone.u16
+exit=0 secs=0.6
+# fine sm=8 warm=self window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 8 --warm self --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm8_warmself.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=8 warm=self off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=260 p75=295 p95=312 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm8_warmself.u16
+exit=0 secs=0.6
+# fine sm=8 warm=0 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 8 --warm 0 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm8_warm0.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=8 warm=0 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=260 p75=429 p95=487 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm8_warm0.u16
+exit=0 secs=0.6
+# fine sm=8 warm=14 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 8 --warm 14 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm8_warm14.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=8 warm=14 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=260 p75=429 p95=487 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm8_warm14.u16
+exit=0 secs=0.6
+# fine sm=10 warm=none window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 10 --warm none --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm10_warmnone.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=10 warm=none off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=499 p75=701 p95=784 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm10_warmnone.u16
+exit=0 secs=0.6
+# fine sm=10 warm=self window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 10 --warm self --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm10_warmself.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=10 warm=self off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=263 p75=293 p95=312 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm10_warmself.u16
+exit=0 secs=0.6
+# fine sm=10 warm=0 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 10 --warm 0 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm10_warm0.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=10 warm=0 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=263 p75=293 p95=312 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm10_warm0.u16
+exit=0 secs=0.7
+# fine sm=10 warm=14 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 10 --warm 14 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm10_warm14.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=10 warm=14 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=263 p75=293 p95=312 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm10_warm14.u16
+exit=0 secs=0.6
+# fine sm=12 warm=none window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 12 --warm none --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm12_warmnone.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=12 warm=none off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=497 p75=703 p95=797 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm12_warmnone.u16
+exit=0 secs=0.6
+# fine sm=12 warm=self window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 12 --warm self --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm12_warmself.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=12 warm=self off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=263 p75=293 p95=311 clock_mhz=1974 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm12_warmself.u16
+exit=0 secs=0.6
+# fine sm=12 warm=0 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 12 --warm 0 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm12_warm0.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=12 warm=0 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=262 p75=427 p95=485 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm12_warm0.u16
+exit=0 secs=0.6
+# fine sm=12 warm=14 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 12 --warm 14 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm12_warm14.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=12 warm=14 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=262 p75=427 p95=485 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm12_warm14.u16
+exit=0 secs=0.6
+# fine sm=14 warm=none window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 14 --warm none --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm14_warmnone.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=14 warm=none off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=498 p75=702 p95=788 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm14_warmnone.u16
+exit=0 secs=0.6
+# fine sm=14 warm=self window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 14 --warm self --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm14_warmself.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=14 warm=self off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=262 p75=294 p95=313 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm14_warmself.u16
+exit=0 secs=0.6
+# fine sm=14 warm=0 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 14 --warm 0 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm14_warm0.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=14 warm=0 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=261 p75=294 p95=313 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm14_warm0.u16
+exit=0 secs=0.6
+# fine sm=130 warm=none window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 130 --warm none --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm130_warmnone.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=130 warm=none off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=478 p75=691 p95=802 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm130_warmnone.u16
+exit=0 secs=0.6
+# fine sm=130 warm=self window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 130 --warm self --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm130_warmself.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=130 warm=self off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=253 p75=291 p95=321 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm130_warmself.u16
+exit=0 secs=0.6
+# fine sm=130 warm=0 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 130 --warm 0 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm130_warm0.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=130 warm=0 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=253 p75=291 p95=321 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm130_warm0.u16
+exit=0 secs=0.6
+# fine sm=130 warm=14 window=8MB stride=128
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 130 --warm 14 --off0 0 --stride 128 --count 65536 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm130_warm14.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=130 warm=14 off0=0 stride=128 count=65536 errs=0 p5=13 p25=13 p50=252 p75=291 p95=321 clock_mhz=1979 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/fine_sm130_warm14.u16
+exit=0 secs=0.6
+# sector sm=0 stride=32 warm=none
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --warm none --off0 16777216 --stride 32 --count 8192 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/sect_sm0_s32_warmnone.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=0 warm=none off0=16777216 stride=32 count=8192 errs=0 p5=13 p25=13 p50=270 p75=502 p95=754 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/sect_sm0_s32_warmnone.u16
+exit=0 secs=0.6
+# sector sm=0 stride=32 warm=self
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --warm self --off0 16777216 --stride 32 --count 8192 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/sect_sm0_s32_warmself.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=0 warm=self off0=16777216 stride=32 count=8192 errs=0 p5=13 p25=13 p50=264 p75=297 p95=316 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/sect_sm0_s32_warmself.u16
+exit=0 secs=0.6
+# sector sm=0 stride=64 warm=none
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --warm none --off0 16777216 --stride 64 --count 4096 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/sect_sm0_s64_warmnone.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=0 warm=none off0=16777216 stride=64 count=4096 errs=0 p5=13 p25=13 p50=438 p75=547 p95=767 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/sect_sm0_s64_warmnone.u16
+exit=0 secs=0.6
+# sector sm=0 stride=64 warm=self
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --warm self --off0 16777216 --stride 64 --count 4096 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/sect_sm0_s64_warmself.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=0 warm=self off0=16777216 stride=64 count=4096 errs=0 p5=13 p25=13 p50=263 p75=297 p95=316 clock_mhz=1979 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/sect_sm0_s64_warmself.u16
+exit=0 secs=0.6
+# blocks sm=0 one line per 4KB over 7GiB cold
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --warm none --off0 0 --stride 4096 --count 1835008 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/blk4k_sm0.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=0 warm=none off0=0 stride=4096 count=1835008 errs=0 p5=13 p25=13 p50=495 p75=703 p95=820 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/blk4k_sm0.u16
+exit=0 secs=1.3
+# blocks sm=14 one line per 4KB over 7GiB cold
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 14 --warm none --off0 0 --stride 4096 --count 1835008 --gib 8 --out /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/blk4k_sm14.u16
+buf=0x155100000000 gib=8.00 align_2MB=yes
+lat sm=14 warm=none off0=0 stride=4096 count=1835008 errs=0 p5=13 p25=13 p50=495 p75=701 p95=820 clock_mhz=1980 out=/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lat/blk4k_sm14.u16
+exit=0 secs=1.4

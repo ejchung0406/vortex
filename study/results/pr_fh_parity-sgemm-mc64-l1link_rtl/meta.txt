@@ -1,0 +1,9 @@
+name=pr_fh_parity-sgemm-mc64-l1link_rtl
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold
+xlen=64
+host=atl1-1-02-003-10-2.pace.gatech.edu
+configs=-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_L1_LINK_LATENCY=20
+blackbox=--driver=rtlsim --app=sgemm --args=-n64 --cores=2 --l2cache
+PERF: instrs=167552, cycles=143369
+wall_s=177
+rc=0

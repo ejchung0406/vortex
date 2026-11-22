@@ -1,0 +1,9 @@
+name=pr_fh_parity-vecadd-lazy-l2_rtl
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_base
+xlen=64
+host=atl1-1-02-005-12-1.pace.gatech.edu
+configs=-DVX_CFG_L2_LAZY_FETCH=1
+blackbox=--driver=rtlsim --app=vecadd --args=-n16384 --l2cache
+PERF: instrs=122912, cycles=373905
+wall_s=54
+rc=0

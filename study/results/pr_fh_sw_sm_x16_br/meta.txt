@@ -1,0 +1,9 @@
+name=pr_fh_sw_sm_x16_br
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold
+xlen=64
+host=atl1-1-02-005-13-2.pace.gatech.edu
+configs=-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16
+blackbox=--driver=simx --app=sector_merge
+PERF: instrs=42768, cycles=89711
+wall_s=3
+rc=0

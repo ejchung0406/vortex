@@ -1,0 +1,269 @@
+### --cluster 8 --nclusters 1 --tpcs 0-3
+cluster=8 nclusters=1 enabled_tpcs=0000000000000000000000000000000f popc=4
+  cluster 0 sms: 0 1 16 17 32 33 48 49
+OK distinct_sms=8 ctas=8
+exit=0
+### --cluster 16 --nclusters 1 --tpcs 0-3,75,78,81,83
+cluster=16 nclusters=1 enabled_tpcs=00000000000a4800000000000000000f popc=8
+TIMEOUT waiting for cluster kernel after 15 s
+exit=124
+### --cluster 16 --nclusters 1 --tpcs 9-16
+cluster=16 nclusters=1 enabled_tpcs=0000000000000000000000000001fe00 popc=8
+  cluster 0 sms: 2 3 18 19 34 35 50 51 64 65 78 79 92 93 106 107
+OK distinct_sms=16 ctas=16
+exit=0
+### --cluster 16 --nclusters 1 --tpcs 18-25
+cluster=16 nclusters=1 enabled_tpcs=00000000000000000000000003fc0000 popc=8
+  cluster 0 sms: 4 5 20 21 36 37 52 53 66 67 80 81 94 95 108 109
+OK distinct_sms=16 ctas=16
+exit=0
+### --cluster 16 --nclusters 1 --tpcs 27-34
+cluster=16 nclusters=1 enabled_tpcs=000000000000000000000007f8000000 popc=8
+  cluster 0 sms: 6 7 22 23 38 39 54 55 68 69 82 83 96 97 110 111
+OK distinct_sms=16 ctas=16
+exit=0
+### --cluster 16 --nclusters 1 --tpcs 36-43
+cluster=16 nclusters=1 enabled_tpcs=000000000000000000000ff000000000 popc=8
+  cluster 0 sms: 8 9 24 25 40 41 56 57 70 71 84 85 98 99 112 113
+OK distinct_sms=16 ctas=16
+exit=0
+### --cluster 16 --nclusters 1 --tpcs 45-52
+cluster=16 nclusters=1 enabled_tpcs=0000000000000000001fe00000000000 popc=8
+  cluster 0 sms: 10 11 26 27 42 43 58 59 72 73 86 87 100 101 114 115
+OK distinct_sms=16 ctas=16
+exit=0
+### --cluster 16 --nclusters 1 --tpcs 54-61
+cluster=16 nclusters=1 enabled_tpcs=00000000000000003fc0000000000000 popc=8
+  cluster 0 sms: 12 13 28 29 44 45 60 61 74 75 88 89 102 103 116 117
+OK distinct_sms=16 ctas=16
+exit=0
+### --cluster 16 --nclusters 1 --tpcs 55-62
+cluster=16 nclusters=1 enabled_tpcs=00000000000000007f80000000000000 popc=8
+  cluster 0 sms: 28 29 44 45 60 61 74 75 88 89 102 103 116 117 120 121
+OK distinct_sms=16 ctas=16
+exit=0
+### --cluster 16 --nclusters 1 --tpcs 63-70
+cluster=16 nclusters=1 enabled_tpcs=000000000000007f8000000000000000 popc=8
+  cluster 0 sms: 14 15 30 31 46 47 62 63 76 77 90 91 104 105 118 119
+OK distinct_sms=16 ctas=16
+exit=0
+### --cluster 16 --nclusters 1 --tpcs 64-71
+cluster=16 nclusters=1 enabled_tpcs=00000000000000ff0000000000000000 popc=8
+  cluster 0 sms: 30 31 46 47 62 63 76 77 90 91 104 105 118 119 122 123
+OK distinct_sms=16 ctas=16
+exit=0
+### --cluster 4 --nclusters 1 --tpcs 0,75
+cluster=4 nclusters=1 enabled_tpcs=00000000000008000000000000000001 popc=2
+TIMEOUT waiting for cluster kernel after 15 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 0,78
+cluster=4 nclusters=1 enabled_tpcs=00000000000040000000000000000001 popc=2
+TIMEOUT waiting for cluster kernel after 15 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 0,81
+cluster=4 nclusters=1 enabled_tpcs=00000000000200000000000000000001 popc=2
+TIMEOUT waiting for cluster kernel after 15 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 0,83
+cluster=4 nclusters=1 enabled_tpcs=00000000000800000000000000000001 popc=2
+TIMEOUT waiting for cluster kernel after 15 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 9,18
+cluster=4 nclusters=1 enabled_tpcs=00000000000000000000000000040200 popc=2
+TIMEOUT waiting for cluster kernel after 15 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 0,9
+cluster=4 nclusters=1 enabled_tpcs=00000000000000000000000000000201 popc=2
+TIMEOUT waiting for cluster kernel after 15 s
+exit=124
+### --cluster 16 --nclusters 7
+cluster=16 nclusters=7 enabled_tpcs=all popc=0
+  cluster 0 sms: 2 3 18 19 34 35 50 51 64 65 78 79 92 93 106 107
+  cluster 1 sms: 4 5 20 21 36 37 52 53 66 67 80 81 94 95 108 109
+  cluster 2 sms: 6 7 22 23 38 39 54 55 68 69 82 83 96 97 110 111
+  cluster 3 sms: 8 9 24 25 40 41 56 57 70 71 84 85 98 99 112 113
+  cluster 4 sms: 10 11 26 27 42 43 58 59 72 73 86 87 100 101 114 115
+  cluster 5 sms: 12 13 28 29 44 45 60 61 74 75 88 89 102 103 116 117
+  cluster 6 sms: 14 15 30 31 46 47 62 63 76 77 90 91 104 105 118 119
+OK distinct_sms=112 ctas=112
+exit=0
+### --cluster 16 --nclusters 8
+cluster=16 nclusters=8 enabled_tpcs=all popc=0
+  cluster 0 sms: 2 3 18 19 34 35 50 51 64 65 78 79 92 93 106 107
+  cluster 1 sms: 4 5 20 21 36 37 52 53 66 67 80 81 94 95 108 109
+  cluster 2 sms: 6 7 22 23 38 39 54 55 68 69 82 83 96 97 110 111
+  cluster 3 sms: 8 9 24 25 40 41 56 57 70 71 84 85 98 99 112 113
+  cluster 4 sms: 10 11 26 27 42 43 58 59 72 73 86 87 100 101 114 115
+  cluster 5 sms: 12 13 28 29 44 45 60 61 74 75 88 89 102 103 116 117
+  cluster 6 sms: 14 15 30 31 46 47 62 63 76 77 90 91 104 105 118 119
+  cluster 7 sms: 2 3 18 19 34 35 50 51 64 65 78 79 92 93 106 107
+OK distinct_sms=112 ctas=128
+exit=0
+### --cluster 2 --nclusters 1 --tpcs 75
+cluster=2 nclusters=1 enabled_tpcs=00000000000008000000000000000000 popc=1
+  cluster 0 sms: 124 125
+OK distinct_sms=2 ctas=2
+exit=0
+### --cluster 2 --nclusters 1 --tpcs 78
+cluster=2 nclusters=1 enabled_tpcs=00000000000040000000000000000000 popc=1
+  cluster 0 sms: 126 127
+OK distinct_sms=2 ctas=2
+exit=0
+### --cluster 2 --nclusters 1 --tpcs 81
+cluster=2 nclusters=1 enabled_tpcs=00000000000200000000000000000000 popc=1
+  cluster 0 sms: 128 129
+OK distinct_sms=2 ctas=2
+exit=0
+### --cluster 2 --nclusters 1 --tpcs 83
+cluster=2 nclusters=1 enabled_tpcs=00000000000800000000000000000000 popc=1
+  cluster 0 sms: 130 131
+OK distinct_sms=2 ctas=2
+exit=0
+### --cluster 4 --nclusters 1 --tpcs 75,78
+cluster=4 nclusters=1 enabled_tpcs=00000000000048000000000000000000 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 81,83
+cluster=4 nclusters=1 enabled_tpcs=00000000000a00000000000000000000 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 75,83
+cluster=4 nclusters=1 enabled_tpcs=00000000000808000000000000000000 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 8 --nclusters 1 --tpcs 75,78,81,83
+cluster=8 nclusters=1 enabled_tpcs=00000000000a48000000000000000000 popc=4
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 9,75
+cluster=4 nclusters=1 enabled_tpcs=00000000000008000000000000000200 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 54,75
+cluster=4 nclusters=1 enabled_tpcs=00000000000008000040000000000000 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 63,75
+cluster=4 nclusters=1 enabled_tpcs=00000000000008008000000000000000 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 9,78
+cluster=4 nclusters=1 enabled_tpcs=00000000000040000000000000000200 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 54,78
+cluster=4 nclusters=1 enabled_tpcs=00000000000040000040000000000000 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 63,78
+cluster=4 nclusters=1 enabled_tpcs=00000000000040008000000000000000 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 9,81
+cluster=4 nclusters=1 enabled_tpcs=00000000000200000000000000000200 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 54,81
+cluster=4 nclusters=1 enabled_tpcs=00000000000200000040000000000000 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 63,81
+cluster=4 nclusters=1 enabled_tpcs=00000000000200008000000000000000 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 9,83
+cluster=4 nclusters=1 enabled_tpcs=00000000000800000000000000000200 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 54,83
+cluster=4 nclusters=1 enabled_tpcs=00000000000800000040000000000000 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 4 --nclusters 1 --tpcs 63,83
+cluster=4 nclusters=1 enabled_tpcs=00000000000800008000000000000000 popc=2
+TIMEOUT waiting for cluster kernel after 10 s
+exit=124
+### --cluster 8 --nclusters 2 --tpcs 0-3,75,78,81,83
+cluster=8 nclusters=2 enabled_tpcs=00000000000a4800000000000000000f popc=8
+  cluster 0 sms: 0 1 16 17 32 33 48 49
+  cluster 1 sms: 0 1 16 17 32 33 48 49
+OK distinct_sms=8 ctas=16
+exit=0
+### --cluster 4 --nclusters 4 --tpcs 0-3,75,78,81,83
+cluster=4 nclusters=4 enabled_tpcs=00000000000a4800000000000000000f popc=8
+  cluster 0 sms: 0 1 16 17
+  cluster 1 sms: 32 33 48 49
+  cluster 2 sms: 0 1 16 17
+  cluster 3 sms: 32 33 48 49
+OK distinct_sms=8 ctas=16
+exit=0
+### --cluster 2 --nclusters 66
+cluster=2 nclusters=66 enabled_tpcs=all popc=0
+  cluster 0 sms: 124 125
+  cluster 1 sms: 126 127
+  cluster 2 sms: 128 129
+  cluster 3 sms: 130 131
+  cluster 4 sms: 0 1
+  cluster 5 sms: 2 3
+  cluster 6 sms: 4 5
+  cluster 7 sms: 6 7
+  cluster 8 sms: 8 9
+  cluster 9 sms: 10 11
+  cluster 10 sms: 12 13
+  cluster 11 sms: 14 15
+  cluster 12 sms: 16 17
+  cluster 13 sms: 18 19
+  cluster 14 sms: 20 21
+  cluster 15 sms: 22 23
+  cluster 16 sms: 24 25
+  cluster 17 sms: 26 27
+  cluster 18 sms: 28 29
+  cluster 19 sms: 30 31
+  cluster 20 sms: 32 33
+  cluster 21 sms: 34 35
+  cluster 22 sms: 36 37
+  cluster 23 sms: 38 39
+  cluster 24 sms: 40 41
+  cluster 25 sms: 42 43
+  cluster 26 sms: 44 45
+  cluster 27 sms: 46 47
+  cluster 28 sms: 48 49
+  cluster 29 sms: 50 51
+  cluster 30 sms: 52 53
+  cluster 31 sms: 54 55
+  cluster 32 sms: 56 57
+  cluster 33 sms: 58 59
+  cluster 34 sms: 60 61
+  cluster 35 sms: 62 63
+  cluster 36 sms: 64 65
+  cluster 37 sms: 66 67
+  cluster 38 sms: 68 69
+  cluster 39 sms: 70 71
+  cluster 40 sms: 72 73
+  cluster 41 sms: 74 75
+  cluster 42 sms: 76 77
+  cluster 43 sms: 78 79
+  cluster 44 sms: 80 81
+  cluster 45 sms: 82 83
+  cluster 46 sms: 84 85
+  cluster 47 sms: 86 87
+  cluster 48 sms: 88 89
+  cluster 49 sms: 90 91
+  cluster 50 sms: 92 93
+  cluster 51 sms: 94 95
+  cluster 52 sms: 96 97
+  cluster 53 sms: 98 99
+  cluster 54 sms: 100 101
+  cluster 55 sms: 102 103
+  cluster 56 sms: 104 105
+  cluster 57 sms: 106 107
+  cluster 58 sms: 108 109
+  cluster 59 sms: 110 111
+  cluster 60 sms: 112 113
+  cluster 61 sms: 114 115
+  cluster 62 sms: 116 117
+  cluster 63 sms: 118 119
+  cluster 64 sms: 120 121
+  cluster 65 sms: 122 123
+OK distinct_sms=132 ctas=132
+exit=0

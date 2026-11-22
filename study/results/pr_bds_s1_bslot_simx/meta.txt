@@ -1,0 +1,9 @@
+name=pr_bds_s1_bslot_simx
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_bar-drain-scope
+src_rev=0770c8a1ea6b463faa68da7578ec3df3768af120
+host=atl1-1-03-003-28-2.pace.gatech.edu
+xlen=64
+xconf=-DVX_CFG_NUM_WARPS=2 -DVX_CFG_BAR_DRAIN_SCOPE=1
+blackbox=--driver=simx --app=bar_slot_phase
+rc=0
+wall_s=151

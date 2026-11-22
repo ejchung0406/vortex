@@ -1,0 +1,9 @@
+name=pr_fh_parity-printf-fw2_base
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_base
+xlen=64
+host=atl1-1-02-006-19-2.pace.gatech.edu
+configs=-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_WIDTH=2
+blackbox=--driver=simx --app=printf
+PERF: instrs=1454842, cycles=1198763
+wall_s=167
+rc=0

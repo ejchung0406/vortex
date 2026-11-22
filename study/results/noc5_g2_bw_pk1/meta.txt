@@ -1,0 +1,8 @@
+name=noc5_g2_bw_pk1
+src_rev=
+src_dirty=0
+host=atl1-1-02-010-25-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NOC_GROUP_SIZE=16 -DVX_CFG_NOC_UPLINK_PORTS=16 -DVX_CFG_NOC_UPLINK_BYTES=646 -DVX_CFG_L2_SIZE=20971520 -DVX_CFG_L2_NUM_WAYS=20 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=32 -DVX_CFG_PLATFORM_MEMORY_PEAK_BW=1600000 -DVX_CFG_L2_NUM_BANKS=32
+blackbox=--driver=simx --app=bwstream --perf=7 --profile=h200s --cores=32 --args=-n2048 -r1 -p0 -u4 -b32 -T -M0
+rc=0
+wall_s=467

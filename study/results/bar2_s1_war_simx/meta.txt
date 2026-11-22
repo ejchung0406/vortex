@@ -1,0 +1,8 @@
+name=bar2_s1_war_simx
+src_rev=
+src_dirty=0
+host=atl1-1-02-011-5-1.pace.gatech.edu
+xconf= -DVX_CFG_BAR_DRAIN_SCOPE=1
+blackbox=--driver=simx --app=war_order --perf=1 --args=-n4096
+rc=0
+wall_s=155

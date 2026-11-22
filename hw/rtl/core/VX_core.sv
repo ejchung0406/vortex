@@ -50,6 +50,8 @@ import VX_tcu_pkg::*;
     // None of this core's requests is held on its way to the dcache, in its
     // dMMU lanes or on the link.
     input wire              dcache_path_drained,
+    // the same, for requests: a response may still be on the link
+    input wire              dcache_req_path_drained,
 
 `ifdef VX_CFG_EXT_DXA_ENABLE
     VX_dxa_req_bus_if.master dxa_req_bus_if,
@@ -151,9 +153,13 @@ import VX_tcu_pkg::*;
     // the in-core global-store path is empty
     wire mem_unit_empty = (& lsu_store_empty);
     wire mem_unit_busy;
-    // no store in flight past the LSU schedulers, to the data cache or local memory
+    // No store in flight past the LSU schedulers to local memory, and no
+    // request on its way to the data cache: in the adapters, a flush lane's
+    // buffer, the dMMU lanes or the link. Once accepted, a request can still be
+    // overtaken by another port's in a shared dcache's core arbiter or a sliced
+    // request crossbar, which hold their inputs apart.
     wire lmem_store_empty;
-    wire lsu_store_landed = mem_unit_empty && lmem_store_empty;
+    wire lsu_store_landed = mem_unit_empty && ~mem_unit_busy && dcache_req_path_drained && lmem_store_empty;
 
 `ifdef VX_CFG_VM_ENABLE
 `ifdef PERF_ENABLE

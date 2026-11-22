@@ -1,0 +1,8 @@
+name=split_b4_s1d4_bw
+src_rev=
+src_dirty=0
+host=atl1-1-02-005-17-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DMTILES=4 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=22 --args=-m64 -n22528 -k1024 -b4 -t1 -s1 -d4 -r6 -o1
+rc=0
+wall_s=6652

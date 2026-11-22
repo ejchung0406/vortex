@@ -1,0 +1,12 @@
+# Physical GPCs of the H200 on atl1-1-02-014-16-0 (l2struct_h200 job 15976443).
+# Mask-bit map identical to h200_tpc_map.txt; cluster domains re-checked in
+# h200_l2s_gpcmap.txt. GPC 0 = cluster domain {0-3} plus the four lone TPCs
+# 75, 78, 81, 83 (shared bandwidth limit, h200_tpc_network.txt).
+gpc 0 bits 0 1 2 3 75 78 81 83
+gpc 1 bits 9 10 11 12 13 14 15 16
+gpc 2 bits 18 19 20 21 22 23 24 25
+gpc 3 bits 27 28 29 30 31 32 33 34
+gpc 4 bits 36 37 38 39 40 41 42 43
+gpc 5 bits 45 46 47 48 49 50 51 52
+gpc 6 bits 54 55 56 57 58 59 60 61 62
+gpc 7 bits 63 64 65 66 67 68 69 70 71

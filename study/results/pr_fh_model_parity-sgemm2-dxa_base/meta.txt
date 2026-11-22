@@ -1,0 +1,9 @@
+name=pr_fh_model_parity-sgemm2-dxa_base
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_base
+xlen=64
+host=atl1-1-02-006-19-2.pace.gatech.edu
+configs=-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_EXT_DXA_ENABLE
+blackbox=--driver=simx --app=sgemm2_dxa --args=-n128 -t4 -m1
+PERF: instrs=3216416, cycles=9049339
+wall_s=29
+rc=0
