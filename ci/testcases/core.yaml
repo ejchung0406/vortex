@@ -249,6 +249,18 @@ tests:
   app: chase
   args: -b8192 -w1 -i512
   configs: -DVX_CFG_L1_LINK_LATENCY=20
+# A launch masked to cores 1 and 3 of two two-core sockets: compute CTAs skip
+# the masked cores at the socket fan-out, and the round-robin pointer starts
+# on a masked one.
+- id: parity-bwstream-coremask
+  check: model_parity
+  via: blackbox
+  app: bwstream
+  args: -n1024 -M1,3
+  configs: -DVX_CFG_SOCKET_SIZE=2
+  shape:
+    cores: 4
+    l2cache: true
 # SGEMM on two frontend slices feeding four issue slices: per-slice fetch on a
 # two-port icache, CTAs as wide as the core, a 16-port dcache.
 - id: parity-sgemm-fw2
