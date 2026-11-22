@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+// One barrier per tile buffer; the device must have at least this many per CTA.
+#define BWSTREAM_DXA_MAX_DEPTH 8
+
 typedef struct {
   uint64_t out_addr;
   uint32_t tile_elems;  // floats per DXA tile

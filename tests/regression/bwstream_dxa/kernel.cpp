@@ -11,7 +11,6 @@
 // With `consume` the CTA sums each tile; without, each thread reads one word
 // of it, which leaves the DXA's delivery as the only work per tile.
 constexpr uint32_t kDescSrc = 0;
-constexpr uint32_t kMaxDepth = 8;
 
 __kernel void kernel_main(kernel_arg_t* arg) {
   auto out = reinterpret_cast<float*>(arg->out_addr);
@@ -25,7 +24,7 @@ __kernel void kernel_main(kernel_arg_t* arg) {
   const uint32_t first = blockIdx.x * tiles * tile;  // element coordinate of the first tile
 
   auto shmem = reinterpret_cast<float*>(__local_mem());
-  vortex::barrier bar[kMaxDepth] = {
+  vortex::barrier bar[BWSTREAM_DXA_MAX_DEPTH] = {
     vortex::barrier(0), vortex::barrier(1), vortex::barrier(2), vortex::barrier(3),
     vortex::barrier(4), vortex::barrier(5), vortex::barrier(6), vortex::barrier(7) };
   const bool is_dxa_warp = (get_sub_group_id() == 0);
@@ -40,21 +39,25 @@ __kernel void kernel_main(kernel_arg_t* arg) {
   };
 
   float s = 0.0f;
-  for (uint32_t j = 0; j + 1 < depth && j < tiles; ++j)
+  for (uint32_t j = 0; j + 1 < depth && j < tiles; ++j) {
     issue(j);
+  }
   for (uint32_t i = 0; i < tiles; ++i) {
     const uint32_t ahead = i + depth - 1;
-    if (ahead < tiles)
+    if (ahead < tiles) {
       issue(ahead);
+    }
     const uint32_t cur = i % depth;
     bar[cur].arrive_and_wait();
     const float* buf = shmem + cur * tile;
     if (consume) {
-      for (uint32_t j = t; j < tile; j += T)
+      for (uint32_t j = t; j < tile; j += T) {
         s += buf[j];
+      }
     } else {
       s += buf[t];
     }
+    // The slot is refilled next iteration: wait until the warp's reads of it are done.
     bar[cur].arrive_and_wait();
   }
   out[gid] = s + (float)(gid + 1);
