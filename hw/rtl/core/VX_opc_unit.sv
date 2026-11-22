@@ -153,7 +153,8 @@ module VX_opc_unit import VX_gpu_pkg::*; #(
         .data_out(simd_out),
         .pid     (simd_pid),
         .sop     (simd_sop),
-        .eop     (simd_eop)
+        .eop     (simd_eop),
+        `UNUSED_PIN (last)
     );
 
     assign pipe_mdata = {

@@ -16,7 +16,7 @@
 
 using namespace vortex;
 
-Dispatcher::Dispatcher(const SimContext& ctx, const char* name, Core* core, uint32_t queue_size, uint32_t block_size, uint32_t num_lanes, uint32_t out_delay)
+Dispatcher::Dispatcher(const SimContext& ctx, const char* name, Core* core, uint32_t queue_size, uint32_t block_size, uint32_t num_lanes, uint32_t out_delay, bool gapless)
   : SimObject<Dispatcher>(ctx, name)
   // One dispatch queue per issue slot. The extra entry holds the op still in
   // the collector's output register, which the channel counts as occupancy.
@@ -35,6 +35,7 @@ Dispatcher::Dispatcher(const SimContext& ctx, const char* name, Core* core, uint
   , block_free_(block_size, 0)
   , held_input_(block_size, -1)
   , iter_out_reg_((num_lanes != VX_CFG_SIMD_WIDTH) && (VX_CFG_SIMD_WIDTH > 12))
+  , gapless_(gapless && iter_out_reg_ && (num_blocks_ == 1))
 {}
 
 Dispatcher::~Dispatcher() {}
@@ -141,7 +142,7 @@ void Dispatcher::on_tick() {
         block_pids_.at(b) = start + 1;
       } else {
         block_pids_.at(b) = -1; // mark block as processed
-        if (iter_out_reg_) {
+        if (iter_out_reg_ && !gapless_) {
           // The iterator's output register holds the last packet a cycle
           // more: the op leaves its slot queue then, and the register is
           // cleared as it does, so the next op's first packet comes a cycle

@@ -468,6 +468,72 @@ tests:
   app: warp_rate
   args: -k8 -w4 -i256
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_BRANCH_REG=0 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+# A fetch pick sent straight into the fetch unit's request buffer
+# (VX_CFG_FETCH_REQ_BUF=0): a taken branch every instruction with one fetch in
+# flight, and a lone warp fetching ahead.
+- id: parity-warp-rate-fetch-nobuf
+  check: model_parity
+  via: blackbox
+  app: warp_rate
+  args: -k6 -w8 -i128
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_REQ_BUF=0
+- id: parity-warp-rate-fetch-nobuf-ahead
+  check: model_parity
+  via: blackbox
+  app: warp_rate
+  args: -k7 -w4 -i128
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_REQ_BUF=0 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+# The first frontend slice's fetches merged with the cache flush without the
+# injector's buffer (VX_CFG_FLUSH_REQ_BUF=0): one warp, on that slice, takes a
+# branch every instruction, then fetches ahead.
+- id: parity-warp-rate-flush-nobuf
+  check: model_parity
+  via: blackbox
+  app: warp_rate
+  args: -k6 -w1 -i128
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FLUSH_REQ_BUF=0
+- id: parity-warp-rate-flush-nobuf-ahead
+  check: model_parity
+  via: blackbox
+  app: warp_rate
+  args: -k0 -w1 -i128
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FLUSH_REQ_BUF=0 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+# Two operand collectors per issue slice merged without a register
+# (VX_CFG_OPC_MERGE_BUF=0): independent integer operations from both
+# collectors, and loads that fill the LSU's dispatch queue.
+- id: parity-warp-rate-opc-merge-nobuf
+  check: model_parity
+  via: blackbox
+  app: warp_rate
+  args: -k2 -w8 -i64
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_OPCS=2 -DVX_CFG_OPC_MERGE_BUF=0
+- id: parity-warp-rate-opc-merge-nobuf-lds
+  check: model_parity
+  via: blackbox
+  app: warp_rate
+  args: -k9 -w8 -i64
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_OPCS=2 -DVX_CFG_OPC_MERGE_BUF=0
+# 32-thread warps on a 16-lane ALU with the lane dispatch's empty cycle removed
+# (VX_CFG_LANE_DISPATCH_GAPLESS bit 0): independent integer adds, a lone warp
+# fetching ahead on a core with one issue slot (built from backend slices), and
+# sixteen warps over four issue slots (stage-sliced). Each op goes through the
+# packet register in two passes.
+- id: parity-warp-rate-alu-lanes-gapless-slice
+  check: model_parity
+  tolerance: 0.005
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k2 -w1 -i32
+  configs: -DVX_CFG_NUM_WARPS=4 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=1 -DVX_CFG_NUM_ALU_LANES=16 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1 -DVX_CFG_LANE_DISPATCH_GAPLESS=1
+- id: parity-warp-rate-alu-lanes-gapless
+  check: model_parity
+  tolerance: 0.01
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k2 -w16 -i16
+  configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_ALU_LANES=16 -DVX_CFG_LANE_DISPATCH_GAPLESS=1
 # SGEMM with local-memory tiling (kernel-managed shared memory).
 - id: parity-sgemmx
   check: model_parity

@@ -38,7 +38,8 @@ module VX_fpu_unit import VX_gpu_pkg::*, VX_fpu_pkg::*; #(
     VX_lane_dispatch #(
         .BLOCK_SIZE (BLOCK_SIZE),
         .NUM_LANES  (NUM_LANES),
-        .OUT_BUF    (PARTIAL_BW ? 3 : 0)
+        .OUT_BUF    (PARTIAL_BW ? 3 : 0),
+        .GAPLESS    ((`VX_CFG_LANE_DISPATCH_GAPLESS >> 3) & 1)
     ) lane_dispatch (
         .clk        (clk),
         .reset      (reset),

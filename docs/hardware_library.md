@@ -676,6 +676,7 @@ Modules for splitting, merging, packing, and dispatching streaming data with val
 | `KEYW` | - | Key width |
 | `N` | - | Number of elements |
 | `OUT_REG` | 0 | Output register enable |
+| `GAPLESS` | 0 | With `OUT_REG`, the register takes a stream's last element as `last` releases the stream, so the next stream follows without an empty cycle |
 | `LPID_WIDTH` | - | Loop/partition ID width |
 
 **Features:**

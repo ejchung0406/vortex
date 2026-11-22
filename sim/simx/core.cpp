@@ -54,6 +54,10 @@
 
 using namespace vortex;
 
+#if (VX_CFG_FETCH_REQ_BUF == 0) && defined(VX_CFG_EXT_C_ENABLE)
+#error "VX_CFG_FETCH_REQ_BUF=0 requires EXT_C off: the decompressor takes its fetches from the scheduler's buffer"
+#endif
+
 // Units whose output channel already holds every register ahead of the commit
 // arbiter except the lane gather's.
 static bool commit_single_hop(uint32_t fu) {
@@ -283,9 +287,12 @@ public:
       dc_req_out.at(p) = &dcache_flush_bufs_.at(p)->Out;
     }
 
-    // The first icache port does the same for the icache.
-    snprintf(sname, 100, "%s-icache_flush_buf", name.c_str());
-    icache_flush_buf_ = TxBuffer<MemReq>::Create(sname, 2);
+    // The first icache port does the same for the icache, unless its arbiter
+    // merges without a buffer.
+    if (VX_CFG_FLUSH_REQ_BUF) {
+      snprintf(sname, 100, "%s-icache_flush_buf", name.c_str());
+      icache_flush_buf_ = TxBuffer<MemReq>::Create(sname, 2);
+    }
 
   #ifdef VX_CFG_VM_ENABLE
     // Per-core L1 TLB stages: hits translate in place, misses park in
@@ -320,14 +327,18 @@ public:
       icache_mmu_->ReqOut.at(f).bind(&simobject_->icache_req_out.at(f));
       simobject_->icache_rsp_in.at(f).bind(&icache_mmu_->RspIn.at(f));
     }
-    icache_flush_buf_->Out.bind(&icache_mmu_->ReqIn.at(0));
+    if (icache_flush_buf_ != nullptr) {
+      icache_flush_buf_->Out.bind(&icache_mmu_->ReqIn.at(0));
+    }
   #else
     // No-VM: direct passthrough.
     for (uint32_t p = 0; p < VX_CFG_NUM_LSU_BLOCKS * DCACHE_CHANNELS; ++p) {
       dc_req_out.at(p)->bind(&simobject_->dcache_req_out.at(p));
       simobject_->dcache_rsp_in.at(p).bind(dc_rsp_in.at(p));
     }
-    icache_flush_buf_->Out.bind(&simobject_->icache_req_out.at(0));
+    if (icache_flush_buf_ != nullptr) {
+      icache_flush_buf_->Out.bind(&simobject_->icache_req_out.at(0));
+    }
   #endif
 
     // initialize execute units. A full-bandwidth ALU or FPU takes its op
@@ -400,12 +411,12 @@ public:
       // buffer; a full-bandwidth one takes it as the queue releases it.
       uint32_t alu_dly = AluUnit::kGather ? 1 : 0;
       uint32_t fpu_dly = FpuUnit::kGather ? 1 : 0;
-      dispatchers_.at((int)FUType::ALU) = SimPlatform::instance().create_object<Dispatcher>(name.c_str(), simobject_, VX_CFG_DISPATCH_QUEUE_SIZE, VX_CFG_NUM_ALU_BLOCKS, VX_CFG_NUM_ALU_LANES, alu_dly);
-      dispatchers_.at((int)FUType::FPU) = SimPlatform::instance().create_object<Dispatcher>(name.c_str(), simobject_, VX_CFG_DISPATCH_QUEUE_SIZE, VX_CFG_NUM_FPU_BLOCKS, VX_CFG_NUM_FPU_LANES, fpu_dly);
-      dispatchers_.at((int)FUType::LSU) = SimPlatform::instance().create_object<Dispatcher>(name.c_str(), simobject_, VX_CFG_DISPATCH_QUEUE_SIZE, VX_CFG_NUM_LSU_BLOCKS, VX_CFG_NUM_LSU_LANES, 1);
-      dispatchers_.at((int)FUType::SFU) = SimPlatform::instance().create_object<Dispatcher>(name.c_str(), simobject_, VX_CFG_DISPATCH_QUEUE_SIZE, VX_CFG_NUM_SFU_BLOCKS, VX_CFG_NUM_SFU_LANES, 1);
+      dispatchers_.at((int)FUType::ALU) = SimPlatform::instance().create_object<Dispatcher>(name.c_str(), simobject_, VX_CFG_DISPATCH_QUEUE_SIZE, VX_CFG_NUM_ALU_BLOCKS, VX_CFG_NUM_ALU_LANES, alu_dly, ((VX_CFG_LANE_DISPATCH_GAPLESS >> 0) & 1) != 0);
+      dispatchers_.at((int)FUType::FPU) = SimPlatform::instance().create_object<Dispatcher>(name.c_str(), simobject_, VX_CFG_DISPATCH_QUEUE_SIZE, VX_CFG_NUM_FPU_BLOCKS, VX_CFG_NUM_FPU_LANES, fpu_dly, ((VX_CFG_LANE_DISPATCH_GAPLESS >> 3) & 1) != 0);
+      dispatchers_.at((int)FUType::LSU) = SimPlatform::instance().create_object<Dispatcher>(name.c_str(), simobject_, VX_CFG_DISPATCH_QUEUE_SIZE, VX_CFG_NUM_LSU_BLOCKS, VX_CFG_NUM_LSU_LANES, 1, ((VX_CFG_LANE_DISPATCH_GAPLESS >> 1) & 1) != 0);
+      dispatchers_.at((int)FUType::SFU) = SimPlatform::instance().create_object<Dispatcher>(name.c_str(), simobject_, VX_CFG_DISPATCH_QUEUE_SIZE, VX_CFG_NUM_SFU_BLOCKS, VX_CFG_NUM_SFU_LANES, 1, ((VX_CFG_LANE_DISPATCH_GAPLESS >> 2) & 1) != 0);
     #ifdef VX_CFG_EXT_TCU_ENABLE
-      dispatchers_.at((int)FUType::TCU) = SimPlatform::instance().create_object<Dispatcher>(name.c_str(), simobject_, VX_CFG_DISPATCH_QUEUE_SIZE, VX_CFG_NUM_TCU_BLOCKS, VX_CFG_NUM_TCU_LANES, 1);
+      dispatchers_.at((int)FUType::TCU) = SimPlatform::instance().create_object<Dispatcher>(name.c_str(), simobject_, VX_CFG_DISPATCH_QUEUE_SIZE, VX_CFG_NUM_TCU_BLOCKS, VX_CFG_NUM_TCU_LANES, 1, ((VX_CFG_LANE_DISPATCH_GAPLESS >> 4) & 1) != 0);
     #endif
       if (!AluUnit::kGather) {
         create_alu();
@@ -695,8 +706,16 @@ public:
       WarpMask room_mask = fetch_warps_[f] & ~ibuf_full_r_;
       WarpMask warp_mask = all_full ? fetch_warps_[f] : room_mask;
 
-      if (fetch_latch->full()) {
-        any_cand |= scheduler_->has_ready(warp_mask, room_mask);
+      // Without the scheduler's buffer the pick goes straight into the
+      // fetch request buffer, and waits for its room.
+      bool held = VX_CFG_FETCH_REQ_BUF ? fetch_latch->full()
+                                       : (this->fetch_req_port(f).full() || pending_icache_.at(f).full());
+      if (held) {
+        bool ready = scheduler_->has_ready(warp_mask, room_mask);
+        if (!VX_CFG_FETCH_REQ_BUF && ready) {
+          ++perf_stats_.fetch_stalls;
+        }
+        any_cand |= ready;
         continue;
       }
 
@@ -706,8 +725,13 @@ public:
       }
       any_cand = true;
 
-      fetch_latch->push(trace);
       DT(3, simobject_->name() << "-pipeline schedule: " << *trace);
+      if (VX_CFG_FETCH_REQ_BUF) {
+        fetch_latch->push(trace);
+      } else {
+        bool sent = this->send_fetch(f, trace, trace->PC);
+        __assert(sent, "a fetch pick was made with its request port full");
+      }
       // with fetch ahead an instruction is pending once decode accepts it: a
       // fetch that will be dropped is not one
       if (VX_CFG_FETCH_INFLIGHT == 1) {
@@ -749,12 +773,9 @@ public:
     // The MMU translates and forwards to simobject_->icache_req_out
     // downstream (driven by SimChannel binding in the constructor).
     auto& icache_rsp = icache_mmu_->RspOut.at(f);
-    auto& icache_port = icache_mmu_->ReqIn.at(f);
   #else
     auto& icache_rsp = simobject_->icache_rsp_in.at(f);
-    auto& icache_port = simobject_->icache_req_out.at(f);
   #endif
-    auto& icache_req = (f == 0) ? icache_flush_buf_->In : icache_port;
 
     // Fetch ahead: a response is decoded only as the next instruction of its
     // warp's current stream. One of a squashed stream is dropped; one that
@@ -878,29 +899,51 @@ public:
       return;
     }
 
-    MemReq mem_req;
-    // Address goes downstream as VA. The icache MMU (under VX_CFG_VM_ENABLE)
-    // substitutes PA before forwarding; with VM off, this is just the PA.
-    mem_req.addr  = req_addr;
-    // op defaults to MemOp::LD — icache request is a load.
-    uint32_t tag = pending_icache.allocate(trace);
-    mem_req.tag   = tag;
-    mem_req.hart_id   = trace->cid;
-    mem_req.uuid  = trace->uuid;
-    if (icache_req.try_send(mem_req, 1)) {
-      DT(3, simobject_->name() << " icache-req: addr=0x" << std::hex << mem_req.addr << ", tag=0x" << mem_req.tag << std::dec << ", " << *trace);
+    if (this->send_fetch(f, trace, req_addr)) {
     #ifdef VX_CFG_EXT_C_ENABLE
       decompressor->commit_request(from_refetch);
       if (!from_refetch) { fetch_latch.pop(); }
     #else
       fetch_latch.pop();
     #endif
-      ++perf_stats_.ifetches;
-      ++pending_ifetches_;
     } else {
-      pending_icache.release(tag);
       ++perf_stats_.fetch_stalls;
     }
+  }
+
+  // Frontend slice f's icache request port: the first one passes the cache
+  // flush injector's buffer, if it has one.
+  SimChannel<MemReq>& fetch_req_port(uint32_t f) {
+    if (f == 0 && icache_flush_buf_ != nullptr) {
+      return icache_flush_buf_->In;
+    }
+  #ifdef VX_CFG_VM_ENABLE
+    return icache_mmu_->ReqIn.at(f);
+  #else
+    return simobject_->icache_req_out.at(f);
+  #endif
+  }
+
+  // The fetch request buffer registers the request on its way to the icache.
+  bool send_fetch(uint32_t f, instr_trace_t* trace, Word addr) {
+    auto& pending_icache = pending_icache_.at(f);
+    MemReq mem_req;
+    // Address goes downstream as VA. The icache MMU (under VX_CFG_VM_ENABLE)
+    // substitutes PA before forwarding; with VM off, this is just the PA.
+    mem_req.addr    = addr;
+    // op defaults to MemOp::LD — icache request is a load.
+    uint32_t tag    = pending_icache.allocate(trace);
+    mem_req.tag     = tag;
+    mem_req.hart_id = trace->cid;
+    mem_req.uuid    = trace->uuid;
+    if (!this->fetch_req_port(f).try_send(mem_req, 1)) {
+      pending_icache.release(tag);
+      return false;
+    }
+    DT(3, simobject_->name() << " icache-req: addr=0x" << std::hex << mem_req.addr << ", tag=0x" << mem_req.tag << std::dec << ", " << *trace);
+    ++perf_stats_.ifetches;
+    ++pending_ifetches_;
+    return true;
   }
 
   void decode() {
