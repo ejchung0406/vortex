@@ -410,6 +410,14 @@ tests:
   app: bar_vis
   args: -w4
   configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1
+# The same across an 8-cycle link to the data cache, which a store crosses
+# before the cache accepts it while the loads' responses cross it back.
+- id: parity-bar-vis-bar-warp-link
+  check: model_parity
+  via: blackbox
+  app: bar_vis
+  args: -w4
+  configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1 -DVX_CFG_L1_LINK_LATENCY=8
 # SGEMM with local-memory tiling (kernel-managed shared memory).
 - id: parity-sgemmx
   check: model_parity
