@@ -222,11 +222,13 @@ int main() {
   check(gopen < gconflict, "GDDR6 row conflicts cost more than row hits", gconflict - gopen);
 
   // reset() does not reset Ramulator: a read it holds across the reset
-  // answers later and completes its own request, not one sent after the
-  // reset (a launch reset with a fill still in DRAM).
+  // completes there, but its requester was reset with the memory (a launch
+  // reset with a fill still in DRAM), so it answers nothing and leaves the
+  // channel's accounting to the requests sent after the reset.
   {
     auto single = base;
     single.num_channels = 1;
+    single.queue_size = 1;
     DramSim dram(single);
     dram.reset();
     std::vector<int> order;
@@ -235,19 +237,27 @@ int main() {
       req->first->push_back(req->second);
       return true;
     };
-    std::pair<std::vector<int>*, int> a{&order, 1}, b{&order, 2};
+    std::pair<std::vector<int>*, int> a{&order, 1}, b{&order, 2}, c{&order, 3};
     dram.send_request(0, 0, false, record, &a);
     for (int k = 0; k < 3; ++k) {
       dram.tick();  // the read enters Ramulator, its data is not back yet
     }
     bool held = order.empty();
     dram.reset();
+    bool open = dram.can_accept(0);
     dram.send_request(0, 64 << 15, false, record, &b);
     for (int k = 0; k < 2000; ++k) {
       dram.tick();
     }
-    bool ok = held && (order == std::vector<int>{1, 2});
-    check(ok, "a read held across reset() completes its own request, then the next one", double(order.size()));
+    bool ok = held && open && (order == std::vector<int>{2}) && dram.can_accept(0);
+    check(ok, "a read held across reset() answers nothing; the next one completes", double(order.size()));
+    if (dram.can_accept(0)) {
+      dram.send_request(0, 128 << 15, false, record, &c);
+      for (int k = 0; k < 2000; ++k) {
+        dram.tick();
+      }
+    }
+    check(order == std::vector<int>{2, 3}, "the channel accepts and completes requests after it", double(order.size()));
   }
 
   if (g_errors != 0) {
