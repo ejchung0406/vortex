@@ -1138,6 +1138,12 @@ and the LSU's pending pool, which wait on both crossings, size from
 `PLATFORM_MEMORY_LATENCY + 2 × L2_LINK_LATENCY`; the L2 and L3 MSHRs from the
 memory latency alone.
 
+**`SM_INGRESS_BYTES`** (`0` = no limit) — the bytes of read lines a socket may
+request per cycle over all its memory ports, the caches' misses and the DXA's
+reads together: a `VX_rate_gate` on the requests leaving the socket (a
+cycle more). Writes and flush tokens pass free, and responses are never held, so
+a socket at its limit does not block the responses of others.
+
 **`L1_LINK_LATENCY`** (`0`) — the link between each core's memory ports and the
 dcache, in cycles **each way**. On some GPUs (Fermi, Kepler, Maxwell, Pascal) a
 global load goes through the L1/texture pipeline and an L1 hit takes 35 to 96

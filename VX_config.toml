@@ -419,6 +419,11 @@ VX_CFG_DCACHE_SET_HASH = 1
 VX_CFG_DCACHE_READ_MERGE = 1
 
 VX_CFG_L1_MEM_PORTS = "expr: min($VX_CFG_DCACHE_NUM_BANKS, $VX_CFG_PLATFORM_MEMORY_NUM_BANKS) if ($VX_CFG_ICACHE_ENABLE or $VX_CFG_DCACHE_ENABLE) else min($VX_CFG_DCACHE_NUM_REQS, $VX_CFG_PLATFORM_MEMORY_NUM_BANKS)"
+# Bytes of read lines a socket may request per cycle over all its memory
+# ports, the caches' misses and the DXA's reads together; 0 is no limit.
+# Requests wait at the socket, a cycle more with the limit on; writes pass
+# free and responses are never held.
+VX_CFG_SM_INGRESS_BYTES = 0
 
 [l2cache]
 VX_CFG_L2_SIZE = 1048576

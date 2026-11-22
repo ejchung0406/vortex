@@ -18,6 +18,7 @@
 #include "constants.h"
 #include "delay_buffer.h"
 #include "types.h"
+#include "mem/noc.h"
 #ifdef SIMX_SOCKET_UNIT_MMU
 #include "mem/mmu.h"
 #endif
@@ -232,6 +233,12 @@ public:
     // its producing domain (requests socket-side, responses uncore-side), so
     // the crossing is never combinational regardless of the arbiter chain
     // behind it.
+  #if VX_CFG_SM_INGRESS_BYTES != 0
+    // The socket's issue limit: the read lines its ports request per cycle.
+    snprintf(sname, 100, "%s-ingress", name.c_str());
+    auto ingress = NocRateGate<MemReq>::Create(sname, VX_CFG_L1_MEM_PORTS, VX_CFG_SM_INGRESS_BYTES,
+      VX_CFG_L1_LINE_SIZE, [](const MemReq& req) { return !req.is_write() && !req.flags.flush; });
+  #endif
     auto bind_mem_port = [&](uint32_t port,
                              SimChannel<MemReq>& req_src,
                              SimChannel<MemRsp>& rsp_dst) {
@@ -244,7 +251,12 @@ public:
         SimPlatform::DomainScope uncore_scope(0u);
         brsp = MemRspSlice::Create(bname, 1);
       }
+    #if VX_CFG_SM_INGRESS_BYTES != 0
+      req_src.bind(&ingress->In.at(port));
+      ingress->Out.at(port).bind(&breq->In);
+    #else
       req_src.bind(&breq->In);
+    #endif
       breq->Out.bind(&simobject_->mem_req_out.at(port));
       simobject_->mem_rsp_in.at(port).bind(&brsp->In);
       brsp->Out.bind(&rsp_dst);
