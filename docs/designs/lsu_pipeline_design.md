@@ -374,6 +374,11 @@ the two ports apart:
   held up stops the first engine's passes until it is served, so a stream of
   atomics or of stores to its row delays it by a few cycles, not for good.
 
+Open item: no test fails when the indefinite-wait rule is removed. A kernel
+cannot issue atomics in every third cycle at the local memory, so it needs a
+bench that drives `VX_lmem_unit` and SimX's `LocalMem` directly
+(`hw/unittest/lmem_unit` is a wrapper without a test).
+
 The model compares rows by memory block when a bank row is narrower than a
 block (fewer than 8 banks at XLEN 64, fewer than 16 at XLEN 32), so there a
 row read may wait in the model for a write to another row of its block.
