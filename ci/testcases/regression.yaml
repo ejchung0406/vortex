@@ -100,6 +100,24 @@ tests:
   app: fetch_squash
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_FETCH_INFLIGHT=2 -DVX_CFG_FFLAGS_ACCUM=1
   args: -w8 -i8
+# The same with one warp per frontend slice (no warp bits in the fetch tag
+# store's address), and under VM, where a fetch ahead stays in its page.
+- id: fetch-squash-ahead-lone
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: fetch_squash
+  configs: -DVX_CFG_NUM_WARPS=4 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+  args: -w4 -i8
+- id: fetch-squash-ahead-vm
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: fetch_squash
+  configs: -DVX_CFG_VM_ENABLE -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+  args: -w1 -i8
 # Atomics with two LSU blocks: the read engine drains before an atomic enters
 # the first engine.
 - id: lmem-access-amo-iw2

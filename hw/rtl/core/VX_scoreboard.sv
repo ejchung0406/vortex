@@ -138,8 +138,9 @@ module VX_scoreboard import VX_gpu_pkg::*; #(
         if (FFLAGS_ACCUM) begin : g_fflags_accum
             localparam ACCUM_W = 8; // as the warp's pending counter
             reg [ACCUM_W-1:0] accum_r;
-            assign ibf_accum  = (ibuffer_if[w].data.ex_type == EX_FPU) && ibuffer_if[w].data.wr_xregs[XREG_FFLAGS];
-            assign stg_accum  = (staging_if[w].data.ex_type == EX_FPU) && staging_if[w].data.wr_xregs[XREG_FFLAGS];
+            // without F there is no FPU, and EX_FPU names another unit
+            assign ibf_accum  = (`VX_CFG_EXT_F_ENABLED != 0) && (ibuffer_if[w].data.ex_type == EX_FPU) && ibuffer_if[w].data.wr_xregs[XREG_FFLAGS];
+            assign stg_accum  = (`VX_CFG_EXT_F_ENABLED != 0) && (staging_if[w].data.ex_type == EX_FPU) && staging_if[w].data.wr_xregs[XREG_FFLAGS];
             assign ibf_xflags = ibf_xregs_mask[XREG_FFLAGS];
             assign stg_xflags = stg_xregs_mask[XREG_FFLAGS];
             wire accum_release = writeback_fire && writeback_if.data.wr_xregs[XREG_FFLAGS] && ~inuse_xregs[XREG_FFLAGS];

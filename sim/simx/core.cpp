@@ -1556,7 +1556,7 @@ private:
 
   std::vector<HashTable<instr_trace_t*>> pending_icache_;
 
-  // Fetch ahead, the decode side (VX_decode): per warp, the current stream,
+  // Fetch ahead, the decode side: per warp, the current stream,
   // the run whose first fetch was decoded last, whether no squash followed
   // it, and the position of the next instruction in it; per frontend slice, the
   // response dropped last cycle.

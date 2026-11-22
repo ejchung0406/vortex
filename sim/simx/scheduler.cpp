@@ -63,7 +63,7 @@ void warp_t::reset() {
   this->mcause  = 0;
   this->mtval   = 0;
   // The fetch-ahead state is excluded: the core runs until no fetch is in
-  // flight, and the stream and window slot carry over as the RTL's do.
+  // flight, and a launch is not a device reset.
   // Register files live in OpcUnit and are reset there.
 }
 
@@ -401,7 +401,7 @@ void Scheduler::resume(uint32_t wid) {
 #if (VX_CFG_FETCH_INFLIGHT > 1) && defined(VX_CFG_EXT_C_ENABLE)
 #error "VX_CFG_FETCH_INFLIGHT > 1 fetches 4-byte words ahead, which compressed instructions break"
 #endif
-#if (VX_CFG_FETCH_INFLIGHT & (VX_CFG_FETCH_INFLIGHT - 1)) != 0
+#if (VX_CFG_FETCH_INFLIGHT < 1) || (VX_CFG_FETCH_INFLIGHT & (VX_CFG_FETCH_INFLIGHT - 1)) != 0
 #error "VX_CFG_FETCH_INFLIGHT must be a power of two"
 #endif
 

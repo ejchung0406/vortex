@@ -6,25 +6,25 @@
 // and instructions that follow one that does not redirect and must execute
 // once. A front end that fetches ahead of decode has the former in flight when
 // the transfer is decoded; each would add 0x100000 to the sum.
-#define POISON4 "lui t0, 0x100\n\tadd %0, %0, t0\n\tadd %0, %0, t0\n\tadd %0, %0, t0\n\t"
-#define POISON8 POISON4 POISON4
+#define POISON4(p) "add %0, %0, " p "\n\t" "add %0, %0, " p "\n\t" "add %0, %0, " p "\n\t" "add %0, %0, " p "\n\t"
+#define POISON8(p) POISON4(p) POISON4(p)
 
 __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   const uint32_t iters = arg->iters;
   const uint32_t t = threadIdx.x;
   auto out = reinterpret_cast<uint64_t*>(arg->out_addr);
-  size_t sum = t, one = 1, zero = 0, err = 0;
-  __asm__ volatile("" : "+r"(one), "+r"(zero));
+  size_t sum = t, one = 1, zero = 0, poison = 0x100000, err = 0;
+  __asm__ volatile("" : "+r"(one), "+r"(zero), "+r"(poison));
 
   for (uint32_t i = 0; i < iters; ++i) {
     // taken branch, jal, jalr over poison; not-taken branch into counted adds
     __asm__ volatile(
-      "bnez %1, 1f\n\t" POISON8 "1:\n\t"
+      "bnez %1, 1f\n\t" POISON8("%3") "1:\n\t"
       "addi %0, %0, 0x1\n\t"
-      "j 2f\n\t" POISON8 "2:\n\t"
+      "j 2f\n\t" POISON8("%3") "2:\n\t"
       "addi %0, %0, 0x2\n\t"
       "la t1, 3f\n\t"
-      "jr t1\n\t" POISON8 "3:\n\t"
+      "jr t1\n\t" POISON8("%3") "3:\n\t"
       "addi %0, %0, 0x4\n\t"
       "bnez %2, 4f\n\t"
       "addi %0, %0, 0x8\n\t"
@@ -32,11 +32,11 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
       "addi %0, %0, 0x20\n\t"
       "4:\n\t"
       // a branch as the next instruction after a branch, taken then not
-      "bnez %1, 5f\n\t" "bnez %1, 6f\n\t" POISON4 "5:\n\t"
+      "bnez %1, 5f\n\t" "bnez %1, 6f\n\t" POISON4("%3") "5:\n\t"
       "bnez %2, 6f\n\t" "bnez %2, 6f\n\t"
       "addi %0, %0, 0x40\n\t"
       "6:\n\t"
-      : "+r"(sum) : "r"(one), "r"(zero) : "t0", "t1");
+      : "+r"(sum) : "r"(one), "r"(zero), "r"(poison) : "t1");
 
     // A fetch that overtakes an older one. Line A's last word is entered cold
     // while line B behind it is cached: the fetch ahead of B's first word
@@ -52,14 +52,14 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
         "addi %0, %0, 0x80\n\t"    // last word of line A
         "8:\n\t"
         "addi %0, %0, 0x100\n\t"   // first word of line B
-        "jr t1\n\t" POISON8
+        "jr t1\n\t" POISON8("%1")
         ".balign 64\n\t"
         ".fill 16, 4, 0x00000013\n\t"
         "9:\n\t"
         "la t1, 10f\n\t"
-        "j 7b\n\t" POISON8
+        "j 7b\n\t" POISON8("%1")
         "10:\n\t"
-        : "+r"(sum) :: "t0", "t1");
+        : "+r"(sum) : "r"(poison) : "t1");
     } else {
       sum += 0x280;
     }

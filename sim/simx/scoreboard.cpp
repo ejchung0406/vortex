@@ -69,7 +69,7 @@ bool Scoreboard::fflags_accumulates(const instr_trace_t* trace) {
 }
 
 // With FFLAGS_ACCUM the FP flags have a slot of their own (kFflagsSlot), apart
-// from the TCU metadata slot that shares FCSR_FFLAGS, as XREG_FFLAGS in the RTL.
+// from the TCU metadata slot that shares FCSR_FFLAGS.
 uint8_t Scoreboard::fcsr_slots(const instr_trace_t* trace, uint8_t fields) {
 #ifdef VX_CFG_EXT_TCU_ENABLE
   bool is_tcu = (trace->fu_type == FUType::TCU);

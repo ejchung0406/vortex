@@ -45,6 +45,13 @@ module VX_decode import
     reg [BYTESEL_BITS-1:0] bytesel;
     reg is_wstall;
 
+    // fetch ahead: the response is dropped, or squashes its warp's stream
+    wire rsp_drop, rsp_squash;
+    wire [PC_BITS-1:0] squash_PC;
+    wire decode_ready;
+    // a response that is dropped is not an instruction
+    wire fetch_valid = fetch_if.valid && ~rsp_drop;
+
     wire [31:0] instr = fetch_if.data.instr;
     wire [6:0] opcode = instr[6:0];
     wire [1:0] funct2 = instr[26:25];
@@ -1110,7 +1117,7 @@ module VX_decode import
 
 `ifdef VX_CFG_TCU_TMEM_ENABLE
     // A tensor-memory build has no warp WGMMA: the TCU's MMAs are tc.mma.
-    `RUNTIME_ASSERT(~(fetch_if.valid && (opcode == INST_EXT1) && (funct7 == 7'h02) && (funct3 == 3'h1)),
+    `RUNTIME_ASSERT(~(fetch_valid && (opcode == INST_EXT1) && (funct7 == 7'h02) && (funct3 == 3'h1)),
         ("%t: %s WGMMA in a tensor-memory build, wid=%0d, PC=0x%0h (#%0d)", $time, INSTANCE_ID, fetch_if.data.wid, to_fullPC(fetch_if.data.PC), fetch_if.data.uuid))
 `endif
 
@@ -1118,33 +1125,33 @@ module VX_decode import
     // decodes to no unit, and its undefined ex/op fields would dispatch an
     // arbitrary operation.
 `ifndef VX_CFG_EXT_TCU_ENABLE
-    `RUNTIME_ASSERT(~(fetch_if.valid && (opcode == INST_EXT1) && (funct7 == 7'h02)),
+    `RUNTIME_ASSERT(~(fetch_valid && (opcode == INST_EXT1) && (funct7 == 7'h02)),
         ("%t: %s TCU instruction on a core built without VX_CFG_EXT_TCU_ENABLE, wid=%0d, PC=0x%0h (#%0d)",
             $time, INSTANCE_ID, fetch_if.data.wid, to_fullPC(fetch_if.data.PC), fetch_if.data.uuid))
 `endif
 `ifndef VX_CFG_EXT_DXA_ENABLE
-    `RUNTIME_ASSERT(~(fetch_if.valid && (opcode == INST_EXT1) && (funct7 == 7'h03)),
+    `RUNTIME_ASSERT(~(fetch_valid && (opcode == INST_EXT1) && (funct7 == 7'h03)),
         ("%t: %s DXA instruction on a core built without VX_CFG_EXT_DXA_ENABLE, wid=%0d, PC=0x%0h (#%0d)",
             $time, INSTANCE_ID, fetch_if.data.wid, to_fullPC(fetch_if.data.PC), fetch_if.data.uuid))
 `endif
 `ifndef VX_CFG_EXT_LDST_WIDE_ENABLE
-    `RUNTIME_ASSERT(~(fetch_if.valid && (opcode == INST_EXT4) && (funct3 >= 3'h3) && (funct3 <= 3'h6)),
+    `RUNTIME_ASSERT(~(fetch_valid && (opcode == INST_EXT4) && (funct3 >= 3'h3) && (funct3 <= 3'h6)),
         ("%t: %s wide load/store on a core built without VX_CFG_EXT_LDST_WIDE_ENABLE, wid=%0d, PC=0x%0h (#%0d)",
             $time, INSTANCE_ID, fetch_if.data.wid, to_fullPC(fetch_if.data.PC), fetch_if.data.uuid))
 `endif
 `ifndef VX_CFG_EXT_LDST_MATRIX_ENABLE
-    `RUNTIME_ASSERT(~(fetch_if.valid && (opcode == INST_EXT4) && ((funct3 == 3'h0) || (funct3 == 3'h2))),
+    `RUNTIME_ASSERT(~(fetch_valid && (opcode == INST_EXT4) && ((funct3 == 3'h0) || (funct3 == 3'h2))),
         ("%t: %s matrix load/store on a core built without VX_CFG_EXT_LDST_MATRIX_ENABLE, wid=%0d, PC=0x%0h (#%0d)",
             $time, INSTANCE_ID, fetch_if.data.wid, to_fullPC(fetch_if.data.PC), fetch_if.data.uuid))
 `else
-    `RUNTIME_ASSERT(~(fetch_if.valid && (opcode == INST_EXT4)
+    `RUNTIME_ASSERT(~(fetch_valid && (opcode == INST_EXT4)
                       && (((funct3 == 3'h0) && ~mtx_ldm_valid(u_12[2:0])) || ((funct3 == 3'h2) && ~mtx_ldm_valid(rd[2:0])))),
         ("%t: %s matrix load/store with a reserved fragment shape, wid=%0d, PC=0x%0h (#%0d)",
             $time, INSTANCE_ID, fetch_if.data.wid, to_fullPC(fetch_if.data.PC), fetch_if.data.uuid))
 `endif
 
 `ifdef VX_CFG_EXT_F_ENABLE
-    `RUNTIME_ASSERT(~(fetch_if.valid && ~fp_legal && ((opcode == INST_FCI) || (opcode == INST_FMADD) || (opcode == INST_FMSUB)
+    `RUNTIME_ASSERT(~(fetch_valid && ~fp_legal && ((opcode == INST_FCI) || (opcode == INST_FMADD) || (opcode == INST_FMSUB)
                                                     || (opcode == INST_FNMSUB) || (opcode == INST_FNMADD))),
         ("%t: %s FP instruction with an unsupported format or a reserved encoding, wid=%0d, PC=0x%0h (#%0d)",
             $time, INSTANCE_ID, fetch_if.data.wid, to_fullPC(fetch_if.data.PC), fetch_if.data.uuid))
@@ -1158,9 +1165,6 @@ module VX_decode import
     // overtook an older fetch is dropped and squashes the stream, which
     // restarts at the overtaken fetch; a stalling instruction squashes what was
     // fetched behind it. A dropped response needs no buffer slot.
-    wire rsp_drop, rsp_squash;
-    wire [PC_BITS-1:0] squash_PC;
-    wire decode_ready;
 
     if (FETCH_AHEAD) begin : g_fetch_ahead
         localparam SW = PER_FETCH_WARPS;
@@ -1225,7 +1229,7 @@ module VX_decode import
     ) req_buf (
         .clk       (clk),
         .reset     (reset),
-        .valid_in  (fetch_if.valid && ~rsp_drop),
+        .valid_in  (fetch_valid),
         .ready_in  (decode_ready),
         .data_in   ({fetch_if.data.uuid,  fetch_if.data.wid,  fetch_if.data.cta_id,  fetch_if.data.tmask,  fetch_if.data.PC,  ex_type,                op_type,                op_args,                wb,                rd_xregs,                wr_xregs,                use_regs[3:1],          reg_ids[RV_RD],    bytesel,                  reg_ids[RV_RS1],    reg_ids[RV_RS2],    reg_ids[RV_RS3]}),
         .data_out  ({decode_if.data.uuid, decode_if.data.wid, decode_if.data.cta_id, decode_if.data.tmask, decode_if.data.PC, decode_if.data.ex_type, decode_if.data.op_type, decode_if.data.op_args, decode_if.data.wb, decode_if.data.rd_xregs, decode_if.data.wr_xregs, decode_if.data.used_rs, decode_if.data.rd, decode_if.data.bytesel,   decode_if.data.rs1, decode_if.data.rs2, decode_if.data.rs3}),

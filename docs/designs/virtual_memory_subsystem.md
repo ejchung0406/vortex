@@ -232,7 +232,7 @@ requests, or a same-lane access could overtake an older one on the hit path
 (§3.5). Only a lane with requests of its own in the station needs that order,
 so a data-side lane joins only while its parked count (§3.5) is non-zero; an
 instruction-side
-lane never joins, since a warp has one fetch in flight. Any other lane takes a
+lane never joins, since a warp has one fetch in flight (with `VX_CFG_FETCH_INFLIGHT` above 1 a lone warp has several, all in the page of the first; one that passes a parked translation is dropped at decode and fetched again). Any other lane takes a
 hit as soon as the fill lands: joining would funnel every access to a hot page
 through the one-token-per-cycle drain, lowest lane first, and starve the
 others. `ummu` and `cmmu` register their park (§3.8, §3.9), so their probe is

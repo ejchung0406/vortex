@@ -75,7 +75,12 @@ module VX_fetch import VX_gpu_pkg::*; #(
     // the stream, run and first flags of a fetch ahead return with its response
     localparam SPEC_DATAW  = FETCH_AHEAD ? (FETCH_STRM_W + 2) : 0;
 
+    // the tag store has an entry per warp and window slot
+    localparam STORE_SIZE  = NUM_WARPS * FETCH_INFLIGHT;
+    localparam STORE_ADDRW = `LOG2UP(STORE_SIZE);
+
     wire [WID_W-1:0] rsp_tag_wid;
+    wire [STORE_ADDRW-1:0] store_waddr, store_raddr;
     wire [STORE_DATAW+SPEC_DATAW-1:0] store_wdata, store_rdata;
     wire [STORE_DATAW-1:0] sched_store_data = {schedule_if.data.PC, schedule_if.data.tmask, schedule_if.data.cta_id};
     fetch_spec_t rsp_spec;
@@ -85,18 +90,26 @@ module VX_fetch import VX_gpu_pkg::*; #(
         assign store_wdata  = {schedule_if.spec.strm, schedule_if.spec.run, schedule_if.spec.first, sched_store_data};
         assign rsp_spec.seq = rsp_tag[FETCH_SEQ_BITS-1:0];
         assign {rsp_spec.strm, rsp_spec.run, rsp_spec.first} = store_rdata[STORE_DATAW +: SPEC_DATAW];
+        // a lone warp's id takes a tag bit and no address bit
+        assign store_waddr  = req_tag[STORE_ADDRW-1:0];
+        assign store_raddr  = rsp_tag[STORE_ADDRW-1:0];
+        if (TAG_W > STORE_ADDRW) begin : g_tag_unused
+            `UNUSED_VAR (rsp_tag[TAG_W-1:STORE_ADDRW])
+        end
     end else begin : g_tag_single
         assign req_tag      = sched_wid;
         assign rsp_tag_wid  = rsp_tag;
         assign store_wdata  = sched_store_data;
         assign rsp_spec     = '0;
+        assign store_waddr  = req_tag;
+        assign store_raddr  = rsp_tag;
         `UNUSED_VAR (schedule_if.spec)
     end
     assign {rsp_PC, rsp_tmask, rsp_cta_id} = store_rdata[STORE_DATAW-1:0];
 
     VX_dp_ram #(
         .DATAW (STORE_DATAW + SPEC_DATAW),
-        .SIZE  (NUM_WARPS * FETCH_INFLIGHT),
+        .SIZE  (STORE_SIZE),
         .RDW_MODE ("R"),
         .LUTRAM (1)
     ) tag_store (
@@ -105,9 +118,9 @@ module VX_fetch import VX_gpu_pkg::*; #(
         .read  (1'b1),
         .write (icache_req_fire),
         .wren  (1'b1),
-        .waddr (req_tag),
+        .waddr (store_waddr),
         .wdata (store_wdata),
-        .raddr (rsp_tag),
+        .raddr (store_raddr),
         .rdata (store_rdata)
     );
 

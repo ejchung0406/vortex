@@ -85,8 +85,8 @@ struct warp_t {
   // Per-warp MSCRATCH (holds kernel arg pointer, set at CTA dispatch)
   Word                              mscratch;
 
-  // Sequential fetch ahead (FETCH_INFLIGHT > 1), the per-warp state of
-  // VX_warp_sched: the next fetch address, the fetches between pick and decode,
+  // Sequential fetch ahead (FETCH_INFLIGHT > 1), the scheduler's per-warp
+  // state: the next fetch address, the fetches between pick and decode,
   // the position of the next fetch in its run, the run, the stream, which a
   // squash changes, and
   // whether fetches of an older stream may still be in flight. PC stays the

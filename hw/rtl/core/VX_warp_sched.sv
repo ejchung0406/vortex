@@ -64,10 +64,11 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
     localparam NPS_BITS = `CLOG2(NPS);
     localparam PSW     = SW / NPS;           // warps per SFU port
     localparam KW      = `LOG2UP(PSW);
-    localparam IBUF_CW = $clog2(`VX_CFG_IBUF_SIZE + 1);
+    // with fetch ahead the count must hold the one pick past the buffer's slots
+    localparam IBUF_CW = $clog2(`VX_CFG_IBUF_SIZE + 1 + FETCH_AHEAD);
     localparam IFL_W   = $clog2(FETCH_INFLIGHT + 1);
 
-    `STATIC_ASSERT(`IS_POW2(FETCH_INFLIGHT), ("invalid parameter: VX_CFG_FETCH_INFLIGHT must be a power of two"))
+    `STATIC_ASSERT((FETCH_INFLIGHT >= 1) && `IS_POW2(FETCH_INFLIGHT), ("invalid parameter: VX_CFG_FETCH_INFLIGHT must be a power of two"))
 `ifdef VX_CFG_EXT_C_ENABLE
     `STATIC_ASSERT(!FETCH_AHEAD, ("invalid parameter: VX_CFG_FETCH_INFLIGHT > 1 fetches 4-byte words ahead, which compressed instructions break"))
 `endif
