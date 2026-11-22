@@ -34,7 +34,7 @@ Dispatcher::Dispatcher(const SimContext& ctx, const char* name, Core* core, uint
   , block_pids_(block_size, 0)
   , block_free_(block_size, 0)
   , held_input_(block_size, -1)
-  , iter_out_reg_((num_lanes != VX_CFG_SIMD_WIDTH) && (VX_CFG_SIMD_WIDTH > 12))
+  , iter_out_reg_(has_packet_reg(num_lanes))
   , gapless_(gapless && iter_out_reg_ && (num_blocks_ == 1))
 {}
 
