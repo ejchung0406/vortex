@@ -176,6 +176,10 @@ public:
 
   int dcr_read(uint32_t addr, uint32_t tag, uint32_t* value);
 
+  // The output of the link from dcache port `port` to the cache, which the
+  // socket builds when the link has a latency.
+  void watch_dcache_link(uint32_t port, const SimChannelBase* link_out);
+
 #ifdef VX_CFG_VM_ENABLE
   // Device satp — invoked from Cluster::set_mmu_satp on the MMU DCR write.
   // Fans out to both per-core MMUs (dcache + icache). Translation itself

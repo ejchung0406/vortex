@@ -1330,7 +1330,19 @@ public:
         return false;
       }
     }
+    // A link hands its head to the cache's input, where it waits for the
+    // cache as it would in the link's output register.
+    for (auto* out : dcache_link_outs_) {
+      if (out->size() != 0) {
+        return false;
+      }
+    }
     return !local_mem_->holds_store();
+  }
+
+  void watch_dcache_link(uint32_t port, const SimChannelBase* link_out) {
+    __assert(port < VX_CFG_DCACHE_NUM_REQS, "invalid dcache port");
+    dcache_link_outs_.push_back(link_out);
   }
 
   int dcr_read(uint32_t addr, uint32_t tag, uint32_t* value) {
@@ -1475,6 +1487,7 @@ private:
   std::vector<MemCoalescer::Ptr> mem_coalescers_;
   std::vector<LsuMemAdapter::Ptr> lsu_dcache_adapters_;
   std::vector<TxBuffer<MemReq>::Ptr> dcache_flush_bufs_;
+  std::vector<const SimChannelBase*> dcache_link_outs_;
   TxBuffer<MemReq>::Ptr icache_flush_buf_;
 
   std::vector<std::unique_ptr<TFifo<instr_trace_t*>>> fetch_latch_;
@@ -1673,6 +1686,10 @@ int Core::dcr_write(uint32_t addr, uint32_t value) {
   __unused(value);
   // KMU DCRs are handled at ProcessorImpl level and never reach here.
   return 0;
+}
+
+void Core::watch_dcache_link(uint32_t port, const SimChannelBase* link_out) {
+  impl_->watch_dcache_link(port, link_out);
 }
 
 int Core::dcr_read(uint32_t addr, uint32_t tag, uint32_t* value) {

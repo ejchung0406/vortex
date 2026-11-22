@@ -355,6 +355,7 @@ public:
         auto rsp_link = DelayBuffer<MemRsp>::Create(sname, VX_CFG_L1_LINK_LATENCY);
         req_src.bind(&req_link->In);
         req_link->Out.bind(&req_dst);
+        cores_.at(core)->watch_dcache_link(port, &req_link->Out);
         rsp_src.bind(&rsp_link->In);
         rsp_link->Out.bind(&rsp_dst);
       } else {

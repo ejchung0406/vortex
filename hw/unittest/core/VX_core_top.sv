@@ -240,6 +240,7 @@ module VX_core_top import VX_gpu_pkg::*;
         .dcache_bus_if  (dcache_bus_if),
         // the dcache ports are this wrapper's own: nothing lies past them
         .dcache_path_drained (1'b1),
+        .dcache_req_path_drained (1'b1),
 
         .icache_bus_if  (icache_bus_if),
 
