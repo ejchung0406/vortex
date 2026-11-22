@@ -5,12 +5,12 @@
 //  - with the FRFCFS scheduler and a device whose prerequisites depend on its
 //    state only (HBM2, HBM3, GDDR6), the scheduling is the same choice made
 //    with less work. The device's state changes only when this controller
-//    issues a command that opens, closes or refreshes, and only in the nodes
-//    the command's address selects and below them (its actions, which reads
-//    and writes have none). The prerequisite of a read or write is
-//    decided at its bank (RequireRowOpen), so it is kept until such a
-//    command reaches that bank. Whether a command is ready depends on the command and
-//    the nodes from the channel to its bank only, so it is asked once per
+//    issues a command that opens, closes or refreshes (reads and writes have
+//    no actions), and only in that command's channel, or only in its bank for
+//    an opening command. The prerequisite of a read or write is decided at
+//    its bank (RequireRowOpen), so it is kept until such a command reaches
+//    that bank. Whether a command is ready depends on the command and the
+//    nodes from the channel to its bank only, so it is asked once per
 //    (command, bank) and cycle, and a ready answer is kept until the next
 //    issue (the nodes' ready cycles do not change before it and the answer
 //    is monotonic in the cycle). A read or write buffer holds its requests in
@@ -22,7 +22,6 @@
 #include "dram_controller/controller.h"
 #include "memory_system/memory_system.h"
 
-#include <algorithm>
 #include <cstring>
 
 namespace Ramulator {
@@ -440,19 +439,23 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
       m_ready.assign(size_t(num_banks) * m_num_commands, ready_memo_t());
     }
 
-    // `command` was issued at `addr_vec`.
-    // Every issue changes timing (the ready memo's epoch). The device's
-    // actions change state only for a command that opens, closes or
-    // refreshes, and only in the nodes it selects down to its scope and the
-    // nodes below them: the banks whose ids match its address (-1 matching
-    // any) down to that level.
+    // `command` was issued at `addr_vec`. Every issue changes timing (the
+    // ready memo's epoch). The device's actions change state only for a
+    // command that opens, closes or refreshes. update_states runs the action
+    // of every level on the command's path, and an action changes its node
+    // and the nodes below it (GDDR6's PREA, scoped to the bank, closes the
+    // channel's banks through its channel action), so a closing or
+    // refreshing command may reach every bank of its channel. An opening
+    // command's only action is the bank's (Lambdas::Action::Bank::ACT): it
+    // reaches the banks whose ids match its address (-1 matching any) down to
+    // the bank.
     void state_changed(int command, const AddrVec_t& addr_vec) {
       ++m_epoch;
       const auto& meta = m_dram->m_command_meta(command);
       if (!meta.is_opening && !meta.is_closing && !meta.is_refreshing) {
         return;
       }
-      int last = std::min(int(m_dram->m_command_scopes(command)), m_bank_levels - 1);
+      int last = (meta.is_closing || meta.is_refreshing) ? 0 : (m_bank_levels - 1);
       for (size_t b = 0; b < m_bank_ids.size(); ++b) {
         bool reached = true;
         for (int l = 0; l <= last && reached; ++l) {
