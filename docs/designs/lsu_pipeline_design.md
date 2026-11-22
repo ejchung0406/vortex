@@ -365,10 +365,28 @@ DCACHE_NUM_REQS = NUM_LSU_BLOCKS × DCACHE_CHANNELS
 
 ### 5.4 Busy reporting
 
-The block reports **empty** only when no store is in flight anywhere on the
-global path — not in the coalescer, and not in the adapter's request buffer.
-That signal folds into the core's `busy`, so the end-of-kernel cache flush is
-ordered strictly behind the last store.
+The block reports **empty** only when no request is in flight on its part of
+the global path — not in the coalescer, and not in the adapter's request
+buffer. That signal folds into the core's `busy`, so the end-of-kernel cache
+flush is ordered strictly behind the last store.
+
+Past the block a request can still be held, in three places:
+
+| stage | reported by |
+|---|---|
+| a flush lane's `VX_dcr_flush` request buffer | `VX_mem_unit`'s `busy` |
+| the socket dMMU's lanes of this core (VM) | the socket's per-lane idle, as `dcache_path_drained` |
+| the link to the dcache (`L1_LINK_LATENCY != 0`) | the same |
+
+A barrier at `VX_CFG_BAR_DRAIN_SCOPE=1` waits for all of them, and the local
+memory's inputs, as `lsu_store_landed`. None of these terms tells a load from
+a store. The dcache does not order its ports with each other: its request
+crossbar arbitrates round-robin, which is why the barrier waits until the
+store is accepted. A sliced crossbar (more than 1.5 x `MAX_FANOUT` ports per
+dcache) still holds requests from different ports apart after accepting them,
+so one accepted first can reach its bank second; the barrier does not see the
+slices, and the release latency covers them, as it covers every stage at
+scope 0.
 
 ---
 
