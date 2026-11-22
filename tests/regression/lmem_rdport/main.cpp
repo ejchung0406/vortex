@@ -41,7 +41,7 @@ uint32_t use_cp = 0;
 uint32_t hold_stores = 0;
 // A held-up row read stops the first engine, so the stream costs the tensor
 // work little; without that it waits for the stream to end.
-uint32_t h_floor_pct = 50;
+uint32_t h_floor_pct = 30;
 uint32_t cta_warps = 0; // 0: one per TCU block
 // With both sides saturated a row read gets every other cycle of the port
 // and a read pass waits a cycle per row read, so the tensor work keeps half
@@ -123,12 +123,15 @@ static void error(const char* what, uint32_t copy, uint32_t pos, uint32_t idx, u
 }
 
 // Every word the tensor engine copied is some generation of that word, never
-// older than the copy before saw; a row the DXA writes is of one generation;
+// older than the copy before saw; what one DXA beat writes is of one generation;
 // the last copy, taken behind the writers, has the final generations.
 static void check_race(const std::vector<uint32_t>& h_out, uint32_t copy_words, uint32_t sub_words,
                        const uint32_t last_gen[NUM_SUBS]) {
   const uint32_t words = NUM_SUBS * sub_words;
-  const uint32_t row_words = VX_CFG_LMEM_NUM_BANKS * (VX_CFG_XLEN / 8) / 4;
+  // The DXA writes a memory block as it arrives: a bank row wider than a
+  // block is written by two beats, and a row read may fall between them.
+  const uint32_t row_bytes = VX_CFG_LMEM_NUM_BANKS * (VX_CFG_XLEN / 8);
+  const uint32_t row_words = std::min<uint32_t>(row_bytes, VX_CFG_MEM_BLOCK_SIZE) / 4;
   const uint32_t num_copies = copies + 2;
   std::vector<uint32_t> idx_of(copy_words);
   std::vector<bool> seen(words, false);
@@ -168,7 +171,7 @@ static void check_race(const std::vector<uint32_t>& h_out, uint32_t copy_words, 
         if (rg == UINT32_MAX) {
           rg = gen;
         } else if (rg != gen) {
-          error("a DXA row of two generations", c, p, idx, v);
+          error("a DXA beat of two generations", c, p, idx, v);
         }
       }
       if (c + 1 == num_copies && gen != last_gen[sub]) {

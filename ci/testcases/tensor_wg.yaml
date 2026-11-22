@@ -665,7 +665,9 @@ tests:
 # local memory's assertion fails if a row read meets a write of its word.
 # starve: the row reads beside warps' loads on both read engines, each side
 # held to a share of its solo rate; a read per A row at 32 threads keeps the
-# read port requested in every cycle.
+# read port requested in every cycle. On rtlsim the local memory's second
+# assertion fails if a row read and a pass's reads take the banks together,
+# more than one row's worth of read bytes in a clock.
 - id: lmem_rdport-race
   via: blackbox
   drivers:
@@ -701,6 +703,7 @@ tests:
   via: blackbox
   drivers:
   - simx
+  - rtlsim
   app: lmem_rdport
   xlen: [64]
   args: -m1 -W8
