@@ -362,16 +362,26 @@ module VX_alu_int import VX_gpu_pkg::*; #(
         `UNUSED_VAR (block_idx)
     end
 
-    VX_pipe_register #(
-        .DATAW  (1 + NW_WIDTH + 1 + PC_BITS + 1 + 1 + 4),
-        .RESETW (1)
-    ) branch_reg (
-        .clk      (clk),
-        .reset    (reset),
-        .enable   (1'b1),
-        .data_in  ({br_enable,           br_wid,            br_taken,            br_dest,            is_trap_entry,         is_mret_op,            br_trap_cause}),
-        .data_out ({branch_ctl_if.valid, branch_ctl_if.wid, branch_ctl_if.taken, branch_ctl_if.dest, branch_ctl_if.is_trap, branch_ctl_if.is_mret, branch_ctl_if.trap_cause})
-    );
+    if (`VX_CFG_BRANCH_REG != 0) begin : g_branch_reg
+        VX_pipe_register #(
+            .DATAW  (1 + NW_WIDTH + 1 + PC_BITS + 1 + 1 + 4),
+            .RESETW (1)
+        ) branch_reg (
+            .clk      (clk),
+            .reset    (reset),
+            .enable   (1'b1),
+            .data_in  ({br_enable,           br_wid,            br_taken,            br_dest,            is_trap_entry,         is_mret_op,            br_trap_cause}),
+            .data_out ({branch_ctl_if.valid, branch_ctl_if.wid, branch_ctl_if.taken, branch_ctl_if.dest, branch_ctl_if.is_trap, branch_ctl_if.is_mret, branch_ctl_if.trap_cause})
+        );
+    end else begin : g_branch_direct
+        assign branch_ctl_if.valid      = br_enable;
+        assign branch_ctl_if.wid        = br_wid;
+        assign branch_ctl_if.taken      = br_taken;
+        assign branch_ctl_if.dest       = br_dest;
+        assign branch_ctl_if.is_trap    = is_trap_entry;
+        assign branch_ctl_if.is_mret    = is_mret_op;
+        assign branch_ctl_if.trap_cause = br_trap_cause;
+    end
 
     `IGNORE_UNOPTFLAT_BEGIN
     wire [PC_BITS-1:0] current_pc = result_if.data.header.PC;

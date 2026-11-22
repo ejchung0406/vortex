@@ -617,11 +617,12 @@ void AluUnit::on_tick() {
         uint32_t latency = this->latency_of(trace) + (kGather ? 1 : 0);
         uint32_t wait = this->output_wait(b, SimPlatform::instance().cycles() + latency);
         // A branch releases its warp as it resolves, not when its result
-        // retires: the result register, then the branch register. It resolves
+        // retires: the result register, then the branch register if there is
+        // one (BRANCH_REG). It resolves
         // as its result leaves the integer unit, behind a multiply or divide
         // result that the unit's result switch takes first.
         if (std::get_if<BrType>(&trace->op_type) && trace->eop && trace->resume_warp) {
-          branch_ctl_out.send(trace->wid, 2 + wait);
+          branch_ctl_out.send(trace->wid, (VX_CFG_BRANCH_REG ? 2 : 1) + wait);
           trace->resume_warp = false;
         }
         output.send(trace, latency);

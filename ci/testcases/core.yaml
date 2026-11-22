@@ -453,6 +453,21 @@ tests:
   app: warp_rate
   args: -k5 -w8 -i64
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+# A resolved branch sent to the scheduler from the ALU's result register,
+# without the branch register (VX_CFG_BRANCH_REG=0): a taken branch every
+# instruction, with one fetch in flight and with a lone warp fetching ahead.
+- id: parity-warp-rate-branch-noreg
+  check: model_parity
+  via: blackbox
+  app: warp_rate
+  args: -k6 -w8 -i128
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_BRANCH_REG=0
+- id: parity-warp-rate-branch-noreg-ahead
+  check: model_parity
+  via: blackbox
+  app: warp_rate
+  args: -k8 -w4 -i256
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_BRANCH_REG=0 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 # SGEMM with local-memory tiling (kernel-managed shared memory).
 - id: parity-sgemmx
   check: model_parity

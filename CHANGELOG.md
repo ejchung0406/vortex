@@ -17,6 +17,9 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
   [VX_fetch.sv](hw/rtl/core/VX_fetch.sv), [VX_decode.sv](hw/rtl/core/VX_decode.sv) and
   [sim/simx/core.cpp](sim/simx/core.cpp); `tests/regression/warp_rate` measures the rate by instruction class and
   `tests/regression/fetch_squash` checks that nothing fetched on a wrong path executes.
+- **Branch register (`VX_CFG_BRANCH_REG`, default 1).** With 0 a resolved branch goes to the warp scheduler straight from the
+  integer ALU's result register, and the warp is picked at the target one cycle earlier; the register between them has no
+  function. [VX_alu_int.sv](hw/rtl/core/VX_alu_int.sv), [sim/simx/alu_unit.cpp](sim/simx/alu_unit.cpp).
 - **FP flags as an accumulation (`VX_CFG_FFLAGS_ACCUM`, default 0).** With 1 the scoreboard counts a warp's FP operations in flight
   instead of reserving fflags for each, so they no longer issue one at a time; a CSR access of fflags or fcsr waits for the count
   to reach zero. [VX_scoreboard.sv](hw/rtl/core/VX_scoreboard.sv), [sim/simx/scoreboard.cpp](sim/simx/scoreboard.cpp).

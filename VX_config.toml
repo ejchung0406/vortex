@@ -96,6 +96,12 @@ VX_CFG_FETCH_INFLIGHT = 1
 # scoreboard slot of their own, so the TCU metadata loads that share the slot
 # at 0 no longer wait for FP operations. 0 serializes the flag writes.
 VX_CFG_FFLAGS_ACCUM = 0
+# 1 registers a resolved branch between the integer ALU and the warp
+# scheduler; 0 sends it straight from the ALU's result register, so the warp
+# is picked at the branch target one cycle earlier. The register has no
+# function: it shortens the path from the ALU block to the scheduler's
+# per-warp PC and stall logic.
+VX_CFG_BRANCH_REG = 1
 VX_CFG_DISPATCH_QUEUE_SIZE = 4
 # A power of two: a warp's issue slice is the low bits of its id.
 VX_CFG_ISSUE_WIDTH = "expr: pow(2, clog2(up($VX_CFG_NUM_WARPS / 16)))"
