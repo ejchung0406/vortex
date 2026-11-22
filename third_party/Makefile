@@ -29,8 +29,13 @@ $(RAMULATOR_EXT_DIR)/gddr6.o: ramulator/src/dram/impl/GDDR6.cpp | ramulator/libr
 
 # Ramulator's generic controller with its read and write buffer sizes as
 # parameters (they are constants there), registered as "Windowed", making the
-# same FRFCFS choices with less work (see the source).
-$(RAMULATOR_EXT_DIR)/windowed_controller.o: ramulator_vortex/windowed_controller.cpp | ramulator/libramulator.so
+# same FRFCFS choices with less work (see the source). The copy and its
+# shortcuts follow the pinned submodule's generic controller, FRFCFS, DRAM
+# node, action and prerequisite lambdas and the HBM2/HBM3/GDDR6 devices: the
+# build stops if any of them differs from the version recorded in
+# upstream.sha256, so a submodule update is reconciled with the copy first.
+$(RAMULATOR_EXT_DIR)/windowed_controller.o: ramulator_vortex/windowed_controller.cpp ramulator_vortex/upstream.sha256 | ramulator/libramulator.so
+	@sha256sum --quiet -c ramulator_vortex/upstream.sha256 || { echo "ramulator_vortex: upstream Ramulator sources changed; reconcile windowed_controller.cpp, then update upstream.sha256"; exit 1; }
 	mkdir -p $(RAMULATOR_EXT_DIR)
 	$(CXX) $(RAMULATOR_EXT_CXXFLAGS) -c $< -o $@
 
