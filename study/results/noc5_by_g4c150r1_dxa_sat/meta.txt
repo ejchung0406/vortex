@@ -1,0 +1,8 @@
+name=noc5_by_g4c150r1_dxa_sat
+src_rev=
+src_dirty=0
+host=atl1-1-03-003-6-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NOC_GROUP_SIZE=8 -DVX_CFG_NOC_UPLINK_PORTS=8 -DVX_CFG_NOC_UPLINK_BYTES=150 -DVX_CFG_L2_SIZE=20971520 -DVX_CFG_L2_NUM_WAYS=20 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=32 -DVX_CFG_PLATFORM_MEMORY_PEAK_BW=1600000 -DVX_CFG_L2_NUM_BANKS=32 -DVX_CFG_NOC_UPLINK_GATE_REQ=1
+blackbox=--driver=simx --app=bwstream_dxa --perf=7 --profile=h200s --cores=32 --args=-e4096 -n256 -d4 -c0 -T -M0-7+8-9+16-17+24-25
+rc=0
+wall_s=786

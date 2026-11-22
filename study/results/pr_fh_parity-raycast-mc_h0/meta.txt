@@ -1,0 +1,9 @@
+name=pr_fh_parity-raycast-mc_h0
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_knob
+xlen=64
+host=atl1-1-02-006-13-2.pace.gatech.edu
+configs=-DVX_CFG_DCACHE_FWD_HOLD=0
+blackbox=--driver=simx --app=raycast --cores=4 --l2cache
+PERF: instrs=5676206, cycles=4875772
+wall_s=209
+rc=0

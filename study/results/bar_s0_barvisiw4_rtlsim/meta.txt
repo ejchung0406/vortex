@@ -1,0 +1,8 @@
+name=bar_s0_barvisiw4_rtlsim
+src_rev=
+src_dirty=0
+host=atl1-1-02-011-26-2.pace.gatech.edu
+xconf=-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_BAR_DRAIN_SCOPE=0
+blackbox=--driver=rtlsim --app=bar_vis --perf=1 --args=-w4
+rc=0
+wall_s=138

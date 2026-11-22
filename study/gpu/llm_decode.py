@@ -27,6 +27,7 @@ p.add_argument("--duration", type=float, default=30)
 p.add_argument("--sync-dir", help="co-run: directory of ready/go/done files shared with the partner")
 p.add_argument("--role", default="b", choices=["a", "b"])
 p.add_argument("--tag", default="")
+p.add_argument("--no-profile", action="store_true", help="window mode: skip the torch.profiler kernel-time pass")
 a = p.parse_args()
 
 import transformers
@@ -51,7 +52,13 @@ except Exception as e:
     print("chat template failed, using the raw prompt:", e)
     text = msgs[0]["content"]
 ids1 = tok(text, return_tensors="pt").input_ids.to(dev)
-print(f"gpu={torch.cuda.get_device_name(0)} torch={torch.__version__} transformers={transformers.__version__} "
+# SMs this process really gets (GNG_SMCOUNT = path of libgng_smcount.so; distinct %smid of a probe kernel)
+sm_note = ""
+if os.environ.get("GNG_SMCOUNT"):
+    import ctypes
+    _l = ctypes.CDLL(os.environ["GNG_SMCOUNT"]); _a = ctypes.c_int(0); _m = ctypes.c_int(0)
+    sm_note = f" smid_distinct={_l.gng_count_sms(ctypes.byref(_a), ctypes.byref(_m))} attr_sms={_a.value} tpc_enable_bits={os.environ.get('TPC_ENABLE_BITS', 'all')}"
+print(f"gpu={torch.cuda.get_device_name(0)} torch={torch.__version__} transformers={transformers.__version__}{sm_note} "
       f"mps_pct={os.environ.get('CUDA_MPS_ACTIVE_THREAD_PERCENTAGE', 'none')} tag={a.tag}", flush=True)
 print(f"model={a.model} class={type(model).__name__} params={nparam} lm_param_bytes={allbytes} step_weight_bytes={wbytes} "
       f"embedding_bytes={emb.numel()*emb.element_size()} lm_head_tied={tied} dtype={emb.dtype} "
@@ -151,11 +158,14 @@ with torch.inference_mode():
             med = statistics.median(ts)
             state = prefill(b)
             sync()
-            with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
-                for _ in range(32):
-                    state, _ = step(state, timed=False)
-                sync()
-            allk, mm = cuda_ms(prof)
+            if a.no_profile:
+                allk = mm = float("nan")
+            else:
+                with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
+                    for _ in range(32):
+                        state, _ = step(state, timed=False)
+                    sync()
+                allk, mm = cuda_ms(prof)
             print(f"segment={k} batch={b} window_s={wall:.1f} steps={len(ts)} step_ms_median={med*1e3:.3f} "
                   f"tok_per_s_wall={b*len(ts)/wall:.1f} tok_per_s_median={b/med:.1f} "
                   f"kernel_ms_per_step={allk/32:.3f} matmul_kernel_ms_per_step={mm/32:.3f} "

@@ -28,3 +28,13 @@ layout 0: a line's words in different warps
 [VXDRV]   RING_BASE=0x400000000055a6c0 HEAD_ADDR=0x400000000056a800 CMPL_ADDR=0x400000000056a900
 [VXDRV]   RING_SIZE_LOG2=16 Q_CONTROL=0x00000001 Q_TAIL=0x00000000000006c0
 [VXDRV]   The ring was accepted but nothing is executing. Set VORTEX_CP_POLL_TIMEOUT_S=<sec> to abort instead of spinning.
+layout 1: a warp's words contiguous
+[VXDRV] Warning: CP has not retired a command in 10s.
+[VXDRV]   Q_SEQNUM=55 target=56 CP_CTRL=0x00000001 CP_STATUS=0x00000001 Q_ERROR=0x00000000
+[VXDRV]   RING_BASE=0x400000000055a6c0 HEAD_ADDR=0x400000000056a800 CMPL_ADDR=0x400000000056a900
+[VXDRV]   RING_SIZE_LOG2=16 Q_CONTROL=0x00000001 Q_TAIL=0x0000000000000e00
+[VXDRV]   The ring was accepted but nothing is executing. Set VORTEX_CP_POLL_TIMEOUT_S=<sec> to abort instead of spinning.
+PERF: core0: dcache: reqs=795079, miss_r=29841 (hit=94%), miss_w=16701 (hit=95%), evicts=16869, bank_st=113059 (utility=88%)
+PERF: instrs=673008, cycles=1296287, IPC=0.519
+PASSED!
+make: Leaving directory '/tmp/echung67/vx_15924525_1838749/tests/regression/war_order'

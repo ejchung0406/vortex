@@ -1,0 +1,8 @@
+name=lrsc_w4_k2
+src_rev=
+src_dirty=0
+host=atl1-1-02-007-14-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=4
+blackbox=--driver=simx --app=amo --perf=1 --profile=h200s --cores=2 --args=-n1 -t lrsc_counter
+rc=0
+wall_s=219

@@ -1,0 +1,20 @@
+name=pr_simx-dcache-order_fix_w64t32_x64
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-order
+host=atl1-1-02-018-20-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=64 -DVX_CFG_NUM_THREADS=32
+driver=simx cores=1 app=war_order xlen=64
+point 0 args="-n65536" rc=0 cycles=457746 
+point 1 args="-n65536 -s1" rc=0 cycles=458530 
+point 2 args="-n65536 -s4 -d1" rc=0 cycles=475320 
+point 3 args="-n65536 -s16 -d2" rc=0 cycles=449198 
+point 4 args="-n65536 -s8 -d7" rc=0 cycles=457690 
+point 5 args="-n65536 -S4 -D2" rc=0 cycles=440087 
+point 6 args="-n65536 -S8 -D5" rc=0 cycles=437912 
+point 7 args="-n65536 -s4 -d1 -S4 -D3" rc=0 cycles=466099 
+point 8 args="-n65536 -s16 -d5 -S8 -D1" rc=0 cycles=517096 
+point 9 args="-n32768 -s8 -d3 -S2 -D7" rc=0 cycles=186803 
+point 10 args="-n131072" rc=0 cycles=1060056 
+point 11 args="-n65536 -s2 -d11 -S3 -D4" rc=0 cycles=424622 
+fails=0 of 12
+rc=0
+wall_s=316

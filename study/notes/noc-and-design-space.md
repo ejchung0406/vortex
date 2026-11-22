@@ -11,6 +11,24 @@ carry a URL and a tag:
 Section 9 lists what is unverified. Diagram specifications are in
 `noc-and-design-space-figures.md`.
 
+> **Corrections, 2026-11-21 (later the same day).** Two sources overturned parts of
+> this report:
+> - the real-H200 measurements (`tpc-placement-and-borrowing.md`, `open-threads.md`
+>   "E1–E4");
+> - a careful reading of the primary sources (`gpu-noc-sources.md`).
+>
+> Each corrected passage below is marked **[corr. 2026-11-21]**. The main points:
+> - One H200 SM's ingest ceiling is ~205–219 GB/s (~110 B/clk), not ~100. The 100
+>   figure was latency-bound (4 × 16 KB in flight). Borrowing adds no bandwidth on
+>   the part (E2).
+> - A GPC returns at most ~1.28 TB/s from DRAM (~6 SMs' worth).
+> - Jin et al.'s "85%" is for one SM per TPC, not for the whole GPC.
+> - The 1 KB interleave has no published support.
+> - Current Accel-Sim does model L2 partitions.
+>
+> The design-space conclusions that rest on "~100 GB/s per SM" (sections 2.0–2.9)
+> are superseded by `tpc-placement-and-borrowing.md` §0 and by `noc-model-design.md`.
+
 ---
 
 ## 0. Answer first
@@ -31,13 +49,21 @@ Section 9 lists what is unverified. Diagram specifications are in
    - I found no 256-cycle latency anywhere in the configuration. 256 is the DRAM
      scheduler window (bursts), the DXA in-flight lines, and the L2 MSHRs per bank.
 
-2. **The real GPU is hierarchical.** The levels are SM → TPC (2 SMs behind a mux) →
-   CPC (2–3 TPCs, undocumented) → GPC (7–9 TPCs) → crossbar → L2 slice (about 80 on
-   H100, in 2 partitions) → FB partition / memory controller. There is also a
+2. **The real GPU is hierarchical.** The levels are SM → TPC (2 SMs) →
+   CPC (2–3 TPCs; name in NVIDIA's patent and driver, size only inferred) → GPC (7–9 TPCs) → crossbar → L2 slice (80 on
+   H100, 96 on H20, in 2 partitions of 4 GPCs each) → FB partition / memory controller. There is also a
    separate SM-to-SM (DSMEM) network inside each GPC.
    - The levels and the per-level bandwidth "speedups" were measured by Jin et
-     al., MICRO 2024. The GPC uplink on H100 is provisioned at about 85% of its SMs' sum.
-   - The two L2 partitions add about 160–175 cycles to "far" accesses.
+     al., MICRO 2024.
+   - ~~The GPC uplink on H100 is provisioned at about 85% of its SMs' sum.~~
+     **[corr. 2026-11-21]** Jin's 85% is GPC_l with one SM per TPC: 9 SMs give
+     ~7.8× one SM's L2-hit read rate. With all 18 SMs (GPC_g) reads reach ~9×, about
+     50%; writes reach ~12.4×. Our own H200 DRAM measurement: a GPC returns at most
+     ~1.28 TB/s, which is ~6 SMs at ~210 GB/s.
+   - The two L2 partitions add about 160–175 cycles to "far" accesses (DGNA: H100
+     174/175; GemAtlas: H20 ~170). **[corr. 2026-11-21]** A remote read also leaves
+     a copy in the requester's partition (GemAtlas V-E, DGNA, Accel-Sim 2.0), so a
+     line can live in two slices.
 
 3. **A network model matters for only one question, and the minimal model answers it.**
    - The one question: **where does the borrowed data enter the consumer SM, and is
@@ -195,6 +221,9 @@ about 90 in all (`VX_gpu_pkg.sv:2334-2353`; SimX `constants.h:115-143`).
 - A round-robin crossbar sends each memory port to the channel chosen by
   `DramSim::Config::locate()`: 1 KB interleave with a channel/bank hash (SimX
   `mem/memory.cpp:63-65`; rtlsim per-port queues `sim/rtlsim/processor.cpp:443-459`).
+  **[corr. 2026-11-21]** That 1 KB unit is a Vortex calibration choice. No source
+  supports it for the part. GemAtlas's H20 hash routes on a 256 B granule, with the
+  partition bit from PA[12]; Accel-Sim uses 256 B.
   This crossbar sits in the simulator harness, not in the RTL.
 - Each channel is a Ramulator HBM3E controller with a 256-entry scheduler window.
 - A read response is released `PLATFORM_MEMORY_LATENCY` = 304 cycles after
@@ -323,15 +352,16 @@ packetization exist.
 | Level | What is known | Tag and source |
 |---|---|---|
 | SM | 228 KB unified L1 / shared memory, about 128 B/clk shared-memory bandwidth | FACT: H100 whitepaper. INFERENCE: Luo et al. measure L1 ~126 B/clk and smem ~128 B/clk on H800 (arXiv 2402.13499, https://arxiv.org/html/2402.13499v1) |
-| TPC | 2 SMs; "within a TPC, two SMs are connected by a multiplexer"; read "speedup" 2, so the mux does not halve per-SM read bandwidth | FACT, measured: Jin et al., "Uncovering Real GPU NoC Characteristics", MICRO 2024, https://people.ece.ubc.ca/aamodt/publications/papers/realgpu-noc.micro2024.pdf |
-| CPC | 2–3 TPCs. Not documented by NVIDIA. Seen in SM-to-SM latency steps (minimum 196 cycles within CPC0) and named in NVIDIA's multicast patent | INFERENCE: Jin et al.; patent US12020035 https://patents.google.com/patent/US12020035 |
-| GPC | 7–9 TPCs (H100 SXM: 8 GPCs, 66 TPCs, 132 SMs; full GH100 144 SMs). Uplink provisioned at about 85% of its SMs' sum on H100 (needs 9×, gets ~8×) | FACT: whitepaper. FACT, measured: Jin et al. |
+| TPC | 2 SMs (FACT, whitepaper). Read "speedup" 2, so the TPC does not halve per-SM read bandwidth (FACT, measured, Jin et al., "Uncovering Real GPU NoC Characteristics", MICRO 2024, https://people.ece.ubc.ca/aamodt/publications/papers/realgpu-noc.micro2024.pdf; our H200: 2 × 205 GB/s). **[corr. 2026-11-21]** "Two SMs connected by a multiplexer" is Jin's background wording, not NVIDIA's (INFERENCE) | see left |
+| CPC | 2–3 TPCs. **[corr. 2026-11-21]** The name *is* documented: NVIDIA patent US12020035 FIG. 7 ("a CPC is a set of TPCs ... optimized together in the physical design") and the driver query `LITTER_NUM_CPC_PER_GPC`. The size is only inferred from SM-to-SM latency steps (196–213 cycles, Jin). Reads see no CPC limit (Jin; our H200: any 3 TPCs of a GPC give the same 1.19–1.20 TB/s) | name FACT; size INFERENCE |
+| GPC | 7–9 TPCs (H100 SXM: 8 GPCs, 66 TPCs, 132 SMs; full GH100 144 SMs). ~~Uplink provisioned at about 85% of its SMs' sum on H100 (needs 9×, gets ~8×)~~ **[corr. 2026-11-21]** Jin H100 L2-hit reads: GPC_l (9 SMs, one per TPC) ≈ 7.8× one SM ("approaches 85%" of 9); GPC_g (all 18 SMs) ≈ 9× (~50%, figure-read), writes ≈ 12.4×. Jin gives no absolute per-SM rate. Our H200 (DRAM, TMA): ~1.28 TB/s per GPC ≈ 6.2 SMs at 205 GB/s | FACT: whitepaper; measured: Jin et al. and ours |
 | SM-to-SM network | "A dedicated SM-to-SM network for SMs in a GPC". Thread-block clusters run "concurrently across SMs within a GPC". DSMEM "can be used by an SM simultaneously with L2 cache accesses". Max portable cluster 8, 16 non-portable | FACT: H100 whitepaper v1.02 (mirror https://www.hpctech.co.jp/assets/images/info/catalog/pdf/gtc22-whitepaper-hopper_v1.02.pdf); Hopper Tuning Guide https://docs.nvidia.com/cuda/hopper-tuning-guide/index.html |
-| DSMEM performance | SM-to-SM latency 180 cycles; aggregate 3.27 TB/s (cluster size 2), 2.65 TB/s (cluster size 4) on H800 | INFERENCE: Luo et al. |
+| DSMEM performance | SM-to-SM latency 180 cycles; aggregate 3.27 TB/s (cluster size 2), 2.65 TB/s (cluster size 4) on H800 PCIe. **[corr. 2026-11-21]** That test is a ring of remote register-add stores, one block per SM over 114 SMs: ≈ 29 GB/s per SM on average, not a bulk-copy bandwidth | INFERENCE: Luo et al. |
 | DSMEM port | "Each GPC has an internal crossbar for DSMEM … independent of GPU NOC used to access the L2"; about 32 B/clk per SM per direction; **"receive port competes with L2 fill returns"**. An NVIDIA employee on the same thread says the topology is not published | RUMOR: forum user, https://forums.developer.nvidia.com/t/what-is-the-inter-sm-linkage-of-dsm-cluster/300533 |
 | Crossbar | "partitioned crossbar structure" connecting GPCs to L2 partitions. Nsight units: `xbar`, `gxc` (GPC XBAR compressor), `lrc` (L2 request coalescer, which "serves programmatic multicast requests"), `ltc`, `ltcfabric` ("communication fabric for the L2 cache partitions"), `lts` (slice), `fbpa` (memory controller) | FACT: whitepaper; Nsight Compute Profiling Guide https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html |
-| L2 | 2 partitions. About 80 slices on H100 (5 FBPs per partition). Near/far latency gap about 160–175 cycles (A100 161, H100 174–175; sub-NUMA ~32 cycles). Far access "nearly twice as long". L2 bandwidth >5.5 TB/s near-footprint, 3.8 TB/s over 50 MB on H100 PCIe | INFERENCE: GemAtlas arXiv 2611.13860 https://arxiv.org/html/2611.13860; DGNA arXiv 2607.19922 https://arxiv.org/pdf/2607.19922; Chips and Cheese https://chipsandcheese.com/p/nvidias-h100-funny-l2-and-tons-of-bandwidth |
-| Slice to channel | "less than a full crossbar" between memory channels and LLC slices | FACT that it is claimed: patent US11429534 https://patents.google.com/patent/US11429534 |
+| L2 | 2 partitions, 4 GPCs each on H100 (DGNA, GemAtlas; H20 4 + 3). 80 slices on H100 = 2 × 5 FBPs × 8; 96 on H20 = 2 × 6 × 8 (GemAtlas; **not measured on any H200**). **[corr. 2026-11-21, night]** Now measured on our H200 (`h200-l2-structure.md`): ncu reports 96 slices, 8 per FBP, 12 FBPs; 2 partitions of 4 GPCs ({0,1,5,7} / {2,3,4,6}) with GemAtlas's partition hash; near/far L2 hit ~290/~467, DRAM ~546/~733 cycles; slice routing fits a 256 B granule. **[corr. 2026-11-21, attribution]** The 161 (A100) / 174–175 (H100) cycle near/far gaps and the ~32-cycle sub-NUMA gap are **DGNA's** numbers (H100 near/far L2 hit 295/470, DRAM 554/728). GemAtlas's own is "~170" on H20 (L2 hit ~276/~446). Remote reads are replicated into the requester's partition (GemAtlas V-E, DGNA, Accel-Sim 2.0). Partition interleave 4–8 KB (GemAtlas partition bit from PA[12]; DGNA; Accel-Sim 2.0 8192 B). Far access "nearly twice as long" (Chips and Cheese). L2 bandwidth >5.5 TB/s near-footprint, 3.8 TB/s over 50 MB on H100 PCIe | INFERENCE: GemAtlas arXiv 2611.13860 https://arxiv.org/html/2611.13860; DGNA arXiv 2607.19922 https://arxiv.org/pdf/2607.19922; Chips and Cheese https://chipsandcheese.com/p/nvidias-h100-funny-l2-and-tons-of-bandwidth |
+| Slice to channel | **[corr. 2026-11-21]** ~~"less than a full crossbar"~~ (not verbatim). The patent says each slice "is dedicated to a particular one or more of the memory channels", "most of the slices communicate directly with only one particular memory channel", and the schemes "do not require a full-crossbar switch". This is an embodiment, not a product statement | FACT that it is claimed: patent US11429534 https://patents.google.com/patent/US11429534 |
+| Slice-select granule | **[added 2026-11-21]** GemAtlas's recovered H20 hash uses no address bit below 8, so the routing granule is 256 B; the partition bit changes no finer than 4 KB. Accel-Sim `SM90_H100` uses a 256 B channel interleave (`dramid@8`, IPOLY modulo) | measured (H20) / simulator |
 | Multicast data path | request to a per-slice LRC; read once; one response packet duplicated at separation points; crossbar multidrop to CPCs; a GPC-arbiter multicast switch delivers to SMs; the receiving SM writes SMEM at the carried offset and updates the barrier | FACT that it is claimed: patent US12020035 |
 | Per-SM bandwidth | V100: one SM to one slice ~34 GB/s; a GPC to one slice ~85 GB/s. A100: near slice 39.5 vs far 26 GB/s per SM. Bandwidth to slices is "(mostly) uniform"; latency varies up to ~70% with location | FACT, measured: Jin et al. |
 | Isolation | Only MIG isolates "on-chip crossbar ports, L2 cache banks, memory controllers, and DRAM address busses" | FACT: whitepaper (A100/H100 MIG) |
@@ -345,7 +375,9 @@ level (`ltcfabric`).
 
 How solid each part is:
 - The SM/TPC/GPC/partition levels and their bandwidth ratios are measured
-  (Jin et al.). That is FACT.
+  (Jin et al.). That is FACT. **[corr. 2026-11-21]** Jin's ratios are multiples of
+  one SM's own L2-hit read rate in their kernel, with no absolute per-SM figure.
+  The absolute per-GPC limit (~1.28 TB/s from DRAM) comes from our H200, not from Jin.
 - The internal switch structure (crossbar vs mesh vs ring per level) is not
   published. That is INFERENCE at best.
 
@@ -359,9 +391,17 @@ How solid each part is:
   crossbar between 132 SMs and 80 sub-partitions, with internal speedup 4.0 and
   256-entry buffers.
   (https://github.com/accel-sim/gpgpu-sim_distribution/tree/dev/configs/tested-cfgs/SM90_H100)
-- **Stock Accel-Sim has no TPC/GPC uplink, no L2 partitions and no SM-to-SM
-  network.** GemAtlas added partitions and GPC affinity and cut H100 error from
-  37.7% to 21.3% MAPE (INFERENCE).
+- ~~Stock Accel-Sim has no TPC/GPC uplink, no L2 partitions and no SM-to-SM
+  network.~~ **[corr. 2026-11-21]** Current Accel-Sim `dev` (2.0, PR #143, merged
+  2026-08-25) **does** model:
+  - two L2 partitions with an inter-partition queue (`-gpgpu_n_chiplet_partition 2`,
+    `-inter_chiplet_queue_size 256`, 100-cycle default latency);
+  - the LRC;
+  - TMA multicast and DSMEM.
+
+  It still has no TPC or GPC uplink level and one flat crossbar. GemAtlas's
+  37.7% → 21.3% H100 MAPE gain is against the older Accel-Sim v1.3.0 baseline. Its
+  largest gain came from the slice count, then the hash, then the partition model.
 
 **Other simulators.**
 - MGPUSim/Akita: a coarse tree network (INFERENCE, https://github.com/sarchlab/mgpusim).
@@ -413,7 +453,7 @@ placement changes a cap. Per mechanism (numbering as in Part 2):
 |---|---|---|
 | 1a remote engine writes into borrower's LMEM | **Yes, decisively.** It needs an SM-to-SM path. Its bandwidth, and **whether it shares the borrower's ingress with L2 responses**, set the gain. On NVIDIA the path exists only inside a GPC (cluster ≤ 8/16). | group membership; SM-to-SM path width; an ingress knob (shared / separate) |
 | 1b lender prefetches into L2, borrower pulls | Little: data comes back over the borrower's normal port. Near/far L2 partition latency changes the in-flight need. | L2 hit latency; optionally near/far |
-| 1c/2 cluster pool of engines/MSHRs/ports | Yes. The pool sits at a group level, so the group uplink width is the cap (H100 GPC ≈ 8 SMs' worth). | group uplink bandwidth cap |
+| 1c/2 cluster pool of engines/MSHRs/ports | Yes. The pool sits at a group level, so the group uplink width is the cap. ~~(H100 GPC ≈ 8 SMs' worth)~~ **[corr. 2026-11-21]** H200 GPC ≈ 1.28 TB/s ≈ 6 SMs at 210 GB/s (measured, DRAM) | group uplink bandwidth cap |
 | 3 priority/ports for designated SMs | Priority only matters under contention. In our scenario the compute job uses 1.7% of the memory, so the network is not contended and priority gains ~0. Extra ports matter only if the SM port is the cap. | per-SM port count/width (exists) |
 | 4 relay through a neighbour's L1/LMEM | As 1a, plus the lender's own port. | as 1a |
 | 5 L2/memory-side push | Needs a delivery path from L2 to the SM's LMEM. The per-SM ingress is the cap. | ingress knob |
@@ -563,6 +603,15 @@ tag growth, Fmax, and the size of the `gpu` beacon/synthesis runs.
 
 ### Real H200 (measured by us; the causes are inferred)
 
+**[corr. 2026-11-21]** The per-SM figures in this subsection are superseded by E1–E4
+and the TPC-mask runs:
+- one SM's ingest is 205–219 GB/s with TMA (32 KB × 6, or several issuers) and
+  ~239 GB/s with 16 B loads;
+- the "~100" was latency-bound (4 × 16 KB in flight) or a 4-byte-load limit (~110);
+- the MPS sweep's fall to 77 GB/s per SM came from MPS packing SMs into few GPCs.
+
+The original text is kept below for the record.
+
 **What was measured.**
 - One SM streams 107 GB/s with plain loads (8 SMs under MPS: 858 GB/s).
 - A TMA write-only copy reaches 101 GB/s with four 16 KB transfers outstanding,
@@ -584,7 +633,7 @@ candidates, both INFERENCE:
 
 **Not the limit.**
 - The TPC mux: read speedup 2 (Jin et al.).
-- For a few SMs, the GPC uplink: ~8 SMs' worth.
+- For a few SMs, the GPC uplink: ~~~8 SMs' worth~~ **[corr. 2026-11-21]** ~1.28 TB/s ≈ 6 SMs' worth (measured on our H200). It does not bind for one SM.
 
 The rumoured 32 B/clock DSMEM port is below 51 B/clock, so it cannot be the
 L2-fill width.
@@ -830,7 +879,7 @@ The same crossbars as 1a. The difference is ownership: there is no "lender".
 the guaranteed minimum.
 
 **Gain bound.** Per SM min(pool share, I). The same ingest ceiling as 1a. Group-level
-cap P_g × 64 B/clk; with an H100-like GPC that is ~8 SMs' worth.
+cap P_g × 64 B/clk; with an H100-like GPC that is ~~~8~~ **[corr. 2026-11-21]** ~6 SMs' worth (H200, measured: 1.28 TB/s).
 
 **Cost.** It can be area-neutral (same total entries), but it adds a level of
 latency (+L_g) for every SM. That costs the compute job's misses a few cycles.

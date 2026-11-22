@@ -1,0 +1,14 @@
+pr_gb_wip2_s0|simx|gemm_block|-s0|--cores=1| -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_wip2_s1|simx|gemm_block|-s1|--cores=1| -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_wip2_s1d1|simx|gemm_block|-s1 -d1|--cores=1| -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_wip2_s1d4|simx|gemm_block|-s1 -d4 -c32|--cores=1| -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_wip2_nt8_s0|simx|gemm_block|-s0 -n128 -k512|--cores=1 --threads=8| -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_wip2_nt8_s1|simx|gemm_block|-s1 -n128 -k512|--cores=1 --threads=8| -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_wip2_c2_s1|simx|gemm_block|-s1 -n256 -k256|--cores=2 --l2cache| -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_wip2_bf16_s1|simx|gemm_block|-s1|--cores=1|-DITYPE=bf16 -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_wip2_fp8_s1|simx|gemm_block|-s1|--cores=1|-DVX_CFG_TCU_FP8_ENABLE -DITYPE=fp8 -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_wip2_tf32_s0|simx|gemm_block|-s0|--cores=1|-DVX_CFG_TCU_TF32_ENABLE -DITYPE=tf32 -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_wip2_dpi_s1|simx|gemm_block|-s1|--cores=1|-DVX_CFG_TCU_TYPE=DPI -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_wip2_bad_s|simx|gemm_block|-s2|--cores=1| -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_fork2_s0|simx|gemm_block_fork|-s0|--cores=1| -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_fork2_s1|simx|gemm_block_fork|-s1|--cores=1| -DVX_CFG_TCU_WGMMA_ENABLE

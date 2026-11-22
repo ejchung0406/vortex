@@ -1,0 +1,8 @@
+name=pr_simx-dcache-order_cmp_fix_sgemm4c
+src_rev=
+src_dirty=0
+host=atl1-1-02-009-10-2.pace.gatech.edu
+xconf=-DVX_CFG_L2_ENABLE
+blackbox=--driver=simx --app=sgemm --perf=7 --cores=4 --args=-n32
+rc=0
+wall_s=161

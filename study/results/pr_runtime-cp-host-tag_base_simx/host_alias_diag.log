@@ -1,0 +1,35 @@
+# stdbuf -o0 run (crash), catchsegv backtrace
+*** signal 11
+Register dump:
+
+ RAX: 52f69054fcbe19e5   RBX: 00007fffe859f040   RCX: 96678cf6302f0a07
+ RDX: 52f69054fcbe19e5   RSI: 0000000000000000   RDI: 00000000005c40f0
+ RBP: 0000000000443858   R8 : 00000000005c0000   R9 : 0000000000000000
+ R10: 0000000000001030   R11: 0000000000000206   R12: 0000000000443a28
+ R13: 00007fffec000bf0   R14: 0000000000010000   R15: 0000000000443740
+ RSP: 00007ffff3129ae0
+
+ RIP: 00007ffff79f4475   EFLAGS: 00010202
+
+ CS: 0033   FS: 0000   GS: 0000
+
+ Trap: 0000000d   Error: 00000000   OldMask: 00000000   CR2: 00000000
+
+ FPUCW: 0000037f   FPUSW: 00000000   TAG: 00000000
+ RIP: 00000000   RDP: 00000000
+
+ mxcsr: 1fa0
+
+Backtrace:
+/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime/libvortex-simx.so(_ZNSt17_Function_handlerIFvmPvmEZN9vx_device13make_cp_hooksEvEUlmS0_mE_E9_M_invokeERKSt9_Any_dataOmOS0_S8_+0x55)[0x7ffff79f4475]
+/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime/libvortex-simx.so(_ZN6vortex16CommandProcessor11tick_engineEv+0x391)[0x7ffff79f5a11]
+/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime/libvortex-simx.so(_ZN6vortex16CommandProcessor4tickEv+0x20)[0x7ffff79f5c80]
+/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime/libvortex-simx.so(+0x87a0)[0x7ffff79f17a0]
+/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime/libvortex.so(_ZN2vx6Device13cp_submit_cl_EPKvb+0xde)[0x7ffff7f5ae2e]
+/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime/libvortex.so(_ZN2vx6Device14cp_submit_mem_Ehmmmbb+0x44)[0x7ffff7f5b1d4]
+/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime/libvortex.so(_ZN2vx6Device19cp_submit_mem_writeEmPKvmbb+0xff)[0x7ffff7f5c9ff]
+/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime/libvortex.so(+0x1a305)[0x7ffff7f61305]
+# same binary under gdb (heap shifted by 64 B): silent data mismatch
+FAILED: word 1441824: got 0x00000002, expected 0x99809385
+device buffer [0x30000, 0x4030000), host heap at 0x5c5bf0
+[Inferior 1 (process 2739782) exited with code 01]

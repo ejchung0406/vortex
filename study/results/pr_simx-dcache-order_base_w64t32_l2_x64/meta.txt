@@ -1,0 +1,20 @@
+name=pr_simx-dcache-order_base_w64t32_l2_x64
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-order_base
+host=atl1-1-02-018-13-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=64 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_L2_ENABLE
+driver=simx cores=1 app=war_order xlen=64
+point 0 args="-n65536" rc=2 cycles=314832 Found 60 errors (error bits 0x1e)
+point 1 args="-n65536 -s1" rc=2 cycles=310240 Found 126 errors (error bits 0x1e)
+point 2 args="-n65536 -s4 -d1" rc=2 cycles=300643 Found 79 errors (error bits 0x1c)
+point 3 args="-n65536 -s16 -d2" rc=2 cycles=318099 Found 63 errors (error bits 0x1e)
+point 4 args="-n65536 -s8 -d7" rc=2 cycles=332074 Found 25 errors (error bits 0xe)
+point 5 args="-n65536 -S4 -D2" rc=2 cycles=313964 Found 35 errors (error bits 0x1c)
+point 6 args="-n65536 -S8 -D5" rc=2 cycles=344126 Found 38 errors (error bits 0xc)
+point 7 args="-n65536 -s4 -d1 -S4 -D3" rc=2 cycles=303409 Found 95 errors (error bits 0x1c)
+point 8 args="-n65536 -s16 -d5 -S8 -D1" rc=2 cycles=389860 Found 24 errors (error bits 0xc)
+point 9 args="-n32768 -s8 -d3 -S2 -D7" rc=2 cycles=148684 Found 1 errors (error bits 0x10)
+point 10 args="-n131072" rc=2 cycles=680013 Found 153 errors (error bits 0x1e)
+point 11 args="-n65536 -s2 -d11 -S3 -D4" rc=2 cycles=316893 Found 84 errors (error bits 0x1e)
+fails=12 of 12
+rc=0
+wall_s=272

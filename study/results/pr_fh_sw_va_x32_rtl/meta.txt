@@ -1,0 +1,9 @@
+name=pr_fh_sw_va_x32_rtl
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_base
+xlen=64
+host=atl1-1-02-005-18-1.pace.gatech.edu
+configs=-DVX_CFG_NUM_WARPS=32 -DVX_CFG_NUM_THREADS=32 -DVX_DBG_STALL_TIMEOUT=20000000
+blackbox=--driver=rtlsim --app=vecadd --args=-n65536
+PERF: instrs=61696, cycles=52852
+wall_s=293
+rc=0

@@ -1,0 +1,8 @@
+name=barfix_ab_s0_sgemm2_simx
+src_rev=
+src_dirty=0
+host=atl1-1-02-005-23-2.pace.gatech.edu
+xconf=-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_ISSUE_WIDTH=2
+blackbox=--driver=simx --app=sgemm2 --perf=7 --args=-n64 -t16
+rc=0
+wall_s=158

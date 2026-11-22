@@ -1,0 +1,8 @@
+name=ld_mst_dl_k22
+src_rev=
+src_dirty=0
+host=atl1-1-02-007-20-2.pace.gatech.edu
+xconf=-DPATH_STATS -DSTAGE_LOAD=1 -DLOAD_WARPS=16 -DKSTEPS=2 -DPIPE=6
+blackbox=--driver=simx --app=gemm_tmem_decode --perf=7 --profile=h200s --cores=22 --args=-m16 -n45056 -k4096 -a
+rc=0
+wall_s=5822

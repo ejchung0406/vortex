@@ -1,0 +1,8 @@
+name=pr_simx-dcache-order_cmp_fix_lazy_fetch
+src_rev=
+src_dirty=0
+host=atl1-1-02-018-6-2.pace.gatech.edu
+xconf=-DVX_CFG_EXT_A_ENABLE -DVX_CFG_DCACHE_LAZY_FETCH=1
+blackbox=--driver=simx --app=lazy_fetch --perf=7
+rc=0
+wall_s=157

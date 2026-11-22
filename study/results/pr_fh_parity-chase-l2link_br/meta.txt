@@ -1,0 +1,9 @@
+name=pr_fh_parity-chase-l2link_br
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold
+xlen=64
+host=atl1-1-02-005-16-2.pace.gatech.edu
+configs=-DVX_CFG_L2_LINK_LATENCY=20
+blackbox=--driver=simx --app=chase --args=-b262144 -w1 -i512 --l2cache
+PERF: instrs=6810, cycles=219700
+wall_s=165
+rc=0

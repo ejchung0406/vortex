@@ -1,0 +1,8 @@
+name=noc_off_dxa_8
+src_rev=
+src_dirty=0
+host=atl1-1-01-003-29-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=simx --app=bwstream_dxa --perf=7 --profile=h200s --cores=22 --args=-e4096 -n64 -d4 -c0 -M0-7
+rc=0
+wall_s=281

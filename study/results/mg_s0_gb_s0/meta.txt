@@ -1,0 +1,8 @@
+name=mg_s0_gb_s0
+src_rev=
+src_dirty=0
+host=atl1-1-02-002-28-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_BAR_DRAIN_SCOPE=0 -DMTILES=1 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_block --perf=4 --profile=h200s --cores=1 --args=-m16 -n1024 -k4096 -s0
+rc=0
+wall_s=266

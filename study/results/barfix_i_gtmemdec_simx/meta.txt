@@ -1,0 +1,8 @@
+name=barfix_i_gtmemdec_simx
+src_rev=
+src_dirty=0
+host=atl1-1-02-009-9-2.pace.gatech.edu
+xconf=
+blackbox=--driver=simx --app=gemm_tmem_decode --perf=7 --profile=h200s --cores=1 --args=-m16 -n2048 -k1024
+rc=0
+wall_s=252

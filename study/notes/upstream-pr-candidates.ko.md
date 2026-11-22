@@ -17,7 +17,7 @@
 | 5 | TMA 엔진에 메모리 포트 여러 개 | 기능 | SimX만. 포트만 늘려서는 효과 없음 (24번 참고) | 24번으로 대체 |
 | 6 | 연산 천장을 묶는 코어 한도 세 가지 | 설정 | 프로파일 값. rtlsim 118,350 → 35,006 (SimX 118,418 → 33,419) | 기본값으로 할지 프로파일에만 둘지 |
 | 7 | 작은 발견들 | 노트 | 아래 참고 | |
-| 8 | **SM당 TMA 엔진 수가 시뮬레이션하는 SM 수에 따라 달라짐** | **버그** (설정 + 낡은 문서) | 발견. 프로파일에서 값을 고정해 피함 | 리포트, SM당 개수 정하기 |
+| 8 | **SM당 TMA 엔진 수가 시뮬레이션하는 SM 수에 따라 달라짐** (코어 1~15개에서 1개, 16~23개에서 2개, 132개에서 16개) | **버그** (설정 + 낡은 문서) | 발견. 프로파일에서 값을 고정해 피함. `VX_CFG_DXA_MEM_PORTS`는 읽는 곳이 없음 | 리포트, SM당 개수 정하기 |
 | 9 | **SimX 캐시가 나중 store의 값을 앞선 load에게 돌려줌** | **버그** (결과가 틀림) | 포크에서 수정 dab77b7f2 + 51a4cce00, 테스트 `war_order`, 리뷰 2회. rtlsim 통과 (16 × 16 write-back: 1,296,287, SimX 1,295,606) | `h200s` 크기 rtlsim 실행 중, CI 등록 |
 | 10 | **SimX의 L1은 응답 대기열이 차면 재실행, RTL은 기다림** | **버그** (SimX/RTL 불일치, 타이밍) | 포크에서 수정 cbc696a98 (설정), `h200s`에 켬. rtlsim 20,570, SimX 20,266 / 25,824 | 기본 동작으로 바꾸기 |
 | 11 | **런타임: 장치 주소가 명령 처리기의 호스트 영역과 겹침** | **버그** (죽거나 조용히 데이터 손상) | 포크에서 수정 b974a9e98 (simx), 51a4cce00 (rtlsim) | foldsim, firesim |
@@ -27,16 +27,24 @@
 | 15 | L2가 FIFO라서 서로 다른 SM끼리 느려짐 | 보정 | `h200s`에 pseudo-LRU 적용 (9c27e289a) | 기본값 제안 여부 |
 | 16 | L1 캐시와 공유 메모리가 둘 다 전체 크기 (484 KB, 실제는 256 KB를 나눠 씀) | 프로파일 정확도 | 발견. Volta 이후 모든 프로파일이 같음 | 나누는 비율 정하기 |
 | 17 | 텐서 메모리 엔진: B를 두 조각 앞까지 미리 가져오기, A를 줄 단위로 읽기 | 성능 (설계 변경) | 포크에 있음, RTL + SimX (93a8adad4, 055e5d12d, 합침 303d10c29), `h200s`에 켬: SM당 클럭당 1,787 → 3,684 FLOP (실제 3,786). rtlsim과 SimX 1% 이내 | upstream의 텐서 메모리 브랜치가 먼저 들어가야 함. 회로 깊이와 면적 미측정 |
-| 18 | 배리어가 SM 전체의 load가 끝나기를 기다렸음 | 설계의 성질, 성능 | 포크에 있음, RTL + SimX (9215d3f88, caa4fcd4d, 합침 7658376d9), `h200s`에 켬: load 방식 decode SM당 15.8 → 22.2 GB/s, 두 상태를 오가는 현상 없음 | store 조건의 리뷰, 회로 깊이 |
+| 18 | 배리어가 SM 전체의 load가 끝나기를 기다렸음 | 설계의 성질, 성능 | 포크에 있음, RTL + SimX (9215d3f88, caa4fcd4d, 합침 7658376d9), `h200s`에 켬: load 방식 decode SM당 15.8 → 22.2 GB/s, 두 상태를 오가는 현상 없음. 리뷰에서 값 1의 빈틈이 나와 `feature/bar-drain-fix`에서 고치는 중이라 `h200s`의 값 1 결과는 아직 확정이 아님 | `feature/bar-drain-fix` 검증·합치기 후 `h200s` 재실행, 회로 깊이 |
 | 19 | 텐서 메모리 엔진을 쓰는 새 커널 (`gemm_tmem`, `gemm_tmem_decode`) | 테스트 | 패치 `gemm_tmem.patch`. 3,334 FLOP/클럭, SM당 82 GB/s | 22번과 24번 뒤에 포크에 넣기 |
 | 20 | TMA와 공유 메모리의 문을 실제에 맞추기 | 보정 | 24번과 27번으로 합침 | |
 | 21 | 실제 H200 측정이 바꾼 것 (SM당 받는 양 약 210 GB/s, GPC 한도 1.28 TB/s, 같이 올리면 굶음) | 연구 방향 | 측정 완료. `tpc-placement-and-borrowing.md` | upstream 항목 아님 |
-| 22 | **워프 하나는 명령을 약 11사이클에 하나씩만 실행** (명령마다 해독될 때까지 세움) | 설계 (2021년부터), 성능 | 원인 추적 완료. H200 측정과 SimX 시제품 진행 중 | 시제품, RTL, 대조 |
-| 23 | **SimX의 L2가 응답 대기열이 차면 재실행, RTL은 기다림** | 버그 (SimX/RTL 불일치, 타이밍) | 설정을 포크에 넣음 (462002754), 기본 꺼짐. rtlsim으로 확인 못 함 | L2의 응답 대기열을 채우는 테스트 |
+| 22 | **워프 하나는 명령을 약 11사이클에 하나씩만 실행** (명령마다 해독될 때까지 세움) | 설계 (2021년부터), 성능 | 측정 완료: H200은 워프 하나가 클럭당 최대 약 1개, Vortex는 명령당 11.75사이클(52개 경우에서 RTL과 SimX가 같음). SimX 시제품 `VX_CFG_FETCH_INFLIGHT`로 3.84 | RTL은 연구 방향을 정한 뒤로 미룸 |
+| 23 | **SimX의 L2가 응답 대기열이 차면 재실행, RTL은 기다림** | 버그 (SimX/RTL 불일치, 타이밍) | 설정을 포크에 넣음 (462002754), 기본 꺼짐. SimX는 기다리기를 끈 쪽이 rtlsim에 더 가까움(코어 2개: 20,860 대 끔 20,864 / 켬 21,137). 그래서 `h200s`에도 켜지 않음 | 켰을 때 왜 rtlsim에서 멀어지는지 |
 | 24 | TMA를 실제 칩의 복사 곡선(16개 점)에 맞추기 | 보정 (설계 변경) | SimX 설정은 `dxa_lmem_calib.patch`: 16개 중 13개가 10% 안. 포크에 없음 | 22번 뒤에 다시 정함, RTL |
 | 25 | 2 MB 페이지 설정이 힙의 첫 2 MB에는 적용되지 않음 | 런타임 동작 | 발견. 테스트 쪽에서 우회 | 매핑을 바꿀지 결정 |
 | 26 | **SimX가 텐서 코어의 A와 B를 기술자의 시작 주소로 구분** | **버그** (중단) | 포크에서 수정 0c1054236 | 리뷰 |
 | 27 | 공유 메모리의 문을 TMA 쓰기와 텐서 코어 읽기가 번갈아 씀 | 보정 (설계 변경) | SimX 설정(합계 160바이트)은 `dxa_lmem_calib.patch`. 값을 확인하지 못함 | 22번 뒤에 확인, RTL |
+| 28 | **두 드라이버 모두 디버그 빌드가 실패** (`sw/common/util.h`의 `__assert`가 glibc와 충돌) | **버그** (빌드) | 발견, 고치지 않음 | 매크로 이름 바꾸기 |
+| 29 | **모든 FP 연산이 fflags 때문에 한 줄로 섬** (워프당 약 21사이클에 FP 연산 하나) | 설계, 성능 | 발견. SimX 시제품 `VX_CFG_FFLAGS_ACCUM`은 `warp_rate.patch` | RTL, fflags 규칙 정하기 |
+| 30 | XLEN 64에서는 16바이트 load를 쓸 수 없음 (`LDST_WIDE`가 FLEN 32를 요구) | ISA / 설정 한계 | 발견 | FLEN 64에서도 허용할지 정하기 |
+| 31 | **SimX가 TMA의 소켓 메모리 경로에 방향마다 레지스터를 하나씩 더 둠** | SimX/RTL 불일치, 타이밍 | 수정은 `dxa_mc_parity.patch`. 아직 적용하지 않음: `h200s`의 한 점이 +20% 움직이고, 기준이 될 rtlsim 실행 `par_h2_dxa32_rtl`이 아직 돌고 있음 | 그 rtlsim 결과. 코어 4~8개는 여전히 +4.8% / −3.4% |
+| 32 | TMA 성능 통계: SimX는 모든 소켓을 합하고 rtlsim은 소켓 0만 보고함 | SimX/RTL 불일치, 통계 | 발견 | 어느 쪽 뜻으로 할지 정하기 |
+| 33 | **SimX의 공유 메모리가 오는 중인 패킷이 있는데 잠듦** (TMA 엔진 2개 이상에서 멈춤) | **버그** (멈춤) | 포크에서 수정 fad1f31d7. upstream/master에서도 재현됨(`sgemm2_dxa`, 엔진 2~8개) | PR 브랜치에 커밋, CI 등록 |
+| 34 | 큰 구성에서 LR/SC는 느릴 뿐 livelock이 아님 | 동작, 성능 | 측정 (`amo -t lrsc_counter`, `h200s`) | 없음. 기록만 |
+| 35 | **upstream/master의 SimX가 WGMMA 없는 TCU 구성에서 빌드되지 않음** (`decode_descs`의 `#ifdef`) | **버그** (빌드, upstream) | 발견, 고치지 않음 | 호출을 감싸거나 정의를 밖으로 옮기기 |
 | – | 코어 4개의 TMA 복사: SimX 19,874, rtlsim 18,321사이클 (8.5%) | 설명되지 않은 불일치 | 23번에 기록 | 원인 찾기 |
 
 9, 10, 11번의 영어 이슈 초안은 `upstream-issue-drafts.md`에 있습니다. upstream `master`를
@@ -173,10 +181,11 @@ upstream에 물을 것: `FPU_QUEUE_SIZE`의 계산식이 FMA 지연을 고려해
 ## 7. 작은 발견들
 
 - 한 워프의 FP 연산이 FCSR 규칙 때문에 직렬화됩니다. 워프 64개에서는 효과 없음. 우선순위 낮음.
+  (재어 보니 RTL도 같아서 29번으로 옮겼습니다.)
 - `memory: lat=` 통계가 큰 실행에서 넘칩니다.
 - TLB: 128 MiB 가중치의 decode GEMM은 2 MB 페이지에서 `DTLB_SIZE`와 `L2_TLB_MEGA_SIZE`가
   256이어야 합니다. 실행에는 `VORTEX_VM_MEGAPAGE_HEAP=1`이 필요합니다(없으면 페이지 워크를 재게 됨).
-- SimX의 디버그 빌드가 컴파일되지 않습니다(`__assert` 충돌).
+- SimX의 디버그 빌드가 컴파일되지 않습니다(`__assert` 충돌). (rtlsim도 같아서 28번으로 옮겼습니다.)
 
 ---
 
@@ -194,7 +203,8 @@ VX_CFG_NUM_DXA_CORES = "expr: max(1, up($VX_CFG_NUM_CORES / 8))"
 커밋 `7d6950de5`(2026-07-11)가 TMA 코어를 소켓(SM)마다 넣도록 옮겼는데 이 식은 건드리지 않았습니다.
 지금 이 값은 "SM 하나의 TMA 코어 안에 있는 엔진 수"인데 여전히 전체 코어 수에서 계산됩니다.
 
-**결과.** SM 하나의 엔진 수가 1~8 SM 실행에서 1개, 22 SM에서 2개, 132 SM에서 16개입니다.
+**결과.** SM 하나의 엔진 수가 1~15 SM 실행에서 1개, 16~23 SM에서 2개, 132 SM에서 16개입니다
+(**[정정 2026-11-21]** 전에는 "1~8 SM에서 1개, 22 SM에서 2개"라고 적었습니다).
 SM의 TMA 능력이 실행의 SM 수에 따라 달라져서 SM 수를 바꾸는 실험이 성립하지 않습니다.
 주석과 설계 문서(`docs/designs/dxa_async_copy_multicast.md`)는 없어진 구조를 설명합니다.
 `VX_CFG_DXA_MAX_INFLIGHT` 기본값 8도 같이 봐야 합니다(8 → 6.7 GB/s, 256 → 90 GB/s).
@@ -430,6 +440,134 @@ SM의 TMA 능력이 실행의 SM 수에 따라 달라져서 SM 수를 바꾸는 
 - 한 클럭에 하나만 통과합니다. 실제 SM은 TMA 쓰기 215 GB/s, 읽기 253, 쓰고 읽기 157~170으로 일부 겹칩니다.
   Vortex의 decode 커널은 이 문 때문에 SM당 82 GB/s에서 막혔고, 합계 160바이트로 풀면 텐서 엔진이 한계가 되어 114입니다.
   이 값이 맞는지는 load로 읽는 소비 워프로 확인하지 못했습니다(22번 때문).
+
+## 2026-11-21 밤에 추가 (28~35번, 8·18·22·23번 갱신, upstream에서 재현되는 것)
+
+### 8번 갱신 (TMA 엔진 수)
+- **[정정 2026-11-21]** 소켓당 엔진 수는 `max(1, up(NUM_CORES / 8))`입니다. `/`는 정수 나눗셈이고 `up(x)`는 "x, 0이면 1"입니다(`ci/gen_config.py`).
+  그래서 코어 1~15개에서 1개, 16~23개에서 2개, 24~31개에서 3개, 132개에서 16개입니다. 목록에는 "1~8개에서 1개"라고 잘못 적혀 있었습니다(출처: `pr/notes/issue-dxa-worker-count.md`).
+- `VX_CFG_DXA_MEM_PORTS`(upstream/master의 `VX_config.toml:428`)는 값을 계산만 하고 읽는 곳이 없습니다(`git grep`. `hw/`, `sim/`, `sw/`, `ci/`, `profiles/` 어디에도 없음).
+  소켓은 TMA 코어에 `GMEM_OUT_PORTS = 1`을 넘깁니다.
+
+### 18번 갱신 (배리어 값 1): `feature/bar-drain-fix`를 검증하고 합치기 전까지는 확정이 아님
+- **리뷰에서 나온 것**: 값 1의 store 검사가 LSU 어댑터에서 끝나서, dcache flush 장치의 출력 버퍼(`VX_mem_unit.sv:255-262`), VM을 켰을 때 소켓의 dMMU,
+  L1 링크 지연(`VX_socket.sv:221-237`)에 남아 있는 store를 보지 못했습니다. 다른 LSU 블록의 load가 그런 store를 앞지를 수 있습니다
+  (F2, 중간 심각도, 코드를 읽고 논증. `pr/notes/INDEX.md`). 그 밖에: VM을 켠 대조 실행이 없었음. 설명(설정 주석, 프로파일, 인터페이스)이 코드보다 좁았음.
+  SimX는 값 1의 조건에 load와 TCU 요청까지 세는데 RTL은 세지 않았음(F1).
+- **`feature/bar-drain-fix`의 수정** (`git log feature/dxa-borrowing..feature/bar-drain-fix`. 커밋 메시지가 "WIP"라서 diff를 읽고 정리):
+  - 9c99c5b34 (RTL + SimX): 값 1의 배리어가 LSU에서 dcache까지의 경로 전체를 기다립니다. flush 레인의 요청 버퍼(`VX_mem_unit`의 busy),
+    소켓 dMMU 중 이 코어의 레인, dcache로 가는 링크입니다(`VX_core.sv`의 `dcache_path_drained`). 대신 소켓의 MMU 전체를 기다리던 조건(`mmu_empty`)은 값 1에서 뺐습니다.
+  - f09e7c0c6 (SimX): 아직 LSU 대기열에 들어가지 않은 텐서 장치의 메타데이터 읽기는 값 1의 배리어를 붙잡지 않습니다. RTL과 같아졌습니다.
+  - 155190ece (문서): `VX_config.toml`, `VX_warp_ctl_if.sv`, `docs/designs/lsu_pipeline_design.md`(요청이 아직 머물 수 있는 곳의 표,
+    나뉜 crossbar에 대한 주의), `h200s`의 주석이 이제 코드대로 말합니다. 값 1의 조건은 코어 전체를 보고, store뿐 아니라 load도 셉니다.
+  - 새 CI 항목: `parity-vm-bar-vis-bar-warp`(VM 켬, 586fd3c41), `model_parity-wgmma-sparse-fullk-bar-warp`(7ab22fc33),
+    `bar-vis-warp-scope-bank-stress`와 `-link`(뱅크 1개·MSHR 4개짜리 dcache, 8사이클 L1 링크 있음/없음, 4cb08bce4).
+  - 같은 브랜치에 있지만 배리어와 무관한 것: 4c5d609be(23번의 `L2_CRSQ_SIZE` assert), 1261d40da + 99a5a2168(A와 B 기술자를 겹친 `sgemm_tcu_wg`, 26번의 테스트),
+    f6ab22bb4(`gemm_block`의 쉬는 역할이 스레드 하나로만 폴링, `-o`에는 A 확장 필요), WIP 테스트들(`warp_rate`, `ldstream`, `smprobe`, `gemm_tmem*`, `bwstream` 인자 검사).
+- **그래서**: `h200s`의 값 1 결과(load 방식 decode SM당 15.8 → 22.2 GB/s, M = 64 역할의 블록 시간 1,395,242 → 816,228)는 이 브랜치를 검증해 합치고
+  `h200s`를 다시 돌리기 전까지 확정이 아닙니다. upstream용 브랜치 `pr/bar-drain-scope`(`pr/notes/bar-drain-scope.md`)는 리뷰 전 커밋에서 만든 것이라
+  값 1의 조건에 아직 MMU가 들어 있고, 독립 리뷰도 돌지 않았습니다.
+
+### 22번 갱신 (워프당 명령 속도): 측정과 시제품
+- **실제 H200** (`gpu/warprate.cu`, `results_gpu/h200_warprate_summary.txt`): 워프 하나가 클럭당 최대 약 1개의 명령을 냅니다(독립 FMA 명령당 1.07사이클, 독립 정수 1.21).
+  SM 전체는 클럭당 4개까지 냅니다(독립 FMA, 워프 8개 이상에서 4.00).
+- **Vortex** (`tests/regression/warp_rate`, SimX `h200s`, 코어 1개, `results/wr_warp_rate/warp_rate_tables.txt`): 독립 정수 명령당 11.75사이클(`int_ind4`, `int_ind8`은 11.81),
+  의존 정수 14.60, FMA 21.3~21.8(29번), 명령마다 분기 23.99.
+- **RTL과 SimX가 사이클까지 같습니다**: 작은 구성(워프 8개 × 스레드 8개, 발행 폭 4)의 52개 경우(13종류 × 워프 1/2/4/8개). 발행 폭 2에서는 약 0.2% 안.
+- **시제품 `VX_CFG_FETCH_INFLIGHT`** (`notes/warp_rate.patch`, SimX만. 기본값 1은 원래 코드와 사이클·레지스터 해시가 같음): 워프가 순서대로 이어지는 가져오기를
+  최대 N개까지 걸어 둡니다. 단, 그 워프가 자기 가져오기 구역에 혼자 있을 때만입니다(`fetch_alone`). 주소나 마스크를 바꾸는 명령 뒤에 미리 가져온 것은 버립니다(`fetch_squash`).
+  C 확장과는 같이 쓸 수 없습니다(`#error`). N = 4에서 `int_ind8` 11.81 → 3.84사이클, `int_ind4` 4.25, `br_every16` 5.49, `lds_own` 6.41.
+  의존 사슬은 그대로(14.49). FMA는 29번의 설정을 같이 켜야 빨라집니다(3.84). N = 8에 버퍼 8칸이면 3.75.
+- **위에 적은 "가져올 때 판별하고 버리지 않는" 방향**은 icache 왕복 약 8사이클에 묶입니다. 명령이 돌아와 판별되기 전에는 다음 가져오기를 시작할 수 없기 때문입니다.
+  그래서 시제품은 미리 가져오고, 틀리면 버리는 방식으로 만들었습니다.
+- **RTL은 만들지 않았습니다.** 연구 방향을 정한 뒤로 미뤘습니다.
+
+### 23번 갱신 (L2의 기다리기): 대조 결과
+- 구조로 보면 RTL은 기다립니다(같은 `VX_cache_bank`). 그런데 숫자로는 SimX에서 기다리기를 끈 쪽이 rtlsim에 더 가깝습니다.
+  코어 2개: rtlsim 20,860, SimX 20,864(끔) / 21,137(켬). 코어 4개: 10,575 대 10,978 / 11,179. 그래서 기본값은 꺼 둔 채로 두고 `h200s`에도 켜지 않았습니다.
+  켰을 때 왜 rtlsim에서 멀어지는지는 모릅니다.
+- `VX_CFG_L2_CRSQ_SIZE`를 주면 assert만 걸렸습니다("a deeper core-response queue is modeled under read merging only". L2에는 읽기 합치기가 없음).
+  `feature/bar-drain-fix`에서 고쳤습니다(4c5d609be: 읽기 합치기 없이도 대기열이 `crsq_size`를 받음).
+
+### 28. 두 드라이버 모두 디버그 빌드가 실패함 (버그, 빌드)
+- `sw/common/util.h:36`이 `__assert`라는 매크로를 정의하는데, glibc `assert.h`의 `__assert`와 충돌해서 SimX와 rtlsim의 디버그 빌드가 컴파일되지 않습니다.
+  (7번에는 SimX만 적혀 있었습니다.)
+- 상태: 발견, 고치지 않음.
+
+### 29. 모든 FP 연산이 fflags 때문에 한 줄로 섬 (설계, 성능)
+- `VX_decode.sv:628/636`은 모든 FP 연산이 FCSR 가상 레지스터에 쓴다고 표시하고(`wr_xregs[XREG_0] = 1`, "most FP operations may set exception flags"),
+  `VX_scoreboard.sv:115/149/182`는 이를 쓰는 레지스터로 추적합니다(사용 중 마스크에 넣고, 발행할 때 예약하고, 사용 중인 집합과 비교). 그래서 FP 연산마다 앞 연산이
+  끝나기를 기다립니다. 워프 하나에서 약 21사이클에 FP 연산 하나이고, 독립 FMA가 의존 FMA보다 빠르지 않습니다(`fma_ind8` 21.57, `fma_dep` 21.27).
+  실제 H200은 워프 하나가 FMA당 1.07사이클입니다. 워프 64개면 코어가 IPC 2.8~2.9를 내므로 처리량 테스트에서는 가려집니다(7번의 메모).
+- 시제품 `VX_CFG_FFLAGS_ACCUM` (`notes/warp_rate.patch`, SimX 스코어보드만, 기본 0): FP 연산은 레지스터를 예약하지 않고 플래그를 누적하며,
+  FCSR을 읽거나 쓰는 명령만 기다립니다. `FETCH_INFLIGHT=4`와 함께 잰 값: `fma_ind8` 21.47 → 3.84사이클, 워프 64개의 코어 IPC 2.76 → 3.01.
+  이 설정만 켠 경우는 재지 않았고, RTL은 만들지 않았습니다.
+
+### 30. XLEN 64에서는 16바이트 load를 쓸 수 없음 (ISA / 설정 한계)
+- `sim/simx/decode.cpp:39`: `VX_CFG_EXT_LDST_WIDE_ENABLE`은 FLEN 32인 F 확장을 요구합니다. XLEN 64 빌드는 D 확장이 있어 FLEN이 64이므로 넓은 load가 꺼집니다.
+  가장 넓은 load가 스레드당 8바이트, 워프 명령 하나에 256바이트입니다. 실제 칩은 스레드당 16바이트(512바이트)입니다.
+- 상태: 발견. load로 올리는 커널에 미치는 영향은 재지 않았습니다.
+
+### 31. SimX가 TMA의 소켓 메모리 경로에 방향마다 레지스터를 하나씩 더 둠 (SimX/RTL 불일치, 타이밍)
+- `sim/simx/socket.cpp:235-251`은 소켓의 메모리 포트에 방향마다 한 칸짜리 레지스터를 두고, 그 뒤의 소켓 중재기가 양방향을 한 번 더 레지스터로 받습니다.
+  RTL의 중재기(`hw/rtl/VX_socket.sv:974-1005`, `mem_arb`, `REQ_OUT_BUF`/`RSP_OUT_BUF`)에는 방향마다 하나뿐입니다.
+  L1 캐시는 이미 그만큼을 빼 주고 있었고(`Cache::Config::mem_rsp_slice`) TMA는 그렇지 않았습니다.
+- 수정은 `notes/dxa_mc_parity.patch`(`dxa_core.cpp`: GMEM 요청은 낸 사이클에 중재기로 들어가고, 응답은 공유 메모리에 쓰러 가는 길에서 한 사이클을 돌려받음).
+  적용하면 코어 1~2개는 rtlsim과 0.2% 안이고, 코어 4~8개는 여전히 +4.8% / −3.4%입니다.
+- **아직 적용하지 않았습니다**: `h200s`의 한 점이 +20% 움직이는데, 그 점의 rtlsim 기준 실행(`par_h2_dxa32_rtl`)이 아직 돌고 있습니다.
+
+### 32. TMA 성능 통계: SimX는 모든 소켓을 합하고 rtlsim은 소켓 0만 보고함 (SimX/RTL 불일치, 통계)
+- `sim/simx/csr_unit.cpp:261-264`는 클러스터의 TMA 통계를 읽는데, `cluster.cpp`가 이를 모든 소켓에 걸쳐 합합니다. rtlsim은 소켓 0의 값만 보고합니다.
+  소켓이 둘 이상이면 두 드라이버의 TMA 통계가 다릅니다.
+- 상태: 발견.
+
+### 33. SimX의 공유 메모리가 오는 중인 패킷이 있는데 잠듦 (버그, 멈춤. 포크에서 fad1f31d7로 수정)
+- `LocalMem`은 엔진이 비고 DMA 입력에 *도착한* 패킷이 없으면(`empty()`) 잠들었습니다. 같은 사이클에 먼저 도는 모듈이 입력 쪽으로 패킷을 예약하면
+  도착 전에 깨우는데, 깨어난 장치는 입력이 아직 비어 있는 것을 보고 다시 잠들고, 정작 패킷이 도착했을 때는 깨워 줄 것이 없었습니다.
+  TMA 엔진이 하나면 다음 줄이 장치를 다시 깨워서 드러나지 않았습니다. 엔진이 여럿이면 DMA 채널이 한 사이클에 차고, 모든 엔진이 자기 줄을 들고 기다리며,
+  모든 워프가 전송 배리어에 선 채로 장치가 멈췄습니다(h200q 모양, `VX_CFG_NUM_DXA_CORES >= 2`, 코어 1개까지).
+- 수정 (`sim/simx/mem/local_mem.cpp`): 잠들지 판단할 때 DMA 입력과 요청 입력에 줄 서 있거나 오는 중인 패킷까지 셉니다(`size()`, 캐시와 같은 방식).
+- 영향: TMA를 안 쓰는 실행은 사이클이 그대로입니다(h200q의 `sgemm_tcu`, `bwstream`). 깨우기를 놓쳤다가 나중 쓰기로 회복하던 TMA 실행은 0.14% 짧아졌습니다
+  (2,532,751 → 2,529,311, `bwstream_dxa`, h200q 코어 4개, 엔진 1개).
+- **upstream/master에서도 재현됩니다** (`pr/notes/INDEX.md`, 결과 `results/pr_simx-lmem-wake_*`): 워프 16개 × 스레드 16개에서 SimX `sgemm2_dxa -n64 -t8 -m1`이
+  코어 1개에 TMA 엔진 2, 4, 8개일 때, 코어 4개에 엔진 4개일 때, 코어 16개에 기본 식(엔진 2개)일 때 멈춥니다(모든 워프가 한 PC에 선 채 10만 사이클 무진행 한도에서 중단).
+  엔진 1개면 통과합니다. 수정을 넣으면 모두 통과합니다: 309,094 / 311,340 / 307,346 / 97,692 / 42,206사이클. master의 rtlsim은 엔진 4개에서 통과합니다(311,222).
+  이슈 문안(인덱스 11번): "simx: LocalMem can sleep past a packet reserved toward it in the same cycle, and the device stalls (its sleep test looks at delivered packets only)."
+- 설명 못 한 것: 수정 후 엔진 1개 실행이 조금 달라집니다(308,369 → 308,445). 8 × 8 모양 몇 개도 master에서 멈추는데, 수정 쪽은 돌리지 않았습니다.
+- 상태: 포크에 있음. upstream 쪽은 워크트리 `pr/simx-lmem-wake`에 커밋하지 않은 채로 있습니다(커밋, CI 항목, 노트 없음).
+
+### 34. 큰 구성에서 LR/SC는 느릴 뿐 livelock이 아님 (동작)
+- `tests/regression/amo -n1 -t lrsc_counter`, SimX `h200s`(`results/lrsc_*`). 모두 통과했습니다. 사이클:
+
+| 워프 | 코어 1개 | 2개 | 4개 | 8개 | 22개 |
+|---|---|---|---|---|---|
+| 4 | 247,089 | 494,689 | 929,864 | 1,805,495 | 5,170,288 |
+| 16 | 3,259,085 | 6,519,617 | 13,094,833 | | |
+| 64 | | 72,972,015 | | | |
+
+- 코어 수에 비례하고 워프 수에는 대략 제곱으로 늘어납니다(워프 4 → 16개: 13배). upstream 항목은 아니고, 오래 걸리는 실행을 멈춘 것으로 오해하지 않도록 적어 둡니다.
+
+### 35. upstream/master의 SimX가 WGMMA 없는 TCU 구성에서 빌드되지 않음 (버그, 빌드)
+- `VX_CFG_EXT_TCU_ENABLE`을 켜고 `VX_CFG_TCU_WGMMA_ENABLE`을 끄면 `sim/simx/tcu/tcu_unit.cpp:1239: 'class vortex::TcuUnit::Impl' has no member named 'decode_descs'`가 납니다.
+  eaea0c79a(#488)가 `#ifdef` 밖에 있는 `Impl::wgmma()`에서 `decode_descs()`를 부르는데, 정의는 `#ifdef VX_CFG_TCU_WGMMA_ENABLE` 블록(760~1129행) 안에 있습니다.
+  upstream 자체의 WGMMA 없는 SimX TCU 항목(예: `sgemm_tcu-1`)도 이것 때문에 실패합니다. 출처: `pr/notes/tests-gemm-block.md`(Dependencies), `results/pr_gb_fork_s0`. 에이전트 셋이 따로 보고했습니다.
+- 상태: 발견. 어느 브랜치에서도 고치지 않았습니다.
+
+### upstream/master에서 그대로 재현되는 것 (upstream PR 작업의 최종 인덱스 `pr/notes/INDEX.md`, 2026-11-21 19:20에 정리)
+우선순위가 바뀌어 작업을 일찍 멈췄습니다. 올린 것도, 연 PR이나 이슈도 없습니다. upstream/master ccf811e11에서 딴 로컬 브랜치 `pr/*` 15개가 있고, 결과는 모두 XLEN 64뿐입니다.
+- **1번 (DRAM)**: 포크에서는 SimX와 rtlsim의 주소 배치가 기본값에서(둘 다 일반 배치) 그리고 `h200s`에서(둘 다 해시 배치, 인터리빙 1024) 일치합니다.
+  `MEM_BLOCK_SIZE`를 64 미만으로 줄 때만 갈립니다(SimX는 해시 배치, rtlsim은 일반 배치. `pr/dram-interleave`의 리뷰 F2). `SCHED_WINDOW=0`은 받아들여진 뒤 멈춥니다.
+  기본값은 32, `h200s`는 256이라 이 연구의 결과에는 영향이 없습니다. 코드를 읽어 확인했고 돌려 보지는 않았습니다.
+- **2번 (`bwstream -b`)**: upstream에는 `bwstream`과 `bwstream_dxa`가 아예 없습니다. PR(`pr/tests-bwstream`)은 두 테스트를 통째로 추가합니다.
+- **4번 (TMA 배정)**: upstream 자체 테스트에서는 효과가 작습니다. rtlsim `sgemm2_dxa -n32`가 엔진 4개와 8개에서 203,317 → 202,352(−0.5%), `dxa_copy`와 `dxa_copy_mcast`는 그대로입니다.
+  위의 −8.7%는 포크 프로파일에서 `bwstream_dxa -n8`로 잰 값입니다.
+- **9번 (캐시 순서)**: master에서 `war_order`가 60개 조건 중 35개에서 실패합니다(16 × 16 write-back 12개 중 8, 16 × 16 L2 뒤 4, 64 × 32 write-back 11, 64 × 32 L2 뒤 12).
+  기본 4 × 4에서는 실패가 없고, 수정 후에는 0개입니다.
+- **11번 (호스트 주소 겹침)**: 새 테스트 `tests/runtime/test_host_alias`가 simx에서 5번 중 5번 죽습니다(non-PIE, ASLR 끔). PIE로 빌드하면 통과합니다.
+- **12번 (TMA 꼬리표 폭)**: 엔진 수 × 동시 요청 수가 크면 rtlsim이 빌드되지 않습니다.
+- **13번 (B 버퍼 모양)**: WGMMA를 켜면 스레드 16개 · 뱅크 8개와 32개 · 16개에서 rtlsim이 멈춥니다.
+- **26번 (타일 버퍼 경로)**: `pr/simx-tbuf-route`의 테스트로 master에서 재현됩니다.
+- **33번 (LocalMem 깨우기)**: 재현됨(위).
 
 ---
 

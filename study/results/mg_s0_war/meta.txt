@@ -1,0 +1,8 @@
+name=mg_s0_war
+src_rev=
+src_dirty=0
+host=atl1-1-02-008-29-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_BAR_DRAIN_SCOPE=0
+blackbox=--driver=simx --app=war_order --perf=4 --profile=h200s --cores=1
+rc=0
+wall_s=223

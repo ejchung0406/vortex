@@ -1,0 +1,66 @@
+kind=int_dep W=1 iters=32 cyc_per_iter_warp=1883.09 cyc_per_iter_sm=1883.09 hash=998132940b017e43
+PERF: scheduler: idle=97%, occupancy=1.0 (2%), simt_util=31.9 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=21%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=12.03, load_lat=462.55, loads=160, stores=98
+PERF: instrs=4333, cycles=63617, IPC=0.068
+kind=int_ind4 W=1 iters=32 cyc_per_iter_warp=552.47 cyc_per_iter_sm=552.47 hash=35b8a36599bb7e43
+PERF: scheduler: idle=91%, occupancy=1.0 (2%), simt_util=31.9 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=13%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=11.88, load_lat=462.55, loads=160, stores=98
+PERF: instrs=4329, cycles=21037, IPC=0.206
+kind=int_ind8 W=1 iters=32 cyc_per_iter_warp=499.84 cyc_per_iter_sm=499.84 hash=22a524e42e4a2243
+PERF: scheduler: idle=90%, occupancy=1.0 (2%), simt_util=31.9 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=1%, opds=1%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=12.11, load_lat=462.55, loads=160, stores=98
+PERF: instrs=4330, cycles=19353, IPC=0.224
+kind=fma_dep W=1 iters=32 cyc_per_iter_warp=2751.84 cyc_per_iter_sm=2751.84 hash=19b9d3f5e2199d36
+PERF: scheduler: idle=98%, occupancy=1.0 (2%), simt_util=31.9 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=22%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=11.80, load_lat=462.55, loads=160, stores=98
+PERF: instrs=4328, cycles=91417, IPC=0.047
+kind=fma_ind4 W=1 iters=32 cyc_per_iter_warp=2822.72 cyc_per_iter_sm=2822.72 hash=2d61391fb2274623
+PERF: scheduler: idle=98%, occupancy=1.0 (2%), simt_util=31.9 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=22%, opds=1%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=11.96, load_lat=462.55, loads=160, stores=98
+PERF: instrs=4330, cycles=93685, IPC=0.046
+kind=fma_ind8 W=1 iters=32 cyc_per_iter_warp=2791.47 cyc_per_iter_sm=2791.47 hash=d5c879d3d89cd524
+PERF: scheduler: idle=98%, occupancy=1.0 (2%), simt_util=31.9 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=22%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=11.99, load_lat=462.55, loads=160, stores=98
+PERF: instrs=4330, cycles=92685, IPC=0.047
+kind=br_every1 W=1 iters=32 cyc_per_iter_warp=3081.84 cyc_per_iter_sm=3081.84 hash=e14e878c4b183e43
+PERF: scheduler: idle=86%, occupancy=1.0 (2%), simt_util=32.0 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=0%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=9.36, load_lat=462.55, loads=160, stores=98
+PERF: instrs=4328, cycles=101977, IPC=0.042
+kind=br_every4 W=1 iters=32 cyc_per_iter_warp=1151.12 cyc_per_iter_sm=1151.12 hash=9aa57a5be8513e43
+PERF: scheduler: idle=90%, occupancy=1.0 (2%), simt_util=31.9 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=1%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=11.02, load_lat=462.55, loads=160, stores=98
+PERF: instrs=4330, cycles=40194, IPC=0.108
+kind=br_every16 W=1 iters=32 cyc_per_iter_warp=714.16 cyc_per_iter_sm=714.16 hash=ede8db2220689e43
+PERF: scheduler: idle=91%, occupancy=1.0 (2%), simt_util=31.9 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=7%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=11.83, load_lat=462.55, loads=160, stores=98
+PERF: instrs=4330, cycles=26211, IPC=0.165
+kind=lds_own W=1 iters=32 cyc_per_iter_warp=1653.84 cyc_per_iter_sm=1653.84 hash=86cea7b057826183
+PERF: scheduler: idle=89%, occupancy=1.0 (2%), simt_util=31.9 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=15%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=10.89, load_lat=9.05, loads=131232, stores=98
+PERF: instrs=8430, cycles=56281, IPC=0.150
+kind=lds_chase W=1 iters=32 cyc_per_iter_warp=3401.94 cyc_per_iter_sm=3401.94 hash=f83c0c50512605c3
+PERF: scheduler: idle=98%, occupancy=1.0 (2%), simt_util=31.9 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=23%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=11.92, load_lat=9.05, loads=131232, stores=98
+PERF: instrs=4331, cycles=112220, IPC=0.039
+kind=sts_own W=1 iters=32 cyc_per_iter_warp=854.78 cyc_per_iter_sm=854.78 hash=e14e878c4b183e43
+PERF: scheduler: idle=94%, occupancy=1.0 (2%), simt_util=31.9 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=1%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=12.33, load_lat=462.55, loads=160, stores=131170
+PERF: instrs=4330, cycles=30711, IPC=0.141
+kind=lds_nouse W=1 iters=32 cyc_per_iter_warp=859.47 cyc_per_iter_sm=859.47 hash=86cea7b057826183
+PERF: scheduler: idle=94%, occupancy=1.0 (2%), simt_util=31.9 (100%)
+PERF: stalls: fetch=0%, ibuf=0%, scrb=16%, opds=0%, alu=0%, lsu=0%, sfu=0%, fpu=0%, tcu=0%
+PERF: memory: ifetch_lat=12.10, load_lat=9.05, loads=131232, stores=98
+PERF: instrs=4334, cycles=30861, IPC=0.140
+done

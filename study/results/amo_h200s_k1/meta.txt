@@ -1,0 +1,6 @@
+name=amo_h200s_k1
+src_rev=
+src_dirty=0
+host=atl1-1-02-005-18-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=simx --app=amo --perf=4 --profile=h200s --cores=1

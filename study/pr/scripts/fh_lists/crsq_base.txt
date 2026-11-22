@@ -1,0 +1,4 @@
+pr_fh_crsq_bw_x32l_base|simx|bwstream|-n64 -r1 -p0 -u4 -b32||-DVX_CFG_NUM_WARPS=32 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_DCACHE_CRSQ_SIZE=2
+pr_fh_crsq_va_x32_base|simx|vecadd|-n65536||-DVX_CFG_NUM_WARPS=32 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_DCACHE_CRSQ_SIZE=2
+pr_fh_crsq_packld_x16_base|simx|packld|||-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_DCACHE_CRSQ_SIZE=2
+pr_fh_crsq_sgemm_mc64_base|simx|sgemm|-n64|--cores=2 --l2cache|-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_DCACHE_CRSQ_SIZE=2

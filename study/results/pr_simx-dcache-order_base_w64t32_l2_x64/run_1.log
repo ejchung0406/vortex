@@ -1,0 +1,42 @@
+CONFIGS=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=64 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_L2_ENABLE -DPERF_ENABLE -DVX_CFG_NUM_CORES=1
+Running: CONFIGS="-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=64 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_L2_ENABLE -DPERF_ENABLE -DVX_CFG_NUM_CORES=1" make -C "./ci/../tests/regression/war_order" runtime-simx > /dev/null
+which: no ccache in (/storage/home/hcoda1/7/echung67/.local/bin:/usr/local/pace-apps/manual/packages/xalt/xalt/bin:/usr/local/pace-apps/manual/packages/uv/0.9.17:/opt/pace-common/bin:/opt/slurm/current/bin:/storage/home/hcoda1/7/echung67/.nvm/versions/node/v24.15.0/bin:/storage/home/hcoda1/7/echung67/.local/bin:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/mvapich2-2.3.7-1-qv3gjagtbx5e3rlbdy6iy2sfczryftyt/bin:/opt/pmix/4.2.6/bin:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/iozone/bin:/storage/home/hcoda1/7/echung67/bin:/storage/home/hcoda1/7/echung67/bin)
+Running: OPTS="-n65536 -s1" CONFIGS="-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=64 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_L2_ENABLE -DPERF_ENABLE -DVX_CFG_NUM_CORES=1" make -C "./ci/../tests/regression/war_order" run-simx
+make: Entering directory '/tmp/echung67/vx_15977787_1375913/tests/regression/war_order'
+CONFIGS="-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=64 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_L2_ENABLE -DPERF_ENABLE -DVX_CFG_NUM_CORES=1"  PERF=4   make -C /tmp/echung67/vx_15977787_1375913/sw/runtime/stub DESTDIR=/tmp/echung67/vx_15977787_1375913/sw/runtime
+make[1]: Entering directory '/tmp/echung67/vx_15977787_1375913/sw/runtime/stub'
+make[1]: Nothing to be done for 'all'.
+make[1]: Leaving directory '/tmp/echung67/vx_15977787_1375913/sw/runtime/stub'
+CONFIGS="-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=64 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_L2_ENABLE -DPERF_ENABLE -DVX_CFG_NUM_CORES=1"  PERF=4   make -C /tmp/echung67/vx_15977787_1375913/sw/runtime/simx DESTDIR=/tmp/echung67/vx_15977787_1375913/sw/runtime
+make[1]: Entering directory '/tmp/echung67/vx_15977787_1375913/sw/runtime/simx'
+DESTDIR=/tmp/echung67/vx_15977787_1375913/sw/runtime make -C /tmp/echung67/vx_15977787_1375913/sim/simx /tmp/echung67/vx_15977787_1375913/sw/runtime/libsimx.so
+make[2]: Entering directory '/tmp/echung67/vx_15977787_1375913/sim/simx'
+which: no ccache in (/storage/home/hcoda1/7/echung67/.local/bin:/usr/local/pace-apps/manual/packages/xalt/xalt/bin:/usr/local/pace-apps/manual/packages/uv/0.9.17:/opt/pace-common/bin:/opt/slurm/current/bin:/storage/home/hcoda1/7/echung67/.nvm/versions/node/v24.15.0/bin:/storage/home/hcoda1/7/echung67/.local/bin:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/mvapich2-2.3.7-1-qv3gjagtbx5e3rlbdy6iy2sfczryftyt/bin:/opt/pmix/4.2.6/bin:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/iozone/bin:/storage/home/hcoda1/7/echung67/bin:/storage/home/hcoda1/7/echung67/bin)
+make[2]: Leaving directory '/tmp/echung67/vx_15977787_1375913/sim/simx'
+make[1]: Leaving directory '/tmp/echung67/vx_15977787_1375913/sw/runtime/simx'
+LD_LIBRARY_PATH=/tmp/echung67/vx_15977787_1375913/sw/runtime:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/boost-1.86.0-ctvuqdbnk462qizlnak3nv35j4vke2mu/lib:/opt/slurm/current/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/mvapich2-2.3.7-1-qv3gjagtbx5e3rlbdy6iy2sfczryftyt/lib:/opt/slurm/current/lib:/opt/pmix/4.2.6/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/libpciaccess-0.17-pjfe4ct4gfm5k26s36hmewhbz4k232dl/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/lib64:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/zlib-1.2.13-3qhjpij2pji47kfanmlflvwk5ljcn5lh/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/mpc-1.3.1-3zvixith5i243hwiill4exyu3lf2q6ad/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/mpfr-4.2.0-tox4bdsc25zr763rnq5gzlukfbvw7uj7/lib:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/gmp-6.2.1-n7dzsse5e3f6w5z6q6cuqursydg6yypo/lib:: VORTEX_DRIVER=simx ./war_order -n65536 -s1
+war_order: words=65536 threads=2048 delay=1x3 store_delay=1x0
+layout 0: a line's words in different warps
+*** word 6517: data=0xc0001975 (expected 0xc0001975) err=0x4
+*** word 7394: data=0xc0001ce2 (expected 0xc0001ce2) err=0x2
+*** word 7477: data=0xc0001d35 (expected 0xc0001d35) err=0x4
+*** word 10647: data=0xc0002997 (expected 0xc0002997) err=0x4
+*** word 11223: data=0xc0002bd7 (expected 0xc0002bd7) err=0x4
+*** word 17062: data=0xc00042a6 (expected 0xc00042a6) err=0x4
+*** word 19169: data=0xc0004ae1 (expected 0xc0004ae1) err=0xc
+*** word 20678: data=0xc00050c6 (expected 0xc00050c6) err=0xc
+*** word 21407: data=0xc000539f (expected 0xc000539f) err=0xc
+*** word 21510: data=0xc0005406 (expected 0xc0005406) err=0xc
+*** word 21983: data=0xc00055df (expected 0xc00055df) err=0xc
+*** word 22568: data=0xc0005828 (expected 0xc0005828) err=0x4
+*** word 23336: data=0xc0005b28 (expected 0xc0005b28) err=0x4
+*** word 24005: data=0xc0005dc5 (expected 0xc0005dc5) err=0xc
+*** word 24765: data=0xc00060bd (expected 0xc00060bd) err=0xc
+*** word 24829: data=0xc00060fd (expected 0xc00060fd) err=0xc
+layout 1: a warp's words contiguous
+PERF: core0: dcache: reqs=672341, miss_r=137285 (hit=64%), miss_w=139312 (hit=53%), evicts=0, bank_st=20268 (utility=97%)
+PERF: instrs=254912, cycles=310240, IPC=0.822
+Found 126 errors (error bits 0x1e)!
+FAILED!
+make: *** [../common.mk:245: run-simx] Error 1
+make: Leaving directory '/tmp/echung67/vx_15977787_1375913/tests/regression/war_order'

@@ -1,0 +1,15 @@
+name=pr_dram_base_rtlsim
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram_base rev=ccf811e1196d7aa2aa2f8a3ada77797c1ff6333d
+host=atl1-1-01-004-5-1.pace.gatech.edu
+driver=rtlsim xlen=64
+ext_symbols=0
+case sgemm32 app=sgemm args="-n32" configs="" flags="" rc=0 cycles=114005 instrs=47904 wall=43
+case sgemv app=sgemv args="-m128 -n128" configs="" flags="" rc=0 cycles=58608 instrs=20640 wall=5
+case vecadd app=vecadd args="-n16384" configs="" flags="" rc=0 cycles=380940 instrs=122912 wall=8
+case dxa app=dxa_copy args="-d2" configs="-DVX_CFG_EXT_DXA_ENABLE" flags="" rc=0 cycles=53994 instrs=15968 wall=43
+case l2mc app=sgemm args="-n32" configs="" flags="--l2cache --cores=2" rc=0 cycles=57326 instrs=47936 wall=73
+case hbm3 app=vecadd args="-n16384" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6545" flags="--l2cache --cores=2" rc=0 cycles=188051 instrs=122944 wall=77
+case gddr6 app=sgemv args="-m128 -n128" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=GDDR6 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=8 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=14000" flags="" rc=0 cycles=58053 instrs=20640 wall=39
+fails=0 of 7
+wall_s=288
+rc=0

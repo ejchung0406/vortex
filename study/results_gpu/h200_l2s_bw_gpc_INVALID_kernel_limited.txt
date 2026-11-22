@@ -1,0 +1,730 @@
+# GPC6 n=1 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12@all:65536 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=1 gbs=52.4 gbs_range=52.4-52.4 clock_mhz=1980 bytes_per_clk_chip=26.5 per_sm_gbs=52.4 g0_gbs=52.4
+exit=0 secs=0.8
+# GPC6 n=1 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12@all:65536 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=1 gbs=43.4 gbs_range=43.4-43.5 clock_mhz=1980 bytes_per_clk_chip=21.9 per_sm_gbs=43.4 g0_gbs=43.4
+exit=0 secs=0.6
+# GPC6 n=1 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12@all:128 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=1 gbs=61.7 gbs_range=61.7-61.7 clock_mhz=1980 bytes_per_clk_chip=31.1 per_sm_gbs=61.7 g0_gbs=61.7
+exit=0 secs=0.7
+# GPC6 n=1 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12@all:128 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=1 gbs=57.2 gbs_range=57.2-57.3 clock_mhz=1980 bytes_per_clk_chip=28.9 per_sm_gbs=57.2 g0_gbs=57.2
+exit=0 secs=0.6
+# GPC6 n=1 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=1 gbs=61.7 gbs_range=61.7-61.8 clock_mhz=1980 bytes_per_clk_chip=31.2 per_sm_gbs=61.7 g0_gbs=61.7
+exit=0 secs=0.6
+# GPC6 n=1 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=1 gbs=63.0 gbs_range=63.0-63.1 clock_mhz=1980 bytes_per_clk_chip=31.8 per_sm_gbs=63.0 g0_gbs=63.0
+exit=0 secs=0.6
+# GPC6 n=2 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13@all:131072 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=2 gbs=104.6 gbs_range=104.5-104.8 clock_mhz=1980 bytes_per_clk_chip=52.8 per_sm_gbs=52.3 g0_gbs=104.6
+exit=0 secs=0.7
+# GPC6 n=2 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13@all:131072 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=2 gbs=86.6 gbs_range=86.5-86.6 clock_mhz=1980 bytes_per_clk_chip=43.7 per_sm_gbs=43.3 g0_gbs=86.6
+exit=0 secs=0.6
+# GPC6 n=2 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13@all:256 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=2 gbs=123.4 gbs_range=123.3-123.4 clock_mhz=1980 bytes_per_clk_chip=62.3 per_sm_gbs=61.7 g0_gbs=123.4
+exit=0 secs=0.6
+# GPC6 n=2 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13@all:256 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=2 gbs=114.5 gbs_range=114.5-114.5 clock_mhz=1980 bytes_per_clk_chip=57.8 per_sm_gbs=57.3 g0_gbs=114.5
+exit=0 secs=0.6
+# GPC6 n=2 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=2 gbs=122.9 gbs_range=122.9-123.1 clock_mhz=1973 bytes_per_clk_chip=62.3 per_sm_gbs=61.5 g0_gbs=122.9
+exit=0 secs=0.6
+# GPC6 n=2 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=2 gbs=126.0 gbs_range=126.0-126.1 clock_mhz=1980 bytes_per_clk_chip=63.7 per_sm_gbs=63.0 g0_gbs=126.0
+exit=0 secs=0.6
+# GPC6 n=3 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28@all:196608 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=3 units=6 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=3 gbs=156.5 gbs_range=156.4-157.0 clock_mhz=1980 bytes_per_clk_chip=79.0 per_sm_gbs=52.2 g0_gbs=156.5
+exit=0 secs=0.6
+# GPC6 n=3 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28@all:196608 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=3 units=6 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=3 gbs=129.9 gbs_range=129.7-129.9 clock_mhz=1980 bytes_per_clk_chip=65.6 per_sm_gbs=43.3 g0_gbs=129.9
+exit=0 secs=0.6
+# GPC6 n=3 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28@all:384 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=3 units=6 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=3 gbs=185.0 gbs_range=184.9-185.1 clock_mhz=1980 bytes_per_clk_chip=93.4 per_sm_gbs=61.7 g0_gbs=185.0
+exit=0 secs=0.6
+# GPC6 n=3 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28@all:384 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=3 units=6 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=3 gbs=171.6 gbs_range=171.6-171.8 clock_mhz=1980 bytes_per_clk_chip=86.7 per_sm_gbs=57.2 g0_gbs=171.6
+exit=0 secs=0.6
+# GPC6 n=3 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=3 units=6 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=3 gbs=185.0 gbs_range=184.9-185.1 clock_mhz=1980 bytes_per_clk_chip=93.4 per_sm_gbs=61.7 g0_gbs=185.0
+exit=0 secs=0.6
+# GPC6 n=3 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=3 units=6 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=3 gbs=188.8 gbs_range=188.7-189.0 clock_mhz=1980 bytes_per_clk_chip=95.4 per_sm_gbs=62.9 g0_gbs=188.8
+exit=0 secs=0.7
+# GPC6 n=4 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29@all:262144 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=4 gbs=208.5 gbs_range=208.5-209.0 clock_mhz=1980 bytes_per_clk_chip=105.3 per_sm_gbs=52.1 g0_gbs=208.5
+exit=0 secs=0.6
+# GPC6 n=4 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29@all:262144 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=4 gbs=172.8 gbs_range=172.7-173.1 clock_mhz=1980 bytes_per_clk_chip=87.3 per_sm_gbs=43.2 g0_gbs=172.8
+exit=0 secs=0.6
+# GPC6 n=4 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29@all:512 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=4 gbs=246.7 gbs_range=246.3-246.7 clock_mhz=1980 bytes_per_clk_chip=124.6 per_sm_gbs=61.7 g0_gbs=246.7
+exit=0 secs=0.6
+# GPC6 n=4 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29@all:512 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=4 gbs=229.0 gbs_range=228.9-229.0 clock_mhz=1980 bytes_per_clk_chip=115.7 per_sm_gbs=57.2 g0_gbs=229.0
+exit=0 secs=0.6
+# GPC6 n=4 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=4 gbs=246.6 gbs_range=246.4-246.6 clock_mhz=1980 bytes_per_clk_chip=124.6 per_sm_gbs=61.6 g0_gbs=246.6
+exit=0 secs=0.6
+# GPC6 n=4 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=4 gbs=251.9 gbs_range=251.8-251.9 clock_mhz=1980 bytes_per_clk_chip=127.2 per_sm_gbs=63.0 g0_gbs=251.9
+exit=0 secs=0.6
+# GPC6 n=5 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44@all:327680 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=5 units=10 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=5 gbs=260.2 gbs_range=259.9-260.3 clock_mhz=1980 bytes_per_clk_chip=131.4 per_sm_gbs=52.0 g0_gbs=260.2
+exit=0 secs=0.6
+# GPC6 n=5 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44@all:327680 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=5 units=10 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=5 gbs=215.9 gbs_range=215.4-216.1 clock_mhz=1980 bytes_per_clk_chip=109.0 per_sm_gbs=43.2 g0_gbs=215.9
+exit=0 secs=0.6
+# GPC6 n=5 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44@all:640 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=5 units=10 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=5 gbs=308.0 gbs_range=307.9-308.0 clock_mhz=1980 bytes_per_clk_chip=155.6 per_sm_gbs=61.6 g0_gbs=308.0
+exit=0 secs=0.6
+# GPC6 n=5 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44@all:640 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=5 units=10 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=5 gbs=286.2 gbs_range=286.1-286.4 clock_mhz=1980 bytes_per_clk_chip=144.5 per_sm_gbs=57.2 g0_gbs=286.2
+exit=0 secs=0.6
+# GPC6 n=5 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=5 units=10 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=5 gbs=306.7 gbs_range=306.7-307.7 clock_mhz=1971 bytes_per_clk_chip=155.6 per_sm_gbs=61.3 g0_gbs=306.7
+exit=0 secs=0.6
+# GPC6 n=5 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=5 units=10 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=5 gbs=314.4 gbs_range=314.4-314.6 clock_mhz=1979 bytes_per_clk_chip=158.8 per_sm_gbs=62.9 g0_gbs=314.4
+exit=0 secs=0.6
+# GPC6 n=6 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45@all:393216 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=6 units=12 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=6 gbs=312.8 gbs_range=312.5-312.9 clock_mhz=1979 bytes_per_clk_chip=158.0 per_sm_gbs=52.1 g0_gbs=312.8
+exit=0 secs=0.6
+# GPC6 n=6 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45@all:393216 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=6 units=12 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=6 gbs=257.1 gbs_range=257.1-257.4 clock_mhz=1980 bytes_per_clk_chip=129.9 per_sm_gbs=42.9 g0_gbs=257.1
+exit=0 secs=0.7
+# GPC6 n=6 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45@all:768 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=6 units=12 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=6 gbs=367.9 gbs_range=367.7-369.3 clock_mhz=1970 bytes_per_clk_chip=186.7 per_sm_gbs=61.3 g0_gbs=367.9
+exit=0 secs=0.6
+# GPC6 n=6 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45@all:768 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=6 units=12 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=6 gbs=343.4 gbs_range=343.3-343.4 clock_mhz=1980 bytes_per_clk_chip=173.4 per_sm_gbs=57.2 g0_gbs=343.4
+exit=0 secs=0.7
+# GPC6 n=6 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=6 units=12 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=6 gbs=369.3 gbs_range=369.2-369.5 clock_mhz=1979 bytes_per_clk_chip=186.6 per_sm_gbs=61.6 g0_gbs=369.3
+exit=0 secs=0.6
+# GPC6 n=6 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=6 units=12 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=6 gbs=377.2 gbs_range=377.0-377.5 clock_mhz=1979 bytes_per_clk_chip=190.6 per_sm_gbs=62.9 g0_gbs=377.2
+exit=0 secs=0.6
+# GPC6 n=8 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61@all:524288 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=8 gbs=416.4 gbs_range=415.5-417.2 clock_mhz=1979 bytes_per_clk_chip=210.4 per_sm_gbs=52.1 g0_gbs=416.4
+exit=0 secs=0.6
+# GPC6 n=8 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61@all:524288 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=8 gbs=342.9 gbs_range=342.8-343.5 clock_mhz=1980 bytes_per_clk_chip=173.2 per_sm_gbs=42.9 g0_gbs=342.9
+exit=0 secs=0.6
+# GPC6 n=8 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61@all:1024 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=8 gbs=492.3 gbs_range=492.2-492.8 clock_mhz=1979 bytes_per_clk_chip=248.7 per_sm_gbs=61.5 g0_gbs=492.3
+exit=0 secs=0.6
+# GPC6 n=8 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61@all:1024 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=8 gbs=455.5 gbs_range=454.9-455.9 clock_mhz=1980 bytes_per_clk_chip=230.1 per_sm_gbs=56.9 g0_gbs=455.5
+exit=0 secs=0.6
+# GPC6 n=8 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=8 gbs=490.2 gbs_range=490.0-492.4 clock_mhz=1970 bytes_per_clk_chip=248.8 per_sm_gbs=61.3 g0_gbs=490.2
+exit=0 secs=0.6
+# GPC6 n=8 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=8 gbs=502.9 gbs_range=502.7-502.9 clock_mhz=1979 bytes_per_clk_chip=254.1 per_sm_gbs=62.9 g0_gbs=502.9
+exit=0 secs=0.7
+# GPC6 n=10 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75@all:655360 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=10 units=20 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=10 gbs=521.5 gbs_range=519.5-521.5 clock_mhz=1979 bytes_per_clk_chip=263.6 per_sm_gbs=52.2 g0_gbs=521.5
+exit=0 secs=0.6
+# GPC6 n=10 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75@all:655360 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=10 units=20 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=10 gbs=428.0 gbs_range=427.5-428.2 clock_mhz=1980 bytes_per_clk_chip=216.2 per_sm_gbs=42.8 g0_gbs=428.0
+exit=0 secs=0.6
+# GPC6 n=10 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75@all:1280 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=10 units=20 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=10 gbs=615.2 gbs_range=615.1-615.4 clock_mhz=1978 bytes_per_clk_chip=311.0 per_sm_gbs=61.5 g0_gbs=615.2
+exit=0 secs=0.6
+# GPC6 n=10 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75@all:1280 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=10 units=20 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=10 gbs=569.0 gbs_range=569.0-569.2 clock_mhz=1980 bytes_per_clk_chip=287.5 per_sm_gbs=56.9 g0_gbs=569.0
+exit=0 secs=0.6
+# GPC6 n=10 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=10 units=20 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=10 gbs=615.1 gbs_range=614.9-615.2 clock_mhz=1978 bytes_per_clk_chip=310.9 per_sm_gbs=61.5 g0_gbs=615.1
+exit=0 secs=0.6
+# GPC6 n=10 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=10 units=20 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=10 gbs=628.1 gbs_range=627.8-628.6 clock_mhz=1978 bytes_per_clk_chip=317.6 per_sm_gbs=62.8 g0_gbs=628.1
+exit=0 secs=0.6
+# GPC6 n=12 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89@all:786432 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=12 units=24 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=12 gbs=625.0 gbs_range=623.5-625.4 clock_mhz=1977 bytes_per_clk_chip=316.1 per_sm_gbs=52.1 g0_gbs=625.0
+exit=0 secs=0.6
+# GPC6 n=12 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89@all:786432 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=12 units=24 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=12 gbs=511.2 gbs_range=510.6-511.7 clock_mhz=1979 bytes_per_clk_chip=258.3 per_sm_gbs=42.6 g0_gbs=511.2
+exit=0 secs=0.6
+# GPC6 n=12 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89@all:1536 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=12 units=24 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=12 gbs=737.4 gbs_range=737.2-737.5 clock_mhz=1976 bytes_per_clk_chip=373.1 per_sm_gbs=61.5 g0_gbs=737.4
+exit=0 secs=0.6
+# GPC6 n=12 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89@all:1536 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=12 units=24 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=12 gbs=682.5 gbs_range=682.3-682.5 clock_mhz=1978 bytes_per_clk_chip=345.0 per_sm_gbs=56.9 g0_gbs=682.5
+exit=0 secs=0.6
+# GPC6 n=12 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=12 units=24 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=12 gbs=737.2 gbs_range=737.1-737.4 clock_mhz=1976 bytes_per_clk_chip=373.1 per_sm_gbs=61.4 g0_gbs=737.2
+exit=0 secs=0.6
+# GPC6 n=12 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=12 units=24 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=12 gbs=752.9 gbs_range=752.9-752.9 clock_mhz=1976 bytes_per_clk_chip=381.0 per_sm_gbs=62.7 g0_gbs=752.9
+exit=0 secs=0.6
+# GPC6 n=14 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103@all:917504 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=14 units=28 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=14 gbs=726.1 gbs_range=725.9-728.0 clock_mhz=1976 bytes_per_clk_chip=367.4 per_sm_gbs=51.9 g0_gbs=726.1
+exit=0 secs=0.6
+# GPC6 n=14 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103@all:917504 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=14 units=28 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=14 gbs=577.6 gbs_range=577.3-577.7 clock_mhz=1979 bytes_per_clk_chip=291.8 per_sm_gbs=41.3 g0_gbs=577.6
+exit=0 secs=0.6
+# GPC6 n=14 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103@all:1792 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=14 units=28 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=14 gbs=855.4 gbs_range=855.0-855.5 clock_mhz=1965 bytes_per_clk_chip=435.4 per_sm_gbs=61.1 g0_gbs=855.4
+exit=0 secs=0.6
+# GPC6 n=14 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103@all:1792 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=14 units=28 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=14 gbs=659.9 gbs_range=655.9-665.0 clock_mhz=1978 bytes_per_clk_chip=333.7 per_sm_gbs=47.1 g0_gbs=659.9
+exit=0 secs=0.6
+# GPC6 n=14 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=14 units=28 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=14 gbs=859.7 gbs_range=859.1-860.3 clock_mhz=1976 bytes_per_clk_chip=435.1 per_sm_gbs=61.4 g0_gbs=859.7
+exit=0 secs=0.6
+# GPC6 n=14 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=14 units=28 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=14 gbs=877.8 gbs_range=877.5-878.1 clock_mhz=1975 bytes_per_clk_chip=444.5 per_sm_gbs=62.7 g0_gbs=877.8
+exit=0 secs=0.6
+# GPC6 n=16 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117@all:1048576 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=16 units=32 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=16 gbs=829.8 gbs_range=827.3-830.2 clock_mhz=1976 bytes_per_clk_chip=419.9 per_sm_gbs=51.9 g0_gbs=829.8
+exit=0 secs=1.2
+# GPC6 n=16 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117@all:1048576 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=16 units=32 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=16 gbs=657.6 gbs_range=657.2-657.6 clock_mhz=1979 bytes_per_clk_chip=332.3 per_sm_gbs=41.1 g0_gbs=657.6
+exit=0 secs=0.6
+# GPC6 n=16 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117@all:2048 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=16 units=32 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=16 gbs=981.9 gbs_range=981.6-982.0 clock_mhz=1974 bytes_per_clk_chip=497.3 per_sm_gbs=61.4 g0_gbs=981.9
+exit=0 secs=0.6
+# GPC6 n=16 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117@all:2048 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=16 units=32 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=16 gbs=737.4 gbs_range=729.6-748.7 clock_mhz=1978 bytes_per_clk_chip=372.9 per_sm_gbs=46.1 g0_gbs=737.4
+exit=0 secs=0.6
+# GPC6 n=16 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=16 units=32 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=16 gbs=982.0 gbs_range=980.8-982.0 clock_mhz=1975 bytes_per_clk_chip=497.3 per_sm_gbs=61.4 g0_gbs=982.0
+exit=0 secs=0.6
+# GPC6 n=16 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=16 units=32 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=16 gbs=1002.5 gbs_range=1002.5-1003.1 clock_mhz=1974 bytes_per_clk_chip=507.8 per_sm_gbs=62.7 g0_gbs=1002.5
+exit=0 secs=0.6
+# GPC6 n=18 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121@all:1179648 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=18 units=36 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=18 gbs=919.3 gbs_range=918.9-919.8 clock_mhz=1961 bytes_per_clk_chip=468.9 per_sm_gbs=51.1 g0_gbs=919.3
+exit=0 secs=0.6
+# GPC6 n=18 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121@all:1179648 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=18 units=36 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=18 gbs=736.4 gbs_range=735.5-736.4 clock_mhz=1976 bytes_per_clk_chip=372.7 per_sm_gbs=40.9 g0_gbs=736.4
+exit=0 secs=0.7
+# GPC6 n=18 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121@all:2304 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=18 units=36 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=18 gbs=1099.9 gbs_range=1099.6-1100.6 clock_mhz=1969 bytes_per_clk_chip=558.6 per_sm_gbs=61.1 g0_gbs=1099.9
+exit=0 secs=0.6
+# GPC6 n=18 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121@all:2304 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=18 units=36 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=18 gbs=835.8 gbs_range=826.9-836.5 clock_mhz=1975 bytes_per_clk_chip=423.2 per_sm_gbs=46.4 g0_gbs=835.8
+exit=0 secs=0.6
+# GPC6 n=18 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=18 units=36 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=18 gbs=1100.8 gbs_range=1100.2-1101.5 clock_mhz=1970 bytes_per_clk_chip=558.8 per_sm_gbs=61.2 g0_gbs=1100.8
+exit=0 secs=0.6
+# GPC6 n=18 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 12,13,28,29,44,45,60,61,74,75,88,89,102,103,116,117,120,121@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=18 units=36 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=18 gbs=1124.3 gbs_range=1123.7-1124.3 clock_mhz=1969 bytes_per_clk_chip=571.0 per_sm_gbs=62.5 g0_gbs=1124.3
+exit=0 secs=0.6
+# GPC1 n=1 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2@all:65536 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=1 gbs=52.2 gbs_range=52.1-52.4 clock_mhz=1980 bytes_per_clk_chip=26.4 per_sm_gbs=52.2 g0_gbs=52.2
+exit=0 secs=0.6
+# GPC1 n=1 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2@all:65536 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=1 gbs=43.4 gbs_range=43.3-43.4 clock_mhz=1980 bytes_per_clk_chip=21.9 per_sm_gbs=43.4 g0_gbs=43.4
+exit=0 secs=0.7
+# GPC1 n=1 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2@all:128 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=1 gbs=61.7 gbs_range=61.7-61.7 clock_mhz=1980 bytes_per_clk_chip=31.2 per_sm_gbs=61.7 g0_gbs=61.7
+exit=0 secs=0.6
+# GPC1 n=1 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2@all:128 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=1 gbs=57.3 gbs_range=57.3-57.3 clock_mhz=1980 bytes_per_clk_chip=28.9 per_sm_gbs=57.3 g0_gbs=57.3
+exit=0 secs=0.6
+# GPC1 n=1 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=1 gbs=61.7 gbs_range=61.7-61.8 clock_mhz=1980 bytes_per_clk_chip=31.2 per_sm_gbs=61.7 g0_gbs=61.7
+exit=0 secs=0.6
+# GPC1 n=1 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=1 gbs=63.0 gbs_range=63.0-63.1 clock_mhz=1980 bytes_per_clk_chip=31.8 per_sm_gbs=63.0 g0_gbs=63.0
+exit=0 secs=0.6
+# GPC1 n=2 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3@all:131072 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=2 gbs=104.5 gbs_range=104.3-104.6 clock_mhz=1980 bytes_per_clk_chip=52.8 per_sm_gbs=52.3 g0_gbs=104.5
+exit=0 secs=0.7
+# GPC1 n=2 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3@all:131072 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=2 gbs=86.5 gbs_range=86.4-86.8 clock_mhz=1980 bytes_per_clk_chip=43.7 per_sm_gbs=43.3 g0_gbs=86.5
+exit=0 secs=0.7
+# GPC1 n=2 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3@all:256 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=2 gbs=123.4 gbs_range=123.4-123.5 clock_mhz=1980 bytes_per_clk_chip=62.3 per_sm_gbs=61.7 g0_gbs=123.4
+exit=0 secs=0.6
+# GPC1 n=2 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3@all:256 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=2 gbs=114.5 gbs_range=114.4-114.6 clock_mhz=1980 bytes_per_clk_chip=57.8 per_sm_gbs=57.3 g0_gbs=114.5
+exit=0 secs=0.6
+# GPC1 n=2 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=2 gbs=123.4 gbs_range=123.4-123.5 clock_mhz=1980 bytes_per_clk_chip=62.4 per_sm_gbs=61.7 g0_gbs=123.4
+exit=0 secs=0.6
+# GPC1 n=2 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=2 gbs=126.0 gbs_range=126.0-126.0 clock_mhz=1980 bytes_per_clk_chip=63.7 per_sm_gbs=63.0 g0_gbs=126.0
+exit=0 secs=0.6
+# GPC1 n=3 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18@all:196608 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=3 units=6 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=3 gbs=156.6 gbs_range=156.4-156.7 clock_mhz=1980 bytes_per_clk_chip=79.1 per_sm_gbs=52.2 g0_gbs=156.6
+exit=0 secs=0.6
+# GPC1 n=3 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18@all:196608 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=3 units=6 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=3 gbs=129.7 gbs_range=129.6-130.1 clock_mhz=1980 bytes_per_clk_chip=65.5 per_sm_gbs=43.2 g0_gbs=129.7
+exit=0 secs=0.6
+# GPC1 n=3 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18@all:384 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=3 units=6 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=3 gbs=184.4 gbs_range=184.2-184.5 clock_mhz=1974 bytes_per_clk_chip=93.4 per_sm_gbs=61.5 g0_gbs=184.4
+exit=0 secs=0.6
+# GPC1 n=3 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18@all:384 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=3 units=6 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=3 gbs=171.8 gbs_range=171.6-171.8 clock_mhz=1980 bytes_per_clk_chip=86.8 per_sm_gbs=57.3 g0_gbs=171.8
+exit=0 secs=0.6
+# GPC1 n=3 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=3 units=6 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=3 gbs=185.0 gbs_range=185.0-185.1 clock_mhz=1980 bytes_per_clk_chip=93.5 per_sm_gbs=61.7 g0_gbs=185.0
+exit=0 secs=0.7
+# GPC1 n=3 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=3 units=6 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=3 gbs=189.0 gbs_range=188.9-189.0 clock_mhz=1980 bytes_per_clk_chip=95.5 per_sm_gbs=63.0 g0_gbs=189.0
+exit=0 secs=0.6
+# GPC1 n=4 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19@all:262144 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=4 gbs=208.2 gbs_range=208.1-208.5 clock_mhz=1980 bytes_per_clk_chip=105.2 per_sm_gbs=52.0 g0_gbs=208.2
+exit=0 secs=0.6
+# GPC1 n=4 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19@all:262144 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=4 gbs=173.2 gbs_range=172.8-173.2 clock_mhz=1980 bytes_per_clk_chip=87.5 per_sm_gbs=43.3 g0_gbs=173.2
+exit=0 secs=0.6
+# GPC1 n=4 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19@all:512 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=4 gbs=246.6 gbs_range=246.5-246.6 clock_mhz=1980 bytes_per_clk_chip=124.6 per_sm_gbs=61.7 g0_gbs=246.6
+exit=0 secs=0.6
+# GPC1 n=4 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19@all:512 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=4 gbs=228.9 gbs_range=228.8-229.1 clock_mhz=1980 bytes_per_clk_chip=115.6 per_sm_gbs=57.2 g0_gbs=228.9
+exit=0 secs=0.6
+# GPC1 n=4 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=4 gbs=246.8 gbs_range=246.7-246.8 clock_mhz=1980 bytes_per_clk_chip=124.7 per_sm_gbs=61.7 g0_gbs=246.8
+exit=0 secs=0.6
+# GPC1 n=4 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=4 gbs=251.6 gbs_range=251.6-251.9 clock_mhz=1980 bytes_per_clk_chip=127.1 per_sm_gbs=62.9 g0_gbs=251.6
+exit=0 secs=0.6
+# GPC1 n=5 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34@all:327680 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=5 units=10 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=5 gbs=260.6 gbs_range=260.2-260.7 clock_mhz=1980 bytes_per_clk_chip=131.6 per_sm_gbs=52.1 g0_gbs=260.6
+exit=0 secs=0.7
+# GPC1 n=5 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34@all:327680 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=5 units=10 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=5 gbs=215.9 gbs_range=215.7-215.9 clock_mhz=1980 bytes_per_clk_chip=109.0 per_sm_gbs=43.2 g0_gbs=215.9
+exit=0 secs=0.6
+# GPC1 n=5 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34@all:640 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=5 units=10 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=5 gbs=308.0 gbs_range=308.0-308.0 clock_mhz=1980 bytes_per_clk_chip=155.6 per_sm_gbs=61.6 g0_gbs=308.0
+exit=0 secs=0.6
+# GPC1 n=5 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34@all:640 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=5 units=10 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=5 gbs=286.2 gbs_range=286.0-286.3 clock_mhz=1980 bytes_per_clk_chip=144.6 per_sm_gbs=57.2 g0_gbs=286.2
+exit=0 secs=0.6
+# GPC1 n=5 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=5 units=10 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=5 gbs=308.2 gbs_range=308.2-308.2 clock_mhz=1980 bytes_per_clk_chip=155.7 per_sm_gbs=61.6 g0_gbs=308.2
+exit=0 secs=0.6
+# GPC1 n=5 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=5 units=10 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=5 gbs=314.5 gbs_range=314.3-314.5 clock_mhz=1980 bytes_per_clk_chip=158.8 per_sm_gbs=62.9 g0_gbs=314.5
+exit=0 secs=0.6
+# GPC1 n=6 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35@all:393216 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=6 units=12 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=6 gbs=311.5 gbs_range=311.3-312.7 clock_mhz=1980 bytes_per_clk_chip=157.3 per_sm_gbs=51.9 g0_gbs=311.5
+exit=0 secs=0.6
+# GPC1 n=6 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35@all:393216 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=6 units=12 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=6 gbs=259.0 gbs_range=258.1-259.2 clock_mhz=1980 bytes_per_clk_chip=130.8 per_sm_gbs=43.2 g0_gbs=259.0
+exit=0 secs=0.6
+# GPC1 n=6 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35@all:768 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=6 units=12 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=6 gbs=369.6 gbs_range=369.3-369.7 clock_mhz=1980 bytes_per_clk_chip=186.7 per_sm_gbs=61.6 g0_gbs=369.6
+exit=0 secs=1.1
+# GPC1 n=6 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35@all:768 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=6 units=12 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=6 gbs=343.5 gbs_range=343.3-343.6 clock_mhz=1980 bytes_per_clk_chip=173.5 per_sm_gbs=57.2 g0_gbs=343.5
+exit=0 secs=0.6
+# GPC1 n=6 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=6 units=12 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=6 gbs=369.8 gbs_range=369.6-369.8 clock_mhz=1980 bytes_per_clk_chip=186.8 per_sm_gbs=61.6 g0_gbs=369.8
+exit=0 secs=0.6
+# GPC1 n=6 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=6 units=12 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=6 gbs=377.5 gbs_range=377.2-377.7 clock_mhz=1980 bytes_per_clk_chip=190.7 per_sm_gbs=62.9 g0_gbs=377.5
+exit=0 secs=0.6
+# GPC1 n=8 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51@all:524288 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=8 gbs=415.8 gbs_range=414.1-416.4 clock_mhz=1975 bytes_per_clk_chip=210.5 per_sm_gbs=52.0 g0_gbs=415.8
+exit=0 secs=0.6
+# GPC1 n=8 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51@all:524288 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=8 gbs=344.1 gbs_range=343.8-344.3 clock_mhz=1980 bytes_per_clk_chip=173.8 per_sm_gbs=43.0 g0_gbs=344.1
+exit=0 secs=0.7
+# GPC1 n=8 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51@all:1024 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=8 gbs=493.0 gbs_range=492.8-493.2 clock_mhz=1980 bytes_per_clk_chip=249.0 per_sm_gbs=61.6 g0_gbs=493.0
+exit=0 secs=0.6
+# GPC1 n=8 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51@all:1024 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=8 gbs=455.6 gbs_range=455.0-455.6 clock_mhz=1980 bytes_per_clk_chip=230.1 per_sm_gbs=56.9 g0_gbs=455.6
+exit=0 secs=0.6
+# GPC1 n=8 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=8 gbs=493.1 gbs_range=493.0-493.1 clock_mhz=1980 bytes_per_clk_chip=249.1 per_sm_gbs=61.6 g0_gbs=493.1
+exit=0 secs=0.6
+# GPC1 n=8 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=8 gbs=503.2 gbs_range=503.0-503.4 clock_mhz=1980 bytes_per_clk_chip=254.2 per_sm_gbs=62.9 g0_gbs=503.2
+exit=0 secs=0.6
+# GPC1 n=10 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65@all:655360 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=10 units=20 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=10 gbs=521.6 gbs_range=520.6-522.5 clock_mhz=1980 bytes_per_clk_chip=263.5 per_sm_gbs=52.2 g0_gbs=521.6
+exit=0 secs=0.7
+# GPC1 n=10 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65@all:655360 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=10 units=20 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=10 gbs=428.4 gbs_range=428.4-429.2 clock_mhz=1980 bytes_per_clk_chip=216.4 per_sm_gbs=42.8 g0_gbs=428.4
+exit=0 secs=0.7
+# GPC1 n=10 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65@all:1280 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=10 units=20 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=10 gbs=616.2 gbs_range=615.8-616.3 clock_mhz=1980 bytes_per_clk_chip=311.2 per_sm_gbs=61.6 g0_gbs=616.2
+exit=0 secs=0.6
+# GPC1 n=10 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65@all:1280 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=10 units=20 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=10 gbs=569.2 gbs_range=568.7-569.3 clock_mhz=1980 bytes_per_clk_chip=287.5 per_sm_gbs=56.9 g0_gbs=569.2
+exit=0 secs=0.6
+# GPC1 n=10 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=10 units=20 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=10 gbs=616.5 gbs_range=616.2-616.6 clock_mhz=1980 bytes_per_clk_chip=311.4 per_sm_gbs=61.7 g0_gbs=616.5
+exit=0 secs=0.6
+# GPC1 n=10 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=10 units=20 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=10 gbs=629.2 gbs_range=628.8-629.2 clock_mhz=1980 bytes_per_clk_chip=317.8 per_sm_gbs=62.9 g0_gbs=629.2
+exit=0 secs=0.6
+# GPC1 n=12 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79@all:786432 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=12 units=24 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=12 gbs=623.8 gbs_range=623.2-624.6 clock_mhz=1978 bytes_per_clk_chip=315.4 per_sm_gbs=52.0 g0_gbs=623.8
+exit=0 secs=0.6
+# GPC1 n=12 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79@all:786432 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=12 units=24 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=12 gbs=512.7 gbs_range=512.4-512.9 clock_mhz=1980 bytes_per_clk_chip=259.0 per_sm_gbs=42.7 g0_gbs=512.7
+exit=0 secs=0.7
+# GPC1 n=12 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79@all:1536 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=12 units=24 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=12 gbs=738.8 gbs_range=738.4-739.0 clock_mhz=1980 bytes_per_clk_chip=373.2 per_sm_gbs=61.6 g0_gbs=738.8
+exit=0 secs=0.7
+# GPC1 n=12 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79@all:1536 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=12 units=24 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=12 gbs=682.7 gbs_range=682.4-683.1 clock_mhz=1980 bytes_per_clk_chip=344.8 per_sm_gbs=56.9 g0_gbs=682.7
+exit=0 secs=0.6
+# GPC1 n=12 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=12 units=24 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=12 gbs=739.2 gbs_range=739.1-739.5 clock_mhz=1980 bytes_per_clk_chip=373.4 per_sm_gbs=61.6 g0_gbs=739.2
+exit=0 secs=0.6
+# GPC1 n=12 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=12 units=24 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=12 gbs=754.9 gbs_range=754.5-755.1 clock_mhz=1980 bytes_per_clk_chip=381.3 per_sm_gbs=62.9 g0_gbs=754.9
+exit=0 secs=0.6
+# GPC1 n=14 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79,92,93@all:917504 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=14 units=28 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=14 gbs=729.2 gbs_range=729.1-729.5 clock_mhz=1980 bytes_per_clk_chip=368.3 per_sm_gbs=52.1 g0_gbs=729.2
+exit=0 secs=0.6
+# GPC1 n=14 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79,92,93@all:917504 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=14 units=28 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=14 gbs=577.1 gbs_range=576.3-577.3 clock_mhz=1980 bytes_per_clk_chip=291.5 per_sm_gbs=41.2 g0_gbs=577.1
+exit=0 secs=0.6
+# GPC1 n=14 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79,92,93@all:1792 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=14 units=28 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=14 gbs=861.7 gbs_range=861.5-862.2 clock_mhz=1980 bytes_per_clk_chip=435.2 per_sm_gbs=61.5 g0_gbs=861.7
+exit=0 secs=0.6
+# GPC1 n=14 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79,92,93@all:1792 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=14 units=28 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=14 gbs=649.6 gbs_range=643.9-663.9 clock_mhz=1980 bytes_per_clk_chip=328.1 per_sm_gbs=46.4 g0_gbs=649.6
+exit=0 secs=0.6
+# GPC1 n=14 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79,92,93@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=14 units=28 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=14 gbs=862.8 gbs_range=862.5-862.9 clock_mhz=1980 bytes_per_clk_chip=435.8 per_sm_gbs=61.6 g0_gbs=862.8
+exit=0 secs=0.6
+# GPC1 n=14 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79,92,93@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=14 units=28 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=14 gbs=880.7 gbs_range=880.7-881.1 clock_mhz=1980 bytes_per_clk_chip=444.9 per_sm_gbs=62.9 g0_gbs=880.7
+exit=0 secs=0.6
+# GPC1 n=16 DRAM read disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79,92,93,106,107@all:1048576 --per-sm 2 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=16 units=32 block=4096 per_sm=2 passes=1 shared=0 write=0 reps=3 check=ok bad=0 used_sms=16 gbs=829.0 gbs_range=827.6-830.1 clock_mhz=1980 bytes_per_clk_chip=418.7 per_sm_gbs=51.8 g0_gbs=829.0
+exit=0 secs=0.6
+# GPC1 n=16 DRAM write disjoint 128MB/unit
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79,92,93,106,107@all:1048576 --per-sm 2 --write 1 --gib 24
+buf=0x154d00000000 gib=24.00 align_2MB=yes
+bw groups=1 sms=16 units=32 block=4096 per_sm=2 passes=1 shared=0 write=1 reps=3 check=ok bad=0 used_sms=16 gbs=658.0 gbs_range=657.4-659.4 clock_mhz=1980 bytes_per_clk_chip=332.3 per_sm_gbs=41.1 g0_gbs=658.0
+exit=0 secs=0.6
+# GPC1 n=16 L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79,92,93,106,107@all:2048 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=16 units=32 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=16 gbs=984.4 gbs_range=984.0-985.0 clock_mhz=1980 bytes_per_clk_chip=497.2 per_sm_gbs=61.5 g0_gbs=984.4
+exit=0 secs=0.6
+# GPC1 n=16 L2 write disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79,92,93,106,107@all:2048 --per-sm 2 --passes 400 --write 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=16 units=32 block=4096 per_sm=2 passes=400 shared=0 write=1 reps=3 check=ok bad=0 used_sms=16 gbs=746.8 gbs_range=743.8-753.2 clock_mhz=1980 bytes_per_clk_chip=377.2 per_sm_gbs=46.7 g0_gbs=746.8
+exit=0 secs=0.6
+# GPC1 n=16 L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79,92,93,106,107@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=16 units=32 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=16 gbs=985.6 gbs_range=985.3-985.7 clock_mhz=1980 bytes_per_clk_chip=497.8 per_sm_gbs=61.6 g0_gbs=985.6
+exit=0 secs=0.6
+# GPC1 n=16 L2 read shared 4MB x25
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 2,3,18,19,34,35,50,51,64,65,78,79,92,93,106,107@all:1024 --per-sm 2 --passes 25 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=16 units=32 block=4096 per_sm=2 passes=25 shared=1 write=0 reps=3 check=ok bad=0 used_sms=16 gbs=1005.0 gbs_range=1004.8-1005.2 clock_mhz=1980 bytes_per_clk_chip=507.7 per_sm_gbs=62.8 g0_gbs=1005.0
+exit=0 secs=0.6
+# one SM in each of 1 GPCs L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0@all:128 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=1 gbs=61.7 gbs_range=61.7-61.7 clock_mhz=1980 bytes_per_clk_chip=31.2 per_sm_gbs=61.7 g0_gbs=61.7
+exit=0 secs=1.2
+# one SM in each of 1 GPCs L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=1 units=2 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=1 gbs=61.7 gbs_range=61.7-61.7 clock_mhz=1980 bytes_per_clk_chip=31.2 per_sm_gbs=61.7 g0_gbs=61.7
+exit=0 secs=0.6
+# one SM in each of 2 GPCs L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,2@all:256 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=2 gbs=123.3 gbs_range=123.3-123.4 clock_mhz=1980 bytes_per_clk_chip=62.3 per_sm_gbs=61.7 g0_gbs=123.3
+exit=0 secs=0.6
+# one SM in each of 2 GPCs L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,2@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=2 units=4 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=2 gbs=123.4 gbs_range=123.4-123.5 clock_mhz=1980 bytes_per_clk_chip=62.3 per_sm_gbs=61.7 g0_gbs=123.4
+exit=0 secs=0.6
+# one SM in each of 4 GPCs L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,2,4,6@all:512 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=4 gbs=246.6 gbs_range=246.6-246.7 clock_mhz=1980 bytes_per_clk_chip=124.6 per_sm_gbs=61.7 g0_gbs=246.6
+exit=0 secs=0.6
+# one SM in each of 4 GPCs L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,2,4,6@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=4 units=8 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=4 gbs=246.8 gbs_range=246.6-246.8 clock_mhz=1980 bytes_per_clk_chip=124.7 per_sm_gbs=61.7 g0_gbs=246.8
+exit=0 secs=0.6
+# one SM in each of 8 GPCs L2 read disjoint 256KB/unit x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,2,4,6,8,10,12,14@all:1024 --per-sm 2 --passes 400 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=400 shared=0 write=0 reps=3 check=ok bad=0 used_sms=8 gbs=493.2 gbs_range=493.1-493.3 clock_mhz=1980 bytes_per_clk_chip=249.1 per_sm_gbs=61.7 g0_gbs=493.2
+exit=0 secs=0.6
+# one SM in each of 8 GPCs L2 read shared 256KB x400
+# /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab bw --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --groups 0,2,4,6,8,10,12,14@all:64 --per-sm 2 --passes 400 --shared 1 --gib 8
+buf=0x155100000000 gib=8.00 align_2MB=yes
+bw groups=1 sms=8 units=16 block=4096 per_sm=2 passes=400 shared=1 write=0 reps=3 check=ok bad=0 used_sms=8 gbs=493.4 gbs_range=493.3-493.5 clock_mhz=1980 bytes_per_clk_chip=249.2 per_sm_gbs=61.7 g0_gbs=493.4
+exit=0 secs=0.6

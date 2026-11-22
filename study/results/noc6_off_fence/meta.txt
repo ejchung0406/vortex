@@ -1,0 +1,8 @@
+name=noc6_off_fence
+src_rev=
+src_dirty=0
+host=atl1-1-02-011-4-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_L2_ENABLE -DVX_CFG_L2_LINK_LATENCY=20
+blackbox=--driver=simx --app=fence --perf=7 --cores=4
+rc=0
+wall_s=159

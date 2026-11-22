@@ -1,0 +1,79 @@
++ make -s -C sw/runtime simx
++ make -s -C tests/regression/basic kernel.vxbin
++ make -s -C tests/runtime test_host_alias
++ file tests/runtime/test_host_alias
+tests/runtime/test_host_alias: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, not stripped
++ for i in 1 2 3 4 5
++ VORTEX_DRIVER=simx
++ LD_LIBRARY_PATH=/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime
++ timeout 600 ./tests/runtime/test_host_alias
+/storage/project/r-hkim358-0/echung67/vortex-exp/pr/scripts/host_tag_simx.sh: line 7: 2565359 Segmentation fault      VORTEX_DRIVER=simx LD_LIBRARY_PATH=$PWD/sw/runtime timeout 600 ./tests/runtime/test_host_alias > $OUT/host_alias_$i.log 2>&1
++ echo 'host_alias run 1 rc=139'
+host_alias run 1 rc=139
++ tail -3 /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/host_alias_1.log
++ for i in 1 2 3 4 5
++ VORTEX_DRIVER=simx
++ LD_LIBRARY_PATH=/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime
++ timeout 600 ./tests/runtime/test_host_alias
+/storage/project/r-hkim358-0/echung67/vortex-exp/pr/scripts/host_tag_simx.sh: line 7: 2565809 Segmentation fault      VORTEX_DRIVER=simx LD_LIBRARY_PATH=$PWD/sw/runtime timeout 600 ./tests/runtime/test_host_alias > $OUT/host_alias_$i.log 2>&1
++ echo 'host_alias run 2 rc=139'
+host_alias run 2 rc=139
++ tail -3 /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/host_alias_2.log
++ for i in 1 2 3 4 5
++ VORTEX_DRIVER=simx
++ LD_LIBRARY_PATH=/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime
++ timeout 600 ./tests/runtime/test_host_alias
+/storage/project/r-hkim358-0/echung67/vortex-exp/pr/scripts/host_tag_simx.sh: line 7: 2566649 Segmentation fault      VORTEX_DRIVER=simx LD_LIBRARY_PATH=$PWD/sw/runtime timeout 600 ./tests/runtime/test_host_alias > $OUT/host_alias_$i.log 2>&1
++ echo 'host_alias run 3 rc=139'
+host_alias run 3 rc=139
++ tail -3 /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/host_alias_3.log
++ for i in 1 2 3 4 5
++ VORTEX_DRIVER=simx
++ LD_LIBRARY_PATH=/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime
++ timeout 600 ./tests/runtime/test_host_alias
+/storage/project/r-hkim358-0/echung67/vortex-exp/pr/scripts/host_tag_simx.sh: line 7: 2567161 Segmentation fault      VORTEX_DRIVER=simx LD_LIBRARY_PATH=$PWD/sw/runtime timeout 600 ./tests/runtime/test_host_alias > $OUT/host_alias_$i.log 2>&1
++ echo 'host_alias run 4 rc=139'
+host_alias run 4 rc=139
++ tail -3 /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/host_alias_4.log
++ for i in 1 2 3 4 5
++ VORTEX_DRIVER=simx
++ LD_LIBRARY_PATH=/tmp/echung67/pr_runtime-cp-host-tag_base_simx/sw/runtime
++ timeout 600 ./tests/runtime/test_host_alias
+/storage/project/r-hkim358-0/echung67/vortex-exp/pr/scripts/host_tag_simx.sh: line 7: 2567786 Segmentation fault      VORTEX_DRIVER=simx LD_LIBRARY_PATH=$PWD/sw/runtime timeout 600 ./tests/runtime/test_host_alias > $OUT/host_alias_$i.log 2>&1
++ echo 'host_alias run 5 rc=139'
+host_alias run 5 rc=139
++ tail -3 /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/host_alias_5.log
++ make -C tests/runtime run-simx VXBIN=/tmp/echung67/pr_runtime-cp-host-tag_base_simx/tests/regression/basic/kernel.vxbin
++ echo 'runtime suite rc=2'
+runtime suite rc=2
++ grep -E '^\[RUN\]|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/runtime_suite.log
+[RUN] test_basic (simx)
+PASSED
+[RUN] test_async (simx)
+PASSED
+[RUN] test_timeline_events (simx)
+PASSED
+[RUN] test_module_kernel (simx)
+PASSED
+[RUN] test_rect_fill (simx)
+PASSED
+[RUN] test_host_alias (simx)
++ run demo --app=demo
++ tag=demo
++ shift
++ timeout 1800 ./ci/blackbox.sh --driver=simx --app=demo
++ echo 'bb demo rc=124'
+bb demo rc=124
++ grep -E 'PERF: instrs|cycles=|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/bb_demo.log
++ tail -3
++ run sgemm16 --app=sgemm --args=-n16
++ tag=sgemm16
++ shift
++ timeout 1800 ./ci/blackbox.sh --driver=simx --app=sgemm --args=-n16
++ echo 'bb sgemm16 rc=124'
+bb sgemm16 rc=124
++ tail -3
++ grep -E 'PERF: instrs|cycles=|PASSED|FAILED' /storage/project/r-hkim358-0/echung67/vortex-exp/results/pr_runtime-cp-host-tag_base_simx/bb_sgemm16.log
++ make -s -C tests/regression/dxa_copy clean
++ CONFIGS=-DVX_CFG_EXT_DXA_ENABLE
++ make -s -C tests/regression/dxa_copy

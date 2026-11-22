@@ -1,0 +1,11 @@
+CONFIGS=-DVX_CFG_NUM_THREADS=16 -DVX_CFG_EXT_LDST_WIDE_ENABLE
+Running: CONFIGS="-DVX_CFG_NUM_THREADS=16 -DVX_CFG_EXT_LDST_WIDE_ENABLE" make -C "./ci/../tests/regression/ldst_wide" runtime-rtlsim > /dev/null
+%Error: /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_base/hw/rtl/VX_define.vh:134:16: "VX_CFG_EXT_LDST_WIDE_ENABLE requires FLEN 32"
+  134 |         `error "VX_CFG_EXT_LDST_WIDE_ENABLE requires FLEN 32"
+      |                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        ... See the manual at https://verilator.org/verilator_doc.html?v=5.050 for more assistance.
+%Error: Exiting due to 1 error(s)
+make[2]: *** [Makefile:229: /tmp/echung67/vx_15977619_1835034/sw/runtime/librtlsim.so] Error 1
+make[1]: *** [Makefile:42: /tmp/echung67/vx_15977619_1835034/sw/runtime/librtlsim.so] Error 2
+make: *** [../common.mk:241: runtime-rtlsim] Error 2
+Error building driver: rtlsim (via ./ci/../tests/regression/ldst_wide)

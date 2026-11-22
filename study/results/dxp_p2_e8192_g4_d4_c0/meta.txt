@@ -1,0 +1,8 @@
+name=dxp_p2_e8192_g4_d4_c0
+src_rev=
+src_dirty=0
+host=atl1-1-02-007-22-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_DXA_GMEM_PORTS=2
+blackbox=--driver=simx --app=bwstream_dxa --perf=16 --profile=h200s --cores=1 --args=-e8192 -n16 -g4 -d4 -c0
+rc=0
+wall_s=210

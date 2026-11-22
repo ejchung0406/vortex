@@ -1,0 +1,8 @@
+name=pr_fh_parity-ldst-wide_br
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold
+xlen=64
+host=atl1-1-02-005-12-2.pace.gatech.edu
+configs=-DVX_CFG_NUM_THREADS=16 -DVX_CFG_EXT_LDST_WIDE_ENABLE
+blackbox=--driver=simx --app=ldst_wide
+wall_s=64
+rc=2

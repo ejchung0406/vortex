@@ -1,0 +1,12 @@
+CONFIGS=-DVX_CFG_NUM_CORES=2 -DVX_CFG_L2_ENABLE
+make: python3: No such file or directory
+Running: CONFIGS="-DVX_CFG_NUM_CORES=2 -DVX_CFG_L2_ENABLE" make -C "./ci/../tests/regression/bwstream" runtime-simx > /dev/null
+make: python3: No such file or directory
+make[1]: python3: No such file or directory
+make[2]: python3: No such file or directory
+make[2]: which: No such file or directory
+make[2]: mkdir: No such file or directory
+make[2]: *** [Makefile:265: /tmp/echung67/vx_15977657_3220284/sw/runtime/simx_config.stamp] Error 127
+make[1]: *** [Makefile:38: /tmp/echung67/vx_15977657_3220284/sw/runtime/libsimx.so] Error 2
+make: *** [../common.mk:241: runtime-simx] Error 2
+Error building driver: simx (via ./ci/../tests/regression/bwstream)

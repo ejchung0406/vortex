@@ -1,0 +1,9 @@
+name=pr_tcu-bbuf-geometry_base_eq_sp4_simx
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_tcu-bbuf-geometry_base
+src_rev=ccf811e1196d7aa2aa2f8a3ada77797c1ff6333d
+host=atl1-1-02-007-28-1.pace.gatech.edu
+xlen=64
+xconf=-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_FETCH_WIDTH=4 -DVX_CFG_TCU_SPARSE_ENABLE -DWGMMA_NRC=8 -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1
+blackbox=--driver=simx --app=sgemm_tcu_wg_sp --perf=7
+rc=0
+wall_s=166

@@ -1,0 +1,32 @@
+rtl: size the socket memory tag for the DXA's in-flight slots
+
+The socket arbiter's tag was the widest of the L1, texture and ray-cache
+memory tags, and the DXA was left to fit in it: each worker's in-flight
+slot id, the worker select the DXA's arbiter adds, and the UUID. At the
+default cache sizes that leaves 7 bits at XLEN 64 (8 at XLEN 32), so
+VX_CFG_DXA_MAX_INFLIGHT x VX_CFG_NUM_DXA_CORES of 128 or more failed to
+elaborate: on an exact fit the spare-bits lint sink in VX_dxa_gmem_req is
+an empty slice, past it a reversed one (Verilator SELRANGE). The lint
+failure was the only guard; the width STATIC_ASSERT there fires at time 0.
+
+Include the DXA's tag in the maximum and generate the lint sink only when
+there are spare bits. Where the DXA fitted, every width is unchanged.
+
+Measured with rtlsim dxa_copy -d1, XLEN 64, upstream -> this change:
+1 x 128, 2 x 64, 8 x 16, 1 x 256, 8 x 32 and 8 x 256 (workers x slots)
+failed to build and now pass (6,470 cycles; 8 x 8 passes on both).
+sgemm2_dxa at 8 x 32 and 8 x 256: rtlsim 36,086, SimX 36,098 cycles.
+With the lint guard alone, 8 x 32 builds and stops at time 0 on "gmem tag
+too narrow for slot encoding". SOCKET_MEM_TAG_WIDTH and every width
+derived from it (L2, L3, VX_MEM_TAG_WIDTH) print identical before and
+after at both XLENs, release and debug, for the default configuration,
+each DXA shape in ci/testcases/dxa.yaml and the synthesis DUTs that
+contain the DXA; default rtlsim dxa_copy -d1 / -d2 and sgemm2_dxa are
+cycle-identical (6,470 / 53,994 / 36,242).
+
+dxa_copy-tagw runs 8 workers of 32 slots on SimX and rtlsim. Their tag
+needs 9 bits: one more than XLEN 64 leaves (the width) and exactly what
+XLEN 32 leaves (the lint guard).
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01S5PBErhG8sHe1yUkDDxz1o

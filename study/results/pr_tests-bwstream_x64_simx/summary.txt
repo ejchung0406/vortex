@@ -1,0 +1,8 @@
+buildall rc=0
+make_run-simx-bwstream rc=0 PERF: instrs=1620, cycles=4803, IPC=0.337 1 passed
+make_run-simx-bwstream_dxa rc=0 PERF: instrs=3500, cycles=9988, IPC=0.350 1 passed
+case_bwstream_dxa-1-simx rc=0 PERF: instrs=6716, cycles=18828, IPC=0.357 1 passed
+case_bwstream_dxa-2-simx rc=0 PERF: instrs=4184, cycles=6235, IPC=0.671 1 passed
+case_bwstream-1-simx rc=2 no-perf 0 passed
+case_bwstream-rows-simx rc=2 no-perf 0 passed
+case_bwstream-block-simx rc=2 no-perf 0 passed

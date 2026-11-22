@@ -1,0 +1,8 @@
+name=bar_s1_lmemamo_rtlsim
+src_rev=
+src_dirty=0
+host=atl1-1-02-010-30-2.pace.gatech.edu
+xconf=-DVX_CFG_EXT_A_ENABLE -DVX_CFG_NUM_THREADS=16 -DVX_CFG_BAR_DRAIN_SCOPE=1
+blackbox=--driver=rtlsim --app=lmem_access --perf=1
+rc=0
+wall_s=75

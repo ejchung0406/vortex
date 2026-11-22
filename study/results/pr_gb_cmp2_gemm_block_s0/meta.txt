@@ -1,0 +1,10 @@
+name=pr_gb_cmp2_gemm_block_s0
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_tests-gemm-block_wip
+src_rev=wip: upstream ccf811e11 + new gemm_block (uncommitted)
+xlen=64
+host=atl1-1-02-008-25-2.pace.gatech.edu
+configs=-DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1
+blackbox=--driver=simx --app=gemm_block --args=-n1024 -k1024 -s0 --cores=4 --l2cache --threads=8 --warps=4
+PERF: instrs=1684608, cycles=844615
+wall_s=209
+rc=0

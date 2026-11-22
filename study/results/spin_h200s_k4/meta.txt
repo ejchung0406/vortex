@@ -1,0 +1,6 @@
+name=spin_h200s_k4
+src_rev=
+src_dirty=0
+host=atl1-1-03-003-1-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 
+blackbox=--driver=simx --app=spin --perf=4 --profile=h200s --cores=4

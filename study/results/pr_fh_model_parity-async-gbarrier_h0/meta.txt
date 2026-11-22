@@ -1,0 +1,9 @@
+name=pr_fh_model_parity-async-gbarrier_h0
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_knob
+xlen=64
+host=atl1-1-02-006-7-1.pace.gatech.edu
+configs=-DVX_CFG_DCACHE_FWD_HOLD=0
+blackbox=--driver=simx --app=async_gbarrier --cores=2
+PERF: instrs=49762, cycles=67302
+wall_s=160
+rc=0

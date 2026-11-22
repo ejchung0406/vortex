@@ -1,0 +1,10 @@
+name=pr_simx-dcache-order_rtl_w16t16_x64
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-order
+host=atl1-1-02-006-24-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16
+driver=rtlsim cores=1 app=war_order xlen=64
+point 0 args="-n65536 -s16 -d2" rc=0 cycles=1461416 
+point 1 args="-n65536 -s8 -d7" rc=0 cycles=1810623 
+fails=0 of 2
+rc=0
+wall_s=292

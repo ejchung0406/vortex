@@ -1,0 +1,10 @@
+name=pr_dram_base_axi
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram_base rev=ccf811e1196d7aa2aa2f8a3ada77797c1ff6333d
+host=atl1-1-02-006-4-2.pace.gatech.edu
+driver=rtlsim xlen=64
+ext_symbols=0
+case axi_demo app=demo args="" configs="-DVX_CFG_NUM_CLUSTERS=1 -DVX_CFG_NUM_CORES=1 -DVX_CFG_NUM_WARPS=2 -DVX_CFG_NUM_THREADS=2 -DVX_CFG_ICACHE_DISABLE -DVX_CFG_DCACHE_DISABLE -DVX_CFG_LMEM_DISABLE -DVX_CFG_FPU_TYPE_STD -DPLATFORM_MEMORY_ID_WIDTH=5" flags="" env="AXI_BUS=1 AXI_MEM_MODEL=bank" rc=0 cycles=17150 instrs=1234 unit_fails=0 wall=34
+case axi_sgemm app=sgemm args="-n16" configs="-DVX_CFG_NUM_CLUSTERS=1 -DVX_CFG_NUM_CORES=1 -DVX_CFG_NUM_WARPS=2 -DVX_CFG_NUM_THREADS=2 -DVX_CFG_ICACHE_DISABLE -DVX_CFG_DCACHE_DISABLE -DVX_CFG_LMEM_DISABLE -DVX_CFG_FPU_TYPE_STD -DPLATFORM_MEMORY_ID_WIDTH=5" flags="" env="AXI_BUS=1 AXI_MEM_MODEL=bank" rc=0 cycles=200012 instrs=14992 unit_fails=0 wall=7
+fails=0 of 2
+wall_s=41
+rc=0

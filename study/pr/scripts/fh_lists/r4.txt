@@ -1,0 +1,3 @@
+pr_fh_parity-sgemm-fw2_rtl|rtlsim|sgemm|-n128||-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_WIDTH=2
+pr_fh_parity-uniform-ld_rtl|rtlsim|uniform_ld|||-DVX_CFG_NUM_THREADS=16
+pr_fh_parity-ldst-wide_rtl|rtlsim|ldst_wide|||-DVX_CFG_NUM_THREADS=16 -DVX_CFG_EXT_LDST_WIDE_ENABLE

@@ -1,0 +1,3 @@
+pr_fh_parity-sgemm-mc64-l1link_rtl|rtlsim|sgemm|-n64|--cores=2 --l2cache|-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_L1_LINK_LATENCY=20
+pr_fh_parity-sgemm-mc64-l2link_rtl|rtlsim|sgemm|-n64|--cores=2 --l2cache|-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_L2_LINK_LATENCY=20
+pr_fh_parity-printf-ss2_rtl|rtlsim|printf||--cores=2 --l2cache|-DVX_CFG_SOCKET_SIZE=2

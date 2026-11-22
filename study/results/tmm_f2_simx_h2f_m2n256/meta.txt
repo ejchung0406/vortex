@@ -1,0 +1,8 @@
+name=tmm_f2_simx_h2f_m2n256
+src_rev=
+src_dirty=0
+host=atl1-1-03-003-3-1.pace.gatech.edu
+xconf=-DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_TMEM_ENABLE -DVX_CFG_TCU_TMEM_COLS=1024 -DVX_CFG_TCU_TMEM_B_AHEAD=2 -DVX_CFG_TCU_TMEM_A_BANKROW=1
+blackbox=--driver=simx --app=tmem_roof --perf=11 --profile=h200s --cores=1 --args=-m2 -n256 -i256 -c4
+rc=0
+wall_s=222

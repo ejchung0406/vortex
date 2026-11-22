@@ -1,0 +1,9 @@
+name=pr_fh_sw_ul_x32l_br
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold
+xlen=64
+host=atl1-1-02-005-13-2.pace.gatech.edu
+configs=-DVX_CFG_NUM_WARPS=32 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_DCACHE_NUM_BANKS=4
+blackbox=--driver=simx --app=uniform_ld
+PERF: instrs=171616, cycles=173059
+wall_s=154
+rc=0

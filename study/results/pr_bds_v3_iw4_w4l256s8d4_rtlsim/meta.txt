@@ -1,0 +1,8 @@
+name=pr_bds_v3_iw4_w4l256s8d4_rtlsim
+src_rev=var-0770c8a1ea6b463faa68da7578ec3df3768af120
+host=atl1-1-02-008-25-2.pace.gatech.edu
+xconf=-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_BAR_DRAIN_SCOPE=1 -DBAR_DRAIN_TEST -DBAR_DRAIN_TEST_3
+args=-w4 -l256 -s8 -d4
+driver=rtlsim
+rc=0
+wall_s=5

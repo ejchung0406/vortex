@@ -1,0 +1,8 @@
+name=ld_fa_dl_a64
+src_rev=
+src_dirty=0
+host=atl1-1-02-011-10-2.pace.gatech.edu
+xconf=-DPATH_STATS -DMEAS_FETCH_AHEAD
+blackbox=--driver=simx --app=ldstream --perf=1 --profile=h200s --cores=1 --args=-t1024 -b8 -u8 -m16 -a -l
+rc=0
+wall_s=249

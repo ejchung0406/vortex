@@ -1,0 +1,21 @@
+open device connection
+CONFIGS: num_threads=4, num_warps=4, num_cores=1, num_clusters=1, socket_size=1, local_mem_base=0x1fffc0000, num_barriers=8
+data type: integer
+number of points: 1024
+buffer size: 4096 bytes
+allocate device memory
+dev_src0=0x30000
+dev_src1=0x31000
+dev_dst=0x32000
+allocate host buffers
+upload source buffer0
+upload source buffer1
+load kernel module
+launch kernel
+grid_dim=4x1, block_dim=4x1
+download destination buffer
+wait for completion
+verify result
+cleanup
+PERF: instrs=2468, cycles=6423, IPC=0.384
+PASSED!

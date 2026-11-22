@@ -1,0 +1,9 @@
+name=pr_fh_sw_bw_x64mli_h0
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_knob
+xlen=64
+host=atl1-1-02-002-25-2.pace.gatech.edu
+configs=-DVX_CFG_NUM_WARPS=64 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_DCACHE_MSHR_SIZE=512 -DVX_CFG_LSU_PENDING_LIMIT=512 -DVX_CFG_LSU_PENDING_SIZE=512 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_ALU_LANES=16 -DVX_CFG_NUM_FPU_LANES=32 -DVX_CFG_FETCH_WIDTH=4 -DVX_CFG_DCACHE_SIZE=262144 -DVX_CFG_DCACHE_FWD_HOLD=0
+blackbox=--driver=simx --app=bwstream --args=-n64 -r1 -p0 -u4 -b32
+PERF: instrs=20608, cycles=18453
+wall_s=165
+rc=0

@@ -1,0 +1,8 @@
+name=pr_fh_parity-ldst-matrix_h0
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_knob
+xlen=64
+host=atl1-1-02-006-7-1.pace.gatech.edu
+configs=-DVX_CFG_NUM_THREADS=8 -DVX_CFG_EXT_LDST_MATRIX_ENABLE -DVX_CFG_EXT_LDST_WIDE_ENABLE -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_TYPE_DPI -DVX_CFG_TCU_SPARSE_ENABLE -DVX_CFG_DCACHE_FWD_HOLD=0
+blackbox=--driver=simx --app=ldst_matrix
+wall_s=63
+rc=2

@@ -1,0 +1,408 @@
+### nvidia-smi -q -d CLOCK,POWER,PERFORMANCE (exit 0)
+           : Disabled
+    GPU Power Readings
+        Average Power Draw                             : 78.93 W
+        Instantaneous Power Draw                       : 78.05 W
+        GPU Ceiling Power Limit
+            Current Power Limit                        : 560.00 W
+            Requested Power Limit                      : 560.00 W
+            Default Power Limit                        : 700.00 W
+        GPU Base Power
+            Current Base Power                         : N/A
+            Requested Base Power                       : N/A
+            Default Base Power                         : N/A
+            Adaptive TGP Adjusted Base Power           : N/A
+        Min Power Limit                                : 200.00 W
+        Max Power Limit                                : 700.00 W
+    Power Samples
+        Duration                                       : 2.36 sec
+        Number of Samples                              : 119
+        Max                                            : 80.45 W
+        Min                                            : 77.48 W
+        Avg                                            : 78.91 W
+    GPU Memory Power Readings 
+        Average Power Draw                             : 42.89 W
+        Instantaneous Power Draw                       : N/A
+    Module Power Readings
+        Average Power Draw                             : N/A
+        Instantaneous Power Draw                       : N/A
+        Current Power Limit                            : N/A
+        Requested Power Limit                          : N/A
+        Default Power Limit                            : N/A
+        Min Power Limit                                : N/A
+        Max Power Limit                                : N/A
+    EDPp Multiplier                                    : 100.00%
+    Clocks
+        Graphics                                       : 345 MHz
+        SM                                             : 345 MHz
+        Memory                                         : 3201 MHz
+        Video                                          : 765 MHz
+    Applications Clocks
+        Graphics                                       : Requested functionality has been deprecated
+        Memory                                         : Requested functionality has been deprecated
+    Default Applications Clocks
+        Graphics                                       : Requested functionality has been deprecated
+        Memory                                         : Requested functionality has been deprecated
+    Deferred Clocks
+        Memory                                         : N/A
+    Max Clocks
+        Graphics                                       : 1980 MHz
+        SM                                             : 1980 MHz
+        Memory                                         : 3201 MHz
+        Video                                          : 1545 MHz
+    Max Customer Boost Clocks
+        Graphics                                       : 1980 MHz
+    SM Clock Samples
+        Duration                                       : Not Found
+        Number of Samples                              : Not Found
+        Max                                            : Not Found
+        Min                                            : Not Found
+        Avg                                            : Not Found
+    Memory Clock Samples
+        Duration                                       : Not Found
+        Number of Samples                              : Not Found
+        Max                                            : Not Found
+        Min                                            : Not Found
+        Avg                                            : Not Found
+    Clock Policy
+        Auto Boost                                     : N/A
+        Auto Boost Default                             : N/A
+    DLA Clocks
+        Engine                                         : N/A
+        Max Engine                                     : N/A
+
+
+### nvidia-smi -lgc 1980,1980 (exit 4)
+The current user does not have permission to change clocks for GPU 00000000:BB:00.0.
+Terminating early due to previous errors.
+
+### nvidia-smi -ac 3201,1980 (exit 0)
+The requested functionality has been deprecated.
+All done.
+
+### nvidia-smi --query-gpu=name,serial,uuid,pci.bus_id,driver_version,clocks.max.sm,clocks.max.mem --format=csv (exit 0)
+name, serial, uuid, pci.bus_id, driver_version, clocks.max.sm [MHz], clocks.max.memory [MHz]
+NVIDIA H200, 1753424034561, GPU-7d994d23-ca43-78ab-e625-ea155550ba32, 00000000:BB:00.0, 615.71.09, 1980 MHz, 3201 MHz
+
+### ncu --metrics device__attribute_l2s_count,device__attribute_num_l2s_per_fbp,device__attribute_fbp_count,device__attribute_max_gpu_frequency_khz,device__attribute_max_mem_frequency_khz,device__attribute_l2_cache_size,device__attribute_multiprocessor_count,device__attribute_dram_bandwidth,device__attribute_fb_bus_width,device__attribute_limits_max_cta_per_sm,device__attribute_num_tpc_per_gpc,device__attribute_num_gpcs,device__attribute_num_tpcs,device__attribute_ltc_count,device__attribute_num_ltc,device__attribute_num_fbpas,device__attribute_fbpa_count,device__attribute_display_name,device__attribute_chip_name --print-units base /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --count 64 --gib 2 --flush 0 (exit 6)
+==PROF== Connected to process 2403853 (/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab)
+==PROF== Profiling "init_buf" - 0: 0%....50%....100% - 1 pass
+==ERROR== The application returned an error code (6).
+[2403853] l2s_lab@127.0.0.1
+  init_buf(unsigned int *, unsigned long) (528, 1, 1)x(1024, 1, 1), Context 1, Stream 7, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------------------- ----------- ------------
+    Metric Name                             Metric Unit Metric Value
+    --------------------------------------- ----------- ------------
+    device__attribute_chip_name                              (!) n/a
+    device__attribute_display_name                       NVIDIA H200
+    device__attribute_dram_bandwidth                         (!) n/a
+    device__attribute_fb_bus_width                             6,016
+    device__attribute_fbp_count                                   12
+    device__attribute_fbpa_count                             (!) n/a
+    device__attribute_l2_cache_size                       62,914,560
+    device__attribute_l2s_count                                   96
+    device__attribute_limits_max_cta_per_sm                       32
+    device__attribute_ltc_count                              (!) n/a
+    device__attribute_max_gpu_frequency_khz                1,980,000
+    device__attribute_max_mem_frequency_khz                3,201,000
+    device__attribute_multiprocessor_count                       132
+    device__attribute_num_fbpas                              (!) n/a
+    device__attribute_num_gpcs                               (!) n/a
+    device__attribute_num_l2s_per_fbp                              8
+    device__attribute_num_ltc                                (!) n/a
+    device__attribute_num_tpc_per_gpc                        (!) n/a
+    device__attribute_num_tpcs                               (!) n/a
+    --------------------------------------- ----------- ------------
+
+tpc_smctrl: subscribe failed (210)
+
+### ncu --metrics lts__t_sectors.sum,fbpa__dram_read_sectors.sum,ltc__t_sectors.sum --print-metric-instances values /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --count 64 --gib 2 --flush 0 (exit 6)
+==PROF== Connected to process 2403941 (/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab)
+==PROF== Profiling "init_buf" - 0: 0%....50%....100% - 1 pass
+==ERROR== The application returned an error code (6).
+[2403941] l2s_lab@127.0.0.1
+  init_buf(unsigned int *, unsigned long) (528, 1, 1)x(1024, 1, 1), Context 1, Stream 7, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------- ----------- ------------
+    Metric Name                 Metric Unit Metric Value
+    --------------------------- ----------- ------------
+    fbpa__dram_read_sectors.sum      sector          664
+    ltc__t_sectors.sum                           (!) n/a
+    lts__t_sectors.sum               sector  103,603,436
+    --------------------------- ----------- ------------
+
+tpc_smctrl: subscribe failed (210)
+
+### nvidia-smi -q -d CLOCK,POWER,PERFORMANCE (exit 0)
+           : Disabled
+    GPU Power Readings
+        Average Power Draw                             : 79.21 W
+        Instantaneous Power Draw                       : 79.48 W
+        GPU Ceiling Power Limit
+            Current Power Limit                        : 560.00 W
+            Requested Power Limit                      : 560.00 W
+            Default Power Limit                        : 700.00 W
+        GPU Base Power
+            Current Base Power                         : N/A
+            Requested Base Power                       : N/A
+            Default Base Power                         : N/A
+            Adaptive TGP Adjusted Base Power           : N/A
+        Min Power Limit                                : 200.00 W
+        Max Power Limit                                : 700.00 W
+    Power Samples
+        Duration                                       : 2.36 sec
+        Number of Samples                              : 119
+        Max                                            : 80.13 W
+        Min                                            : 78.05 W
+        Avg                                            : 79.24 W
+    GPU Memory Power Readings 
+        Average Power Draw                             : 42.57 W
+        Instantaneous Power Draw                       : N/A
+    Module Power Readings
+        Average Power Draw                             : N/A
+        Instantaneous Power Draw                       : N/A
+        Current Power Limit                            : N/A
+        Requested Power Limit                          : N/A
+        Default Power Limit                            : N/A
+        Min Power Limit                                : N/A
+        Max Power Limit                                : N/A
+    EDPp Multiplier                                    : 100.00%
+    Clocks
+        Graphics                                       : 345 MHz
+        SM                                             : 345 MHz
+        Memory                                         : 3201 MHz
+        Video                                          : 765 MHz
+    Applications Clocks
+        Graphics                                       : Requested functionality has been deprecated
+        Memory                                         : Requested functionality has been deprecated
+    Default Applications Clocks
+        Graphics                                       : Requested functionality has been deprecated
+        Memory                                         : Requested functionality has been deprecated
+    Deferred Clocks
+        Memory                                         : N/A
+    Max Clocks
+        Graphics                                       : 1980 MHz
+        SM                                             : 1980 MHz
+        Memory                                         : 3201 MHz
+        Video                                          : 1545 MHz
+    Max Customer Boost Clocks
+        Graphics                                       : 1980 MHz
+    SM Clock Samples
+        Duration                                       : Not Found
+        Number of Samples                              : Not Found
+        Max                                            : Not Found
+        Min                                            : Not Found
+        Avg                                            : Not Found
+    Memory Clock Samples
+        Duration                                       : Not Found
+        Number of Samples                              : Not Found
+        Max                                            : Not Found
+        Min                                            : Not Found
+        Avg                                            : Not Found
+    Clock Policy
+        Auto Boost                                     : N/A
+        Auto Boost Default                             : N/A
+    DLA Clocks
+        Engine                                         : N/A
+        Max Engine                                     : N/A
+
+
+### nvidia-smi -lgc 1980,1980 (exit 4)
+The current user does not have permission to change clocks for GPU 00000000:BB:00.0.
+Terminating early due to previous errors.
+
+### nvidia-smi -ac 3201,1980 (exit 0)
+The requested functionality has been deprecated.
+All done.
+
+### nvidia-smi --query-gpu=name,serial,uuid,pci.bus_id,driver_version,clocks.max.sm,clocks.max.mem --format=csv (exit 0)
+name, serial, uuid, pci.bus_id, driver_version, clocks.max.sm [MHz], clocks.max.memory [MHz]
+NVIDIA H200, 1753424034561, GPU-7d994d23-ca43-78ab-e625-ea155550ba32, 00000000:BB:00.0, 615.71.09, 1980 MHz, 3201 MHz
+
+### ncu --metrics device__attribute_l2s_count,device__attribute_num_l2s_per_fbp,device__attribute_fbp_count,device__attribute_max_gpu_frequency_khz,device__attribute_max_mem_frequency_khz,device__attribute_l2_cache_size,device__attribute_multiprocessor_count,device__attribute_dram_bandwidth,device__attribute_fb_bus_width,device__attribute_limits_max_cta_per_sm,device__attribute_num_tpc_per_gpc,device__attribute_num_gpcs,device__attribute_num_tpcs,device__attribute_ltc_count,device__attribute_num_ltc,device__attribute_num_fbpas,device__attribute_fbpa_count,device__attribute_display_name,device__attribute_chip_name --print-units base /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --count 64 --gib 2 --flush 0 (exit 6)
+==PROF== Connected to process 2404376 (/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab)
+==PROF== Profiling "init_buf" - 0: 0%....50%....100% - 1 pass
+==ERROR== The application returned an error code (6).
+[2404376] l2s_lab@127.0.0.1
+  init_buf(unsigned int *, unsigned long) (528, 1, 1)x(1024, 1, 1), Context 1, Stream 7, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------------------- ----------- ------------
+    Metric Name                             Metric Unit Metric Value
+    --------------------------------------- ----------- ------------
+    device__attribute_chip_name                              (!) n/a
+    device__attribute_display_name                       NVIDIA H200
+    device__attribute_dram_bandwidth                         (!) n/a
+    device__attribute_fb_bus_width                             6,016
+    device__attribute_fbp_count                                   12
+    device__attribute_fbpa_count                             (!) n/a
+    device__attribute_l2_cache_size                       62,914,560
+    device__attribute_l2s_count                                   96
+    device__attribute_limits_max_cta_per_sm                       32
+    device__attribute_ltc_count                              (!) n/a
+    device__attribute_max_gpu_frequency_khz                1,980,000
+    device__attribute_max_mem_frequency_khz                3,201,000
+    device__attribute_multiprocessor_count                       132
+    device__attribute_num_fbpas                              (!) n/a
+    device__attribute_num_gpcs                               (!) n/a
+    device__attribute_num_l2s_per_fbp                              8
+    device__attribute_num_ltc                                (!) n/a
+    device__attribute_num_tpc_per_gpc                        (!) n/a
+    device__attribute_num_tpcs                               (!) n/a
+    --------------------------------------- ----------- ------------
+
+tpc_smctrl: subscribe failed (210)
+
+### ncu --metrics lts__t_sectors.sum,fbpa__dram_read_sectors.sum,ltc__t_sectors.sum --print-metric-instances values /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --count 64 --gib 2 --flush 0 (exit 6)
+==PROF== Connected to process 2404436 (/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab)
+==PROF== Profiling "init_buf" - 0: 0%....50%....100% - 1 pass
+==ERROR== The application returned an error code (6).
+[2404436] l2s_lab@127.0.0.1
+  init_buf(unsigned int *, unsigned long) (528, 1, 1)x(1024, 1, 1), Context 1, Stream 7, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------- ----------- ------------
+    Metric Name                 Metric Unit Metric Value
+    --------------------------- ----------- ------------
+    fbpa__dram_read_sectors.sum      sector          704
+    ltc__t_sectors.sum                           (!) n/a
+    lts__t_sectors.sum               sector  103,616,298
+    --------------------------- ----------- ------------
+
+tpc_smctrl: subscribe failed (210)
+
+### nvidia-smi -q -d CLOCK,POWER,PERFORMANCE (exit 0)
+           : Disabled
+    GPU Power Readings
+        Average Power Draw                             : 79.16 W
+        Instantaneous Power Draw                       : 79.48 W
+        GPU Ceiling Power Limit
+            Current Power Limit                        : 560.00 W
+            Requested Power Limit                      : 560.00 W
+            Default Power Limit                        : 700.00 W
+        GPU Base Power
+            Current Base Power                         : N/A
+            Requested Base Power                       : N/A
+            Default Base Power                         : N/A
+            Adaptive TGP Adjusted Base Power           : N/A
+        Min Power Limit                                : 200.00 W
+        Max Power Limit                                : 700.00 W
+    Power Samples
+        Duration                                       : 2.35 sec
+        Number of Samples                              : 119
+        Max                                            : 80.45 W
+        Min                                            : 78.13 W
+        Avg                                            : 79.19 W
+    GPU Memory Power Readings 
+        Average Power Draw                             : 42.47 W
+        Instantaneous Power Draw                       : N/A
+    Module Power Readings
+        Average Power Draw                             : N/A
+        Instantaneous Power Draw                       : N/A
+        Current Power Limit                            : N/A
+        Requested Power Limit                          : N/A
+        Default Power Limit                            : N/A
+        Min Power Limit                                : N/A
+        Max Power Limit                                : N/A
+    EDPp Multiplier                                    : 100.00%
+    Clocks
+        Graphics                                       : 345 MHz
+        SM                                             : 345 MHz
+        Memory                                         : 3201 MHz
+        Video                                          : 765 MHz
+    Applications Clocks
+        Graphics                                       : Requested functionality has been deprecated
+        Memory                                         : Requested functionality has been deprecated
+    Default Applications Clocks
+        Graphics                                       : Requested functionality has been deprecated
+        Memory                                         : Requested functionality has been deprecated
+    Deferred Clocks
+        Memory                                         : N/A
+    Max Clocks
+        Graphics                                       : 1980 MHz
+        SM                                             : 1980 MHz
+        Memory                                         : 3201 MHz
+        Video                                          : 1545 MHz
+    Max Customer Boost Clocks
+        Graphics                                       : 1980 MHz
+    SM Clock Samples
+        Duration                                       : Not Found
+        Number of Samples                              : Not Found
+        Max                                            : Not Found
+        Min                                            : Not Found
+        Avg                                            : Not Found
+    Memory Clock Samples
+        Duration                                       : Not Found
+        Number of Samples                              : Not Found
+        Max                                            : Not Found
+        Min                                            : Not Found
+        Avg                                            : Not Found
+    Clock Policy
+        Auto Boost                                     : N/A
+        Auto Boost Default                             : N/A
+    DLA Clocks
+        Engine                                         : N/A
+        Max Engine                                     : N/A
+
+
+### nvidia-smi -lgc 1980,1980 (exit 4)
+The current user does not have permission to change clocks for GPU 00000000:BB:00.0.
+Terminating early due to previous errors.
+
+### nvidia-smi -ac 3201,1980 (exit 0)
+The requested functionality has been deprecated.
+All done.
+
+### nvidia-smi --query-gpu=name,serial,uuid,pci.bus_id,driver_version,clocks.max.sm,clocks.max.mem --format=csv (exit 0)
+name, serial, uuid, pci.bus_id, driver_version, clocks.max.sm [MHz], clocks.max.memory [MHz]
+NVIDIA H200, 1753424034561, GPU-7d994d23-ca43-78ab-e625-ea155550ba32, 00000000:BB:00.0, 615.71.09, 1980 MHz, 3201 MHz
+
+### ncu --metrics device__attribute_l2s_count,device__attribute_num_l2s_per_fbp,device__attribute_fbp_count,device__attribute_max_gpu_frequency_khz,device__attribute_max_mem_frequency_khz,device__attribute_l2_cache_size,device__attribute_multiprocessor_count,device__attribute_dram_bandwidth,device__attribute_fb_bus_width,device__attribute_limits_max_cta_per_sm,device__attribute_num_tpc_per_gpc,device__attribute_num_gpcs,device__attribute_num_tpcs,device__attribute_ltc_count,device__attribute_num_ltc,device__attribute_num_fbpas,device__attribute_fbpa_count,device__attribute_display_name,device__attribute_chip_name --print-units base /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --count 64 --gib 2 --flush 0 (exit 6)
+==PROF== Connected to process 2405110 (/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab)
+==PROF== Profiling "init_buf" - 0: 0%....50%....100% - 1 pass
+==ERROR== The application returned an error code (6).
+[2405110] l2s_lab@127.0.0.1
+  init_buf(unsigned int *, unsigned long) (528, 1, 1)x(1024, 1, 1), Context 1, Stream 7, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------------------- ----------- ------------
+    Metric Name                             Metric Unit Metric Value
+    --------------------------------------- ----------- ------------
+    device__attribute_chip_name                              (!) n/a
+    device__attribute_display_name                       NVIDIA H200
+    device__attribute_dram_bandwidth                         (!) n/a
+    device__attribute_fb_bus_width                             6,016
+    device__attribute_fbp_count                                   12
+    device__attribute_fbpa_count                             (!) n/a
+    device__attribute_l2_cache_size                       62,914,560
+    device__attribute_l2s_count                                   96
+    device__attribute_limits_max_cta_per_sm                       32
+    device__attribute_ltc_count                              (!) n/a
+    device__attribute_max_gpu_frequency_khz                1,980,000
+    device__attribute_max_mem_frequency_khz                3,201,000
+    device__attribute_multiprocessor_count                       132
+    device__attribute_num_fbpas                              (!) n/a
+    device__attribute_num_gpcs                               (!) n/a
+    device__attribute_num_l2s_per_fbp                              8
+    device__attribute_num_ltc                                (!) n/a
+    device__attribute_num_tpc_per_gpc                        (!) n/a
+    device__attribute_num_tpcs                               (!) n/a
+    --------------------------------------- ----------- ------------
+
+tpc_smctrl: subscribe failed (210)
+
+### ncu --metrics lts__t_sectors.sum,fbpa__dram_read_sectors.sum,ltc__t_sectors.sum --print-metric-instances values /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab lat --map /storage/project/r-hkim358-0/echung67/vortex-exp/gpu/../results_gpu/h200_l2s_map.txt --sm 0 --count 64 --gib 2 --flush 0 (exit 6)
+==PROF== Connected to process 2405189 (/storage/project/r-hkim358-0/echung67/vortex-exp/gpu/l2s_lab)
+==PROF== Profiling "init_buf" - 0: 0%....50%....100% - 1 pass
+==ERROR== The application returned an error code (6).
+[2405189] l2s_lab@127.0.0.1
+  init_buf(unsigned int *, unsigned long) (528, 1, 1)x(1024, 1, 1), Context 1, Stream 7, Device 0, CC 9.0
+    Section: Command line profiler metrics
+    --------------------------- ----------- ------------
+    Metric Name                 Metric Unit Metric Value
+    --------------------------- ----------- ------------
+    fbpa__dram_read_sectors.sum      sector        1,952
+    ltc__t_sectors.sum                           (!) n/a
+    lts__t_sectors.sum               sector  103,517,076
+    --------------------------- ----------- ------------
+
+tpc_smctrl: subscribe failed (210)
+

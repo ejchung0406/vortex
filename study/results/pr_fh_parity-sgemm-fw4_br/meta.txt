@@ -1,0 +1,9 @@
+name=pr_fh_parity-sgemm-fw4_br
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold
+xlen=64
+host=atl1-1-02-005-16-2.pace.gatech.edu
+configs=-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_WIDTH=4
+blackbox=--driver=simx --app=sgemm --args=-n128
+PERF: instrs=621696, cycles=418675
+wall_s=172
+rc=0

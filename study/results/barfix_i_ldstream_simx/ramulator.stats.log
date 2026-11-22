@@ -1,0 +1,832 @@
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 24
+  total_num_read_requests: 2064
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 106.04409
+    read_queue_len_avg_0: 2.78356194
+    write_queue_len_0: 2032
+    queue_len_0: 218003
+    num_other_reqs_0: 0
+    num_write_reqs_0: 24
+    read_latency_0: 218875
+    priority_queue_len_avg_0: 0
+    row_hits_0: 2020
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 16
+    read_row_misses_0: 50
+    queue_len_avg_0: 2.80975151
+    read_row_conflicts_core_0: 16
+    read_row_hits_0: 1998
+    write_queue_len_avg_0: 0.0261896178
+    read_row_conflicts_0: 16
+    write_row_misses_0: 2
+    write_row_conflicts_0: 0
+    read_queue_len_0: 215971
+    write_row_hits_0: 22
+    read_row_hits_core_0: 1998
+    read_row_misses_core_0: 50
+    num_read_reqs_0: 2064
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 89.3056641
+    read_queue_len_avg_0: 2.3209517
+    write_queue_len_0: 0
+    queue_len_0: 180078
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 182898
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.3209517
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 180078
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 95.1005859
+    read_queue_len_avg_0: 2.47396493
+    write_queue_len_0: 0
+    queue_len_0: 191950
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 194766
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.47396493
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 191950
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 104.379883
+    read_queue_len_avg_0: 2.71889973
+    write_queue_len_0: 0
+    queue_len_0: 210954
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 213770
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.71889973
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 210954
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 100.4375
+    read_queue_len_avg_0: 2.61483741
+    write_queue_len_0: 0
+    queue_len_0: 202880
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 205696
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.61483741
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 202880
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 95.4262695
+    read_queue_len_avg_0: 2.48244572
+    write_queue_len_0: 0
+    queue_len_0: 192608
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 195433
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.48244572
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 192608
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2050
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 93.8346329
+    read_queue_len_avg_0: 2.44232345
+    write_queue_len_0: 0
+    queue_len_0: 189495
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 192361
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1985
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 13
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.44232345
+    read_row_conflicts_core_0: 13
+    read_row_hits_0: 1985
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 13
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 189495
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1985
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2050
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 96.9975586
+    read_queue_len_avg_0: 2.52403712
+    write_queue_len_0: 0
+    queue_len_0: 195835
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 198651
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.52403712
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 195835
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 104.751465
+    read_queue_len_avg_0: 2.72870803
+    write_queue_len_0: 0
+    queue_len_0: 211715
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 214531
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.72870803
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 211715
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 89.4238281
+    read_queue_len_avg_0: 2.32400632
+    write_queue_len_0: 0
+    queue_len_0: 180315
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 183140
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.32400632
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 180315
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 95.9990234
+    read_queue_len_avg_0: 2.49767995
+    write_queue_len_0: 0
+    queue_len_0: 193790
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 196606
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.49767995
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 193790
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 104.890625
+    read_queue_len_avg_0: 2.73238134
+    write_queue_len_0: 0
+    queue_len_0: 212000
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 214816
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.73238134
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 212000
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 100.691406
+    read_queue_len_avg_0: 2.62153935
+    write_queue_len_0: 0
+    queue_len_0: 203400
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 206216
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.62153935
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 203400
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2050
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 95.3551254
+    read_queue_len_avg_0: 2.48249722
+    write_queue_len_0: 0
+    queue_len_0: 192612
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 195478
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1985
+    priority_queue_len_0: 0
+    row_misses_0: 53
+    row_conflicts_0: 12
+    read_row_misses_0: 53
+    queue_len_avg_0: 2.48249722
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1985
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 192612
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1985
+    read_row_misses_core_0: 53
+    num_read_reqs_0: 2050
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 94.8740234
+    read_queue_len_avg_0: 2.4679718
+    write_queue_len_0: 0
+    queue_len_0: 191485
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 194302
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.4679718
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 191485
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+
+Frontend:
+  impl: GEM5
+
+MemorySystem:
+  impl: GenericDRAM
+  total_num_other_requests: 0
+  total_num_write_requests: 0
+  total_num_read_requests: 2048
+  memory_system_cycles: 77588
+  DRAM:
+    impl: HBM3
+  AddrMapper:
+    impl: RoBaRaCoCh
+
+
+  Controller:
+    impl: Windowed
+    id: Channel 0
+    avg_read_latency_0: 97.4873047
+    read_queue_len_avg_0: 2.53696442
+    write_queue_len_0: 0
+    queue_len_0: 196838
+    num_other_reqs_0: 0
+    num_write_reqs_0: 0
+    read_latency_0: 199654
+    priority_queue_len_avg_0: 0
+    row_hits_0: 1984
+    priority_queue_len_0: 0
+    row_misses_0: 52
+    row_conflicts_0: 12
+    read_row_misses_0: 52
+    queue_len_avg_0: 2.53696442
+    read_row_conflicts_core_0: 12
+    read_row_hits_0: 1984
+    write_queue_len_avg_0: 0
+    read_row_conflicts_0: 12
+    write_row_misses_0: 0
+    write_row_conflicts_0: 0
+    read_queue_len_0: 196838
+    write_row_hits_0: 0
+    read_row_hits_core_0: 1984
+    read_row_misses_core_0: 52
+    num_read_reqs_0: 2048
+    Scheduler:
+      impl: FRFCFS
+    RefreshManager:
+      impl: AllBank
+    RowPolicy:
+      impl: OpenRowPolicy
+
+
+

@@ -1,0 +1,11 @@
+CONFIGS=-DVX_CFG_NUM_THREADS=16 -DVX_CFG_EXT_LDST_WIDE_ENABLE -DVX_CFG_DCACHE_FWD_HOLD=1
+Running: CONFIGS="-DVX_CFG_NUM_THREADS=16 -DVX_CFG_EXT_LDST_WIDE_ENABLE -DVX_CFG_DCACHE_FWD_HOLD=1" make -C "./ci/../tests/regression/sgemm2" runtime-simx > /dev/null
+which: no ccache in (/storage/home/hcoda1/7/echung67/.local/bin:/usr/local/pace-apps/manual/packages/xalt/xalt/bin:/usr/local/pace-apps/manual/packages/uv/0.9.17:/opt/pace-common/bin:/opt/slurm/current/bin:/storage/home/hcoda1/7/echung67/.nvm/versions/node/v24.15.0/bin:/storage/home/hcoda1/7/echung67/.local/bin:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/mvapich2-2.3.7-1-qv3gjagtbx5e3rlbdy6iy2sfczryftyt/bin:/opt/pmix/4.2.6/bin:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/iozone/bin:/storage/home/hcoda1/7/echung67/bin:/storage/home/hcoda1/7/echung67/bin)
+/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_knob/sim/simx/decode.cpp:40:2: error: #error "VX_CFG_EXT_LDST_WIDE_ENABLE requires VX_CFG_EXT_F_ENABLE with FLEN 32"
+   40 | #error "VX_CFG_EXT_LDST_WIDE_ENABLE requires VX_CFG_EXT_F_ENABLE with FLEN 32"
+      |  ^~~~~
+compilation terminated due to -Wfatal-errors.
+make[2]: *** [Makefile:206: /tmp/echung67/vx_15977433_2169631/sw/runtime/obj/decode.o] Error 1
+make[1]: *** [Makefile:38: /tmp/echung67/vx_15977433_2169631/sw/runtime/libsimx.so] Error 2
+make: *** [../common.mk:241: runtime-simx] Error 2
+Error building driver: simx (via ./ci/../tests/regression/sgemm2)

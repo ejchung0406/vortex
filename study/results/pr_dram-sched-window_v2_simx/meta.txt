@@ -1,0 +1,19 @@
+name=pr_dram-sched-window_v2_simx
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-sched-window rev=857d99c26267d6416b19c929a345b38ce24f2431
+host=atl1-1-02-003-16-1.pace.gatech.edu
+driver=simx xlen=64
+ext_symbols=32
+case unit app=unit:dram_sim args="" configs="" flags="" env="" rc=0   unit_fails=0 wall=25
+case unitb app=unit:dram_bank_model args="" configs="" flags="" env="" rc=0   unit_fails=0 wall=25
+case mem8 app=sgemm args="" configs="-DVX_CFG_MEM_BLOCK_SIZE=8 -DVX_CFG_LMEM_NUM_BANKS=4 -DVX_CFG_DCACHE_NUM_BANKS=1" flags="" env="" rc=0 cycles=817602 instrs=334880 unit_fails=0 wall=169
+case sgemm32 app=sgemm args="-n32" configs="" flags="" env="" rc=0 cycles=113990 instrs=47904 unit_fails=0 wall=166
+case vecadd app=vecadd args="-n16384" configs="" flags="" env="" rc=0 cycles=381938 instrs=122912 unit_fails=0 wall=4
+case l2mc app=sgemm args="-n32" configs="" flags="--l2cache --cores=2" env="" rc=0 cycles=57246 instrs=47936 unit_fails=0 wall=166
+case hbm3 app=vecadd args="-n16384" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6545" flags="--l2cache --cores=2" env="" rc=0 cycles=188562 instrs=122944 unit_fails=0 wall=168
+case pb_off app=vecadd args="-n16384" configs="-DVX_CFG_PLATFORM_CLOCK_RATE=1980 -DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=2 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6400" flags="--l2cache --cores=2" env="" rc=0 cycles=188623 instrs=122944 unit_fails=0 wall=168
+case pb_on app=vecadd args="-n16384" configs="-DVX_CFG_PLATFORM_CLOCK_RATE=1980 -DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=2 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6400 -DVX_CFG_PLATFORM_MEMORY_SCHED_WINDOW=256" flags="--l2cache --cores=2" env="" rc=0 cycles=188623 instrs=122944 unit_fails=0 wall=168
+case bw_w32 app=bwstream args="-n256 -r1 -p0 -u4 -b32" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=2 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6400" flags="--profile=h100 --cores=4" env="" rc=0 cycles=342346 instrs=256256 unit_fails=0 wall=263
+case bw_w256 app=bwstream args="-n256 -r1 -p0 -u4 -b32" configs="-DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=2 -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6400 -DVX_CFG_PLATFORM_MEMORY_SCHED_WINDOW=256" flags="--profile=h100 --cores=4" env="" rc=0 cycles=234050 instrs=256256 unit_fails=0 wall=259
+fails=0 of 11
+wall_s=1581
+rc=0

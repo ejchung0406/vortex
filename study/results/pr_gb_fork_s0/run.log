@@ -1,0 +1,12 @@
+CONFIGS=-DVX_CFG_NUM_CORES=1
+Running: CONFIGS="-DVX_CFG_NUM_CORES=1" make -C "./ci/../tests/regression/gemm_block" runtime-simx > /dev/null
+which: no ccache in (/storage/home/hcoda1/7/echung67/.local/bin:/usr/local/pace-apps/manual/packages/xalt/xalt/bin:/usr/local/pace-apps/manual/packages/uv/0.9.17:/opt/pace-common/bin:/opt/slurm/current/bin:/storage/home/hcoda1/7/echung67/.nvm/versions/node/v24.15.0/bin:/storage/home/hcoda1/7/echung67/.local/bin:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-12.3.0/mvapich2-2.3.7-1-qv3gjagtbx5e3rlbdy6iy2sfczryftyt/bin:/opt/pmix/4.2.6/bin:/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/opt/iozone/bin:/storage/home/hcoda1/7/echung67/bin:/storage/home/hcoda1/7/echung67/bin)
+/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_tests-gemm-block/sim/simx/tcu/tcu_unit.cpp: In member function 'void vortex::TcuUnit::Impl::wgmma(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, const vortex::RegDataVec&, const vortex::RegDataVec&, const vortex::RegDataVec&, vortex::RegDataVec&, bool, uint32_t, uint32_t, uint32_t)':
+/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_tests-gemm-block/sim/simx/tcu/tcu_unit.cpp:1239:13: error: 'class vortex::TcuUnit::Impl' has no member named 'decode_descs'
+ 1239 |       this->decode_descs(wid, fmt_s, is_a_smem, is_sparse);
+      |             ^~~~~~~~~~~~
+compilation terminated due to -Wfatal-errors.
+make[2]: *** [Makefile:206: /tmp/echung67/vx_15977766_1698653/sw/runtime/obj/tcu/tcu_unit.o] Error 1
+make[1]: *** [Makefile:38: /tmp/echung67/vx_15977766_1698653/sw/runtime/libsimx.so] Error 2
+make: *** [../common.mk:241: runtime-simx] Error 2
+Error building driver: simx (via ./ci/../tests/regression/gemm_block)

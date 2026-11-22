@@ -1,0 +1,9 @@
+pr_fh_l2_sgemm_c4_d1l1|simx|sgemm|-n128|--cores=4 --l2cache|-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_L2_FWD_HOLD=1
+pr_fh_l2_sgemm_c8_d1l1|simx|sgemm|-n128|--cores=8 --l2cache|-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_L2_FWD_HOLD=1
+pr_fh_l2_sgemm_c4_b1_d1l1|simx|sgemm|-n128|--cores=4 --l2cache|-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_L2_NUM_BANKS=1 -DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_L2_FWD_HOLD=1
+pr_fh_l2_sgemm_c8_b2_d1l1|simx|sgemm|-n128|--cores=8 --l2cache|-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_L2_NUM_BANKS=2 -DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_L2_FWD_HOLD=1
+pr_fh_l2_sgemv_c4_d1l1|simx|sgemv|-m512 -n512|--cores=4 --l2cache|-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_L2_FWD_HOLD=1
+pr_fh_l2_sgemv_c8_b2_d1l1|simx|sgemv|-m512 -n512|--cores=8 --l2cache|-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_L2_NUM_BANKS=2 -DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_L2_FWD_HOLD=1
+pr_fh_l2_va_c4_d1l1|simx|vecadd|-n65536|--cores=4 --l2cache|-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_L2_FWD_HOLD=1
+pr_fh_l2_raycast_c4_d1l1|simx|raycast||--cores=4 --l2cache|-DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_L2_FWD_HOLD=1
+pr_fh_l2_sgemm_mc_d1l1|simx|sgemm|-n128|--cores=2 --l2cache|-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_L2_FWD_HOLD=1

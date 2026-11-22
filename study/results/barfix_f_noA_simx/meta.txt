@@ -1,0 +1,8 @@
+name=barfix_f_noA_simx
+src_rev=
+src_dirty=0
+host=atl1-1-03-003-13-1.pace.gatech.edu
+xconf=-DMTILES=1
+blackbox=--driver=simx --app=gemm_block --perf=7 --args=-m16 -n128 -k64 -b0 -o2
+rc=2
+wall_s=175

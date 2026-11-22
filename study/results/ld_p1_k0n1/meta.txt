@@ -1,0 +1,6 @@
+name=ld_p1_k0n1
+src_rev=
+src_dirty=0
+host=atl1-1-02-007-20-1.pace.gatech.edu
+xconf=-DPATH_STATS
+blackbox=--driver=simx --app=smprobe --perf=1 --profile=h200s --cores=1 --args=-k0 -n1 -i200

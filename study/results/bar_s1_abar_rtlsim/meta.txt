@@ -1,0 +1,8 @@
+name=bar_s1_abar_rtlsim
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-10-1.pace.gatech.edu
+xconf= -DVX_CFG_BAR_DRAIN_SCOPE=1
+blackbox=--driver=rtlsim --app=async_barrier --perf=1
+rc=0
+wall_s=39

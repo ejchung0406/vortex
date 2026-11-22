@@ -1,0 +1,8 @@
+name=bar_s1_barvisiw2_simx
+src_rev=
+src_dirty=0
+host=atl1-1-02-008-4-1.pace.gatech.edu
+xconf=-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1
+blackbox=--driver=simx --app=bar_vis --perf=1 --args=-w4
+rc=0
+wall_s=152

@@ -1,0 +1,6 @@
+name=par_h2_dxa32_rtl
+src_rev=
+src_dirty=0
+host=atl1-1-02-002-10-2.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000
+blackbox=--driver=rtlsim --app=bwstream_dxa --perf=16 --profile=h200s --cores=1 --args=-e4096 -n32 -g16 -d4 -c0

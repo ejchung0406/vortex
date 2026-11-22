@@ -222,3 +222,150 @@ Raw: `results_gpu/h200_borrow_*.txt`; sources `gpu/borrow_*`; holder job 1595316
 - Best today: disjoint SMs spread over all GPCs, <= 5-6 memory SMs per GPC. Beside a CUTLASS FP8 GEMM on the other 100 SMs: memory job 4.49 -> 3.7 TB/s, GEMM -10%.
 - LithOS picks a TPC count per kernel, not a placement; no GPC/memory awareness; evaluated on A100. No public code found.
 - Hardware directions left: GPC egress / cross-GPC paths; issue priority or a reserved lane for a co-resident memory warp; bypassing shared memory.
+
+## Update 2026-11-21 (evening): critique, design studies, review findings
+
+Decisions by the user
+- Network model baseline `h200g2`: 2 partitions, each one GPC of 16 SMs, 16 L2
+  slices and one HBM3E stack (32 SMs, ~1.6 TB/s). Deviation: memory per SM is
+  1.375x the part (**[corr. 2026-11-21]** was "1.43x"; like for like it is
+  (2 / 32) / (6 / 132) = 1.375, `noc-design-verification.md` §1.4). The build
+  waits for the in-flight patches; design first.
+- SimX wall-clock optimisation started on branch `feature/simx-perf`
+  (cycle counts must stay bit-identical).
+
+New notes
+- `framing-critique.md`: reviewer-style critique. Verdict "revise".
+- `gpc-limit-design.md`, `smem-bypass-design.md`: both conclude "not a
+  proposal on its own". `sm-sharing-design-space.md` is still being written.
+- `related-work-placement.md`: placement is taken (GPCPlace, Fan et al.).
+- `noc-design-verification.md`: independent verification of the network design
+  (in progress).
+
+Corrections to earlier statements
+- "Memory job starves to 0.6-22% when sharing SMs" holds only beside the
+  synthetic FMA kernel. Beside a cuBLAS GEMM (`h200_borrow_e3.txt` lines 14-21)
+  memory keeps 0.63-0.78 and the GEMM drops to 0.25 at 132 memory blocks; the
+  two alternate on SMs.
+- Qwen decode printed `'!!!!…'` in 4 MPS runs and 2 co-runs; those timings come
+  from wrong output. Cause unknown.
+- Two packed GPCs give 2.27-2.28 TB/s, not 2 x 1.28.
+- "cuBLAS FP16 small M: 16-20 GB/s per SM" is an all-SM, chip-limited figure;
+  on 8-14 SMs it is ~52.
+- Decode kernels sit at the tensor core's bound for an M padded to 64 rows
+  (117 GB/s per SM; 59 for a 128-row tile), not at the ingest ceiling.
+- Barrier scope 1 (h200s): review found a store stage the RTL condition does
+  not see (the dcache flush arbiter's buffer), no parity run with VM on, and a
+  description narrower than the code. The "15.8 -> 22.2 GB/s per SM" figure is
+  unconfirmed until the fix branch `feature/bar-drain-fix` reports.
+- DXA worker count: 1 at 1-15 cores, 2 at 16-23, 16 at 132 (the findings list
+  says 1 at 1-8; to be corrected in both languages).
+- LR/SC at large configurations is slow, not livelocked (cycles scale linearly
+  with cores, ~quadratically with warps).
+
+Real-H200 experiments owed (one holder job at a time)
+1. L2 structure + bystander/saturation/L2-aggregate tests (running).
+2. Go/no-go for SM sharing: lane-sized decode kernel beside a DiT-shaped
+   production GEMM, both launch orders, 1 s windows, clock/power logged.
+3. Go/no-go for the shared-memory bypass: swap-AB wgmma decode kernel in three
+   operand variants on one SM.
+4. Cause of the `'!!!!'` outputs; rerun the MPS decode numbers.
+
+## Update 2026-11-21 (night): L2 structure, network design verdict, shapes, accounts, what is owed
+
+Decisions by the user
+- Network model: the GPC limit is a **return-side gate**, because that is what
+  reproduces the bystander effect (prototype: -30% for a bystander with the
+  return-side gate, -3% with a request-side one; the part: -45 to -54%).
+  Replication of remote reads is to be built. Per-SM rates are calibrated
+  before any placement number is compared with the part. Both `h200g2` (fast
+  iteration) and `h200g4` (ratio-dependent results) are used.
+- Upstream PRs are low priority. The PR effort was wound down (19:20); the
+  branches are kept (15 local `pr/*`, nothing pushed, no PR or issue opened),
+  verified at XLEN 64 only (no 32-bit toolchain here). Final state:
+  `pr/notes/INDEX.md`.
+- Functional work is consolidated on `feature/bar-drain-fix`, to be merged into
+  `feature/dxa-borrowing`. Performance optimisation (`feature/simx-perf`) and
+  the network model stay on their own branches.
+- ICE, a free cluster, is validated for SimX: cycle counts bit-identical to
+  Phoenix on three reference runs (`results/icev_*_ice` against `_phx`).
+  Scripts in `vortex-exp/ice/`.
+
+H200 L2 / memory-side structure (`h200-l2-structure.md`; holder 15976443, 43
+min, a third die; raw `results_gpu/h200_l2s_*`)
+- Structure: 96 L2 slices (8 per FBP, 12 FBPs, 60 MiB, ncu). **2 partitions** of
+  4 GPCs: side A = GPCs {0, 1, 5, 7}, side B = {2, 3, 4, 6}. Partition of an
+  address = PA12 ^ PA13 ^ PA15 ^ PA17 ^ PA19 ^ a per-2 MB-page constant (zero
+  error on 65,536 lines; identical to GemAtlas's H20 hash); 4 KB interleave.
+  A remote read leaves a copy in the reader's half. Slice routing fits a 256 B
+  granule (bits 8, 10, 11 matter, 7 and 9 do not): **it argues against the
+  1 KB interleave** in `h200s` (medium confidence).
+- Latencies (SM cycles at 1980 MHz): L2 hit near ~290 (sub-classes ~280 / ~305),
+  far ~467; DRAM miss with a near home ~546, far home ~733; 7-10% of cold lines
+  at ~960-975. A DRAM miss fetches 64 B.
+- Limits: **per GPC 1.28 TB/s** (~648 B per SM clock) of unique lines, reached at
+  8 SMs, for DRAM and L2-resident data alike (shared lines merge and go past it:
+  2.75 TB/s at 18 SMs, which is Fan's 2.8). **Cross-partition fabric 1.28 TB/s
+  per direction** (remote-only chip 2.56; local-only 4.63; mixed 4.58). Total =
+  min(GPCs x 1.28, 2.56 per half, ~4.6). Writes 63 GB/s per SM, no GPC limit
+  reached. The earlier "two packed GPCs 2.27-2.28 TB/s" was a makespan
+  artefact (all 28 pairs give 2.54-2.56).
+- **Bystander effect**: one saturated GPC (16 SMs) cuts unsaturated SMs in every
+  other GPC from 192 to 88 (same half) or 106 (other half) GB/s per SM with TMA
+  (93 / 132 with loads); the chip total falls below the sum of the parts. With
+  6 SMs in that GPC the others keep 177-182. Mechanism open; a dedicated
+  experiment is running (`h200-bystander.md`, draft).
+- **Per-SM ingress**: one ceiling shared by TMA and loads, 215-230 GB/s
+  (110-116 B/clock) together, not 196 + 218; shared-memory bandwidth is not
+  the limit (TMA keeps 174-180 with readers taking 54-99). Near 223 / far 206
+  GB/s for loads. Two SMs of a TPC give exactly 2x.
+
+Network design verification (`noc-design-verification.md`, being edited)
+- Verdict: **sound with required changes.** The structure (GPC switch, two
+  partitions, slices bound to channels, one inter-partition link) is
+  realisable, the zero-load latency budget matches our H200 within 2%, and the
+  knobs-off prototype is the old code path cycle for cycle; not ready to build
+  as written.
+- Blocking items and their state against rev. 3: B1 `h200g2`'s link default hid
+  the GPC limit (accepted: B_x = B_g = 648, closed); **B2 fences are not ordered
+  through address-hashed lanes** (accepted, not implemented; every result with
+  a fence or flush between memory phases is unsafe until it is); **B3 no
+  mechanism or target for the bystander effect** (mechanism and target added,
+  open until a SimX run shows it); **B4 a GPC plateaus below its configured
+  cap** (gate bugs reported fixed, re-measurement and review not done).
+- Still open in rev. 3: the new per-SM ingress gate holds responses at the
+  socket and would slow SMs of an unsaturated GPC, which the part does not
+  show; credit accumulation needs a bound; replication with write-to-home +
+  invalidate needs its own correctness review; the other-half bystander value
+  (86 vs the part's 106).
+
+Network model shapes (`noc-model-design.md`, being edited)
+- `h200g2` (reference): 2 partitions x 1 GPC x 16 SMs x 16 slices x 1 HBM3E
+  stack = 32 SMs, ~1.6 TB/s, 20 MiB. Packed in one GPC 1.28 vs spread 1.54
+  TB/s; the fabric never binds; only other-half bystanders exist. **Memory per
+  SM is 1.375x the part** (48 GB/s per SM achieved against the part's 35; the
+  earlier "1.43x" is corrected above).
+- `h200g4` (exact ratio): 64 SMs = 4 GPCs x 16, 2 per partition, 3 stacks.
+  Memory per SM, SMs to fill memory (17%), L2 per SM and the GPC/memory ratio
+  per side match the part; packed 16 vs spread 16 = 1.8x.
+- `h200g4x8` (4 GPCs of 8): the cost of `h200g2`; separates the GPC effect from
+  the partition effect.
+
+Charge accounts and clusters
+- CPU jobs are billed on Phoenix. CPU jobs now run on `gts-hkim358` (the
+  account is given at submission; `run_point.sbatch` still names
+  `gts-hkim358-paid`, which the GPU holder jobs keep using).
+- ICE is being set up: see `ice-cluster.md` (in progress) and, for the SimX
+  validation, above. ICE has no charge account
+  (association "coc", partition `ice-cpu`, 18 h, QOS `coc-ice` 50 submitted
+  jobs per user: `ice/run_point_ice.sbatch`).
+
+Still owed
+- `dxa_mc_parity.patch` (item 31): waiting for its rtlsim reference run
+  `par_h2_dxa32_rtl` (running), because one `h200s` point moves +20%.
+- RTL for the per-warp rate (items 22, 29: `VX_CFG_FETCH_INFLIGHT`,
+  `VX_CFG_FFLAGS_ACCUM`): deferred until a research direction is chosen.
+- Barrier scope 1 on `h200s`: unconfirmed until `feature/bar-drain-fix` is
+  verified and merged (item 18).
+- Real H200: the go/no-go experiments A, B, C (`h200-go-nogo.md`, in progress) and the bystander characterisation (`h200-bystander.md`, draft) are
+  running.

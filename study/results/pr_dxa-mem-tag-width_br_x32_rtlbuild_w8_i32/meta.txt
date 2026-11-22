@@ -1,0 +1,8 @@
+name=br_x32_rtlbuild_w8_i32
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dxa-mem-tag-width
+xlen=32
+target=sim/rtlsim
+xconf=-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_DXA_CORES=8 -DVX_CFG_DXA_MAX_INFLIGHT=32 -DPERF_ENABLE
+host=atl1-1-02-005-10-2.pace.gatech.edu
+rc=0
+wall_s=59

@@ -1,0 +1,9 @@
+name=pr_fh_l2_va_c4_d1l1
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_knob
+xlen=64
+host=atl1-1-02-018-5-1.pace.gatech.edu
+configs=-DVX_CFG_NUM_THREADS=16 -DVX_CFG_NUM_WARPS=16 -DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_L2_FWD_HOLD=1
+blackbox=--driver=simx --app=vecadd --args=-n65536 --cores=4 --l2cache
+PERF: instrs=123392, cycles=45939
+wall_s=153
+rc=0

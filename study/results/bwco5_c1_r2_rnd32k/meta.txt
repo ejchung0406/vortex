@@ -1,0 +1,8 @@
+name=bwco5_c1_r2_rnd32k
+src_rev=
+src_dirty=0
+host=atl1-1-02-007-28-1.pace.gatech.edu
+xconf=-DVX_DBG_STALL_TIMEOUT=20000000 -DMTILES=4 -DPROFILE_ENABLE 
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=1 --args=-m64 -k1024 -t1 -n8192 -b1 -s0 -r2 -o1
+rc=0
+wall_s=540

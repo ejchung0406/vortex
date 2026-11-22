@@ -1,0 +1,60 @@
+home label h = far-for-SM4-after-warm-by-SM0; fraction 0.5
+  agreement with SM6 warm0: 1.00000, SM6 warm14: 1.00000
+  agreement with SM8 warm0: 1.00000, SM8 warm14: 1.00000
+  agreement with SM12 warm0: 1.00000, SM12 warm14: 1.00000
+run lengths of h in 128 B lines: min 32 set of distinct lengths (first 12): [32, 64]
+fraction of 4 KB blocks with a constant h: 1.0
+  constant within 256 B: 1.0000
+  constant within 512 B: 1.0000
+  constant within 1024 B: 1.0000
+  constant within 2048 B: 1.0000
+GF(2) fit of h on bits 7..20 + per-2MB-page constant: bits [12, 13, 15, 17, 19] error 0.0
+GF(2) fit of h on bits 7..22 + per-2MB-page constant: bits [12, 13, 15, 17, 19, 21] error 0.0
+  page 0: bits [12, 13, 15, 17, 19] error 0.0000
+  page 1: bits [12, 13, 15, 17, 19] error 0.0000
+  page 2: bits [12, 13, 15, 17, 19] error 0.0000
+  page 3: bits [12, 13, 15, 17, 19] error 0.0000
+cold sm=  0 side A: <640: 0.429, 640-850: 0.500, >=850: 0.071 | local-home lines: median 548 (p10 524 p90 762); remote-home: median 736 (p10 701 p90 790)
+cold sm=  2 side A: <640: 0.429, 640-850: 0.501, >=850: 0.071 | local-home lines: median 545 (p10 520 p90 775); remote-home: median 733 (p10 698 p90 783)
+cold sm= 10 side A: <640: 0.428, 640-850: 0.504, >=850: 0.068 | local-home lines: median 545 (p10 521 p90 766); remote-home: median 734 (p10 699 p90 780)
+cold sm= 14 side A: <640: 0.428, 640-850: 0.503, >=850: 0.069 | local-home lines: median 546 (p10 522 p90 765); remote-home: median 734 (p10 700 p90 782)
+cold sm=130 side A: <640: 0.430, 640-850: 0.494, >=850: 0.076 | local-home lines: median 553 (p10 509 p90 766); remote-home: median 739 (p10 682 p90 802)
+cold sm=  4 side B: <640: 0.428, 640-850: 0.503, >=850: 0.069 | local-home lines: median 546 (p10 522 p90 769); remote-home: median 730 (p10 698 p90 775)
+cold sm=  6 side B: <640: 0.430, 640-850: 0.503, >=850: 0.068 | local-home lines: median 546 (p10 522 p90 754); remote-home: median 730 (p10 699 p90 777)
+cold sm=  8 side B: <640: 0.428, 640-850: 0.503, >=850: 0.070 | local-home lines: median 547 (p10 523 p90 766); remote-home: median 731 (p10 699 p90 782)
+cold sm= 12 side B: <640: 0.429, 640-850: 0.503, >=850: 0.067 | local-home lines: median 546 (p10 522 p90 759); remote-home: median 731 (p10 698 p90 779)
+hit sm=  0 side A warm=self local-home median 294 p10 274 p90 | remote-home median 301 p10 281 p90 319
+hit sm=  2 side A warm=self local-home median 290 p10 271 p90 | remote-home median 296 p10 278 p90 315
+hit sm=  2 side A warm=0    local-home median 290 p10 271 p90 | remote-home median 297 p10 278 p90 315
+hit sm= 10 side A warm=self local-home median 290 p10 272 p90 | remote-home median 297 p10 279 p90 315
+hit sm= 10 side A warm=0    local-home median 290 p10 272 p90 | remote-home median 297 p10 279 p90 315
+hit sm= 14 side A warm=self local-home median 291 p10 272 p90 | remote-home median 298 p10 279 p90 315
+hit sm= 14 side A warm=0    local-home median 291 p10 272 p90 | remote-home median 298 p10 279 p90 316
+hit sm=130 side A warm=self local-home median 285 p10 266 p90 | remote-home median 292 p10 273 p90 324
+hit sm=130 side A warm=0    local-home median 285 p10 266 p90 | remote-home median 292 p10 273 p90 324
+hit sm=  4 side B warm=self local-home median 290 p10 271 p90 | remote-home median 297 p10 278 p90 315
+hit sm=  4 side B warm=0    local-home median 290 p10 271 p90 | remote-home median 466 p10 445 p90 490
+hit sm=  6 side B warm=self local-home median 291 p10 271 p90 | remote-home median 298 p10 278 p90 316
+hit sm=  6 side B warm=0    local-home median 291 p10 271 p90 | remote-home median 466 p10 445 p90 492
+hit sm=  8 side B warm=self local-home median 291 p10 271 p90 | remote-home median 298 p10 278 p90 315
+hit sm=  8 side B warm=0    local-home median 292 p10 271 p90 | remote-home median 467 p10 446 p90 493
+hit sm= 12 side B warm=self local-home median 290 p10 271 p90 | remote-home median 297 p10 278 p90 315
+hit sm= 12 side B warm=0    local-home median 290 p10 271 p90 | remote-home median 467 p10 445 p90 490
+agreement of local-hit sub-class (>292) between SMs:
+    0 1.000 0.924 0.173 0.167 0.836 0.847 0.167 0.173
+    2 0.924 1.000 0.159 0.153 0.841 0.849 0.153 0.159
+   10 0.173 0.159 1.000 0.948 0.163 0.156 0.848 0.840
+   14 0.167 0.153 0.948 1.000 0.157 0.150 0.856 0.847
+    4 0.836 0.841 0.163 0.157 1.000 0.948 0.157 0.163
+    6 0.847 0.849 0.156 0.150 0.948 1.000 0.150 0.156
+    8 0.167 0.153 0.848 0.856 0.157 0.150 1.000 0.953
+   12 0.173 0.159 0.840 0.847 0.163 0.156 0.953 1.000
+GF(2) fit of SM0 local sub-class: bits [7, 9, 10, 15, 16] error 0.5001
+GF(2) fit of SM4 local sub-class: bits [7, 9, 10, 13, 15, 16] error 0.5020
+blocks 1835008 pages 3584 page-vote confidence min 0.872 median 0.932
+agreement of homeA with SM0 cold class on non-tail blocks: 0.9660
+agreement with SM14 (side A) cold class: 0.9660
+fraction home A: 0.5000; tail (>=850) blocks: 0.0951
+page constants first 64: 1001100101100110100110011001100101100110100110010110011010011001
+lists: home A 917504 blocks, home B 917504 blocks (4 KB)
+pages 2j/2j+1 (4KB) in opposite partitions: 1.0000

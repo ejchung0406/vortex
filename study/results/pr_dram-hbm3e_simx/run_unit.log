@@ -1,0 +1,30 @@
+make: Entering directory '/tmp/echung67/vx_15981240_3758825/tests/unittest/dram_sim'
+rm -rf dram_sim *.o *.log .depend
+make: Leaving directory '/tmp/echung67/vx_15981240_3758825/tests/unittest/dram_sim'
+make: Entering directory '/tmp/echung67/vx_15981240_3758825/tests/unittest/dram_sim'
+/usr/local/pace-apps/spack/packages/linux-rhel9-x86_64_v3/gcc-11.3.1/gcc-12.3.0-ukkkutsxfl5kpnnaxflpkq2jtliwthfz/bin/g++ -I/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/sim/common -isystem /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/third_party/ramulator/ext/spdlog/include -isystem /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/third_party/ramulator/ext/yaml-cpp/include -isystem /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/third_party/ramulator/src -std=c++17 -Wall -Wextra -pedantic -Wfatal-errors -Werror -I/tmp/echung67/vx_15981240_3758825/sw -I/tmp/echung67/vx_15981240_3758825/hw -I/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/sw/common  -O2 -DNDEBUG /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/tests/unittest/dram_sim/main.cpp /storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/sim/common/dram_sim.cpp -Wl,-rpath,/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/third_party/ramulator -L/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/third_party/ramulator -lramulator -Wl,-rpath,/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/third_party/ramulator_ext -L/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram-hbm3e/third_party/ramulator_ext -Wl,--push-state,--no-as-needed -lramulator-vortex -Wl,--pop-state -o dram_sim
+./dram_sim
+PASS A100 open-row read latency ~215 core cycles (218.0)
+PASS A100 row-conflict read latency ~255 core cycles (259.0)
+PASS fixed latency adds 190 cycles (190.0)
+PASS bandwidth scales with the channel count (32.0)
+PASS 5 channels stream ~5x one (5.0)
+PASS A100 stream reaches 75-100% of peak (958.7)
+PASS queue of 8 bounds requests in flight (8.0)
+PASS a 128 B block returns one response (1.0)
+PASS default open-row read latency 14 cycles (14.0)
+PASS default row-conflict read latency 26 cycles (26.0)
+PASS four streams 1 MB apart keep over half one stream's rate (0.6)
+PASS HBM2 2 channels stream ~2x one (2.0)
+PASS H100 stream reaches 75-100% of peak (1391.8)
+PASS HBM3E stream reaches 75-100% of peak (24.8)
+FAIL HBM3E channel streams half an HBM3 channel (0.6)
+PASS HBM3E tCCDL is 4 nCK at 6,400 MT/s (8.0)
+PASS HBM3E tCCDL is 2.5 ns at 9,600 MT/s (12.0)
+PASS 8 bank groups stream 64 strided streams faster than 4 (1.3)
+PASS GDDR6 stream reaches 70-100% of peak (405.9)
+PASS GDDR6 bandwidth scales with the channel count (32.0)
+PASS GDDR6 row conflicts cost more than row hits (69.0)
+FAILED: 1 check(s)
+make: *** [../common.mk:21: run] Error 1
+make: Leaving directory '/tmp/echung67/vx_15981240_3758825/tests/unittest/dram_sim'

@@ -1,0 +1,4 @@
+pr_fh_sw_bw_def_rtl|rtlsim|bwstream|-n64 -r1 -p0 -u4||
+pr_fh_sw_bw_x16_rtl|rtlsim|bwstream|-n64 -r1 -p0 -u4 -b16||-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16 -DVX_DBG_STALL_TIMEOUT=20000000
+pr_fh_sw_va_x16_rtl|rtlsim|vecadd|-n65536||-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16
+pr_fh_sw_va_x32_rtl|rtlsim|vecadd|-n65536||-DVX_CFG_NUM_WARPS=32 -DVX_CFG_NUM_THREADS=32 -DVX_DBG_STALL_TIMEOUT=20000000

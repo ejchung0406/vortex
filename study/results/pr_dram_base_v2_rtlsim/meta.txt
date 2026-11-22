@@ -1,0 +1,9 @@
+name=pr_dram_base_v2_rtlsim
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_dram_base rev=ccf811e1196d7aa2aa2f8a3ada77797c1ff6333d
+host=atl1-1-03-003-8-1.pace.gatech.edu
+driver=rtlsim xlen=64
+ext_symbols=0
+case mem8 app=sgemm args="" configs="-DVX_CFG_MEM_BLOCK_SIZE=8 -DVX_CFG_LMEM_NUM_BANKS=4 -DVX_CFG_DCACHE_NUM_BANKS=1" flags="" env="" rc=0 cycles=830105 instrs=334880 unit_fails=0 wall=53
+fails=0 of 1
+wall_s=53
+rc=0

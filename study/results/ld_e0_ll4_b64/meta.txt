@@ -1,0 +1,8 @@
+name=ld_e0_ll4_b64
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-16-1.pace.gatech.edu
+xconf=-DPATH_STATS
+blackbox=--driver=simx --app=ldstream --perf=1 --profile=h200s --cores=1 --args=-t2048 -b4 -u8 -w4 -p2 -a -l
+rc=0
+wall_s=238

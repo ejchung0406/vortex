@@ -1,0 +1,3 @@
+pr_fh_sw_packld_x16_rtl|rtlsim|packld|||-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16
+pr_fh_sw_sgemv_x16_rtl|rtlsim|sgemv|-m512 -n512||-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16
+pr_fh_sw_ul_x32_rtl|rtlsim|uniform_ld|||-DVX_CFG_NUM_WARPS=32 -DVX_CFG_NUM_THREADS=32 -DVX_DBG_STALL_TIMEOUT=20000000

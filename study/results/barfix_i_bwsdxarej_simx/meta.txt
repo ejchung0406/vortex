@@ -1,0 +1,8 @@
+name=barfix_i_bwsdxarej_simx
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-15-2.pace.gatech.edu
+xconf=-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_BARRIERS=4
+blackbox=--driver=simx --app=bwstream_dxa --perf=7 --args=-e64 -n8 -d8
+rc=2
+wall_s=178

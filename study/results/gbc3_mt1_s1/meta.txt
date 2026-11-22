@@ -1,0 +1,8 @@
+name=gbc3_mt1_s1
+src_rev=
+src_dirty=0
+host=atl1-1-02-006-17-2.pace.gatech.edu
+xconf=-DMTILES=1 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=1 --args=-m16 -n1024 -k4096 -s1
+rc=0
+wall_s=251

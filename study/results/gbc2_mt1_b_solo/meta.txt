@@ -1,0 +1,8 @@
+name=gbc2_mt1_b_solo
+src_rev=
+src_dirty=0
+host=atl1-1-02-007-3-1.pace.gatech.edu
+xconf=-DMTILES=1 -DPROFILE_ENABLE
+blackbox=--driver=simx --app=gemm_block --perf=7 --profile=h200s --cores=2 --args=-m16 -n8192 -k1024 -b1 -r2 -s1 -o1
+rc=0
+wall_s=437

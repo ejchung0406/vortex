@@ -1,0 +1,5 @@
+pr_gb_rtl_s0|rtlsim|gemm_block|-s0||-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_EXT_TCU_ENABLE
+pr_gb_rtl_s1|rtlsim|gemm_block|-s1||-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_EXT_TCU_ENABLE
+pr_gb_rtl_dpi_s1|rtlsim|gemm_block|-s1||-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_TYPE=DPI
+pr_gb_rtl_wg_s0|rtlsim|gemm_block|-s0||-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
+pr_gb_rtl_wg_s1|rtlsim|gemm_block|-s1||-DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE

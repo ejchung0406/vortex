@@ -1,0 +1,9 @@
+name=pr_bds_s0_dxa_simx
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_bar-drain-scope
+src_rev=0770c8a1ea6b463faa68da7578ec3df3768af120
+host=atl1-1-02-011-30-1.pace.gatech.edu
+xlen=64
+xconf=-DVX_CFG_EXT_DXA_ENABLE
+blackbox=--driver=simx --app=dxa_copy --args=-d1
+rc=0
+wall_s=165

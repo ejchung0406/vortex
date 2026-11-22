@@ -1,0 +1,8 @@
+name=barfix_e_rev_aliaspad_simx
+src_rev=
+src_dirty=0
+host=atl1-1-03-003-13-1.pace.gatech.edu
+xconf=-DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=8 -DWGMMA_SS -DWGMMA_RMAJOR_A -DWGMMA_KMAJOR_B -DWGMMA_AB_ALIAS -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1 -DA_PAD_K=1 -DA_OFF_K=1 -DB_PAD_K=1 -DB_OFF_K=1
+blackbox=--driver=simx --app=sgemm_tcu_wg --perf=7 --args=-k64
+rc=0
+wall_s=169

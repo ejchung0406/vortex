@@ -1,0 +1,8 @@
+name=tmc_q0_c16d8
+src_rev=
+src_dirty=0
+host=atl1-1-02-008-30-1.pace.gatech.edu
+xconf=-DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_TMEM_ENABLE -DVX_CFG_TCU_TMEM_COLS=1024 -DVX_CFG_TCU_TMEM_B_AHEAD=2 -DVX_CFG_TCU_TMEM_A_BANKROW=1 -DTCU_ENGINE_STATS -DLMEM_DMA_STATS -DVX_CFG_DXA_MAX_INFLIGHT=512 -DVX_CFG_LMEM_DMA_BUDGET=128 -DNO_MMA -DKSTEPS=2 -DPIPE=4 -DXFER=16384
+blackbox=--driver=simx --app=gemm_tmem_decode --perf=16 --profile=h200s --cores=1 --args=-m16 -n8192 -k2048
+rc=0
+wall_s=275

@@ -1,0 +1,9 @@
+name=pr_fh_sw_bw_x16_h1
+src=/storage/project/r-hkim358-0/echung67/vortex-exp/src_pr_simx-dcache-fwd-hold_knob
+xlen=64
+host=atl1-1-02-006-25-2.pace.gatech.edu
+configs=-DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_DCACHE_FWD_HOLD=1
+blackbox=--driver=simx --app=bwstream --args=-n64 -r1 -p0 -u4 -b16
+PERF: instrs=5152, cycles=10424
+wall_s=164
+rc=0
