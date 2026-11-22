@@ -94,6 +94,12 @@ VX_CFG_FETCH_INFLIGHT = 1
 # registers the request and gives the pick a registered ready. Requires EXT_C
 # off.
 VX_CFG_FETCH_REQ_BUF = 1
+# 1 registers the first frontend slice's icache requests once more where the
+# core's cache flush is merged into them, a cycle the other slices do not
+# have; 0 merges the flush through a priority mux behind the fetch unit's
+# registered request. The flush leaves in the same order with fetches either
+# way.
+VX_CFG_FLUSH_REQ_BUF = 1
 # 1 treats a floating-point operation's exception flags as an accumulation
 # (sticky OR): the scoreboard counts a warp's FP operations in flight instead
 # of reserving fflags for each, so they no longer issue one at a time. A CSR

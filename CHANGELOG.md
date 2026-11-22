@@ -24,6 +24,11 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
   fetch unit's request buffer, without the scheduler's own buffer in front of it, and reaches the icache one cycle earlier; the
   request still leaves the fetch unit registered and the pick still sees a registered ready. Requires EXT_C off.
   [VX_warp_sched.sv](hw/rtl/core/VX_warp_sched.sv), [sim/simx/core.cpp](sim/simx/core.cpp).
+- **Flush injector buffer (`VX_CFG_FLUSH_REQ_BUF`, default 1).** With 0 the core merges its icache flush into the first frontend
+  slice's fetch requests through a priority mux behind the fetch unit's request register, instead of a buffer that gives that
+  slice one cycle more to the icache than the others; flush and fetches leave in the arbiter's order either way.
+  [VX_core.sv](hw/rtl/core/VX_core.sv), [sim/simx/core.cpp](sim/simx/core.cpp); `tests/regression/icache_flush` runs two images
+  from one address in turn.
 - **FP flags as an accumulation (`VX_CFG_FFLAGS_ACCUM`, default 0).** With 1 the scoreboard counts a warp's FP operations in flight
   instead of reserving fflags for each, so they no longer issue one at a time; a CSR access of fflags or fcsr waits for the count
   to reach zero. [VX_scoreboard.sv](hw/rtl/core/VX_scoreboard.sv), [sim/simx/scoreboard.cpp](sim/simx/scoreboard.cpp).

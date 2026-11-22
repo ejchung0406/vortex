@@ -282,9 +282,12 @@ public:
       dc_req_out.at(p) = &dcache_flush_bufs_.at(p)->Out;
     }
 
-    // The first icache port does the same for the icache.
-    snprintf(sname, 100, "%s-icache_flush_buf", name.c_str());
-    icache_flush_buf_ = TxBuffer<MemReq>::Create(sname, 2);
+    // The first icache port does the same for the icache, unless its arbiter
+    // merges without a buffer.
+    if (VX_CFG_FLUSH_REQ_BUF) {
+      snprintf(sname, 100, "%s-icache_flush_buf", name.c_str());
+      icache_flush_buf_ = TxBuffer<MemReq>::Create(sname, 2);
+    }
 
   #ifdef VX_CFG_VM_ENABLE
     // Per-core L1 TLB stages: hits translate in place, misses park in
@@ -319,14 +322,18 @@ public:
       icache_mmu_->ReqOut.at(f).bind(&simobject_->icache_req_out.at(f));
       simobject_->icache_rsp_in.at(f).bind(&icache_mmu_->RspIn.at(f));
     }
-    icache_flush_buf_->Out.bind(&icache_mmu_->ReqIn.at(0));
+    if (icache_flush_buf_ != nullptr) {
+      icache_flush_buf_->Out.bind(&icache_mmu_->ReqIn.at(0));
+    }
   #else
     // No-VM: direct passthrough.
     for (uint32_t p = 0; p < VX_CFG_NUM_LSU_BLOCKS * DCACHE_CHANNELS; ++p) {
       dc_req_out.at(p)->bind(&simobject_->dcache_req_out.at(p));
       simobject_->dcache_rsp_in.at(p).bind(dc_rsp_in.at(p));
     }
-    icache_flush_buf_->Out.bind(&simobject_->icache_req_out.at(0));
+    if (icache_flush_buf_ != nullptr) {
+      icache_flush_buf_->Out.bind(&simobject_->icache_req_out.at(0));
+    }
   #endif
 
     // initialize execute units. A full-bandwidth ALU or FPU takes its op
@@ -777,9 +784,9 @@ public:
   }
 
   // Frontend slice f's icache request port: the first one passes the cache
-  // flush injector's buffer.
+  // flush injector's buffer, if it has one.
   SimChannel<MemReq>& fetch_req_port(uint32_t f) {
-    if (f == 0) {
+    if (f == 0 && icache_flush_buf_ != nullptr) {
       return icache_flush_buf_->In;
     }
   #ifdef VX_CFG_VM_ENABLE

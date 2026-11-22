@@ -535,6 +535,24 @@ tests:
   drivers:
   - simx
   app: module_reload
+# Two images run in turn from one address: each launch's cache flush must
+# invalidate the instruction cache, once through the flush injector's buffer
+# and once merged without it (VX_CFG_FLUSH_REQ_BUF=0).
+- id: icache_flush-1
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: icache_flush
+- id: icache_flush-2
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: icache_flush
+  configs: -DVX_CFG_FLUSH_REQ_BUF=0
+  shape:
+    cores: 2
 # Kernel-boundary flush coherence: back-to-back launches with host rewrites,
 # rotating line ownership across cores and cross-launch read-modify-writes.
 # The shapes cover a write-back L1, a write-back L2 shared by 4 cores, and a

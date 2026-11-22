@@ -239,7 +239,9 @@ import VX_tcu_pkg::*;
     `SCOPE_IO_SWITCH (3);
 
     // Port 0 injects the cache flush into its request stream; the cache flushes
-    // every bank. The merged request leaves the core registered. The response
+    // every bank. The merged request leaves the core registered, or without
+    // the buffer through a priority mux behind the fetch unit's registered
+    // request; either way it leaves in the order the arbiter grants. The response
     // goes to the frontend slice as the cache returns it, and the slice drops the
     // flush's own (select bit set), so no logic lies between the cache's response
     // register and the slice. The injector observes the response for its done.
@@ -267,7 +269,7 @@ import VX_tcu_pkg::*;
     VX_dcr_flush #(
         .WORD_SIZE   (ICACHE_WORD_SIZE),
         .TAG_WIDTH   (ICACHE_FETCH_TAG_WIDTH),
-        .REQ_OUT_BUF (3)
+        .REQ_OUT_BUF ((`VX_CFG_FLUSH_REQ_BUF != 0) ? 3 : 0)
     ) icache_dcr_flush (
         .clk          (clk),
         .reset        (reset),
