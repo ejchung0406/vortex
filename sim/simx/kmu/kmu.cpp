@@ -49,7 +49,7 @@ Kmu::Kmu(const SimContext& ctx, const char* name, uint32_t num_clusters,
   routers_.resize(fanout_.size());
   links_.resize(fanout_.size());
   for (uint32_t l = 0; l < fanout_.size(); ++l) {
-    routers_[l].assign(nodes, router_t{0, false, 0});
+    routers_[l].assign(nodes, router_t{0, false, 0, std::vector<uint32_t>(fanout_[l], 0)});
     if (l != 0) {
       links_[l].resize(nodes);
     }
@@ -59,6 +59,7 @@ Kmu::Kmu(const SimContext& ctx, const char* name, uint32_t num_clusters,
     below /= fanout_[l];
     span_[l] = below;
   }
+  this->update_weights();
   block_dim_[0]    = block_dim_[1]    = block_dim_[2]    = 1;
   grid_dim_[0]     = grid_dim_[1]     = grid_dim_[2]     = 1;
   cluster_dim_[0]  = cluster_dim_[1]  = cluster_dim_[2]  = 1;
@@ -78,8 +79,8 @@ void Kmu::on_reset() {
   // zero-initialized at construction.
   running_         = false;
   cta_id_          = 0;
-  for (auto& level : routers_) {
-    level.assign(level.size(), router_t{0, false, 0});
+  for (uint32_t l = 0; l < routers_.size(); ++l) {
+    routers_[l].assign(routers_[l].size(), router_t{0, false, 0, std::vector<uint32_t>(fanout_[l], 0)});
   }
   for (auto& level : links_) {
     for (auto& link : level) {
@@ -118,6 +119,7 @@ void Kmu::dcr_write(uint32_t addr, uint32_t value) {
     if (addr >= VX_DCR_KMU_CORE_DISABLE0
      && addr < VX_DCR_KMU_CORE_DISABLE0 + VX_DCR_KMU_CORE_DISABLE_WORDS) {
       core_disable_[addr - VX_DCR_KMU_CORE_DISABLE0] = value;
+      this->update_weights();
     }
     break;
   }
@@ -137,6 +139,31 @@ void Kmu::start() {
     group_origin_[0] = group_origin_[1] = group_origin_[2] = 0;
     intra_offset_[0] = intra_offset_[1] = intra_offset_[2] = 0;
     this->tick_wake();
+  }
+}
+
+void Kmu::update_weights() {
+  out_cores_.resize(fanout_.size());
+  weighted_.resize(fanout_.size());
+  for (uint32_t l = 0; l < fanout_.size(); ++l) {
+    const uint32_t n = fanout_[l];
+    out_cores_[l].assign(routers_[l].size() * n, 0);
+    weighted_[l].assign(routers_[l].size(), false);
+    for (uint32_t child = 0; child < out_cores_[l].size(); ++child) {
+      for (uint32_t c = child * span_[l]; c < (child + 1) * span_[l]; ++c) {
+        out_cores_[l][child] += ((core_disable_[c / 32] >> (c % 32)) & 1) ^ 1;
+      }
+    }
+    for (uint32_t node = 0; node < routers_[l].size(); ++node) {
+      const uint32_t* cores = &out_cores_[l][node * n];
+      for (uint32_t i = 0; i < n; ++i) {
+        for (uint32_t j = i + 1; j < n; ++j) {
+          if (cores[i] != 0 && cores[j] != 0 && cores[i] != cores[j]) {
+            weighted_[l][node] = true;
+          }
+        }
+      }
+    }
   }
 }
 
@@ -196,14 +223,8 @@ void Kmu::route(uint32_t lvl, uint32_t node, const std::vector<std::vector<uint3
   // core holds fewer than LAUNCH_CREDITS CTAs it has not yet admitted, a link
   // when it had room at the start of the cycle.
   const uint32_t n = fanout_[lvl];
-  auto enabled = [&](uint32_t child) {
-    for (uint32_t c = child * span_[lvl]; c < (child + 1) * span_[lvl]; ++c) {
-      if (((core_disable_[c / 32] >> (c % 32)) & 1) == 0) {
-        return true;
-      }
-    }
-    return false;
-  };
+  const uint32_t* cores = &out_cores_[lvl][node * n];
+  const bool weighted = weighted_[lvl][node];
   auto ready = [&](uint32_t child) {
     if (last) {
       return !bus_out.at(child).full() && inflight_[child] < LAUNCH_CREDITS;
@@ -213,20 +234,32 @@ void Kmu::route(uint32_t lvl, uint32_t node, const std::vector<std::vector<uint3
   // A message's later members follow its first; a new message goes to the
   // nearest ready, enabled output from the round-robin pointer, so a core that
   // drains its work sooner takes the next cluster instead of the launch
-  // waiting on a busy neighbour.
+  // waiting on a busy neighbour. Weighted, it goes to the nearest such output
+  // with credit, and when none has credit left every output reloads its
+  // enabled cores' worth (VX_kmu_bus_arb).
   auto& r = routers_[lvl][node];
+  auto scan = [&](bool need_credit) {
+    for (uint32_t k = 0; k < n; ++k) {
+      uint32_t o = (r.rr + k) % n;
+      if (cores[o] != 0 && ready(node * n + o) && (!need_credit || r.credit[o] != 0)) {
+        return o;
+      }
+    }
+    return n;
+  };
   uint32_t sel = n;
+  bool reload = false;
   if (r.locked) {
     if (ready(node * n + r.lock_sel)) {
       sel = r.lock_sel;
     }
   } else {
-    for (uint32_t k = 0; k < n; ++k) {
-      uint32_t o = (r.rr + k) % n;
-      if (enabled(node * n + o) && ready(node * n + o)) {
-        sel = o;
-        break;
-      }
+    if (weighted) {
+      sel = scan(true);
+    }
+    if (sel == n) {
+      sel = scan(false);
+      reload = true;
     }
   }
   if (sel == n) {
@@ -248,6 +281,13 @@ void Kmu::route(uint32_t lvl, uint32_t node, const std::vector<std::vector<uint3
     ++inflight_[child];
   } else {
     links_[lvl + 1][child].push_back(beat);
+  }
+  if (weighted && !r.locked) {
+    // A message takes one credit at its first member.
+    if (reload) {
+      r.credit.assign(cores, cores + n);
+    }
+    --r.credit[sel];
   }
   r.locked   = !beat.eop;
   r.lock_sel = sel;

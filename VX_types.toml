@@ -140,8 +140,12 @@ VX_DCR_KMU_CLUSTER_DIM_Z= 0x023
 VX_DCR_KMU_TMEM_COLS    = 0x024
 # Cores a launch must not use, 32 per word: bit c of word w masks core 32w + c
 # (all 0 = every core). Compute CTAs skip a masked core; fragment work does
-# not. With every core masked the KMU never dispatches. Kept across launches,
-# like the rest of the kernel descriptor.
+# not. Each fan-out level weights its round-robin by the enabled cores below
+# each output when those counts differ: an output takes a new CTA cluster
+# while it has credit, and when no ready, enabled output has credit left all
+# reload to their enabled-core counts. So every enabled core gets an equal
+# share when all are equally ready. With every core masked the KMU never
+# dispatches. Kept across launches, like the rest of the kernel descriptor.
 VX_DCR_KMU_CORE_DISABLE0 = 0x025
 VX_DCR_KMU_CORE_DISABLE_WORDS = 8
 VX_DCR_KMU_STATE_END    = 0x02D

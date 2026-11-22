@@ -274,10 +274,10 @@ module Vortex import VX_gpu_pkg::*, VX_trace_pkg::*, VX_tlb_pkg::*; (
 
     VX_kmu_bus_if per_cluster_kmu_bus_if[`VX_CFG_NUM_CLUSTERS]();
 
-    // A cluster takes compute launches while any of its cores is enabled.
-    wire [`VX_CFG_NUM_CLUSTERS-1:0] per_cluster_disable;
-    for (genvar c = 0; c < `VX_CFG_NUM_CLUSTERS; ++c) begin : g_cluster_disable
-        assign per_cluster_disable[c] = (& core_disable[c * `VX_CFG_NUM_CORES +: `VX_CFG_NUM_CORES]);
+    // Each cluster's enabled cores weight its share of compute launches.
+    wire [`VX_CFG_NUM_CLUSTERS-1:0][`CLOG2(KMU_DEST_DIV_DEVICE+1)-1:0] per_cluster_cores;
+    for (genvar c = 0; c < `VX_CFG_NUM_CLUSTERS; ++c) begin : g_cluster_cores
+        assign per_cluster_cores[c] = `CLOG2(KMU_DEST_DIV_DEVICE+1)'($countones(~core_disable[c * `VX_CFG_NUM_CORES +: `VX_CFG_NUM_CORES]));
     end
 
     VX_kmu_bus_arb #(
@@ -290,7 +290,7 @@ module Vortex import VX_gpu_pkg::*, VX_trace_pkg::*, VX_tlb_pkg::*; (
         .reset       (reset),
         .bus_in_if   (kmu_bus_in),
         .bus_out_if  (per_cluster_kmu_bus_if),
-        .out_disable (per_cluster_disable)
+        .out_cores   (per_cluster_cores)
     );
 
 `ifdef VX_CFG_EXT_RASTER_ENABLE

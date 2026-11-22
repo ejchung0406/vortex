@@ -92,7 +92,7 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .reset       (reset),
         .bus_in_if   (kmu_bus_if),
         .bus_out_if  (per_core_kmu_bus_if),
-        .out_disable (core_disable_r)
+        .out_cores   (~core_disable_r)
     );
 
     VX_gbar_bus_if per_core_gbar_bus_if[`VX_CFG_SOCKET_SIZE]();

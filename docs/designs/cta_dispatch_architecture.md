@@ -222,7 +222,7 @@ Two things are worth noticing about what is *not* here:
 
 ### 2.4 Routing — and why the two kinds differ
 
-`kind` selects the fan-out rule ([`VX_kmu_bus_arb.sv:187-189`](../../hw/rtl/core/VX_kmu_bus_arb.sv#L187)):
+`kind` selects the fan-out rule ([`VX_kmu_bus_arb.sv:234-235`](../../hw/rtl/core/VX_kmu_bus_arb.sv#L234)):
 
 - **COMPUTE** → round-robin over the ready outputs. A cluster carries no
   placement hint, so the fan-out drops its first member on any ready core and
@@ -238,8 +238,20 @@ message is a whole cluster (§4.5), `rr_ptr` advances once per *cluster* — so
 clusters, not CTAs, are the unit of load balancing.
 
 A launch can be kept off some cores: the KMU's `VX_DCR_KMU_CORE_DISABLE*`
-words hold one bit per core, and each fan-out level takes an output out of
-the compute round-robin when every core below it is masked. Fragment routing
+words hold one bit per core, and each fan-out level gets the number of
+enabled cores below each output (`out_cores`). An output with none takes no
+compute message. When the enabled outputs hold different numbers of enabled
+cores, a plain round-robin would give each subtree an equal share, so a core
+alone in its socket would take as many CTAs as a full socket. The round-robin
+is then weighted: each output has a credit counter, a new compute message
+goes to the nearest ready, enabled output from `rr_ptr` that still has
+credit and takes one, and when no ready, enabled output has credit left all
+counters reload to `out_cores` and the message goes to the nearest ready,
+enabled output in the same cycle. With every output equally ready, each
+reload window gives every output one message per enabled core below it, so
+each enabled core gets an equal share (a per-launch TPC mask on an H200
+spreads CTAs over the enabled SMs the same way). When the counts are equal,
+the unmasked case among them, the plain round-robin runs. Fragment routing
 ignores the mask. The mask is kept across launches; with every core masked no
 compute message is ever accepted, so the launch does not finish.
 
@@ -480,9 +492,9 @@ Two preconditions make this sound, both already enforced:
 SimX has no bus, so its `Kmu` carries the routing itself: the destination is
 fixed **before** a message is sent — a locked cluster's remaining members go
 only to the core that took the first, and a new message walks the same tree
-as the RTL fan-out: each level, from a round-robin pointer of its own, takes
-the nearest child with a ready, unmasked core below it
-([`kmu.cpp:141-209`](../../sim/simx/kmu/kmu.cpp#L141)).
+as the RTL fan-out: each level, from a round-robin pointer and credits of its
+own, takes the nearest child with a ready, unmasked core below it
+([`kmu.cpp:184-297`](../../sim/simx/kmu/kmu.cpp#L184)).
 
 **Why this is load-bearing rather than an optimisation.** The obvious
 consequence of a split cluster is that LMEM peers resolve to another CTA's

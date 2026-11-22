@@ -99,16 +99,21 @@ private:
     bool      eop;
   };
 
-  // One router of the fan-out tree: its round-robin pointer, and the output
-  // it holds while a message (a cluster of CTAs) passes.
+  // One router of the fan-out tree: its round-robin pointer, the output it
+  // holds while a message (a cluster of CTAs) passes, and each output's
+  // credits for the weighted round-robin.
   struct router_t {
     uint32_t rr;
     bool     locked;
     uint32_t lock_sel;
+    std::vector<uint32_t> credit;
   };
 
   // Fill *beat with the next CTA; false when the grid is exhausted.
   bool next_cta(beat_t* beat);
+
+  // Recompute out_cores_ and weighted_ from the core mask.
+  void update_weights();
 
   // Step router `node` of level `lvl` once; occupancy is each link's fill
   // at the start of the cycle.
@@ -136,6 +141,11 @@ private:
   std::vector<uint32_t> span_;
   std::vector<std::vector<router_t>> routers_;           // [level][node]
   std::vector<std::vector<std::deque<beat_t>>> links_;  // [level][node] input, level >= 1
+  // Enabled cores below each output ([level][node * fanout + output]), and
+  // whether a router's enabled outputs hold different numbers of them, which
+  // weights its round-robin ([level][node]).
+  std::vector<std::vector<uint32_t>> out_cores_;
+  std::vector<std::vector<bool>>     weighted_;
   uint8_t  ctx_id_;
   // Nested counter: group_origin advances by cluster_dim per axis;
   // intra_offset walks within the cluster.

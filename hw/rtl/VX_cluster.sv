@@ -113,10 +113,10 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
     wire [`VX_CFG_NUM_CORES-1:0] core_disable_r;
     `BUFFER(core_disable_r, core_disable);
 
-    // A socket takes compute launches while any of its cores is enabled.
-    wire [NUM_SOCKETS-1:0] per_socket_disable;
-    for (genvar i = 0; i < NUM_SOCKETS; ++i) begin : g_socket_disable
-        assign per_socket_disable[i] = (& core_disable_r[i * `VX_CFG_SOCKET_SIZE +: `VX_CFG_SOCKET_SIZE]);
+    // Each socket's enabled cores weight its share of compute launches.
+    wire [NUM_SOCKETS-1:0][`CLOG2(KMU_DEST_DIV_CLUSTER+1)-1:0] per_socket_cores;
+    for (genvar i = 0; i < NUM_SOCKETS; ++i) begin : g_socket_cores
+        assign per_socket_cores[i] = `CLOG2(KMU_DEST_DIV_CLUSTER+1)'($countones(~core_disable_r[i * `VX_CFG_SOCKET_SIZE +: `VX_CFG_SOCKET_SIZE]));
     end
 
 `ifdef VX_CFG_EXT_RASTER_ENABLE
@@ -158,7 +158,7 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .reset       (reset),
         .bus_in_if   (kmu_arb_in_if),
         .bus_out_if  (cluster_merged_kmu_if),
-        .out_disable (1'b0)
+        .out_cores   (1'b1)
     );
 
     VX_kmu_bus_arb #(
@@ -171,7 +171,7 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .reset       (reset),
         .bus_in_if   (cluster_merged_kmu_if),
         .bus_out_if  (per_socket_kmu_bus_if),
-        .out_disable (per_socket_disable)
+        .out_cores   (per_socket_cores)
     );
 `else
     VX_kmu_bus_arb #(
@@ -184,7 +184,7 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .reset       (reset),
         .bus_in_if   (kmu_bus_if),
         .bus_out_if  (per_socket_kmu_bus_if),
-        .out_disable (per_socket_disable)
+        .out_cores   (per_socket_cores)
     );
 `endif
 

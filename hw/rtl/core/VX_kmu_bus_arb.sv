@@ -32,8 +32,17 @@
 //              same-pixel blend order.
 //   COMPUTE  — round-robin over the ready outputs, which is what the plain
 //              stream arbiter did before and what keeps CTAs spread across cores.
-//              An output in `out_disable` (every core below it masked off for
-//              launches) takes no new compute message.
+//              An output with no enabled core below it (`out_cores` == 0, every
+//              core masked off for launches) takes no new compute message. When
+//              the enabled outputs hold different numbers of enabled cores, the
+//              round-robin is weighted so that each enabled core, not each
+//              subtree, gets an equal share: every output has a credit counter,
+//              a new message goes to the nearest ready, enabled output from
+//              rr_ptr that still has credit and takes one, and when no ready,
+//              enabled output has credit left all counters reload to
+//              `out_cores` and the message goes to the nearest ready, enabled
+//              output in the same cycle. With equal counts the plain
+//              round-robin runs and the counters are not used.
 
 module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
     parameter NUM_INPUTS  = 1,
@@ -52,8 +61,9 @@ module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
     VX_kmu_bus_if.slave  bus_in_if [NUM_INPUTS],
     VX_kmu_bus_if.master bus_out_if [NUM_OUTPUTS],
 
-    // Static for a launch: written between launches through the KMU's DCRs.
-    input wire [NUM_OUTPUTS-1:0] out_disable
+    // Enabled cores below each output. Static for a launch: the core mask is
+    // written between launches through the KMU's DCRs.
+    input wire [NUM_OUTPUTS-1:0][`CLOG2(DEST_DIV+1)-1:0] out_cores
 );
     // Single-stage router only: a merge (N->1) or a distribute (1->M), never a
     // crossbar. A genuine N->M would chain the fan-in arbiter and the fan-out mux
@@ -70,6 +80,7 @@ module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
     localparam LOG_O = `CLOG2(NUM_OUTPUTS);
     localparam SEL_I = `UP(LOG_I);
     localparam SEL_O = `UP(LOG_O);
+    localparam CORES_W = `CLOG2(DEST_DIV+1);
 
     // field offsets within a packed beat
     localparam PW_DEST = KMU_DATAW;
@@ -171,30 +182,61 @@ module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
         reg             lock_v;
         reg [SEL_O-1:0] lock_sel;
         reg [SEL_O-1:0] rr_ptr;
+        reg [NUM_OUTPUTS-1:0][CORES_W-1:0] credit;
 
         wire [SEL_O-1:0] dest_sel = SEL_O'((32'(m_data[PW_DEST +: KMU_DEST_W]) / DEST_DIV) % NUM_OUTPUTS);
 
-        // Round-robin over the ready, enabled outputs, starting at rr_ptr.
-        // Descending scan so the nearest one (smallest step from rr_ptr) is the
-        // last assignment and therefore wins.
-        reg [SEL_O-1:0] rr_sel;
+        wire [NUM_OUTPUTS-1:0] out_enabled;
+        wire [NUM_OUTPUTS-1:0] has_credit;
+        for (genvar o = 0; o < NUM_OUTPUTS; ++o) begin : g_enabled
+            assign out_enabled[o] = (out_cores[o] != '0);
+            assign has_credit[o]  = (credit[o] != '0);
+        end
+
+        // Static for a launch, like the mask it comes from.
+        reg weighted;
         always @(*) begin
-            rr_sel = rr_ptr;
-            for (integer k = NUM_OUTPUTS - 1; k >= 0; --k) begin
-                automatic logic [SEL_O-1:0] idx =
-                    SEL_O'((32'(rr_ptr) + k) % NUM_OUTPUTS);
-                if (out_ready[idx] && ~out_disable[idx]) begin
-                    rr_sel = idx;
+            weighted = 1'b0;
+            for (integer i = 0; i < NUM_OUTPUTS; ++i) begin
+                for (integer j = i + 1; j < NUM_OUTPUTS; ++j) begin
+                    if (out_enabled[i] && out_enabled[j] && (out_cores[i] != out_cores[j])) begin
+                        weighted = 1'b1;
+                    end
                 end
             end
         end
+
+        wire [NUM_OUTPUTS-1:0] elig        = out_ready & out_enabled;
+        wire [NUM_OUTPUTS-1:0] elig_credit = elig & has_credit;
+        wire use_credit = weighted && (elig_credit != '0);
+
+        // Round-robin over the ready, enabled outputs (with credit, when
+        // weighted), starting at rr_ptr. Descending scan so the nearest one
+        // (smallest step from rr_ptr) is the last assignment and therefore wins.
+        // Both scans run in parallel so the credit test is not in series.
+        reg [SEL_O-1:0] rr_sel_all, rr_sel_credit;
+        always @(*) begin
+            rr_sel_all    = rr_ptr;
+            rr_sel_credit = rr_ptr;
+            for (integer k = NUM_OUTPUTS - 1; k >= 0; --k) begin
+                automatic logic [SEL_O-1:0] idx =
+                    SEL_O'((32'(rr_ptr) + k) % NUM_OUTPUTS);
+                if (elig[idx]) begin
+                    rr_sel_all = idx;
+                end
+                if (elig_credit[idx]) begin
+                    rr_sel_credit = idx;
+                end
+            end
+        end
+        wire [SEL_O-1:0] rr_sel = use_credit ? rr_sel_credit : rr_sel_all;
 
         wire is_fragment = (m_data[PW_KIND] == KMU_KIND_FRAGMENT);
         wire [SEL_O-1:0] sel_new = is_fragment ? dest_sel : rr_sel;
         wire [SEL_O-1:0] sel = lock_v ? lock_sel : sel_new;
         // With no output eligible rr_sel falls back to rr_ptr, which may be
         // disabled: hold the header rather than send it there.
-        wire sel_ok = lock_v || is_fragment || ~out_disable[sel];
+        wire sel_ok = lock_v || is_fragment || out_enabled[sel];
 
         for (genvar o = 0; o < NUM_OUTPUTS; ++o) begin : g_sel
             assign out_valid[o] = m_valid && sel_ok && (sel == SEL_O'(o));
@@ -205,26 +247,36 @@ module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
         wire m_fire = m_valid && m_ready;
         wire [SEL_O-1:0] rr_next = (sel == SEL_O'(NUM_OUTPUTS - 1)) ? '0 : (sel + SEL_O'(1));
 
+        // A message takes one credit at its header; the granted output is
+        // enabled, so a reload leaves it at least one to take.
+        wire credit_fire = m_fire && ~lock_v && ~is_fragment && weighted;
+
         always @(posedge clk) begin
             if (reset) begin
                 lock_v   <= 1'b0;
                 lock_sel <= '0;
                 rr_ptr   <= '0;
+                credit   <= '0;
             end else if (m_fire) begin
                 lock_v   <= ~m_data[PW_EOP];
                 lock_sel <= sel;
                 if (m_data[PW_EOP]) begin
                     rr_ptr <= rr_next;
                 end
+                if (credit_fire) begin
+                    for (integer o = 0; o < NUM_OUTPUTS; ++o) begin
+                        credit[o] <= (use_credit ? credit[o] : out_cores[o])
+                                   - CORES_W'(sel == SEL_O'(o));
+                    end
+                end
             end
         end
 
     end else begin : g_fanout_1
 
-        `UNUSED_PARAM (DEST_DIV)
         // The mask is static for a launch, so gating each compute beat gates
         // whole messages.
-        wire sel_ok = (m_data[PW_KIND] == KMU_KIND_FRAGMENT) || ~out_disable[0];
+        wire sel_ok = (m_data[PW_KIND] == KMU_KIND_FRAGMENT) || (out_cores[0] != '0);
         assign out_valid[0] = m_valid && sel_ok;
         assign out_data[0]  = m_data;
         assign m_ready      = out_ready[0] && sel_ok;
