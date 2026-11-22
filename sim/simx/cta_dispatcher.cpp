@@ -23,7 +23,8 @@ using namespace vortex;
 
 CtaDispatcher::CtaDispatcher(const SimContext& ctx, const char* name, Core* core)
   : SimObject<CtaDispatcher>(ctx, name)
-  , bus_in(this, 1)
+  // the core steps the dispatcher, so a CTA sent toward the lane wakes it
+  , bus_in(core, 1)
   , credit_out(this)
 #ifdef VX_CFG_TCU_TMEM_ENABLE
   , cta_exit_out(this)

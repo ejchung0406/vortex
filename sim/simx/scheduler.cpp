@@ -391,6 +391,27 @@ bool Scheduler::running() const {
     ;
 }
 
+bool Scheduler::quiescent() const {
+  if (!(active_warps_.none() && (cta_fire_cnt_ == 0) && cta_dispatcher_->quiescent()
+     && (stalled_warps_ == stalled_warps_next_) && (cta_active_view_ == active_warps_)
+     && (timeout_ctr_ == 0)
+#ifdef VX_CFG_EXT_RASTER_ENABLE
+     && !fwd_armed_ && fwd_waves_.empty()
+#endif
+     )) {
+    return false;
+  }
+  if (VX_CFG_FETCH_INFLIGHT > 1) {
+    // schedule_end() applies decode's fetch events
+    for (auto& warp : warps_) {
+      if (warp.fetch_inflight != 0 || warp.fetch_leave_pending || warp.fetch_squash_pending) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // suspend()/resume() drive the next-state; schedule() clocks it into the
 // registered stalled_warps_ at the end of the cycle, so the change is observed
 // only next cycle. Asserts check the next-state being mutated, not the

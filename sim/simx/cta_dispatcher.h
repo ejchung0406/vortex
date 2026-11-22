@@ -83,6 +83,12 @@ public:
     return has_cta_ || (bus_in.size() != 0);
   }
 
+  // step() would change nothing: no CTA in dispatch or on its way, and no
+  // warp retirement still to land.
+  bool quiescent() const {
+    return !has_cta_ && !cta_done_ && retiring_.empty() && (bus_in.size() == 0);
+  }
+
   // Kernel start PC of the most recently dispatched CTA. The Fragment Work
   // Distributor reuses it as the entry PC for injected fragment-wave warps
   // (which run the same kernel as the host-launched driver warp).

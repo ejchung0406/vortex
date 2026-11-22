@@ -451,10 +451,36 @@ public:
   #endif
     gather_holds_.resize(VX_CFG_ISSUE_WIDTH, std::vector<GatherHold>((uint32_t)FUType::Count));
 
+    // The channels the core polls but other units own wake a quiescent core
+    // as a packet reaches them: a unit's result can come after its
+    // instruction has left the pending count, as a split LSU instruction's
+    // last response can arrive after its end-of-packet beat retired.
+    for (uint32_t fu = 0; fu < (uint32_t)FUType::Count; ++fu) {
+      auto& func_unit = func_units_.at(fu);
+      for (uint32_t b = 0; b < func_unit->num_blocks(); ++b) {
+        func_unit->output(b).tx_callback([this](instr_trace_t* const&, uint64_t) {
+          this->wake();
+        });
+      }
+      dispatchers_.at(fu)->ReleaseOut.tx_callback([this](instr_trace_t* const&, uint64_t) {
+        this->wake();
+      });
+    }
+    for (auto& operand : operands_) {
+      operand->Output.tx_callback([this](instr_trace_t* const&, uint64_t) {
+        this->wake();
+      });
+    }
+
     this->reset();
   }
 
   void reset() {
+    // a reset re-arms every object; the ticks skipped up to it are counted
+    if (asleep_) {
+      this->account_sleep(SimPlatform::instance().cycles());
+    }
+    asleep_ = false;
     for (auto& arb : ibuffer_arbs_) {
       arb.reset();
     }
@@ -497,6 +523,10 @@ public:
   }
 
   void tick() {
+    if (asleep_) {
+      this->account_sleep(SimPlatform::instance().cycles());
+      asleep_ = false;
+    }
     this->commit();
     this->return_dispatch_credits();
     this->issue();
@@ -513,6 +543,101 @@ public:
       ++perf_stats_.cycles;
     }
     DPN(2, std::flush);
+
+    if (this->quiescent()) {
+      asleep_ = true;
+      asleep_after_ = SimPlatform::instance().cycles();
+      asleep_active_ = scheduler_->active_warps().count();
+      asleep_stalled_ = scheduler_->stalled_warps().count();
+      simobject_->tick_sleep();
+    }
+  }
+
+  // ----- Quiescence -----
+  //
+  // A core with no warp, no CTA on its way and nothing in its pipeline sleeps:
+  // each tick it skips would only count an idle scheduler cycle and its
+  // (inactive) stalled warps, which the next tick, a reset or a counter read
+  // adds in at once. Anything that can give it work wakes it: a packet sent
+  // toward one of its channels (its CTA launch lane among them), a packet
+  // reaching a unit output, credit return or collector output it polls, or a
+  // call that changes its warps' state.
+
+  // The next tick would change nothing but those counters.
+  bool quiescent() const {
+    if (pending_total_ != 0 || pending_ifetches_ != 0 || ibuf_held_.any()) {
+      return false;
+    }
+    if (!scheduler_->quiescent()) {
+      return false;
+    }
+    if (simobject_->branch_ctl_in.size() != 0
+     || simobject_->warp_ctl_in.size() != 0
+     || simobject_->bar_unlock_in.size() != 0) {
+      return false;
+    }
+    for (uint32_t f = 0; f < VX_CFG_FETCH_WIDTH; ++f) {
+      if (fetch_latch_.at(f)->size() != 0 || decode_latch_.at(f)->size() != 0
+       || fetch_drop_.at(f).valid) {
+        return false;
+      }
+    #ifdef VX_CFG_VM_ENABLE
+      if (icache_mmu_->RspOut.at(f).size() != 0) {
+        return false;
+      }
+    #else
+      if (simobject_->icache_rsp_in.at(f).size() != 0) {
+        return false;
+      }
+    #endif
+    #ifdef VX_CFG_EXT_C_ENABLE
+      if (!decompressors_.at(f)->quiescent()) {
+        return false;
+      }
+    #endif
+    }
+    for (uint32_t iw = 0; iw < VX_CFG_ISSUE_WIDTH; ++iw) {
+      if (operands_.at(iw)->Output.size() != 0
+       || issue_yield_.at(iw) != kNoYield
+       || fu_full_seen_.at(iw) != fu_full_.at(iw)) {
+        return false;
+      }
+      for (auto& queue : commit_queues_.at(iw)) {
+        if (queue->size() != 0) {
+          return false;
+        }
+      }
+    }
+    for (uint32_t fu = 0; fu < (uint32_t)FUType::Count; ++fu) {
+      if (dispatchers_.at(fu)->ReleaseOut.size() != 0) {
+        return false;
+      }
+      auto& func_unit = func_units_.at(fu);
+      for (uint32_t b = 0, nb = func_unit->num_blocks(); b < nb; ++b) {
+        if (func_unit->output(b).size() != 0) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  // Count the ticks skipped since the core fell asleep, those of the cycles
+  // before `now`, as the scheduler would have: idle, with the warp counts it
+  // had then (a launch resets the scheduler before the core).
+  void account_sleep(uint64_t now) {
+    if (now <= asleep_after_ + 1) {
+      return; // read in the cycle the core fell asleep, or the one after
+    }
+    uint64_t skipped = now - 1 - asleep_after_;
+    perf_stats_.sched_idle    += skipped;
+    perf_stats_.active_warps  += skipped * asleep_active_;
+    perf_stats_.stalled_warps += skipped * asleep_stalled_;
+    asleep_after_ = now - 1;
+  }
+
+  void wake() {
+    simobject_->tick_wake();
   }
 
   // ----- Pipeline stages (private) -----
@@ -1459,6 +1584,10 @@ public:
       bool     is_hi       = (mpm_tag_idx >> 5) & 1;
       uint32_t idx         = mpm_tag_idx & 0x1f;
       uint32_t csr_addr    = is_hi ? (VX_CSR_MPM_BASE_H + idx) : (VX_CSR_MPM_BASE + idx);
+      // the counters a quiescent core has skipped are counted first
+      if (asleep_) {
+        this->account_sleep(SimPlatform::instance().cycles());
+      }
       auto saved_class = mpm_class_;
       mpm_class_ = mpm_class;
       *value = static_cast<uint32_t>(this->csr_unit().get_csr(csr_addr, 0, 0));
@@ -1472,6 +1601,9 @@ public:
   }
 
   PerfStats& perf_stats() {
+    if (asleep_) {
+      this->account_sleep(SimPlatform::instance().cycles());
+    }
     perf_stats_.opds_stalls = 0;
     for (uint32_t iw = 0; iw < VX_CFG_ISSUE_WIDTH; ++iw) {
       perf_stats_.opds_stalls += operands_.at(iw)->total_stalls();
@@ -1695,6 +1827,12 @@ private:
 
   PoolAllocator<instr_trace_t, 64> trace_pool_;
 
+  // asleep since the end of the tick of cycle asleep_after_ (see quiescent())
+  bool     asleep_ = false;
+  uint64_t asleep_after_ = 0;
+  uint64_t asleep_active_ = 0;
+  uint64_t asleep_stalled_ = 0;
+
 #ifdef VX_CFG_EXT_C_ENABLE
   // RVC fetch SimObject per frontend slice (per-warp halfword buffer + refetch
   // queue + pick/commit_request helpers). See decompressor.h.
@@ -1774,18 +1912,22 @@ bool Core::lsu_stores_landed() const {
 }
 
 void Core::resume(uint32_t wid) {
+  impl_->wake();
   impl_->scheduler()->resume(wid);
 }
 
 void Core::barrier_arrive(uint32_t bar_id, uint32_t count, uint32_t wid, bool is_sync_bar) {
+  impl_->wake();
   impl_->scheduler()->barrier_unit().arrive(bar_id, count, wid, is_sync_bar);
 }
 
 void Core::barrier_wait(uint32_t bar_id, uint32_t phase, uint32_t wid) {
+  impl_->wake();
   impl_->scheduler()->barrier_unit().wait(bar_id, phase, wid);
 }
 
 void Core::global_barrier_resume(uint32_t bar_id) {
+  impl_->wake();
   impl_->scheduler()->barrier_unit().global_resume(bar_id);
 }
 
@@ -1795,23 +1937,28 @@ void Core::on_gbar_resume(const GbarResume& msg) {
 
 #ifdef VX_CFG_EXT_RASTER_ENABLE
 void Core::on_fwd_arm(const FwdArm& msg) {
+  impl_->wake();
   impl_->scheduler()->fwd_arm(msg.frag_entry, msg.frag_param);
 }
 #endif
 
 void Core::barrier_event_attach(uint32_t bar_id, uint32_t count) {
+  impl_->wake();
   impl_->scheduler()->barrier_unit().event_attach(bar_id, count);
 }
 
 void Core::barrier_event_release(uint32_t bar_id) {
+  impl_->wake();
   impl_->scheduler()->barrier_unit().event_release(bar_id);
 }
 
 bool Core::wspawn(uint32_t num_warps, Word nextPC) {
+  impl_->wake();
   return impl_->scheduler()->wspawn(num_warps, nextPC);
 }
 
 bool Core::setTmask(uint32_t wid, const ThreadMask& tmask) {
+  impl_->wake();
   return impl_->scheduler()->setTmask(wid, tmask);
 }
 
@@ -1852,9 +1999,9 @@ CsrUnit& Core::csr_unit() { return impl_->csr_unit(); }
 uint32_t Core::mpm_class() const { return impl_->mpm_class(); }
 
 Word Core::dtm_get_pc(uint32_t wid) const         { return impl_->dtm_get_pc(wid); }
-void Core::dtm_set_pc(uint32_t wid, Word pc)      { impl_->dtm_set_pc(wid, pc); }
+void Core::dtm_set_pc(uint32_t wid, Word pc)      { impl_->wake(); impl_->dtm_set_pc(wid, pc); }
 Word Core::dtm_get_ireg(uint32_t wid, uint32_t reg)            { return impl_->dtm_get_ireg(wid, reg); }
-void Core::dtm_set_ireg(uint32_t wid, uint32_t reg, Word val)  { impl_->dtm_set_ireg(wid, reg, val); }
+void Core::dtm_set_ireg(uint32_t wid, uint32_t reg, Word val)  { impl_->wake(); impl_->dtm_set_ireg(wid, reg, val); }
 
 #ifdef VX_CFG_EXT_TCU_ENABLE
 std::shared_ptr<TcuUnit>& Core::tcu_unit() {
