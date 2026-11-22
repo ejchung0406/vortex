@@ -152,7 +152,7 @@ public:
     __assert(ispow2(lanes), "the lanes of an SM group are a power of two");
     for (auto& ch : ReqDeliver) {
       ch.tx_callback([this](const MemReq& req, uint64_t cycle) {
-        delivered_.push_back({uint32_t(req.tag) & ((1u << port_bits_) - 1), cycle});
+        delivered_.push_back({uint32_t(req.tag) & ((1u << port_bits_) - 1), cycle, req.flags.flush != 0});
       });
     }
   }
@@ -176,8 +176,10 @@ protected:
     // A delivery counts from the cycle after the L2 took the request.
     while (!delivered_.empty() && delivered_.front().cycle < now) {
       uint32_t p = delivered_.front().port;
+      bool token = delivered_.front().token;
       delivered_.pop_front();
       __assert(in_flight_.at(p) != 0, "a delivery the port did not send");
+      __assert(!token || in_flight_.at(p) == 1, "a token entered the L2 with other requests of its port in flight");
       if (--in_flight_.at(p) == 0) {
         token_out_.at(p) = false;
       }
@@ -368,6 +370,7 @@ private:
   struct Delivery {
     uint32_t port;
     uint64_t cycle;
+    bool     token;
   };
 
   uint32_t port_bits_;
