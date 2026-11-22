@@ -727,6 +727,42 @@ tests:
   shape:
     cores: 4
     l2cache: true
+# A group of one single-port socket: the lanes' tags carry no port bits, and
+# every delivery is that port's.
+- id: fence-noc-one-port
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: fence
+  configs: -DVX_CFG_DCACHE_NUM_BANKS=1 -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=1 -DVX_CFG_NOC_UPLINK_PORTS=2
+  shape:
+    l2cache: true
+# Atomics under a request-side gate far below what the groups ask for: an
+# atomic takes a line back and is charged as a load is.
+- id: amo-noc-gate-req
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: amo
+  configs: -DVX_CFG_EXT_A_ENABLE -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=8 -DVX_CFG_NOC_UPLINK_GATE_REQ=1
+  shape:
+    cores: 4
+    l2cache: true
+# The L2's inputs stalled at random (DBG_FLUSH_STALL), so a lane holds a
+# port's last stores back while its token's lane runs: without the switch's
+# hold the token is answered first and those stores are lost.
+- id: flush_coherence-noc-stress
+  via: blackbox
+  drivers:
+  - rtlsim
+  app: flush_coherence
+  args: -n2048 -r8 -b16
+  configs: -DDBG_FLUSH_STALL -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  shape:
+    cores: 4
+    l2cache: true
 # Kernel to kernel with no host transfer between (one command batch): the
 # launch flushes are device-scope, so the last-level cache alone carries each
 # round's writes to the next round, and the system-scope flush runs before

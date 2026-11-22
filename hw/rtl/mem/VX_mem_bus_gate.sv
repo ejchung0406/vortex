@@ -15,8 +15,8 @@
 
 // A byte-rate limit over NUM_PORTS memory buses: together they pass at most
 // RATE bytes of read lines a cycle, a line being one bus word. With COUNT_REQ
-// it counts read requests (writes and flush tokens pass free) and leaves the
-// responses alone; without, it counts responses and leaves the requests
+// it counts the requests that return a line (loads and atomics; stores and
+// flush tokens pass free) and leaves the responses alone; without, it counts responses and leaves the requests
 // alone. The counted direction takes a cycle more.
 module VX_mem_bus_gate import VX_gpu_pkg::*; #(
     parameter NUM_PORTS  = 1,

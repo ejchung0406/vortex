@@ -222,7 +222,7 @@ public:
     #if (VX_CFG_NOC_UPLINK_BYTES != 0) && (VX_CFG_NOC_UPLINK_GATE_REQ != 0)
       snprintf(sname, 100, "%s-noc-gate%d", name.c_str(), g);
       auto req_gate = NocRateGate<MemReq>::Create(sname, kLanes, VX_CFG_NOC_UPLINK_BYTES, VX_CFG_L1_LINE_SIZE,
-        [](const MemReq& req) { return !req.is_write() && !req.flags.flush; });
+        &NocSwitch::returns_line);
     #elif VX_CFG_NOC_UPLINK_BYTES != 0
       snprintf(sname, 100, "%s-noc-gate%d", name.c_str(), g);
       auto rsp_gate = NocRateGate<MemRsp>::Create(sname, kLanes, VX_CFG_NOC_UPLINK_BYTES, VX_CFG_L1_LINE_SIZE,

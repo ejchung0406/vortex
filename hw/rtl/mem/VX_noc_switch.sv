@@ -45,11 +45,14 @@ module VX_noc_switch import VX_gpu_pkg::*; #(
 
     input wire [NUM_LANES-1:0]                      deliver_valid,
     input wire [NUM_LANES-1:0][`UP(PORT_BITS)-1:0]  deliver_port,
+    input wire [NUM_LANES-1:0]                      deliver_token,
 
     // nothing of this group between its ports and the L2, either way
     output wire             req_empty,
     output wire             rsp_empty
 );
+    `UNUSED_VAR (deliver_port)
+    `UNUSED_VAR (deliver_token)
     `STATIC_ASSERT(`IS_POW2(NUM_LANES), ("invalid parameter: NUM_LANES=%0d must be a power of two", NUM_LANES))
 
     localparam DATA_WIDTH = (8 * DATA_SIZE);
@@ -108,9 +111,14 @@ module VX_noc_switch import VX_gpu_pkg::*; #(
         assign port_bus_if[p].req_ready = req_ready_in[p] && ~hold;
         assign req_fire_in[p]  = req_valid_in[p] && req_ready_in[p];
 
+        // a single port owns every delivery: its tag has no port bits
         wire [NUM_LANES-1:0] delivered_here;
         for (genvar l = 0; l < NUM_LANES; ++l) begin : g_delivered
-            assign delivered_here[l] = deliver_valid[l] && (deliver_port[l] == `UP(PORT_BITS)'(p));
+            if (PORT_BITS != 0) begin : g_match
+                assign delivered_here[l] = deliver_valid[l] && (deliver_port[l] == PORT_BITS'(p));
+            end else begin : g_one_port
+                assign delivered_here[l] = deliver_valid[l];
+            end
         end
         wire [DELIVERW-1:0] delivered_cnt;
         `POP_COUNT(delivered_cnt, delivered_here);
@@ -133,6 +141,10 @@ module VX_noc_switch import VX_gpu_pkg::*; #(
 
         `RUNTIME_ASSERT(~(| delivered_cnt) || (in_flight_r >= FLIGHTW'(delivered_cnt)),
             ("%t: port %0d: a delivery the port did not send", $time, p))
+        `RUNTIME_ASSERT(~req_fire_in[p] || (in_flight_r != {FLIGHTW{1'b1}}),
+            ("%t: port %0d: more requests in flight than the counter holds", $time, p))
+        `RUNTIME_ASSERT(~(| (delivered_here & deliver_token)) || (in_flight_r == FLIGHTW'(1)),
+            ("%t: port %0d: a token entered the L2 with other requests of its port in flight", $time, p))
 
         assign port_req_idle[p] = (in_flight_r == 0);
     end

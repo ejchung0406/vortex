@@ -237,7 +237,7 @@ public:
     // The socket's issue limit: the read lines its ports request per cycle.
     snprintf(sname, 100, "%s-ingress", name.c_str());
     auto ingress = NocRateGate<MemReq>::Create(sname, VX_CFG_L1_MEM_PORTS, VX_CFG_SM_INGRESS_BYTES,
-      VX_CFG_L1_LINE_SIZE, [](const MemReq& req) { return !req.is_write() && !req.flags.flush; });
+      VX_CFG_L1_LINE_SIZE, &NocSwitch::returns_line);
   #endif
     auto bind_mem_port = [&](uint32_t port,
                              SimChannel<MemReq>& req_src,

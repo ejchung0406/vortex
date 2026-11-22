@@ -371,6 +371,7 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
 
             wire [NOC_LANES-1:0]                          deliver_valid;
             wire [NOC_LANES-1:0][`UP(NOC_PORT_BITS)-1:0]  deliver_port;
+            wire [NOC_LANES-1:0]                          deliver_token;
 
             VX_noc_switch #(
                 .NUM_PORTS (NOC_GROUP_PORTS),
@@ -384,6 +385,7 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
                 .lane_bus_if   (lane_bus_if),
                 .deliver_valid (deliver_valid),
                 .deliver_port  (deliver_port),
+                .deliver_token (deliver_token),
                 .req_empty     (switch_req_empty),
                 .rsp_empty     (switch_rsp_empty)
             );
@@ -430,6 +432,7 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
                 end
                 assign deliver_valid[l] = per_socket_mem_bus_if[LANE].req_valid && per_socket_mem_bus_if[LANE].req_ready;
                 assign deliver_port[l]  = `UP(NOC_PORT_BITS)'(per_socket_mem_bus_if[LANE].req_data.tag);
+                assign deliver_token[l] = per_socket_mem_bus_if[LANE].req_data.attr[MEM_ATTR_FLUSH_OFFS];
             end
 
             assign group_busy[g] = ~((& sm_link_empty) && (& uplink_empty)

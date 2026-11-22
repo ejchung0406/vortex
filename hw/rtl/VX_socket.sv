@@ -807,6 +807,9 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
     assign per_core_dcr_bus_if[SOCKET_DCR_DXA_IDX].rsp_valid = dxa_dcr_bus_if.rsp_valid;
     assign per_core_dcr_bus_if[SOCKET_DCR_DXA_IDX].rsp_data  = dxa_dcr_bus_if.rsp_data;
 
+    `STATIC_ASSERT(`VX_CFG_DXA_GMEM_PORTS >= 1 && `VX_CFG_DXA_GMEM_PORTS <= L1_MEM_PORTS,
+        ("DXA_GMEM_PORTS=%0d: at most one per socket memory port", `VX_CFG_DXA_GMEM_PORTS))
+
     VX_dxa_core #(
         .INSTANCE_ID    (`SFORMATF(("%s-dxa", INSTANCE_ID))),
         .NUM_REQS       (`VX_CFG_SOCKET_SIZE),

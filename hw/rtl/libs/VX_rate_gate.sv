@@ -68,6 +68,7 @@ module VX_rate_gate #(
     wire [NUM_STREAMS-1:0] charged = valid_in & buf_ready & charge_in;
     reg [NUM_STREAMS-1:0] charged_rot;
     always @(*) begin
+        charged_rot = '0;
         for (integer k = 0; k < NUM_STREAMS; ++k) begin
             charged_rot[k] = charged[(32'(ptr_r) + k) % NUM_STREAMS];
         end
@@ -91,6 +92,7 @@ module VX_rate_gate #(
 
     reg [NUM_STREAMS-1:0] room;
     always @(*) begin
+        room = '0;
         for (integer k = 0; k < NUM_STREAMS; ++k) begin
             room[(32'(ptr_r) + k) % NUM_STREAMS] = room_rot[k];
         end

@@ -148,13 +148,20 @@ public:
     , req_xbar_(this, ports, lanes)
     , rsp_xbar_(this, lanes, ports)
     , in_flight_(ports, 0)
-    , token_out_(ports, false) {
+    , token_out_(ports, false)
+    , at_l2_(lanes) {
     __assert(ispow2(lanes), "the lanes of an SM group are a power of two");
-    for (auto& ch : ReqDeliver) {
-      ch.tx_callback([this](const MemReq& req, uint64_t cycle) {
-        delivered_.push_back({uint32_t(req.tag) & ((1u << port_bits_) - 1), cycle, req.flags.flush != 0});
+    for (uint32_t l = 0; l < lanes; ++l) {
+      ReqDeliver.at(l).tx_callback([this, l](const MemReq& req, uint64_t) {
+        at_l2_.at(l).push_back({uint32_t(req.tag) & ((1u << port_bits_) - 1), req.flags.flush != 0});
       });
     }
+  }
+
+  // A request that takes a line back with it, which a byte gate charges:
+  // a load or an atomic, not a store or a flush token.
+  static bool returns_line(const MemReq& req) {
+    return req.op != MemOp::ST && req.op != MemOp::FLUSH && !req.flags.flush;
   }
 
   // Cycles a request, and a response, take through a switch of this size.
@@ -168,6 +175,22 @@ protected:
     std::fill(in_flight_.begin(), in_flight_.end(), 0);
     std::fill(token_out_.begin(), token_out_.end(), false);
     delivered_.clear();
+    // The L2 takes a request when it pops it from its input, which may hold
+    // it first (a flush in progress): that pop is the delivery. Reset runs
+    // after bind(), so the lane's endpoint exists by now.
+    for (uint32_t l = 0; l < at_l2_.size(); ++l) {
+      at_l2_[l].clear();
+      SimChannelBase* endpoint = &ReqDeliver.at(l);
+      while (endpoint->sink()) {
+        endpoint = endpoint->sink();
+      }
+      endpoint->pop_callback([this, l]() {
+        auto& q = at_l2_.at(l);
+        __assert(!q.empty(), "the L2 took a request the lane did not carry");
+        delivered_.push_back({q.front().port, SimPlatform::instance().cycles(), q.front().token});
+        q.pop_front();
+      });
+    }
   }
 
   void on_tick() {
@@ -256,6 +279,9 @@ private:
       , join_rr_(outputs)
       , slice_buf_(outputs * slices_, SimChannel<Pkt>(owner, 2))
       , requests_(outputs) {
+      for (auto& buf : slice_buf_) {
+        buf.set_registered_ready(true);
+      }
       __assert(slices_ <= kMaxFanout + kMaxFanout / 2, "a crossbar output takes one slice level");
       this->reset();
     }
@@ -381,6 +407,12 @@ private:
   std::vector<uint32_t> in_flight_;
   std::vector<bool>     token_out_;
   std::deque<Delivery>  delivered_;
+  // per lane: the port and kind of each request waiting at the L2's input
+  struct Arrival {
+    uint32_t port;
+    bool     token;
+  };
+  std::vector<std::deque<Arrival>> at_l2_;
 
   friend class SimObject<NocSwitch>;
 };
