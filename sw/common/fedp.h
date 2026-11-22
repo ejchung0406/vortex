@@ -329,7 +329,6 @@ private:
     const uint32_t width = 1u + eb + sb;
     const bool packed = (width <= 16u) && ((32u % width) == 0u);
     const uint32_t epw = packed ? (32u / width) : 1u;
-    const uint32_t wmask = packed ? ((1u << width) - 1u) : ~0u;
     const uint32_t np = n * epw;
     reserve_terms(np + 1);
 
@@ -338,75 +337,28 @@ private:
     uint8_t c_ninf = (c_term.sp == 2) ? FL_NINF : 0;
     uint8_t flags  = (c_nan | c_pinf | c_ninf);
 
-    const int all1 = (1 << eb) - 1;
-    const bool is_e4m3 = (eb == 4 && sb == 3);
-    const int bs = bias(eb);
-    const int shift_sf = 22 - (2 * sb);
-    const int ep_off = F32_BIAS + EXP_POS_BIAS + 1 - W_;
+    // the tensor core's formats with their fields as constants
+    if (renorm_) {
+      flags |= products(a, b, n);
+    } else if (eb == 5 && sb == 10) {
+      flags |= products_fixed<5, 10>(a, b, n);
+    } else if (eb == 8 && sb == 7) {
+      flags |= products_fixed<8, 7>(a, b, n);
+    } else if (eb == 4 && sb == 3) {
+      flags |= products_fixed<4, 3>(a, b, n);
+    } else if (eb == 5 && sb == 2) {
+      flags |= products_fixed<5, 2>(a, b, n);
+    } else if (eb == 8 && sb == 10) {
+      flags |= products_fixed<8, 10>(a, b, n);
+    } else {
+      flags |= products(a, b, n);
+    }
+
     int* const sign = sign_.data();
     int* const mp = mp_.data();
-    int* const eps = eps_.data();     // per-term *window LSB exponent* (not raw Ep/Ec)
-    int* const sel_eps = sel_eps_.data();
-    uint8_t* const nonzero = nz_.data();
-
-    for (uint32_t w = 0; w < n; ++w) {
-      uint32_t aw = a[w], bw = b[w];
-      for (uint32_t e = 0; e < epw; ++e) {
-        const auto ad = decode_input(aw & wmask, eb, sb);
-        const auto bd = decode_input(bw & wmask, eb, sb);
-        if (packed) { aw >>= width; bw >>= width; }
-
-        bool zA = ad.is_zero;
-        bool zB = bd.is_zero;
-        bool p_is_zero = zA || zB;
-
-        bool infA, infB, nanA, nanB;
-        if (is_e4m3) {
-          infA = false; infB = false;
-          nanA = (ad.exp == 15 && ad.frac == 7);
-          nanB = (bd.exp == 15 && bd.frac == 7);
-        } else {
-          infA = (ad.exp == all1 && !ad.frac); infB = (bd.exp == all1 && !bd.frac);
-          nanA = (ad.exp == all1 && ad.frac); nanB = (bd.exp == all1 && bd.frac);
-        }
-
-        bool is_nan = nanA || nanB || (infA && zB) || (infB && zA);
-        bool is_inf = (infA || infB) && !is_nan;
-        bool sign_xor = ((ad.sign ^ bd.sign) != 0);
-
-        flags |= is_nan ? FL_NAN : 0;
-        flags |= is_inf ? (sign_xor ? FL_NINF : FL_PINF) : 0;
-
-        int Ea = ad.is_sub ? (1 - bs) : (ad.exp - bs);
-        int Eb = bd.is_sub ? (1 - bs) : (bd.exp - bs);
-        int Ma = zA ? 0 : (ad.is_sub ? ad.frac : ((1 << sb) | ad.frac));
-        int Mb = zB ? 0 : (bd.is_sub ? bd.frac : ((1 << sb) | bd.frac));
-
-        int Mp = (Ma * Mb) << shift_sf;
-        int Ep = (Ea + Eb) + ep_off;
-
-        if (renorm_) {
-          int lzc_prod = (ad.is_sub ? lzcN(Ma, sb) : 0) + (bd.is_sub ? lzcN(Mb, sb) : 0);
-          Mp <<= lzc_prod;
-          Ep -= lzc_prod;
-        }
-
-        const uint32_t k = w * epw + e;
-        // the fp8 lane pairs its two products by their exponent fields even
-        // when one is zero (a zero field counts as 1, as for a subnormal)
-        sel_eps[k] = (std::max(ad.exp, 1) - bs) + (std::max(bd.exp, 1) - bs) + ep_off;
-        nonzero[k] = !p_is_zero;
-
-        if (p_is_zero) {
-          Ep = kZeroE;
-          Mp = 0;
-        }
-
-        sign[k] = sign_xor;
-        mp[k] = Mp;
-        eps[k] = Ep;
-      }
-    }
+    int* const eps = eps_.data();
+    const int* const sel_eps = sel_eps_.data();
+    const int* const nonzero = nz_.data();
 
     uint32_t nprod = np;
 
@@ -445,6 +397,170 @@ private:
     }
 
     return add_c_term(nprod, c_term, flags);
+  }
+
+  // The n * epw products of a and b into sign_, mp_, eps_ (per-term *window
+  // LSB exponent*, not raw Ep), sel_eps_ and nz_; returns their NaN/Inf
+  // flags.
+  uint8_t products(const uint32_t *a, const uint32_t *b, uint32_t n) {
+    const int eb = exp_bits_;
+    const int sb = sig_bits_;
+    const uint32_t width = 1u + eb + sb;
+    const bool packed = (width <= 16u) && ((32u % width) == 0u);
+    const uint32_t epw = packed ? (32u / width) : 1u;
+    const uint32_t wmask = packed ? ((1u << width) - 1u) : ~0u;
+    const int all1 = (1 << eb) - 1;
+    const bool is_e4m3 = (eb == 4 && sb == 3);
+    const int bs = bias(eb);
+    const int shift_sf = 22 - (2 * sb);
+    const int ep_off = F32_BIAS + EXP_POS_BIAS + 1 - W_;
+    const bool renorm = renorm_;
+    int* __restrict const sign = sign_.data();
+    int* __restrict const mp = mp_.data();
+    int* __restrict const eps = eps_.data();
+    int* __restrict const sel_eps = sel_eps_.data();
+    int* __restrict const nonzero = nz_.data();
+    uint8_t flags = 0;
+
+    for (uint32_t w = 0; w < n; ++w) {
+      uint32_t aw = a[w], bw = b[w];
+      for (uint32_t e = 0; e < epw; ++e) {
+        const auto ad = decode_input(aw & wmask, eb, sb);
+        const auto bd = decode_input(bw & wmask, eb, sb);
+        if (packed) { aw >>= width; bw >>= width; }
+
+        bool zA = ad.is_zero;
+        bool zB = bd.is_zero;
+        bool p_is_zero = zA || zB;
+
+        bool infA, infB, nanA, nanB;
+        if (is_e4m3) {
+          infA = false; infB = false;
+          nanA = (ad.exp == 15 && ad.frac == 7);
+          nanB = (bd.exp == 15 && bd.frac == 7);
+        } else {
+          infA = (ad.exp == all1 && !ad.frac); infB = (bd.exp == all1 && !bd.frac);
+          nanA = (ad.exp == all1 && ad.frac); nanB = (bd.exp == all1 && bd.frac);
+        }
+
+        bool is_nan = nanA || nanB || (infA && zB) || (infB && zA);
+        bool is_inf = (infA || infB) && !is_nan;
+        bool sign_xor = ((ad.sign ^ bd.sign) != 0);
+
+        flags |= is_nan ? FL_NAN : 0;
+        flags |= is_inf ? (sign_xor ? FL_NINF : FL_PINF) : 0;
+
+        int Ea = ad.is_sub ? (1 - bs) : (ad.exp - bs);
+        int Eb = bd.is_sub ? (1 - bs) : (bd.exp - bs);
+        int Ma = zA ? 0 : (ad.is_sub ? ad.frac : ((1 << sb) | ad.frac));
+        int Mb = zB ? 0 : (bd.is_sub ? bd.frac : ((1 << sb) | bd.frac));
+
+        int Mp = (Ma * Mb) << shift_sf;
+        int Ep = (Ea + Eb) + ep_off;
+
+        if (renorm) {
+          int lzc_prod = (ad.is_sub ? lzcN(Ma, sb) : 0) + (bd.is_sub ? lzcN(Mb, sb) : 0);
+          Mp <<= lzc_prod;
+          Ep -= lzc_prod;
+        }
+
+        const uint32_t k = w * epw + e;
+        // the fp8 lane pairs its two products by their exponent fields even
+        // when one is zero (a zero field counts as 1, as for a subnormal)
+        sel_eps[k] = (std::max(ad.exp, 1) - bs) + (std::max(bd.exp, 1) - bs) + ep_off;
+        nonzero[k] = !p_is_zero;
+
+        if (p_is_zero) {
+          Ep = kZeroE;
+          Mp = 0;
+        }
+
+        sign[k] = sign_xor;
+        mp[k] = Mp;
+        eps[k] = Ep;
+      }
+    }
+    return flags;
+  }
+
+  // products() for an EB/SB format without renormalization, branch-free.
+  // A zero or subnormal field reads as exponent 1 (the zero product's
+  // exponent is replaced, and its mantissa product is 0), so Ep and the fp8
+  // lane's pairing exponent are the same sum. Inf/NaN flags are worked out
+  // in a second pass, only when some element has an all-ones exponent.
+  template <int EB, int SB>
+  uint8_t products_fixed(const uint32_t *a, const uint32_t *b, uint32_t n) {
+    constexpr uint32_t width = 1u + EB + SB;
+    constexpr bool packed = (width <= 16u) && ((32u % width) == 0u);
+    constexpr uint32_t epw = packed ? (32u / width) : 1u;
+    constexpr uint32_t wmask = packed ? ((1u << width) - 1u) : ~0u;
+    constexpr uint32_t magmask = (1u << (EB + SB)) - 1u;
+    constexpr int all1 = (1 << EB) - 1;
+    constexpr bool is_e4m3 = (EB == 4 && SB == 3);
+    // the least magnitude with an all-ones exponent (e4m3: its NaN)
+    constexpr uint32_t kSpecial = is_e4m3 ? 0x7fu : (uint32_t(all1) << SB);
+    constexpr int bs = (1 << (EB - 1)) - 1;
+    constexpr int shift_sf = 22 - (2 * SB);
+    constexpr uint32_t fmask = (1u << SB) - 1u;
+    const int ep_off = F32_BIAS + EXP_POS_BIAS + 1 - W_ - 2 * bs;
+    int* __restrict const sign = sign_.data();
+    int* __restrict const mp = mp_.data();
+    int* __restrict const eps = eps_.data();
+    int* __restrict const sel_eps = sel_eps_.data();
+    int* __restrict const nonzero = nz_.data();
+    uint32_t special = 0;
+
+    for (uint32_t w = 0; w < n; ++w) {
+      const uint32_t aw = a[w], bw = b[w];
+      for (uint32_t e = 0; e < epw; ++e) {
+        const uint32_t ae = (aw >> (e * width)) & wmask;
+        const uint32_t be = (bw >> (e * width)) & wmask;
+        const uint32_t magA = ae & magmask, magB = be & magmask;
+        const int eA = int(magA >> SB), eB = int(magB >> SB);
+        const int Ma = (int(eA != 0) << SB) | int(magA & fmask);
+        const int Mb = (int(eB != 0) << SB) | int(magB & fmask);
+        const int sel = std::max(eA, 1) + std::max(eB, 1) + ep_off;
+        const int p_is_zero = (magA == 0) | (magB == 0);
+        special |= uint32_t(is_e4m3 ? ((magA == kSpecial) | (magB == kSpecial))
+                                    : ((magA >= kSpecial) | (magB >= kSpecial)));
+
+        const uint32_t k = w * epw + e;
+        if (width <= 8) { // read only by the fp8 lane reduction
+          sel_eps[k] = sel;
+          nonzero[k] = p_is_zero ^ 1;
+        }
+        sign[k] = int(((ae ^ be) >> (EB + SB)) & 1);
+        mp[k] = (Ma * Mb) << shift_sf;
+        eps[k] = p_is_zero ? kZeroE : sel;
+      }
+    }
+    if (!special) {
+      return 0;
+    }
+
+    uint8_t flags = 0;
+    for (uint32_t w = 0; w < n; ++w) {
+      const uint32_t aw = a[w], bw = b[w];
+      for (uint32_t e = 0; e < epw; ++e) {
+        const auto ad = decode_input((aw >> (e * width)) & wmask, EB, SB);
+        const auto bd = decode_input((bw >> (e * width)) & wmask, EB, SB);
+        bool infA, infB, nanA, nanB;
+        if (is_e4m3) {
+          infA = false; infB = false;
+          nanA = (ad.exp == 15 && ad.frac == 7);
+          nanB = (bd.exp == 15 && bd.frac == 7);
+        } else {
+          infA = (ad.exp == all1 && !ad.frac); infB = (bd.exp == all1 && !bd.frac);
+          nanA = (ad.exp == all1 && ad.frac); nanB = (bd.exp == all1 && bd.frac);
+        }
+        bool is_nan = nanA || nanB || (infA && bd.is_zero) || (infB && ad.is_zero);
+        bool is_inf = (infA || infB) && !is_nan;
+        bool sign_xor = ((ad.sign ^ bd.sign) != 0);
+        flags |= is_nan ? FL_NAN : 0;
+        flags |= is_inf ? (sign_xor ? FL_NINF : FL_PINF) : 0;
+      }
+    }
+    return flags;
   }
 
   // Append the C term after the nprod products and take every term's shift
@@ -622,14 +738,36 @@ private:
     const int* const mp = mp_.data();
     const int* const shifts = shifts_.data();
     uint32_t* const Ts = aln_.data();
-    uint8_t* const stk = stk_.data();
+    int* const stk = stk_.data();
 
-    const int WA = W_ + 2;
+    const int W = W_;
+    const int WA = W + 2;
     const uint32_t mask = (1ULL << WA) - 1;
     int global_sticky = 0;
 
+    if (W <= 28) {
+      // A term's shift k = L - its exponent is never negative. Placed 32 + MANT
+      // bits up in 64 bits and shifted down by k, the high word is the window
+      // value and the low word the bits shifted out (a magnitude is below
+      // 2^24, so past k = WA + MANT the window part is 0 and the low word holds
+      // the whole magnitude: capping k at 32 + MANT keeps every bit).
+      for (uint32_t i = 0; i < nt; ++i) {
+        const int MANT = (i + 1 == nt) ? (W - 24) : (W - 23);
+        const uint64_t placed = uint64_t(uint32_t(mp[i])) << (32 + MANT);
+        const uint64_t y = placed >> std::min(shifts[i], 32 + MANT);
+        const uint32_t shifted_mag = uint32_t(y >> 32);
+        const int s_bit = uint32_t(y) != 0;
+        // two's complement of a negative term: (v ^ -1) + 1
+        const uint32_t neg = 0u - uint32_t(sign[i]);
+        Ts[i] = (((shifted_mag & mask) ^ neg) - neg) & mask;
+        stk[i] = s_bit;
+        global_sticky |= s_bit;
+      }
+      return {global_sticky, res.L, res.flags};
+    }
+
     for (uint32_t i = 0; i < nt; ++i) {
-      const int MANT = (i + 1 == nt) ? (W_ - 24) : (W_ - 23);
+      const int MANT = (i + 1 == nt) ? (W - 24) : (W - 23);
 
       uint32_t mag = mp[i];
       int k = shifts[i];
@@ -658,7 +796,7 @@ private:
 
       int s_bit = sticky_bit ? 1 : 0;
       Ts[i] = final_val;
-      stk[i] = uint8_t(s_bit);
+      stk[i] = s_bit;
       global_sticky |= s_bit;
     }
 
@@ -751,8 +889,8 @@ private:
   std::vector<int>      mp_;
   std::vector<int>      eps_;
   std::vector<int>      sel_eps_;
-  std::vector<uint8_t>  nz_;
+  std::vector<int>      nz_;
   std::vector<int>      shifts_;
   std::vector<uint32_t> aln_;
-  std::vector<uint8_t>  stk_;
+  std::vector<int>      stk_;
 };
