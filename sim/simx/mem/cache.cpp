@@ -2860,7 +2860,16 @@ protected:
       }
     }
     uint32_t n = ReqIn.size();
-    const bool hold = this->any_token();
+    // the port heads, read once: nothing below pops a port before its last
+    // use of the head
+    auto& heads = heads_;
+    heads.resize(n);
+    bool hold = false;
+    for (uint32_t i = 0; i < n; ++i) {
+      auto& in = ReqIn[i];
+      heads[i] = in.empty() ? nullptr : &in.peek();
+      hold |= (heads[i] != nullptr) && heads[i]->flags.flush;
+    }
     this->update_realign();
     // merged ports riding each leader's bank access, by offset in its group
     auto& followers = followers_;
@@ -2869,16 +2878,16 @@ protected:
     merged.assign(n, 0);
     if (merge_group_ > 1 && !hold) {
       for (uint32_t i = 0; i < n; ++i) {
-        if (!this->is_plain_read(i) || this->realign_hold(i)) {
+        if (!plain_read(heads[i]) || this->realign_hold(i)) {
           continue;
         }
-        auto& req_i = ReqIn.at(i).peek();
+        auto& req_i = *heads[i];
         uint32_t base = (i / merge_group_) * merge_group_;
         for (uint32_t j = base; j < i; ++j) {
-          if (followers.at(j) || !this->is_plain_read(j) || this->realign_hold(j)) {
+          if (followers.at(j) || !plain_read(heads[j]) || this->realign_hold(j)) {
             continue;
           }
-          auto& req_j = ReqIn.at(j).peek();
+          auto& req_j = *heads[j];
           bool same = merge_line_
             ? ((req_j.addr >> params_.bank_select_addr_start) == (req_i.addr >> params_.bank_select_addr_start))
             : ((req_j.addr >> params_.word_select_addr_start) == (req_i.addr >> params_.word_select_addr_start)
@@ -2900,11 +2909,11 @@ protected:
     want.assign(nb * slices, 0);
     wants.assign(nb, 0);
     for (uint32_t i = 0; i < n; ++i) {
-      auto& in = ReqIn.at(i);
-      if (in.empty() || followers.at(i)) {
+      if (heads[i] == nullptr || followers.at(i)) {
         continue;
       }
-      auto& req = in.peek();
+      auto& in = ReqIn[i];
+      auto& req = *heads[i];
       if (req.flags.flush) {
         continue;
       }
@@ -3136,12 +3145,8 @@ protected:
   }
 
   // A plain read: no write, flush, IO, local or atomic attribute.
-  bool is_plain_read(uint32_t i) const {
-    if (ReqIn.at(i).empty()) {
-      return false;
-    }
-    auto& req = ReqIn.at(i).peek();
-    return req.op == MemOp::LD && !req.flags.flush && !req.flags.io && !req.flags.local;
+  static bool plain_read(const MemReq* req) {
+    return (req != nullptr) && req->op == MemOp::LD && !req->flags.flush && !req->flags.io && !req->flags.local;
   }
 
 private:
@@ -3172,6 +3177,7 @@ private:
   };
   std::vector<realign_t> realign_;
   // per-tick scratch, kept to avoid an allocation per cycle
+  std::vector<const MemReq*> heads_; // [port] head request, nullptr when empty
   std::vector<uint8_t>  followers_;
   std::vector<uint64_t> merged_;
   std::vector<uint32_t> want_;
