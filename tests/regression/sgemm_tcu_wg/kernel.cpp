@@ -16,6 +16,14 @@ using ctx = vt::wgmma_context<VX_CFG_NUM_THREADS, vt::ITYPE, vt::OTYPE, false, W
 [[maybe_unused]] static constexpr uint32_t b_off = ctx::tileK * B_OFF_K;
 static_assert(A_OFF_K <= A_PAD_K && B_OFF_K <= B_PAD_K, "an offset row must fit its padded stride");
 
+// WGMMA_AB_ALIAS: B is read out of the CTA's A tile, its column n being A's
+// row n, so the first warp's A descriptor and the B descriptor are the same.
+#ifdef WGMMA_AB_ALIAS
+#if defined(WGMMA_RS) || !defined(WGMMA_RMAJOR_A) || !defined(WGMMA_KMAJOR_B) || (A_PAD_K != B_PAD_K) || (A_OFF_K != B_OFF_K)
+#error "WGMMA_AB_ALIAS needs both operands in shared memory, row-major A and K-major B with the same rows"
+#endif
+#endif
+
 __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   auto pA = reinterpret_cast<ctx::input_t *>(arg->A_addr);
   auto pB = reinterpret_cast<ctx::input_t *>(arg->B_addr);
@@ -37,7 +45,11 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   // Shared memory layout: A [cta_M × lda] then B [tileK × per_warp_N]
   auto smem   = reinterpret_cast<ctx::input_t *>(__local_mem());
   auto A_smem = smem;
+#ifdef WGMMA_AB_ALIAS
+  auto B_smem = A_smem;
+#else
   auto B_smem = smem + cta_M * lda;
+#endif
 
   ctx::fragment_acc fragC;
   ctx::fill_fragment(fragC, 0);
@@ -73,6 +85,7 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
     #endif
     }
 
+#ifndef WGMMA_AB_ALIAS
     // Cooperatively load B into smem:
     //   Default (block-major):  B_smem[(k_blk*N_STEPS + n_blk)*BW + n_in*tcK + k_in]
     //   WGMMA_KMAJOR_B:         B_smem[c * ldb + b_off + r] — N-outer, K-inner.
@@ -87,6 +100,9 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
       B_smem[ctx::b_blockmajor_idx(r, c)] = pB[(k + r) * N + (tile_col + c)];
     #endif
     }
+#else
+    (void)pB;
+#endif
 
     __syncthreads();
 
