@@ -9,6 +9,17 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
 
 ### Added
 
+- **Fetch ahead of a lone warp (`VX_CFG_FETCH_INFLIGHT`, default 1).** A warp is stalled from its fetch pick until decode, so a
+  warp alone on a core issues one instruction per fetch round trip. With N > 1 (a power of two; EXT_C off) a warp that is the only
+  runnable warp of its frontend slice keeps fetching sequentially, up to N fetches between pick and decode. Decode drops what was
+  fetched behind a branch or warp-control instruction, and a fetch that arrives ahead of an older one, and the warp refetches once
+  the dropped fetches have returned. Same mechanism in [VX_warp_sched.sv](hw/rtl/core/VX_warp_sched.sv),
+  [VX_fetch.sv](hw/rtl/core/VX_fetch.sv), [VX_decode.sv](hw/rtl/core/VX_decode.sv) and
+  [sim/simx/core.cpp](sim/simx/core.cpp); `tests/regression/warp_rate` measures the rate by instruction class and
+  `tests/regression/fetch_squash` checks that nothing fetched on a wrong path executes.
+- **FP flags as an accumulation (`VX_CFG_FFLAGS_ACCUM`, default 0).** With 1 the scoreboard counts a warp's FP operations in flight
+  instead of reserving fflags for each, so they no longer issue one at a time; a CSR access of fflags or fcsr waits for the count
+  to reach zero. [VX_scoreboard.sv](hw/rtl/core/VX_scoreboard.sv), [sim/simx/scoreboard.cpp](sim/simx/scoreboard.cpp).
 - **Barrier drain scope (`VX_CFG_BAR_DRAIN_SCOPE`).** A barrier that stalls its warp (`vx_barrier`, `vx_barrier_wait`) can wait
   only for its own warp's instructions to commit, for every LSU block to have sent its queued requests and for no store to be in
   flight to the data cache or local memory (1), instead of for the whole core's LSU, other CTAs' outstanding reads included (0,

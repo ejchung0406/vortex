@@ -72,6 +72,34 @@ tests:
   app: bar_vis
   configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1
   args: -w4
+# Wrong-path fetches: control transfers followed in memory by instructions
+# that must not execute, a fetch that overtakes an older one, FP flag reads
+# between FP operations and a barrier; with one fetch in flight per warp and
+# with a lone warp fetching ahead (VX_CFG_FETCH_INFLIGHT) and FP flags
+# accumulated (VX_CFG_FFLAGS_ACCUM), one warp per frontend slice and two.
+- id: fetch-squash
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: fetch_squash
+  args: -w2 -i8
+- id: fetch-squash-ahead
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: fetch_squash
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+  args: -w4 -i8
+- id: fetch-squash-ahead-shared
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: fetch_squash
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_FETCH_INFLIGHT=2 -DVX_CFG_FFLAGS_ACCUM=1
+  args: -w8 -i8
 # Atomics with two LSU blocks: the read engine drains before an atomic enters
 # the first engine.
 - id: lmem-access-amo-iw2
