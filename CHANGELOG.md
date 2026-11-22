@@ -105,6 +105,13 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
 
 ### Changed
 
+- **A cycle gate runs at the xlen its case names.** `model_parity` and `perf_gate` cases were planned at XLEN 32 whatever the case
+  said; a case that sets `xlen` is now gated at exactly that xlen, and one that does not still runs at XLEN 32 only. Correction to
+  earlier commits on this branch line: the messages of the warp_rate, lane-dispatch and bar_vis parity cases say they are "pinned
+  to XLEN 64", which was not true when written, since the planner ignored the key. From this change on it is. Those cases, and
+  the tensor-memory parity cases that name XLEN 64, were measured at XLEN 64 and have never been run at XLEN 32.
+  [ci/testcase.py](ci/testcase.py), [ci/test_testcase.py](ci/test_testcase.py).
+
 - **Toolchain pinned to v3.0.2** (`TOOLCHAIN_REV`): LLVM f44a6bb2af4c, with PoCL rebuilt on it. Wide loads/stores and 64-bit
   atomics stay behind `+xvortexldstwide` and `+xvortexamod`, so code built with plain `+xvortex` uses no new instructions.
 - **Dcache read-merge pairs realign.** A pair of same-word merge ports whose parts a bank served a cycle apart waits for its partner,
