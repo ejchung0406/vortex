@@ -49,6 +49,18 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
       bool ready = false;
     };
     std::vector<ready_memo_t> m_ready;
+    // The read and write buffers' requests in arrival order, with their bank
+    // and prerequisite (valid at `version` of the bank): what FRFCFS reads,
+    // without walking the buffer's list.
+    struct slot_t {
+      ReqBuffer::iterator it;
+      int bank;      // -1: none, the device is asked directly
+      int command;
+      uint64_t version;
+    };
+    std::vector<slot_t> m_read_order;
+    std::vector<slot_t> m_write_order;
+    size_t m_chosen_slot = 0;            // the slot of the last in-order choice
 
     std::deque<Request> pending;          // A queue for read requests that are about to finish (callback after RL)
 
@@ -192,10 +204,13 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
       // Else, enqueue them to corresponding buffer based on request type id
       bool is_success = false;
       req.arrive = m_clk;
+      ReqBuffer* buffer = nullptr;
       if        (req.type_id == Request::Type::Read) {
         is_success = m_read_buffer.enqueue(req);
+        buffer = &m_read_buffer;
       } else if (req.type_id == Request::Type::Write) {
         is_success = m_write_buffer.enqueue(req);
+        buffer = &m_write_buffer;
       } else {
         throw std::runtime_error("Invalid request type!");
       }
@@ -203,6 +218,9 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
         // We could not enqueue the request
         req.arrive = -1;
         return false;
+      }
+      if (auto order = this->order_of(buffer)) {
+        order->push_back({std::prev(buffer->end()), this->bank_index(req.addr_vec), -1, 0});
       }
 
       return true;
@@ -266,11 +284,11 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
           } else if (req_it->type_id == Request::Type::Write) {
             // TODO: Add code to update statistics
           }
-          buffer->remove(req_it);
+          this->remove(buffer, req_it);
         } else {
           if (m_dram->m_command_meta(req_it->command).is_opening) {
             m_active_buffer.enqueue(*req_it);
-            buffer->remove(req_it);
+            this->remove(buffer, req_it);
           }
         }
 
@@ -464,17 +482,50 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
       std::memcpy(req.scratchpad.data(), &v, sizeof(v));
     }
 
+    // The bank an address selects, -1 if it selects none.
+    int bank_index(const AddrVec_t& addr_vec) const {
+      int idx = 0;
+      for (int l = 0; l < m_bank_levels && idx >= 0; ++l) {
+        int id = addr_vec[l];
+        idx = (id < 0 || id >= m_level_count[l]) ? -1 : (idx * m_level_count[l] + id);
+      }
+      return idx;
+    }
+
     int bank_of(Request& req) {
       int& slot = req.scratchpad[2];
       if (slot == 0) {
-        int idx = 0;
-        for (int l = 0; l < m_bank_levels && idx >= 0; ++l) {
-          int id = req.addr_vec[l];
-          idx = (id < 0 || id >= m_level_count[l]) ? -1 : (idx * m_level_count[l] + id);
-        }
+        int idx = this->bank_index(req.addr_vec);
         slot = (idx < 0) ? -1 : (idx + 1);
       }
       return (slot < 0) ? -1 : (slot - 1);
+    }
+
+    std::vector<slot_t>* order_of(ReqBuffer* buffer) {
+      if (!m_fast) {
+        return nullptr;
+      }
+      if (buffer == &m_read_buffer) {
+        return &m_read_order;
+      }
+      if (buffer == &m_write_buffer) {
+        return &m_write_order;
+      }
+      return nullptr;
+    }
+
+    void remove(ReqBuffer* buffer, ReqBuffer::iterator it) {
+      if (auto order = this->order_of(buffer)) {
+        size_t i = m_chosen_slot;
+        if (i >= order->size() || (*order)[i].it != it) {
+          i = 0;
+          while ((*order)[i].it != it) {
+            ++i;
+          }
+        }
+        order->erase(order->begin() + i);
+      }
+      buffer->remove(it);
     }
 
     // The request's prerequisite command, stored in req.command as FRFCFS does.
@@ -495,20 +546,25 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
       if (bank < 0) {
         return m_dram->check_ready(req.command, req.addr_vec);
       }
-      auto& memo = m_ready[size_t(bank) * m_num_commands + req.command];
+      return this->ready_at(bank, req.command, req.addr_vec);
+    }
+
+    bool ready_at(int bank, int command, const AddrVec_t& addr_vec) {
+      auto& memo = m_ready[size_t(bank) * m_num_commands + command];
       if (memo.epoch == m_epoch && (memo.clk == m_clk || memo.ready)) {
         return memo.ready;
       }
-      memo.ready = m_dram->check_ready(req.command, req.addr_vec);
+      memo.ready = m_dram->check_ready(command, addr_vec);
       memo.clk = m_clk;
       memo.epoch = m_epoch;
       return memo.ready;
     }
 
     // FRFCFS::get_best_request: the first ready request by arrival, else the
-    // oldest. In a buffer kept in arrival order (`in_order`) that is the first
-    // ready one in the buffer, else its head; the requests after it keep a
-    // stale command, which nothing reads before the next choice recomputes it.
+    // oldest. In a buffer kept in arrival order (`in_order`, read through its
+    // slots) that is the first ready one, else its head; only the chosen
+    // request's command is written, the others' are not read before the next
+    // choice.
     ReqBuffer::iterator get_best_request(ReqBuffer& buffer, bool in_order) {
       if (!m_fast) {
         return m_scheduler->get_best_request(buffer);
@@ -517,12 +573,29 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
         return buffer.end();
       }
       if (in_order) {
-        for (auto it = buffer.begin(); it != buffer.end(); ++it) {
-          this->update_command(*it);
-          if (this->check_ready(*it)) {
-            return it;
+        auto& order = *this->order_of(&buffer);
+        for (size_t i = 0; i < order.size(); ++i) {
+          auto& slot = order[i];
+          auto& req = *slot.it;
+          bool ready;
+          if (slot.bank < 0) {
+            slot.command = m_dram->get_preq_command(req.final_command, req.addr_vec);
+            ready = m_dram->check_ready(slot.command, req.addr_vec);
+          } else {
+            if (slot.version != m_bank_version[slot.bank]) {
+              slot.command = m_dram->get_preq_command(req.final_command, req.addr_vec);
+              slot.version = m_bank_version[slot.bank];
+            }
+            ready = this->ready_at(slot.bank, slot.command, req.addr_vec);
+          }
+          if (ready) {
+            req.command = slot.command;
+            m_chosen_slot = i;
+            return slot.it;
           }
         }
+        order[0].it->command = order[0].command;
+        m_chosen_slot = 0;
         return buffer.begin();
       }
       auto candidate = buffer.begin();
