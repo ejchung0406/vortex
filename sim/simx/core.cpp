@@ -1291,7 +1291,9 @@ public:
 
   // No request is in flight past the LSU blocks' request queues: the local
   // memory switches, the data-cache coalescers or lane adapters, the path on
-  // to the dcache and the local memory hold none.
+  // to the dcache and the local memory hold none. The hardware reads these
+  // stages in the same cycle; every one is in the socket's execution domain,
+  // whose tick order is fixed, so the read is deterministic at any thread count.
   bool lsu_stores_landed() const {
     for (uint32_t b = 0; b < VX_CFG_NUM_LSU_BLOCKS; ++b) {
       if (lmem_switch_.at(b)->ReqIn.size() != 0) {
