@@ -92,8 +92,10 @@ private:
   std::vector<uint8_t> in_use_fcsr_;
   std::vector<uint32_t> fflags_accums_;
   std::deque<pending_release_t> pending_releases_;
-  std::unordered_map<uint32_t, instr_trace_t*> owners_;
-  std::unordered_map<uint32_t, uint32_t> commit_counts_;
+  // [get_reg_id()] the instruction holding the register, and its packets
+  // committed so far
+  std::vector<instr_trace_t*> owners_;
+  std::vector<uint32_t> commit_counts_;
 
   friend class SimObject<Scoreboard>;
 };
