@@ -41,8 +41,8 @@
 // keep coming, and a row read waits while a pass of the read engine is at the
 // banks, so each waits at most one cycle for the other. The first engine's
 // passes that read the banks take the same turns, so a row read has the banks'
-// read data to itself: a cycle reads one row's worth of bytes at most, by a
-// row read or by the two engines' passes. Its stores pass regardless. The second port returns
+// read data to itself: a cycle's reads are a row read's or the two engines'
+// passes', never both. Its stores pass regardless. The second port returns
 // an undefined word when the first port writes it in the same cycle, so a row
 // read also waits while a DMA write or a store lands in its row and is served
 // the cycle after, with the row as written. A row read held up by an atomic or

@@ -447,9 +447,11 @@ VX_CFG_LMEM_SIZE = "expr: pow(2, $VX_CFG_LMEM_LOG_SIZE)"
 # banks' read-only port, which only exists with several LSU blocks
 # (NUM_LSU_BLOCKS > 1; the build refuses 1 otherwise) and which the second LSU
 # read engine uses: the row reads and the LSU's read passes take the banks in
-# turn, each waiting at most one cycle for the other, so a cycle still reads
-# one row's worth of bytes at most, and a row read waits while a write lands
-# in its row. The DMA
+# turn, so a row read never shares a cycle with a pass's reads and the knob
+# adds no read bytes to a clock (the two engines' passes together read up to
+# 2 x NUM_LSU_LANES words, one bank row's worth at 16 banks and 8 lanes). A
+# row read waits while a write lands in its row or an atomic owns its bank,
+# and then stops the first engine until it is served. The DMA
 # port then carries the DXA's writes alone. No effect without WGMMA operands.
 VX_CFG_LMEM_TCU_RDPORT = 0
 

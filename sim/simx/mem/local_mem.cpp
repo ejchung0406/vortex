@@ -48,8 +48,8 @@ using namespace vortex;
 // read engine issues no pass in the first cycle a request is seen, nor in
 // every other cycle while requests keep coming, and a row read waits a cycle
 // behind a pass of the read engine. The first engine's passes that read the
-// banks take the same turns, so a cycle reads one row's worth of bytes at
-// most; its stores pass regardless. A row read also waits while a DMA write
+// banks take the same turns, so a cycle's reads are a row read's or the two
+// engines' passes', never both; its stores pass regardless. A row read also waits while a DMA write
 // or a store lands in its row, and then returns the row as written. A row read
 // held up by an atomic or by a write in its row stops the first engine's
 // passes until it is served.
