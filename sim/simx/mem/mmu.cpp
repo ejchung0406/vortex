@@ -412,7 +412,8 @@ void Mmu::on_tick() {
     if (ReqIn.at(p).empty()) {
       continue;
     }
-    MemReq req = ReqIn.at(p).peek();
+    // the port's head stays in place until its pop, the last use of req
+    const MemReq& req = ReqIn.at(p).peek();
 
     if (!needs_translation(req)) {
       // A flush token reaches the cache behind its port's parked requests
@@ -458,7 +459,7 @@ void Mmu::on_tick() {
       MemReq translated = req;
       translated.addr = (res.ppn << VX_VM_PAGE_LOG2_SIZE) |
                         (req.addr & ((1ULL << VX_VM_PAGE_LOG2_SIZE) - 1));
-      if (!replaying && ReqOut.at(p).try_send(translated)) {
+      if (!replaying && ReqOut.at(p).try_send(std::move(translated))) {
         ReqIn.at(p).pop();
       }
     } else {
@@ -513,15 +514,12 @@ void Mmu::on_tick() {
 }
 
 bool Mmu::idle() const {
-  if (TlbFillIn.size() != 0 || !this->empty()) {
-    return false;
-  }
   for (uint32_t p = 0; p < num_ports_; ++p) {
     if (ReqIn.at(p).size() != 0 || RspIn.at(p).size() != 0) {
       return false;
     }
   }
-  return true;
+  return TlbFillIn.size() == 0 && this->empty();
 }
 
 #endif // VX_CFG_VM_ENABLE
