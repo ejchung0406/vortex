@@ -151,9 +151,12 @@ import VX_tcu_pkg::*;
     // the in-core global-store path is empty
     wire mem_unit_empty = (& lsu_store_empty);
     wire mem_unit_busy;
-    // no store in flight past the LSU schedulers, to the data cache or local memory
+    // No request in flight past the LSU schedulers to local memory, or to the
+    // data cache: in the adapters, a flush lane's buffer, the dMMU lanes or the
+    // link. A request already in the dcache's request crossbar can still be
+    // overtaken there by another port's when the crossbar is sliced.
     wire lmem_store_empty;
-    wire lsu_store_landed = mem_unit_empty && lmem_store_empty;
+    wire lsu_store_landed = mem_unit_empty && ~mem_unit_busy && dcache_path_drained && lmem_store_empty;
 
 `ifdef VX_CFG_VM_ENABLE
 `ifdef PERF_ENABLE
@@ -187,7 +190,6 @@ import VX_tcu_pkg::*;
         assign dcr_flush_dcache_if.req = dcr_flush_if.req
                                       && ((store_drained && dcache_path_drained) || dcache_flush_go_r);
     end else begin : g_flush_direct
-        `UNUSED_VAR (dcache_path_drained)
         assign dcr_flush_dcache_if.req = dcr_flush_if.req && store_drained;
     end
     // Only the dcache flush walks the shared levels (the icache does not

@@ -37,8 +37,8 @@ interface VX_warp_ctl_if import VX_gpu_pkg::*; ();
     wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] lsu_sched_empty;
     // the same, but for reads awaiting their response: every request sent
     wire [`VX_CFG_NUM_LSU_BLOCKS-1:0] lsu_sched_sent;
-    // no store in flight past the schedulers: the global-store paths and local
-    // memory hold none
+    // no request in flight past the schedulers: the paths to the data cache
+    // (through its dMMU lanes and link) and to local memory hold none
     wire lsu_store_landed;
     wire mmu_empty;
 

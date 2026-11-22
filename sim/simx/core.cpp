@@ -1289,9 +1289,9 @@ public:
     return std::static_pointer_cast<LsuUnit>(func_units_.at((int)FUType::LSU))->sent();
   }
 
-  // No store is in flight past the LSU blocks' request queues: the local
-  // memory switches, the data-cache coalescers or lane adapters and the local
-  // memory hold none.
+  // No request is in flight past the LSU blocks' request queues: the local
+  // memory switches, the data-cache coalescers or lane adapters, the path on
+  // to the dcache and the local memory hold none.
   bool lsu_stores_landed() const {
     for (uint32_t b = 0; b < VX_CFG_NUM_LSU_BLOCKS; ++b) {
       if (lmem_switch_.at(b)->ReqIn.size() != 0) {
@@ -1308,6 +1308,23 @@ public:
           }
         }
       } else if (!mem_coalescers_.at(b)->req_idle()) {
+        return false;
+      }
+    }
+    // Past them: a flush port's arbiter buffer, the dcache MMU and the link
+    // to the dcache.
+    for (auto& buf : dcache_flush_bufs_) {
+      if (buf->Out.size() != 0) {
+        return false;
+      }
+    }
+  #ifdef VX_CFG_VM_ENABLE
+    if (!dcache_mmu_->empty()) {
+      return false;
+    }
+  #endif
+    for (auto& out : simobject_->dcache_req_out) {
+      if (out.size() != 0) {
         return false;
       }
     }
