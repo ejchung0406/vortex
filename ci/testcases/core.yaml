@@ -418,6 +418,18 @@ tests:
   app: bar_vis
   args: -w4
   configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1 -DVX_CFG_L1_LINK_LATENCY=8
+# The same at the h200s unit shape and its front-end settings: 32-thread warps
+# on 16 ALU and 8 LSU lanes, four CTAs of four warps on an 8-warp core. A
+# checking CTA runs beside a loading one, and the two loading CTAs never run
+# together, so the lines they share (bar_vis/kernel.cpp) miss on both models.
+- id: parity-bar-vis-lanes
+  check: model_parity
+  tolerance: 0.01
+  via: blackbox
+  app: bar_vis
+  xlen: [64]
+  args: -w4
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_ALU_LANES=16 -DVX_CFG_NUM_FPU_LANES=32 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_NUM_GPR_BANKS=8 -DVX_CFG_DISPATCH_QUEUE_SIZE=8 -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1 -DVX_CFG_BRANCH_REG=0 -DVX_CFG_BAR_DRAIN_SCOPE=1 -DVX_CFG_FETCH_REQ_BUF=0 -DVX_CFG_FLUSH_REQ_BUF=0 -DVX_CFG_OPC_MERGE_BUF=0 -DVX_CFG_LANE_DISPATCH_GAPLESS=1
 # A lone warp fetching ahead of its decode (VX_CFG_FETCH_INFLIGHT) with FP
 # flags accumulated (VX_CFG_FFLAGS_ACCUM): independent integer adds and
 # fmadds, a taken branch every four instructions, and shared-memory loads,
@@ -534,6 +546,64 @@ tests:
   xlen: [64]
   args: -k2 -w16 -i16
   configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_ALU_LANES=16 -DVX_CFG_LANE_DISPATCH_GAPLESS=1
+# 32-thread warps on a 16-lane ALU, each op split into two passes through the
+# lane dispatch's packet register: independent integer adds, one warp per issue
+# slice fetching ahead, and four warps per slice, whose ALU blocks take their
+# next op independently of each other.
+- id: parity-warp-rate-alu-lanes
+  check: model_parity
+  tolerance: 0.002
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k2 -w4 -i32
+  configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_ALU_LANES=16 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+- id: parity-warp-rate-alu-lanes-shared
+  check: model_parity
+  tolerance: 0.01
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k2 -w16 -i16
+  configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_ALU_LANES=16
+# 32-thread warps on an 8-lane LSU, each op split into passes through the lane
+# dispatch's packet register: stores and unread loads to shared memory, one
+# warp fetching ahead, one packet per cycle into the unit. Tighter than the
+# default: the models agree to within a few cycles here.
+- id: parity-warp-rate-lsu-lanes-store
+  check: model_parity
+  tolerance: 0.01
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k11 -w1 -i32
+  configs: -DVX_CFG_NUM_WARPS=4 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+- id: parity-warp-rate-lsu-lanes-load
+  check: model_parity
+  tolerance: 0.01
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k12 -w1 -i32
+  configs: -DVX_CFG_NUM_WARPS=4 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+# The same stores and unread loads with the LSU's empty cycle removed
+# (VX_CFG_LANE_DISPATCH_GAPLESS bit 1): four packets per op, back to back.
+- id: parity-warp-rate-lsu-lanes-store-gapless
+  check: model_parity
+  tolerance: 0.005
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k11 -w1 -i32
+  configs: -DVX_CFG_NUM_WARPS=4 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1 -DVX_CFG_LANE_DISPATCH_GAPLESS=2
+- id: parity-warp-rate-lsu-lanes-load-gapless
+  check: model_parity
+  tolerance: 0.005
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k12 -w1 -i32
+  configs: -DVX_CFG_NUM_WARPS=4 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1 -DVX_CFG_LANE_DISPATCH_GAPLESS=2
 # SGEMM with local-memory tiling (kernel-managed shared memory).
 - id: parity-sgemmx
   check: model_parity

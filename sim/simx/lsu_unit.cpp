@@ -20,6 +20,7 @@
 #include <nan_box.h>
 #include "debug.h"
 #include "core.h"
+#include "dispatcher.h"
 #include "local_mem_switch.h"
 #include "constants.h"
 #include "mem_block_pool.h"
@@ -164,8 +165,11 @@ LsuUnit::LsuUnit(const SimContext& ctx, const char* name, Core* core)
 	, no_rsp_bufs_(VX_CFG_NUM_LSU_BLOCKS, SimChannel<instr_trace_t*>(this, 2))
 	, pending_loads_(0)
 {
-	// the lane-dispatch skid buffer's ready is registered
+	// The lane-dispatch skid buffer's two entries, and the packet register in
+	// front of it, which hands the buffer a packet in the cycle the unit takes
+	// one; the buffer's ready is registered.
 	for (auto& input : Inputs) {
+		input = SimChannel<instr_trace_t*>(this, 2 + (Dispatcher::has_packet_reg(VX_CFG_NUM_LSU_LANES) ? 1 : 0));
 		input.set_registered_ready(true);
 	}
 	// so are the result path's buffers'

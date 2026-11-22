@@ -38,6 +38,12 @@ public:
 	// the unit accepts the op, from the unit itself.
 	void set_release_on_accept() { release_on_accept_ = true; }
 
+	// A SIMD slice wider than the fanout limit (8 lanes, plus half) splits
+	// into packets through a registered iterator.
+	static constexpr bool has_packet_reg(uint32_t num_lanes) {
+		return (num_lanes != VX_CFG_SIMD_WIDTH) && (VX_CFG_SIMD_WIDTH > 12);
+	}
+
 protected:
 	virtual void on_reset();
 	virtual void on_tick();
@@ -55,8 +61,6 @@ private:
 	std::vector<uint64_t> block_free_;
 	// the slot queue a block's iterator still holds a last packet of, or -1
 	std::vector<int> held_input_;
-	// A SIMD slice wider than the fanout limit (8 lanes, plus half) splits
-	// into packets through a registered iterator.
 	bool iter_out_reg_;
 	// the op leaves its queue as the iterator's register takes its last packet
 	bool gapless_;
