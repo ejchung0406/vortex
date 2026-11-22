@@ -441,30 +441,35 @@ tests:
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k2 -w4 -i256
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 - id: parity-warp-rate-ahead-fma
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k5 -w4 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 - id: parity-warp-rate-ahead-branch
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k7 -w4 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 - id: parity-warp-rate-ahead-lds
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k9 -w1 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_FETCH_INFLIGHT=2 -DVX_CFG_FFLAGS_ACCUM=1
 - id: parity-warp-rate-ahead-shared
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k5 -w8 -i64
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 # A resolved branch sent to the scheduler from the ALU's result register,
@@ -474,12 +479,14 @@ tests:
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k6 -w8 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_BRANCH_REG=0
 - id: parity-warp-rate-branch-noreg-ahead
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k8 -w4 -i256
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_BRANCH_REG=0 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 # A fetch pick sent straight into the fetch unit's request buffer
@@ -489,12 +496,14 @@ tests:
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k6 -w8 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_REQ_BUF=0
 - id: parity-warp-rate-fetch-nobuf-ahead
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k7 -w4 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_REQ_BUF=0 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 # The first frontend slice's fetches merged with the cache flush without the
@@ -504,12 +513,14 @@ tests:
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k6 -w1 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FLUSH_REQ_BUF=0
 - id: parity-warp-rate-flush-nobuf-ahead
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k0 -w1 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FLUSH_REQ_BUF=0 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 # Two operand collectors per issue slice merged without a register
@@ -519,12 +530,14 @@ tests:
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k2 -w8 -i64
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_OPCS=2 -DVX_CFG_OPC_MERGE_BUF=0
 - id: parity-warp-rate-opc-merge-nobuf-lds
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k9 -w8 -i64
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_OPCS=2 -DVX_CFG_OPC_MERGE_BUF=0
 # Multiplies beside adds from eight warps on one issue slot, so the ALU block's
