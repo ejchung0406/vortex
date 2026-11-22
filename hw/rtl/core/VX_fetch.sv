@@ -41,7 +41,9 @@ module VX_fetch import VX_gpu_pkg::*; #(
     `UNUSED_VAR (reset)
 
     localparam WID_W = `LOG2UP(NUM_WARPS);
-    `STATIC_ASSERT (WID_W == ICACHE_TAG_ID_BITS, ("invalid parameter"))
+    // the icache tag names the warp and the slot of its fetch window
+    localparam TAG_W = WID_W + FETCH_SEQ_BITS;
+    `STATIC_ASSERT (TAG_W == ICACHE_TAG_ID_BITS, ("invalid parameter"))
 
     wire [WID_W-1:0] sched_wid = schedule_if.data.wid[WID_W-1:0];
     if (NW_WIDTH > WID_W) begin : g_sched_wid_unused
@@ -61,19 +63,40 @@ module VX_fetch import VX_gpu_pkg::*; #(
     wire [UUID_WIDTH-1:0]   rsp_uuid;
     wire [PC_BITS-1:0]      rsp_PC;
     wire [`VX_CFG_NUM_THREADS-1:0] rsp_tmask;
-    wire [WID_W-1:0]        req_tag;
-    wire [WID_W-1:0]        rsp_tag;
+    wire [TAG_W-1:0]        req_tag;
+    wire [TAG_W-1:0]        rsp_tag;
     wire [NCTA_WIDTH-1:0]   rsp_cta_id;
 
     wire icache_req_fire = icache_req_valid && icache_req_ready;
 
-    assign req_tag = sched_wid;
-
     assign {rsp_uuid, rsp_tag} = icache_bus_if.rsp_data.tag;
 
+    localparam STORE_DATAW = PC_BITS + `VX_CFG_NUM_THREADS + NCTA_WIDTH;
+    // the stream, run and first flags of a fetch ahead return with its response
+    localparam SPEC_DATAW  = FETCH_AHEAD ? (FETCH_STRM_W + 2) : 0;
+
+    wire [WID_W-1:0] rsp_tag_wid;
+    wire [STORE_DATAW+SPEC_DATAW-1:0] store_wdata, store_rdata;
+    wire [STORE_DATAW-1:0] sched_store_data = {schedule_if.data.PC, schedule_if.data.tmask, schedule_if.data.cta_id};
+    fetch_spec_t rsp_spec;
+    if (FETCH_AHEAD) begin : g_tag_ahead
+        assign req_tag      = {sched_wid, schedule_if.spec.seq};
+        assign rsp_tag_wid  = rsp_tag[FETCH_SEQ_BITS +: WID_W];
+        assign store_wdata  = {schedule_if.spec.strm, schedule_if.spec.run, schedule_if.spec.first, sched_store_data};
+        assign rsp_spec.seq = rsp_tag[FETCH_SEQ_BITS-1:0];
+        assign {rsp_spec.strm, rsp_spec.run, rsp_spec.first} = store_rdata[STORE_DATAW +: SPEC_DATAW];
+    end else begin : g_tag_single
+        assign req_tag      = sched_wid;
+        assign rsp_tag_wid  = rsp_tag;
+        assign store_wdata  = sched_store_data;
+        assign rsp_spec     = '0;
+        `UNUSED_VAR (schedule_if.spec)
+    end
+    assign {rsp_PC, rsp_tmask, rsp_cta_id} = store_rdata[STORE_DATAW-1:0];
+
     VX_dp_ram #(
-        .DATAW (PC_BITS + `VX_CFG_NUM_THREADS + NCTA_WIDTH),
-        .SIZE  (NUM_WARPS),
+        .DATAW (STORE_DATAW + SPEC_DATAW),
+        .SIZE  (NUM_WARPS * FETCH_INFLIGHT),
         .RDW_MODE ("R"),
         .LUTRAM (1)
     ) tag_store (
@@ -83,9 +106,9 @@ module VX_fetch import VX_gpu_pkg::*; #(
         .write (icache_req_fire),
         .wren  (1'b1),
         .waddr (req_tag),
-        .wdata ({schedule_if.data.PC, schedule_if.data.tmask, schedule_if.data.cta_id}),
+        .wdata (store_wdata),
         .raddr (rsp_tag),
-        .rdata ({rsp_PC, rsp_tmask, rsp_cta_id})
+        .rdata (store_rdata)
     );
 
     `RUNTIME_ASSERT((!schedule_if.valid || schedule_if.data.PC != 0),
@@ -108,7 +131,8 @@ module VX_fetch import VX_gpu_pkg::*; #(
 
     wire sched_buffered_match;
     wire sched_buffered;
-    assign rsp_wid = rsp_tag;
+    assign rsp_wid = rsp_tag_wid;
+    assign fetch_if.spec = rsp_spec;
 
     // One-outstanding-per-warp (Invariant B): a warp with an icache request in
     // flight must not issue another, else its two responses alias the single
@@ -152,7 +176,7 @@ module VX_fetch import VX_gpu_pkg::*; #(
     // rejects a bit-select applied directly to a function-call result.
     wire [`VX_CFG_XLEN-1:0] icache_req_full_pc = to_fullPC(icache_req_PC);
     assign icache_req_addr  = icache_req_full_pc[ICACHE_ADDR_WIDTH+1 : 2];
-    assign icache_req_tag   = {icache_req_uuid, icache_req_wid};
+    assign icache_req_tag   = {icache_req_uuid, TAG_W'(icache_req_wid)};
     // The icache is word-addressed: PC[1:0] (sub-word) is intentionally
     // dropped from icache_req_addr.
     `UNUSED_VAR (icache_req_full_pc)
@@ -205,13 +229,15 @@ module VX_fetch import VX_gpu_pkg::*; #(
     assign icache_req_addr  = schedule_if.data.PC[2-(`VX_CFG_XLEN-PC_BITS) +: ICACHE_ADDR_WIDTH];
     assign icache_req_wid   = sched_wid;
     assign icache_req_uuid  = schedule_if.data.uuid;
-    assign icache_req_tag   = {icache_req_uuid, icache_req_wid};
+    assign icache_req_tag   = {icache_req_uuid, req_tag};
     assign schedule_if.ibuf_pop = fetch_if.ibuf_pop;
     assign schedule_if.ready = icache_req_ready;
+    `UNUSED_VAR (icache_req_wid)
 
     assign fetch_if.valid       = icache_bus_if.rsp_valid;
     assign fetch_if.data.tmask  = rsp_tmask;
-    assign fetch_if.data.wid    = NW_WIDTH'(rsp_tag);
+    assign fetch_if.data.wid    = NW_WIDTH'(rsp_tag_wid);
+    assign fetch_if.spec        = rsp_spec;
     assign fetch_if.data.cta_id = rsp_cta_id;
     assign fetch_if.data.PC     = rsp_PC;
     assign fetch_if.data.instr  = icache_bus_if.rsp_data.data;

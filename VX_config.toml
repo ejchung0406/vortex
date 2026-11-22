@@ -76,12 +76,14 @@ VX_CFG_BAR_DRAIN_SCOPE = 0
 VX_CFG_MAX_BAR_EVENTS = 32
 
 VX_CFG_IBUF_SIZE = 4
-# SimX only: instructions one warp may have between its fetch pick and decode.
-# 1 stalls the warp from its pick until decode, or for a branch or warp-control
-# instruction until that resolves. More fetches the warp sequentially ahead:
-# decode drops the younger fetches when it finds a stalling instruction or an
-# instruction out of order, and the warp refetches from its PC once released.
-# The instruction buffer (IBUF_SIZE) bounds it as well.
+# Fetches one warp may have between its fetch pick and decode: 1, or a power
+# of two. 1 stalls the warp from its pick until decode, or for a branch or
+# warp-control instruction until that resolves. More lets a warp that is the
+# only runnable warp of its frontend slice fetch sequentially ahead, within
+# its instruction-buffer slots (IBUF_SIZE) and, with VM, within the page of
+# its last fetch. Decode drops what was fetched behind a stalling instruction
+# and a fetch that arrives ahead of an older one, and the warp refetches from
+# there once the dropped fetches have all returned. Requires EXT_C off.
 VX_CFG_FETCH_INFLIGHT = 1
 # 1 treats a floating-point operation's exception flags as an accumulation
 # (sticky OR): the scoreboard counts a warp's FP operations in flight instead

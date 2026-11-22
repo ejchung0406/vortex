@@ -725,6 +725,26 @@ package VX_gpu_pkg;
     localparam FETCH_WFS_BITS  = `CLOG2(PER_FETCH_WARPS);
     localparam FETCH_WFS_W     = `UP(FETCH_WFS_BITS);
 
+    // Sequential fetch ahead: the fetches one warp may have between its pick
+    // and decode (a power of two). A warp's fetches form runs: a run starts
+    // with a fetch picked while no other fetch of the warp is in flight, and
+    // the fetches picked ahead of its decode follow it. A fetch carries its
+    // position in the run, which is also the slot of the warp's fetch window
+    // it occupies, whether it starts the run, the run, and the warp's stream,
+    // which a squash changes.
+    localparam FETCH_INFLIGHT  = `VX_CFG_FETCH_INFLIGHT;
+    localparam FETCH_AHEAD     = (FETCH_INFLIGHT > 1);
+    localparam FETCH_SEQ_BITS  = `CLOG2(FETCH_INFLIGHT);
+    localparam FETCH_SEQ_W     = `UP(FETCH_SEQ_BITS);
+    localparam FETCH_STRM_W    = 1;
+
+    typedef struct packed {
+        logic [FETCH_SEQ_W-1:0]  seq;
+        logic [FETCH_STRM_W-1:0] strm;
+        logic                    run;
+        logic                    first;
+    } fetch_spec_t;
+
     function automatic logic [NW_WIDTH-1:0] wfs_to_wid(
         input logic [FETCH_WFS_W-1:0] wfs,
         input logic [FETCH_FSW_W-1:0] fsw
@@ -2058,8 +2078,9 @@ package VX_gpu_pkg;
     localparam ICACHE_NUM_REQS  = `VX_CFG_FETCH_WIDTH;
     localparam ICACHE_NUM_BANKS = `VX_CFG_ICACHE_NUM_BANKS;
 
-    // Core request tag Id bits: the warp id local to the requesting frontend slice
-    localparam ICACHE_TAG_ID_BITS	= FETCH_WFS_W;
+    // Core request tag Id bits: the warp id local to the requesting frontend
+    // slice, and the slot of the warp's fetch window
+    localparam ICACHE_TAG_ID_BITS	= FETCH_WFS_W + FETCH_SEQ_BITS;
 
     // Core request tag bits as VX_fetch writes them (UUID + warp id).
     localparam ICACHE_FETCH_TAG_WIDTH = (UUID_WIDTH + ICACHE_TAG_ID_BITS);

@@ -85,14 +85,20 @@ struct warp_t {
   // Per-warp MSCRATCH (holds kernel arg pointer, set at CTA dispatch)
   Word                              mscratch;
 
-  // Sequential fetch ahead (FETCH_INFLIGHT > 1): the next fetch address, the
-  // epoch that retires older fetches, and the fetches not yet decoded. PC stays
-  // the architectural next PC, advanced at decode. A squash is registered like
-  // the stall: a pick in its cycle still carries the old epoch.
+  // Sequential fetch ahead (FETCH_INFLIGHT > 1), the per-warp state of
+  // VX_warp_sched: the next fetch address, the fetches between pick and decode,
+  // the position of the next fetch in its run, the run, the stream, which a
+  // squash changes, and
+  // whether fetches of an older stream may still be in flight. PC stays the
+  // architectural next PC, advanced at decode. Decode's events reach the
+  // scheduler registered: they apply at the end of the cycle they arrive in.
   Word                              fetch_PC;
-  uint32_t                          fetch_epoch;
   uint32_t                          fetch_inflight;
-  bool                              fetch_resync;
+  uint32_t                          fetch_seq;
+  uint32_t                          fetch_run;
+  uint32_t                          fetch_strm;
+  bool                              fetch_drain;
+  bool                              fetch_leave_pending;
   bool                              fetch_squash_pending;
 
   // Per-warp machine-mode trap CSRs. Synchronous ECALL/EBREAK traps
@@ -133,10 +139,12 @@ public:
   void schedule_begin();
 
   // One frontend slice's pick: its lowest ready warp in warp_mask.
-  instr_trace_t* schedule(const WarpMask& warp_mask);
+  // warp_mask: the warps the slice may pick; room_mask: those with a free
+  // instruction-buffer slot, which a fetch ahead needs.
+  instr_trace_t* schedule(const WarpMask& warp_mask, const WarpMask& room_mask);
 
   // Whether warp_mask holds a ready warp, without picking it.
-  bool has_ready(const WarpMask& warp_mask) const;
+  bool has_ready(const WarpMask& warp_mask, const WarpMask& room_mask) const;
 
   // Once per cycle, after the picks: clock the registered warp state.
   void schedule_end();
@@ -147,16 +155,15 @@ public:
   void advance_pc(const instr_trace_t* trace, uint32_t inc);
   bool running() const;
 
-  // Fetch ahead (FETCH_INFLIGHT > 1). A fetch of the warp's current stream is
-  // kept; a fetch leaves the front end once decoded or dropped; a squash drops
-  // the warp's fetches in flight and restarts its stream at its PC.
-  bool fetch_current(const instr_trace_t* trace) const;
-  // whether wid is the only runnable warp of its frontend slice
-  bool fetch_alone(uint32_t wid) const;
-  // whether wid's next fetch ahead stays in the page of its last fetch
-  bool fetch_page_ok(uint32_t wid) const;
-  void fetch_retire(uint32_t wid);
-  void fetch_squash(uint32_t wid);
+  // Fetch ahead (FETCH_INFLIGHT > 1). A fetch leaves the front end once
+  // decoded or dropped; a squash makes the warp's fetches in flight stale and
+  // restarts its stream at its PC.
+  void fetch_leave(uint32_t wid, bool squash);
+  // a PC written from outside the pipeline (debugger)
+  void fetch_redirect(uint32_t wid);
+  bool pickable(uint32_t wid, const WarpMask& warp_mask, const WarpMask& room_mask) const;
+  // whether any warp has a fetch between pick and decode
+  bool fetch_pending() const;
 
   bool wspawn(uint32_t num_warps, Word nextPC);
   bool setTmask(uint32_t wid, const ThreadMask& tmask);

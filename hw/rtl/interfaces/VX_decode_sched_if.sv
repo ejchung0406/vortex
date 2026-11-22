@@ -21,10 +21,18 @@ interface VX_decode_sched_if import VX_gpu_pkg::*; ();
     wire                is_rvc;
 `endif
     wire [NW_WIDTH-1:0] wid;
+    // fetch ahead: the fetch was dropped; the warp's fetches in flight are
+    // squashed and its stream restarts at PC
+    wire                drop;
+    wire                squash;
+    wire [PC_BITS-1:0]  PC;
 
     modport master (
         output valid,
         output unlock,
+        output drop,
+        output squash,
+        output PC,
     `ifdef VX_CFG_EXT_C_ENABLE
         output is_rvc,
     `endif
@@ -34,6 +42,9 @@ interface VX_decode_sched_if import VX_gpu_pkg::*; ();
     modport slave (
         input valid,
         input unlock,
+        input drop,
+        input squash,
+        input PC,
     `ifdef VX_CFG_EXT_C_ENABLE
         input is_rvc,
     `endif

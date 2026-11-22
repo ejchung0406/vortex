@@ -65,6 +65,12 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
     localparam PSW     = SW / NPS;           // warps per SFU port
     localparam KW      = `LOG2UP(PSW);
     localparam IBUF_CW = $clog2(`VX_CFG_IBUF_SIZE + 1);
+    localparam IFL_W   = $clog2(FETCH_INFLIGHT + 1);
+
+    `STATIC_ASSERT(`IS_POW2(FETCH_INFLIGHT), ("invalid parameter: VX_CFG_FETCH_INFLIGHT must be a power of two"))
+`ifdef VX_CFG_EXT_C_ENABLE
+    `STATIC_ASSERT(!FETCH_AHEAD, ("invalid parameter: VX_CFG_FETCH_INFLIGHT > 1 fetches 4-byte words ahead, which compressed instructions break"))
+`endif
 
     `UNUSED_VAR (schedule_if.ibuf_pop)
 
@@ -140,6 +146,10 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
     wire          cand_valid;
     wire          sched_fire;
 
+    // fetch ahead, per warp: no fetch in flight; one more may be picked ahead
+    wire [SW-1:0] fetch_idle, fetch_ahead_ok;
+    wire fetch_spec_t [SW-1:0] fetch_specs;
+
     reg [SW-1:0][`VX_CFG_MEM_ADDR_WIDTH-1:0] mscratch_r;
     reg [SW-1:0][`VX_CFG_XLEN-1:0] mstatus_r, mtvec_r, mepc_r, mcause_r, mtval_r;
 
@@ -173,7 +183,7 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
                 tmask_n = sched_if.cta_tmask;
             end
 
-            if (decode_sched_if.valid && decode_sched_if.unlock && (dec_lid == LID)) begin
+            if (!FETCH_AHEAD && decode_sched_if.valid && decode_sched_if.unlock && (dec_lid == LID)) begin
                 stalled_n = 0;
             end
 
@@ -243,12 +253,26 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
                 stalled_n = 0;
             end
 
-            // stall the warp until decode stage
+            // stall the warp until decode stage; with fetch ahead it stays
+            // schedulable, and decode stalls it at a stalling instruction
             if (sched_fire && cand_onehot[l]) begin
-                stalled_n = 1;
+                if (!FETCH_AHEAD) begin
+                    stalled_n = 1;
+                end
             `ifndef VX_CFG_EXT_C_ENABLE
                 pc_n = pc_r + from_fullPC(`VX_CFG_XLEN'(4));
             `endif
+            end
+
+            // A squash restarts the warp's stream at the PC decode gives: behind a
+            // stalling instruction, which also holds the warp, or at the fetch
+            // another one overtook. It arrives a cycle after decode, so a pick
+            // in between is of the old stream.
+            if (FETCH_AHEAD && decode_sched_if.valid && decode_sched_if.squash && (dec_lid == LID)) begin
+                pc_n = decode_sched_if.PC;
+                if (~decode_sched_if.drop) begin
+                    stalled_n = 1;
+                end
             end
 
         `ifdef VX_CFG_EXT_C_ENABLE
@@ -334,7 +358,9 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
         logic [IBUF_CW-1:0] ibuf_size_r, ibuf_size_n;
         logic ibuf_full_r;
         wire ibuf_incr = sched_fire && cand_onehot[l];
-        assign ibuf_size_n = ibuf_size_r + IBUF_CW'(ibuf_incr) - IBUF_CW'(ibuf_pop[l]);
+        // a dropped fetch returns the slot it was picked for
+        wire ibuf_drop = FETCH_AHEAD && decode_sched_if.valid && decode_sched_if.drop && (dec_lid == LID);
+        assign ibuf_size_n = ibuf_size_r + IBUF_CW'(ibuf_incr) - IBUF_CW'(ibuf_pop[l]) - IBUF_CW'(ibuf_drop);
         always @(posedge clk) begin
             if (reset) begin
                 ibuf_size_r <= '0;
@@ -344,8 +370,69 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
                 ibuf_full_r <= ibuf_full_n[l];
             end
         end
-        assign ibuf_full_n[l] = (ibuf_size_n == IBUF_CW'(`VX_CFG_IBUF_SIZE));
+        // a warp picked once every buffer is full goes past its slots, and with
+        // fetch ahead must read as full there
+        assign ibuf_full_n[l] = FETCH_AHEAD ? (ibuf_size_n >= IBUF_CW'(`VX_CFG_IBUF_SIZE))
+                                            : (ibuf_size_n == IBUF_CW'(`VX_CFG_IBUF_SIZE));
         assign ibuf_full[l]   = ibuf_full_r;
+
+        if (FETCH_AHEAD) begin : g_fetch_ahead
+            // Fetches between pick and decode, the position of the next one in
+            // its run, the run, the warp's stream, and whether fetches of an
+            // older stream may still be in flight: the stream id is one bit,
+            // so a squashed warp is picked again only once they have all left.
+            reg [IFL_W-1:0]        inflight_r;
+            reg [FETCH_SEQ_W-1:0]  seq_r;
+            reg                    run_r;
+            reg [FETCH_STRM_W-1:0] strm_r;
+            reg                    drain_r;
+
+            wire fetch_pick   = sched_fire && cand_onehot[l];
+            wire fetch_leave  = decode_sched_if.valid && (dec_lid == LID);
+            wire fetch_squash = fetch_leave && decode_sched_if.squash;
+
+            always @(posedge clk) begin
+                if (reset) begin
+                    inflight_r <= '0;
+                    seq_r      <= '0;
+                    run_r      <= 1'b0;
+                    strm_r     <= '0;
+                    drain_r    <= 1'b0;
+                end else begin
+                    inflight_r <= inflight_r + IFL_W'(fetch_pick) - IFL_W'(fetch_leave);
+                    if (fetch_pick) begin
+                        seq_r   <= fetch_idle[l] ? FETCH_SEQ_W'(1) : (seq_r + FETCH_SEQ_W'(1));
+                        run_r   <= run_r ^ fetch_idle[l];
+                        drain_r <= 1'b0;
+                    end
+                    if (fetch_squash) begin
+                        strm_r  <= strm_r + FETCH_STRM_W'(1);
+                        drain_r <= 1'b1;
+                    end
+                end
+            end
+
+        `ifdef VX_CFG_VM_ENABLE
+            // A fetch ahead stays in the page of the fetch before it: one that is
+            // later dropped must not take a translation fault, which the MMU
+            // reports and never answers.
+            wire page_ok = (pc_r[`VX_VM_PAGE_LOG2_SIZE-(`VX_CFG_XLEN-PC_BITS)-1:0] != '0);
+        `else
+            wire page_ok = 1'b1;
+        `endif
+
+            assign fetch_idle[l]     = (inflight_r == '0);
+            assign fetch_ahead_ok[l] = ~drain_r && (inflight_r != IFL_W'(FETCH_INFLIGHT)) && page_ok;
+            assign fetch_specs[l]    = '{seq: fetch_idle[l] ? FETCH_SEQ_W'(0) : seq_r, strm: strm_r,
+                                         run: run_r ^ fetch_idle[l], first: fetch_idle[l]};
+
+            `RUNTIME_ASSERT(~fetch_leave || (inflight_r != '0),
+                ("%t: %s fetch left with none in flight, wid=%0d", $time, INSTANCE_ID, wfs_to_wid(LID, slice_id)))
+        end else begin : g_fetch_single
+            assign fetch_idle[l]     = 1'b1;
+            assign fetch_ahead_ok[l] = 1'b0;
+            assign fetch_specs[l]    = '0;
+        end
 
         VX_pending_size #(
             .SIZE      (256),
@@ -387,11 +474,31 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
     wire [SW-1:0] schedule_warps = (& sched_if.slice_ibuf_full) ? full_warps : preferred_warps;
 `endif
 
+    // With fetch ahead a warp with a fetch in flight is not picked again, unless
+    // it is the only runnable warp of the slice, has room in its window and its
+    // buffer, and no squash to drain. With other warps runnable they fill its
+    // gaps, and the fetches it would drop at its next branch would take icache
+    // bandwidth from them.
+    wire [SW-1:0] pick_warps, pick_room_warps, pick_full_warps;
+    if (FETCH_AHEAD) begin : g_pick_ahead
+        wire one_ready = ((ready_warps & (ready_warps - SW'(1))) == '0);
+        wire [SW-1:0] ahead_warps = preferred_warps & fetch_ahead_ok & {SW{one_ready}};
+        assign pick_room_warps = (preferred_warps & fetch_idle) | ahead_warps;
+        assign pick_full_warps = (full_warps & fetch_idle) | ahead_warps;
+        assign pick_warps      = (schedule_warps & fetch_idle) | ahead_warps;
+    end else begin : g_pick_single
+        assign pick_room_warps = preferred_warps;
+        assign pick_full_warps = full_warps;
+        assign pick_warps      = schedule_warps;
+        `UNUSED_VAR ({fetch_idle, fetch_ahead_ok})
+        `UNUSED_VAR ({decode_sched_if.drop, decode_sched_if.squash, decode_sched_if.PC})
+    end
+
     wire [`UP(FETCH_WFS_BITS)-1:0] cand_index;
     VX_priority_encoder #(
         .N (SW)
     ) wid_select (
-        .data_in   (schedule_warps),
+        .data_in   (pick_warps),
         .index_out (cand_index),
         .valid_out (cand_valid),
         .onehot_out(cand_onehot)
@@ -460,8 +567,23 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
 `endif
 `endif
 
+    localparam SCHED_DATAW = `VX_CFG_NUM_THREADS + PC_BITS + NW_WIDTH + NCTA_WIDTH + UUID_WIDTH;
+    localparam SPEC_DATAW  = FETCH_AHEAD ? $bits(fetch_spec_t) : 0;
+
+    wire [SCHED_DATAW+SPEC_DATAW-1:0] sched_data_in, sched_data_out;
+    wire [SCHED_DATAW-1:0] cand_data = {thread_masks[cand_lid], warp_pcs[cand_lid], NW_WIDTH'(cand_lid), cand_cta_id, sched_uuid};
+    if (FETCH_AHEAD) begin : g_sched_spec
+        assign sched_data_in    = {fetch_specs[cand_lid], cand_data};
+        assign schedule_if.spec = sched_data_out[SCHED_DATAW +: SPEC_DATAW];
+    end else begin : g_sched_nospec
+        assign sched_data_in    = cand_data;
+        assign schedule_if.spec = '0;
+        `UNUSED_VAR (fetch_specs)
+    end
+    assign {schedule_if.data.tmask, schedule_if.data.PC, schedule_if.data.wid, schedule_if.data.cta_id, schedule_if.data.uuid} = sched_data_out[SCHED_DATAW-1:0];
+
     VX_elastic_buffer #(
-        .DATAW   (`VX_CFG_NUM_THREADS + PC_BITS + NW_WIDTH + NCTA_WIDTH + UUID_WIDTH),
+        .DATAW   (SCHED_DATAW + SPEC_DATAW),
         .SIZE    (2),
         .OUT_REG (1)
     ) sched_buf (
@@ -469,8 +591,8 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
         .reset     (reset),
         .valid_in  (cand_valid),
         .ready_in  (sched_ready),
-        .data_in   ({thread_masks[cand_lid], warp_pcs[cand_lid], NW_WIDTH'(cand_lid), cand_cta_id, sched_uuid}),
-        .data_out  ({schedule_if.data.tmask, schedule_if.data.PC, schedule_if.data.wid, schedule_if.data.cta_id, schedule_if.data.uuid}),
+        .data_in   (sched_data_in),
+        .data_out  (sched_data_out),
         .valid_out (schedule_if.valid),
         .ready_out (schedule_if.ready)
     );
@@ -490,8 +612,8 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
     for (genvar q = 0; q < NPS; ++q) begin : g_divergence
         assign sched_if.divergence[q] = wctl[q].split_valid && wctl[q].split.is_dvg;
     end
-    assign sched_if.sched_valid_room = (| preferred_warps);
-    assign sched_if.sched_valid_full = (| full_warps);
+    assign sched_if.sched_valid_room = (| pick_room_warps);
+    assign sched_if.sched_valid_full = (| pick_full_warps);
     assign sched_if.sched_fire    = schedule_if_fire;
     assign sched_if.sched_tmask   = schedule_if.data.tmask;
 

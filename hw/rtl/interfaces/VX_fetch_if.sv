@@ -17,12 +17,14 @@ interface VX_fetch_if import VX_gpu_pkg::*; ();
 
     logic  valid;
     fetch_t data;
+    fetch_spec_t spec;
     logic  ready;
     logic [`VX_CFG_NUM_WARPS-1:0] ibuf_pop;
 
     modport master (
         output valid,
         output data,
+        output spec,
         input  ready,
         input  ibuf_pop
     );
@@ -30,6 +32,7 @@ interface VX_fetch_if import VX_gpu_pkg::*; ();
     modport slave (
         input  valid,
         input  data,
+        input  spec,
         output ready,
         output ibuf_pop
     );

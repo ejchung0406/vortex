@@ -79,8 +79,13 @@ public:
   // Cycle the instruction entered its warp's instruction buffer.
   uint64_t ibuf_time;
 
-  // The warp's fetch epoch at the pick; decode drops a fetch of an older one.
-  uint32_t fetch_epoch;
+  // Fetch ahead: the position in the run of fetches, the warp's stream and
+  // run at the pick, and whether the fetch starts the run (no other fetch of
+  // the warp was in flight).
+  uint32_t fetch_seq;
+  uint32_t fetch_strm;
+  uint32_t fetch_run;
+  bool     fetch_first;
 
   instr_trace_t(uint64_t uuid)
     : uuid(uuid)
@@ -107,7 +112,10 @@ public:
     , fetch_stall(false)
     , resume_warp(false)
     , ibuf_time(0)
-    , fetch_epoch(0)
+    , fetch_seq(0)
+    , fetch_strm(0)
+    , fetch_run(0)
+    , fetch_first(false)
     , log_once_(false)
   {}
 
@@ -137,7 +145,10 @@ public:
     , fetch_stall(rhs.fetch_stall)
     , resume_warp(rhs.resume_warp)
     , ibuf_time(rhs.ibuf_time)
-    , fetch_epoch(rhs.fetch_epoch)
+    , fetch_seq(rhs.fetch_seq)
+    , fetch_strm(rhs.fetch_strm)
+    , fetch_run(rhs.fetch_run)
+    , fetch_first(rhs.fetch_first)
     , log_once_(false)
   {}
 

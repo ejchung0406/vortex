@@ -38,9 +38,12 @@ warp_t::warp_t(uint32_t num_threads)
   , uuid(0)
   , mscratch(0)
   , fetch_PC(0)
-  , fetch_epoch(0)
   , fetch_inflight(0)
-  , fetch_resync(true)
+  , fetch_seq(0)
+  , fetch_run(0)
+  , fetch_strm(0)
+  , fetch_drain(false)
+  , fetch_leave_pending(false)
   , fetch_squash_pending(false)
   , cta_csrs()
 {
@@ -59,10 +62,8 @@ void warp_t::reset() {
   this->mepc    = 0;
   this->mcause  = 0;
   this->mtval   = 0;
-  // fetch_epoch keeps counting, so a fetch from before the reset stays stale
-  this->fetch_inflight = 0;
-  this->fetch_resync   = true;
-  this->fetch_squash_pending = false;
+  // The fetch-ahead state is excluded: the core runs until no fetch is in
+  // flight, and the stream and window slot carry over as the RTL's do.
   // Register files live in OpcUnit and are reset there.
 }
 
@@ -126,7 +127,6 @@ void Scheduler::activate_warp(uint32_t wid, const cta_warp_record_t& rec) {
   // the kernel's per-CTA dispatch window — a fixed 20-byte (5-instruction)
   // sequence that reloads the entry pointer and kargs before re-calling.
   warp.PC       = rec.do_init ? rec.PC : (warp.PC - 20);
-  warp.fetch_resync = true;
   warp.tmask    = rec.tmask;
   warp.mscratch = rec.mscratch;
 
@@ -190,7 +190,6 @@ void Scheduler::schedule_begin() {
     for (uint32_t i = 1; i < wspawn_.num_warps; ++i) {
       auto& warp = warps_.at(i);
       warp.PC = wspawn_.nextPC;
-      warp.fetch_resync = true;
       warp.tmask.set(0);
       warp.mscratch = spawning_mscratch;
       active_warps_.set(i);
@@ -204,43 +203,58 @@ void Scheduler::schedule_begin() {
   }
 }
 
-bool Scheduler::has_ready(const WarpMask& warp_mask) const {
-  if (VX_CFG_FETCH_INFLIGHT > 1) {
-    for (size_t wid = 0, nw = VX_CFG_NUM_WARPS; wid < nw; ++wid) {
-      if (active_warps_.test(wid) && !stalled_warps_.test(wid) && warp_mask.test(wid)
-       && (warps_.at(wid).fetch_inflight == 0
-        || (warps_.at(wid).fetch_inflight < VX_CFG_FETCH_INFLIGHT && this->fetch_alone(wid)
-         && this->fetch_page_ok(wid)))) {
-        return true;
-      }
-    }
+// A warp is picked when it is runnable and has no fetch in flight. With fetch
+// ahead a warp with fetches in flight is picked again only while it is the one
+// runnable warp of its frontend slice, with room in its window and its buffer,
+// no squash to drain and, under VM, a next fetch in the page of the last: with
+// other warps runnable they fill its gaps, and the fetches it would drop at
+// its next branch would take icache bandwidth from them.
+bool Scheduler::pickable(uint32_t wid, const WarpMask& warp_mask, const WarpMask& room_mask) const {
+  if (!active_warps_.test(wid) || stalled_warps_.test(wid)) {
     return false;
   }
-  return (active_warps_ & ~stalled_warps_ & warp_mask).any();
+  if (VX_CFG_FETCH_INFLIGHT == 1) {
+    return warp_mask.test(wid);
+  }
+  auto& warp = warps_.at(wid);
+  if (warp.fetch_inflight == 0 && warp_mask.test(wid)) {
+    return true;
+  }
+  if (!room_mask.test(wid) || warp.fetch_drain || warp.fetch_inflight == VX_CFG_FETCH_INFLIGHT) {
+    return false;
+  }
+#ifdef VX_CFG_VM_ENABLE
+  // A fetch that is later dropped must not take a translation fault, which
+  // the icache MMU reports and never answers.
+  if ((warp.fetch_PC & ((Word(1) << VX_VM_PAGE_LOG2_SIZE) - 1)) == 0) {
+    return false;
+  }
+#endif
+  for (uint32_t w = wid % VX_CFG_FETCH_WIDTH; w < VX_CFG_NUM_WARPS; w += VX_CFG_FETCH_WIDTH) {
+    if (w != wid && active_warps_.test(w) && !stalled_warps_.test(w)) {
+      return false;
+    }
+  }
+  return true;
 }
 
-instr_trace_t* Scheduler::schedule(const WarpMask& warp_mask) {
+bool Scheduler::has_ready(const WarpMask& warp_mask, const WarpMask& room_mask) const {
+  for (uint32_t wid = 0; wid < VX_CFG_NUM_WARPS; ++wid) {
+    if (this->pickable(wid, warp_mask, room_mask)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+instr_trace_t* Scheduler::schedule(const WarpMask& warp_mask, const WarpMask& room_mask) {
   int scheduled_warp = -1;
 
   // pick next ready warp
-  for (size_t wid = 0, nw = VX_CFG_NUM_WARPS; wid < nw; ++wid) {
-    if (active_warps_.test(wid) && !stalled_warps_.test(wid) && warp_mask.test(wid)
-     && (VX_CFG_FETCH_INFLIGHT == 1 || warps_.at(wid).fetch_inflight == 0)) {
+  for (uint32_t wid = 0; wid < VX_CFG_NUM_WARPS; ++wid) {
+    if (this->pickable(wid, warp_mask, room_mask)) {
       scheduled_warp = wid;
       break;
-    }
-  }
-  // A warp fetches ahead only while it is the one runnable warp of its frontend
-  // slice: with others runnable they fill its gaps, and the fetches it would
-  // drop at its next branch would take icache bandwidth from them.
-  if (VX_CFG_FETCH_INFLIGHT > 1 && scheduled_warp == -1) {
-    for (size_t wid = 0, nw = VX_CFG_NUM_WARPS; wid < nw; ++wid) {
-      if (active_warps_.test(wid) && !stalled_warps_.test(wid) && warp_mask.test(wid)
-       && warps_.at(wid).fetch_inflight < VX_CFG_FETCH_INFLIGHT
-       && this->fetch_alone(wid) && this->fetch_page_ok(wid)) {
-        scheduled_warp = wid;
-        break;
-      }
     }
   }
 
@@ -275,14 +289,21 @@ instr_trace_t* Scheduler::schedule(const WarpMask& warp_mask) {
     // resolved target.
     if (VX_CFG_FETCH_INFLIGHT > 1) {
       // Fetch ahead: the warp stays schedulable and fetches the next word; decode
-      // suspends it at a stalling instruction.
-      if (warp.fetch_resync) {
+      // suspends it at a stalling instruction. With no fetch in flight the next
+      // fetch is at the warp's PC.
+      trace->fetch_first = (warp.fetch_inflight == 0);
+      if (trace->fetch_first) {
         warp.fetch_PC = warp.PC;
-        warp.fetch_resync = false;
+        warp.fetch_drain = false;
+        warp.fetch_seq = 0;
+        warp.fetch_run ^= 1;
       }
-      trace->PC          = warp.fetch_PC;
-      trace->fetch_epoch = warp.fetch_epoch;
+      trace->PC         = warp.fetch_PC;
+      trace->fetch_seq  = warp.fetch_seq;
+      trace->fetch_run  = warp.fetch_run;
+      trace->fetch_strm = warp.fetch_strm;
       warp.fetch_PC += 4;
+      warp.fetch_seq = (warp.fetch_seq + 1) % VX_CFG_FETCH_INFLIGHT;
       ++warp.fetch_inflight;
     } else {
       trace->PC = warp.PC;
@@ -302,9 +323,14 @@ void Scheduler::schedule_end() {
   stalled_warps_ = stalled_warps_next_;
   if (VX_CFG_FETCH_INFLIGHT > 1) {
     for (auto& warp : warps_) {
+      if (warp.fetch_leave_pending) {
+        assert(warp.fetch_inflight > 0);
+        --warp.fetch_inflight;
+        warp.fetch_leave_pending = false;
+      }
       if (warp.fetch_squash_pending) {
-        ++warp.fetch_epoch;
-        warp.fetch_resync = true;
+        warp.fetch_strm ^= 1;
+        warp.fetch_drain = true;
         warp.fetch_squash_pending = false;
       }
     }
@@ -375,40 +401,30 @@ void Scheduler::resume(uint32_t wid) {
 #if (VX_CFG_FETCH_INFLIGHT > 1) && defined(VX_CFG_EXT_C_ENABLE)
 #error "VX_CFG_FETCH_INFLIGHT > 1 fetches 4-byte words ahead, which compressed instructions break"
 #endif
+#if (VX_CFG_FETCH_INFLIGHT & (VX_CFG_FETCH_INFLIGHT - 1)) != 0
+#error "VX_CFG_FETCH_INFLIGHT must be a power of two"
+#endif
 
-bool Scheduler::fetch_alone(uint32_t wid) const {
-  for (uint32_t w = wid % VX_CFG_FETCH_WIDTH; w < VX_CFG_NUM_WARPS; w += VX_CFG_FETCH_WIDTH) {
-    if (w != wid && active_warps_.test(w) && !stalled_warps_.test(w)) {
-      return false;
+void Scheduler::fetch_leave(uint32_t wid, bool squash) {
+  auto& warp = warps_.at(wid);
+  assert(!warp.fetch_leave_pending);
+  warp.fetch_leave_pending = true;
+  warp.fetch_squash_pending = squash;
+}
+
+void Scheduler::fetch_redirect(uint32_t wid) {
+  auto& warp = warps_.at(wid);
+  warp.fetch_strm ^= 1;
+  warp.fetch_drain = true;
+}
+
+bool Scheduler::fetch_pending() const {
+  for (auto& warp : warps_) {
+    if (warp.fetch_inflight != 0) {
+      return true;
     }
   }
-  return true;
-}
-
-// A fetch ahead does not enter a new page: a fetch that is later dropped must
-// not take a translation fault, which the icache MMU reports and never answers.
-bool Scheduler::fetch_page_ok(uint32_t wid) const {
-#ifdef VX_CFG_VM_ENABLE
-  auto& warp = warps_.at(wid);
-  return warp.fetch_resync || (warp.fetch_PC & ((Word(1) << VX_VM_PAGE_LOG2_SIZE) - 1)) != 0;
-#else
-  __unused (wid);
-  return true;
-#endif
-}
-
-bool Scheduler::fetch_current(const instr_trace_t* trace) const {
-  return trace->fetch_epoch == warps_.at(trace->wid).fetch_epoch;
-}
-
-void Scheduler::fetch_retire(uint32_t wid) {
-  auto& warp = warps_.at(wid);
-  assert(warp.fetch_inflight > 0);
-  --warp.fetch_inflight;
-}
-
-void Scheduler::fetch_squash(uint32_t wid) {
-  warps_.at(wid).fetch_squash_pending = true;
+  return false;
 }
 
 void Scheduler::advance_pc(const instr_trace_t* trace, uint32_t inc) {

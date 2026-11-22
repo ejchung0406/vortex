@@ -32,8 +32,6 @@ module VX_decode import
 );
 
     `UNUSED_SPARAM (INSTANCE_ID)
-    `UNUSED_VAR (clk)
-    `UNUSED_VAR (reset)
 
     localparam OUT_DATAW = $bits(decode_t);
 
@@ -1155,14 +1153,80 @@ module VX_decode import
     // disable writes to x0
     wire wb = use_regs[RV_RD] && (reg_ids[RV_RD] != 0);
 
+    // Fetch ahead: a response is decoded only as the next instruction of its
+    // warp's current stream. One of a squashed stream is dropped; one that
+    // overtook an older fetch is dropped and squashes the stream, which
+    // restarts at the overtaken fetch; a stalling instruction squashes what was
+    // fetched behind it. A dropped response needs no buffer slot.
+    wire rsp_drop, rsp_squash;
+    wire [PC_BITS-1:0] squash_PC;
+    wire decode_ready;
+
+    if (FETCH_AHEAD) begin : g_fetch_ahead
+        localparam SW = PER_FETCH_WARPS;
+        localparam LW = FETCH_WFS_W;
+
+        // Per warp: the current stream; the run whose first fetch was decoded
+        // last, whether no squash followed it, and the position of the next
+        // instruction in it. A fetch that follows in a run is the next
+        // instruction only if that run is its own; otherwise the run's first
+        // fetch is still on its way.
+        reg [SW-1:0][FETCH_STRM_W-1:0] strm_r;
+        reg [SW-1:0]                   run_r;
+        reg [SW-1:0]                   open_r;
+        reg [SW-1:0][FETCH_SEQ_W-1:0]  head_r;
+
+        wire [LW-1:0] lid = fetch_if.data.wid[LW-1:0];
+        wire in_run   = open_r[lid] && (fetch_if.spec.run == run_r[lid]);
+        wire [FETCH_SEQ_W-1:0] ahead = fetch_if.spec.seq - (in_run ? head_r[lid] : FETCH_SEQ_W'(0));
+        wire stale    = (fetch_if.spec.strm != strm_r[lid]);
+        wire overtook = ~stale && ~fetch_if.spec.first && (~in_run || (ahead != '0));
+        wire accept   = fetch_if.valid && ~rsp_drop && decode_ready;
+
+        assign rsp_drop   = stale || overtook;
+        assign rsp_squash = overtook || (~rsp_drop && is_wstall);
+
+        // the stream is sequential: the overtaken fetch is `ahead` words back
+        wire [`VX_CFG_XLEN-1:0] squash_ofs = overtook ? (`VX_CFG_XLEN'(0) - (`VX_CFG_XLEN'(ahead) << 2)) : `VX_CFG_XLEN'(4);
+        assign squash_PC = fetch_if.data.PC + from_fullPC(squash_ofs);
+
+        always @(posedge clk) begin
+            if (reset) begin
+                strm_r <= '0;
+                run_r  <= '0;
+                open_r <= '0;
+                head_r <= '0;
+            end else begin
+                if (accept) begin
+                    head_r[lid] <= fetch_if.spec.seq + FETCH_SEQ_W'(1);
+                    if (fetch_if.spec.first) begin
+                        run_r[lid]  <= fetch_if.spec.run;
+                        open_r[lid] <= 1'b1;
+                    end
+                end
+                if (fetch_if.valid && fetch_if.ready && rsp_squash) begin
+                    strm_r[lid] <= strm_r[lid] + FETCH_STRM_W'(1);
+                    open_r[lid] <= 1'b0;
+                end
+            end
+        end
+    end else begin : g_fetch_single
+        assign rsp_drop   = 1'b0;
+        assign rsp_squash = 1'b0;
+        assign squash_PC  = '0;
+        `UNUSED_VAR (fetch_if.spec)
+    end
+
+    assign fetch_if.ready = decode_ready || rsp_drop;
+
     VX_elastic_buffer #(
         .DATAW (OUT_DATAW),
         .SIZE  (0)
     ) req_buf (
         .clk       (clk),
         .reset     (reset),
-        .valid_in  (fetch_if.valid),
-        .ready_in  (fetch_if.ready),
+        .valid_in  (fetch_if.valid && ~rsp_drop),
+        .ready_in  (decode_ready),
         .data_in   ({fetch_if.data.uuid,  fetch_if.data.wid,  fetch_if.data.cta_id,  fetch_if.data.tmask,  fetch_if.data.PC,  ex_type,                op_type,                op_args,                wb,                rd_xregs,                wr_xregs,                use_regs[3:1],          reg_ids[RV_RD],    bytesel,                  reg_ids[RV_RS1],    reg_ids[RV_RS2],    reg_ids[RV_RS3]}),
         .data_out  ({decode_if.data.uuid, decode_if.data.wid, decode_if.data.cta_id, decode_if.data.tmask, decode_if.data.PC, decode_if.data.ex_type, decode_if.data.op_type, decode_if.data.op_args, decode_if.data.wb, decode_if.data.rd_xregs, decode_if.data.wr_xregs, decode_if.data.used_rs, decode_if.data.rd, decode_if.data.bytesel,   decode_if.data.rs1, decode_if.data.rs2, decode_if.data.rs3}),
         .valid_out (decode_if.valid),
@@ -1197,6 +1261,24 @@ module VX_decode import
     assign decode_sched_if.valid  = decode_sched_valid_r;
     assign decode_sched_if.wid    = decode_sched_wid_r;
     assign decode_sched_if.unlock = decode_sched_unlock_r;
+    if (FETCH_AHEAD) begin : g_sched_squash
+        reg               drop_r;
+        reg               squash_r;
+        reg [PC_BITS-1:0] squash_PC_r;
+        always @(posedge clk) begin
+            drop_r      <= rsp_drop;
+            squash_r    <= rsp_squash;
+            squash_PC_r <= squash_PC;
+        end
+        assign decode_sched_if.drop   = drop_r;
+        assign decode_sched_if.squash = squash_r;
+        assign decode_sched_if.PC     = squash_PC_r;
+    end else begin : g_sched_nosquash
+        assign decode_sched_if.drop   = 1'b0;
+        assign decode_sched_if.squash = 1'b0;
+        assign decode_sched_if.PC     = '0;
+        `UNUSED_VAR ({rsp_squash, squash_PC})
+    end
 `ifdef VX_CFG_EXT_C_ENABLE
     assign decode_sched_if.is_rvc = decode_sched_is_rvc_r;
 `endif

@@ -125,7 +125,7 @@ public:
       fetch_latch_.emplace_back(std::make_unique<TFifo<instr_trace_t*>>(ctx, sname, 1, 2));
       snprintf(sname, 100, "decode_latch%d", f);
       decode_latch_.emplace_back(std::make_unique<TFifo<instr_trace_t*>>(ctx, sname, 1, 2));
-      pending_icache_.emplace_back(PER_FETCH_WARPS);
+      pending_icache_.emplace_back(PER_FETCH_WARPS * VX_CFG_FETCH_INFLIGHT);
     }
 
     // create scheduler (SimObject) — also creates the CTA dispatcher.
@@ -553,21 +553,22 @@ public:
     bool any_cand = false;
     for (uint32_t f = 0; f < VX_CFG_FETCH_WIDTH; ++f) {
       auto& fetch_latch = fetch_latch_.at(f);
-      WarpMask warp_mask;
+      WarpMask warp_mask, room_mask;
       for (uint32_t w = f; w < VX_CFG_NUM_WARPS; w += VX_CFG_FETCH_WIDTH) {
-        // fetch ahead stays within the warp's buffer slots
-        bool overflow_ok = all_full && (VX_CFG_FETCH_INFLIGHT == 1 || scheduler_->warp(w).fetch_inflight == 0);
-        if (overflow_ok || !ibuf_full_r_.at(w)) {
+        if (!ibuf_full_r_.at(w)) {
+          room_mask.set(w);
+        }
+        if (all_full || !ibuf_full_r_.at(w)) {
           warp_mask.set(w);
         }
       }
 
       if (fetch_latch->full()) {
-        any_cand |= scheduler_->has_ready(warp_mask);
+        any_cand |= scheduler_->has_ready(warp_mask, room_mask);
         continue;
       }
 
-      auto trace = scheduler_->schedule(warp_mask);
+      auto trace = scheduler_->schedule(warp_mask, room_mask);
       if (trace == nullptr) {
         continue;
       }
@@ -575,7 +576,11 @@ public:
 
       fetch_latch->push(trace);
       DT(3, simobject_->name() << "-pipeline schedule: " << *trace);
-      this->pending_add(trace->wid);
+      // with fetch ahead an instruction is pending once decode accepts it: a
+      // fetch that will be dropped is not one
+      if (VX_CFG_FETCH_INFLIGHT == 1) {
+        this->pending_add(trace->wid);
+      }
       ++ibuf_inflight_.at(trace->wid);
       perf_stats_.issued_warps += 1;
       perf_stats_.issued_threads += trace->tmask.count();
@@ -584,7 +589,8 @@ public:
       ++perf_stats_.sched_idle;
     }
     for (uint32_t w = 0; w < VX_CFG_NUM_WARPS; ++w) {
-      // with fetch ahead an overflow pick may take a warp past its slots
+      // a warp picked once every buffer is full goes past its slots, and with
+      // fetch ahead must read as full there
       ibuf_full_r_.at(w) = (VX_CFG_FETCH_INFLIGHT > 1) ? (ibuf_inflight_.at(w) >= VX_CFG_IBUF_SIZE)
                                                        : (ibuf_inflight_.at(w) == VX_CFG_IBUF_SIZE);
       ibuf_queue_full_r_.at(w) = (ibuf_queued_.at(w) >= VX_CFG_IBUF_SIZE);
@@ -622,18 +628,38 @@ public:
   #endif
     auto& icache_req = (f == 0) ? icache_flush_buf_->In : icache_port;
 
-    // A fetch of a squashed stream leaves at the icache output, needing no
-    // buffer slot.
+    // Fetch ahead: a response is decoded only as the next instruction of its
+    // warp's current stream. One of a squashed stream is dropped; one that
+    // overtook an older fetch is dropped and squashes the stream, which then
+    // restarts at the overtaken fetch. A dropped response needs no buffer slot;
+    // the scheduler learns of it a cycle later, as of a decoded one.
     bool rsp_dropped = false;
     if (VX_CFG_FETCH_INFLIGHT > 1 && !icache_rsp.empty()) {
       auto& mem_rsp = icache_rsp.peek();
       auto trace = pending_icache.at(mem_rsp.tag);
-      if (!scheduler_->fetch_current(trace)) {
+      auto& fd = fetch_dec_.at(trace->wid);
+      bool stale = (trace->fetch_strm != fd.strm);
+      // a fetch that follows in a run is the next instruction only if the run
+      // is the one whose first fetch was decoded last, with no squash since
+      bool in_run = fd.open && (trace->fetch_run == fd.run);
+      uint32_t ahead = (trace->fetch_seq + VX_CFG_FETCH_INFLIGHT - (in_run ? fd.head : 0)) % VX_CFG_FETCH_INFLIGHT;
+      bool overtook = !stale && !trace->fetch_first && (!in_run || ahead != 0);
+      if (stale || overtook) {
         DT(3, simobject_->name() << " icache-rsp drop: " << *trace);
+        if (overtook) {
+          // the stream is sequential: the overtaken fetch is `ahead` words back
+          assert(trace->PC - 4 * ahead == scheduler_->warp(trace->wid).PC);
+          fd.strm ^= 1;
+          fd.open = false;
+        }
+        auto& drop = fetch_drop_.at(f);
+        assert(!drop.valid);
+        drop = {true, trace->wid, overtook};
         pending_icache.release(mem_rsp.tag);
         icache_rsp.pop();
         --pending_ifetches_;
-        this->fetch_drop(trace, false);
+        trace->~instr_trace_t();
+        trace_pool_.deallocate(trace, 1);
         rsp_dropped = true;
       }
     }
@@ -676,6 +702,14 @@ public:
         if (emit) {
           trace->log_once(false);
           ++ibuf_queued_.at(trace->wid);
+          if (VX_CFG_FETCH_INFLIGHT > 1) {
+            auto& fd = fetch_dec_.at(trace->wid);
+            fd.head = (trace->fetch_seq + 1) % VX_CFG_FETCH_INFLIGHT;
+            if (trace->fetch_first) {
+              fd.run  = trace->fetch_run;
+              fd.open = true;
+            }
+          }
           DP(1, "Fetch: code=0x" << std::hex << trace->code << std::dec << ", cid=" << trace->cid
                  << ", wid=" << trace->wid << ", tmask=" << trace->tmask
                  << ", PC=0x" << std::hex << trace->PC << " (#" << std::dec << trace->uuid << ")");
@@ -742,34 +776,28 @@ public:
 
   void decode() {
     for (uint32_t f = 0; f < VX_CFG_FETCH_WIDTH; ++f) {
-      this->decode_slice(*decode_latch_.at(f));
+      this->decode_slice(f, *decode_latch_.at(f));
     }
   }
 
   // One frontend slice's decoder: it feeds the issue slice of each decoded warp.
-  void decode_slice(TFifo<instr_trace_t*>& decode_latch) {
+  void decode_slice(uint32_t f, TFifo<instr_trace_t*>& decode_latch) {
+    // a fetch dropped at the icache response last cycle: its buffer slot
+    // returns, and the scheduler sees it leave now
+    auto& drop = fetch_drop_.at(f);
+    if (drop.valid) {
+      assert(decode_latch.empty());
+      scheduler_->fetch_leave(drop.wid, drop.squash);
+      assert(ibuf_inflight_.at(drop.wid) > 0);
+      --ibuf_inflight_.at(drop.wid);
+      drop.valid = false;
+    }
+
     if (decode_latch.empty()) {
       return;
     }
 
     auto trace = decode_latch.peek();
-
-    if (VX_CFG_FETCH_INFLIGHT > 1) {
-      // A fetch is decoded only at its warp's PC: one of a squashed stream is
-      // dropped, and one that overtook an older fetch is dropped and restarts
-      // the stream there.
-      bool current = scheduler_->fetch_current(trace);
-      if (!current || trace->PC != scheduler_->warp(trace->wid).PC) {
-        DT(3, simobject_->name() << "-pipeline decode drop: " << *trace);
-        if (current) {
-          scheduler_->fetch_squash(trace->wid);
-        }
-        this->fetch_drop(trace, true);
-        decode_latch.pop();
-        return;
-      }
-      scheduler_->fetch_retire(trace->wid);
-    }
 
     // the icache response took the buffer slot this instruction lands in
     auto& ibuffer = ibuffers_.at(trace->wid);
@@ -812,9 +840,12 @@ public:
     // stalling instructions (LSU, SFU, TCU, branches) stay suspended until commit
     if (VX_CFG_FETCH_INFLIGHT > 1) {
       // A stalling instruction holds its warp from here, and what was fetched
-      // behind it is dropped.
+      // behind it is squashed.
+      this->pending_add(trace->wid);
+      scheduler_->fetch_leave(trace->wid, trace->fetch_stall);
       if (trace->fetch_stall) {
-        scheduler_->fetch_squash(trace->wid);
+        fetch_dec_.at(trace->wid).strm ^= 1;
+        fetch_dec_.at(trace->wid).open = false;
         scheduler_->suspend(trace->wid);
       }
     } else if (!trace->fetch_stall) {
@@ -826,6 +857,14 @@ public:
     // insert to ibuffer
     trace->ibuf_time = SimPlatform::instance().cycles();
     ibuffer->push(trace);
+
+    // An instruction that arrives with the warp's buffer and staging register
+    // both empty moves into the register at once, and its buffer slot frees
+    // this cycle; issue() stages the ones that wait behind another.
+    if (!head_staged_.at(trace->wid) && ibuf_queued_.at(trace->wid) == 1 && !instr->is_macro_op()) {
+      head_staged_.at(trace->wid) = true;
+      this->ibuf_release(trace->wid);
+    }
 
     decode_latch.pop();
   }
@@ -1044,22 +1083,6 @@ public:
         ++perf_stats_.scrb_stalls;
       }
     }
-  }
-
-  // A dropped fetch leaves the front end: its buffer slot and pending count
-  // return; `queued` when it had reached the decode latch.
-  void fetch_drop(instr_trace_t* trace, bool queued) {
-    uint32_t wid = trace->wid;
-    scheduler_->fetch_retire(wid);
-    this->pending_remove(wid);
-    assert(ibuf_inflight_.at(wid) > 0);
-    --ibuf_inflight_.at(wid);
-    if (queued) {
-      assert(ibuf_queued_.at(wid) > 0);
-      --ibuf_queued_.at(wid);
-    }
-    trace->~instr_trace_t();
-    trace_pool_.deallocate(trace, 1);
   }
 
   void ibuf_release(uint32_t wid) {
@@ -1316,6 +1339,10 @@ public:
     if (scheduler_->running() || pending_total_ != 0 || !this->lsu_drained()) {
       return true;
     }
+    // fetches of a squashed stream are still on their way back
+    if (VX_CFG_FETCH_INFLIGHT > 1 && scheduler_->fetch_pending()) {
+      return true;
+    }
   #ifdef VX_CFG_VM_ENABLE
     // Parked translations hold no in-flight channel packet, so they are
     // invisible to SimPlatform::idle(); completion must wait for them.
@@ -1418,7 +1445,12 @@ public:
   }
   void dtm_set_pc(uint32_t wid, Word pc) {
     scheduler_->warp(wid).PC = pc;
-    scheduler_->fetch_squash(wid);
+    if (VX_CFG_FETCH_INFLIGHT > 1) {
+      // the warp's fetches in flight are of the old PC
+      fetch_dec_.at(wid).strm ^= 1;
+      fetch_dec_.at(wid).open = false;
+      scheduler_->fetch_redirect(wid);
+    }
   }
   Word dtm_get_ireg(uint32_t wid, uint32_t reg) {
     return operands_.at(wid % VX_CFG_ISSUE_WIDTH)->dtm_ireg(wid, reg);
@@ -1523,6 +1555,24 @@ private:
   std::vector<std::unique_ptr<TFifo<instr_trace_t*>>> decode_latch_;
 
   std::vector<HashTable<instr_trace_t*>> pending_icache_;
+
+  // Fetch ahead, the decode side (VX_decode): per warp, the current stream,
+  // the run whose first fetch was decoded last, whether no squash followed
+  // it, and the position of the next instruction in it; per frontend slice, the
+  // response dropped last cycle.
+  struct FetchDec {
+    uint32_t strm = 0;
+    uint32_t run  = 0;
+    bool     open = false;
+    uint32_t head = 0;
+  };
+  struct FetchDrop {
+    bool     valid = false;
+    uint32_t wid = 0;
+    bool     squash = false;
+  };
+  std::vector<FetchDec>  fetch_dec_  = std::vector<FetchDec>(VX_CFG_NUM_WARPS);
+  std::vector<FetchDrop> fetch_drop_ = std::vector<FetchDrop>(VX_CFG_FETCH_WIDTH);
   // Scheduled, not yet committed: a macro until its last micro-op issues, then
   // each micro-op until it commits.
   std::vector<uint32_t> pending_instrs_ = std::vector<uint32_t>(VX_CFG_NUM_WARPS, 0);
