@@ -236,10 +236,6 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
 
     void tick() override {
       m_clk++;
-      if (m_fast && !m_dram->m_future_actions.empty()) {
-        // A device that changes its state on its own: nothing is kept.
-        this->state_changed(-1, nullptr);
-      }
 
       // Update statistics
       s_queue_len += m_read_buffer.size() + m_write_buffer.size() + m_priority_buffer.size() + pending.size();
@@ -273,7 +269,7 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
         }
         m_dram->issue_command(req_it->command, req_it->addr_vec);
         if (m_fast) {
-          this->state_changed(req_it->command, &req_it->addr_vec);
+          this->state_changed(req_it->command, req_it->addr_vec);
         }
 
         // If we are issuing the last command, set depart clock cycle and move the request to the pending queue
@@ -414,6 +410,9 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
       for (auto plugin : m_plugins) {
         plugins_read_only = plugins_read_only && (plugin->m_impl->get_name() == "TraceRecorder");
       }
+      // These devices change state only in issue_command: their tick only
+      // advances the clock and they queue no future actions (a device that
+      // does applies them in its own tick, before this controller's).
       m_fast = (scheduler == "FRFCFS") && plugins_read_only
             && (device == "HBM2" || device == "HBM3" || device == "GDDR6")
             && m_dram->m_levels.contains("row");
@@ -441,26 +440,23 @@ class WindowedDRAMController final : public IDRAMController, public Implementati
       m_ready.assign(size_t(num_banks) * m_num_commands, ready_memo_t());
     }
 
-    // `command` was issued at `addr_vec` (-1: any state may have changed).
+    // `command` was issued at `addr_vec`.
     // Every issue changes timing (the ready memo's epoch). The device's
     // actions change state only for a command that opens, closes or
     // refreshes, and only in the nodes it selects down to its scope and the
     // nodes below them: the banks whose ids match its address (-1 matching
     // any) down to that level.
-    void state_changed(int command, const AddrVec_t* addr_vec) {
+    void state_changed(int command, const AddrVec_t& addr_vec) {
       ++m_epoch;
-      int last = -1;
-      if (command >= 0) {
-        const auto& meta = m_dram->m_command_meta(command);
-        if (!meta.is_opening && !meta.is_closing && !meta.is_refreshing) {
-          return;
-        }
-        last = std::min(int(m_dram->m_command_scopes(command)), m_bank_levels - 1);
+      const auto& meta = m_dram->m_command_meta(command);
+      if (!meta.is_opening && !meta.is_closing && !meta.is_refreshing) {
+        return;
       }
+      int last = std::min(int(m_dram->m_command_scopes(command)), m_bank_levels - 1);
       for (size_t b = 0; b < m_bank_ids.size(); ++b) {
         bool reached = true;
         for (int l = 0; l <= last && reached; ++l) {
-          int id = (*addr_vec)[l];
+          int id = addr_vec[l];
           reached = (id == -1) || (id == m_bank_ids[b][l]);
         }
         if (reached) {
