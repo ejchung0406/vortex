@@ -47,7 +47,9 @@ using namespace vortex;
 // atomic owns its bank. It shares the port with the read engine in turn: the
 // read engine issues no pass in the first cycle a request is seen, nor in
 // every other cycle while requests keep coming, and a row read waits a cycle
-// behind a pass of the read engine. A row read also waits while a DMA write
+// behind a pass of the read engine. The first engine's passes that read the
+// banks take the same turns, so a cycle reads one row's worth of bytes at
+// most; its stores pass regardless. A row read also waits while a DMA write
 // or a store lands in its row, and then returns the row as written. A row read
 // held up by an atomic or by a write in its row stops the first engine's
 // passes until it is served.
@@ -92,6 +94,8 @@ protected:
     std::deque<RspEntry> rsp_queue;
     // a pass was issued this cycle: its bank accesses happen in the next
     bool        passed = false;
+    // and they read the banks
+    bool        passed_read = false;
   };
 
   LocalMem* simobject_;
@@ -397,6 +401,7 @@ protected:
     }
     auto served = this->select_pass(req, e.pending);
     e.passed = true;
+    e.passed_read = has_rsp;
     LsuRsp rsp(config_.num_lanes);
     rsp.tag  = req.tag;
     rsp.cid  = req.cid;
@@ -629,7 +634,10 @@ public:
     bool rd_valid = config_.rd_port && this->rd_pending();
     bool b_hold = rd_valid && !b_held_;
     b_held_ = b_hold;
-    bool b_at_banks = config_.rd_port && engines_.at(1).passed;
+    bool banks_read = config_.rd_port && (engines_.at(1).passed
+                   || (engines_.at(0).passed && engines_.at(0).passed_read));
+    auto& a_req = engines_.at(0).s1.req;
+    bool a_reads = !a_req.is_write() || a_req.is_amo();
     wr_rows_.swap(store_rows_);
     store_rows_.clear();
     for (auto& e : engines_) {
@@ -648,12 +656,12 @@ public:
       }
       dma_slot_ = dma_valid;
       bool row_written = rd_valid && this->rd_row_written();
-      bool rd_fired = rd_slot_ && rd_valid && !b_at_banks && !row_written && this->rd_fire();
+      bool rd_fired = rd_slot_ && rd_valid && !banks_read && !row_written && this->rd_fire();
       rd_wait_ = rd_valid && !rd_fired && (rd_wait_ || row_written);
       rd_slot_ = rd_valid;
       if (!dma_valid) {
         for (uint32_t k = 0; k < num_engines; ++k) {
-          if (can_pass.at(k) && !(k == 0 && a_hold) && !(k == 1 && b_hold)) {
+          if (can_pass.at(k) && !(k == 0 && (a_hold || (b_hold && a_reads))) && !(k == 1 && b_hold)) {
             s1_ready.at(k) = this->issue_pass(engines_.at(k), rsp_count.at(k));
           }
         }

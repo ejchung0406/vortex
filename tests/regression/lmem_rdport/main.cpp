@@ -38,6 +38,10 @@ uint32_t outlast = 6;
 uint32_t span   = 16;
 uint32_t conflict = 1;
 uint32_t use_cp = 0;
+uint32_t hold_stores = 0;
+// A held-up row read stops the first engine, so the stream costs the tensor
+// work little; without that it waits for the stream to end.
+uint32_t h_floor_pct = 50;
 uint32_t cta_warps = 0; // 0: one per TCU block
 // With both sides saturated a row read gets every other cycle of the port
 // and a read pass waits a cycle per row read, so the tensor work keeps half
@@ -56,14 +60,14 @@ kernel_arg_t kernel_arg = {};
 
 static void show_usage() {
   std::cout << "Vortex local-memory row read port test." << std::endl;
-  std::cout << "Usage: [-m mode: 0=race 1=starve] race: [-g column groups per sub-region] [-c copies] [-r tc.cp per copy]"
+  std::cout << "Usage: [-m mode: 0=race 1=starve 2=held up by atomics or stores] race: [-g column groups per sub-region] [-c copies] [-r tc.cp per copy]"
                " [-w generations] starve: [-n tile N] [-i tensor ops] [-s sweeps] [-k times the fixed work the other side runs] [-l loads per sweep]"
-               " [-x 0|1: lanes in one bank] [-t 0=tc.mma 1=tc.cp] [-W warps in the CTA] [-f tensor floor, percent of the solo rate] [-F loads floor] [-h: help]" << std::endl;
+               " [-x 0|1: lanes in one bank] [-t 0=tc.mma 1=tc.cp] [-W warps in the CTA] [-f tensor floor, percent of the solo rate] [-F loads floor] hold: [-a 0=atomics 1=stores to the operands' rows] [-H tensor floor] and starve's -n -i -s -k -l -t -W [-h: help]" << std::endl;
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "m:g:c:r:w:n:i:s:k:l:x:t:W:f:F:h")) != -1) {
+  while ((c = getopt(argc, argv, "m:g:c:r:w:n:i:s:k:l:x:t:W:f:F:a:H:h")) != -1) {
     switch (c) {
     case 'm': mode = atoi(optarg); break;
     case 'g': groups = atoi(optarg); break;
@@ -80,6 +84,8 @@ static void parse_args(int argc, char **argv) {
     case 'W': cta_warps = atoi(optarg); break;
     case 'f': t_floor_pct = atoi(optarg); break;
     case 'F': l_floor_pct = atoi(optarg); break;
+    case 'a': hold_stores = atoi(optarg); break;
+    case 'H': h_floor_pct = atoi(optarg); break;
     case 'h':
       show_usage();
       exit(0);
@@ -228,6 +234,28 @@ static void check_starve(const std::vector<uint64_t>& st, uint32_t load_warps) {
   }
 }
 
+// The tensor work beside a stream that holds its row reads up, which must
+// still be running when the tensor work ends.
+static void check_hold(const std::vector<uint64_t>& st, uint32_t stream_warps) {
+  const uint64_t* ts = st.data();
+  double ratio = double(ts[ST_SOLO]) / double(ts[ST_CONT]);
+  printf("HOLD: tensor ops=%u solo=%lu beside the %s=%lu cycles, rate ratio=%.3f (floor %.2f); cycles per op mean %.1f -> %.1f, worst %lu -> %lu\n",
+         ops, ts[ST_SOLO], hold_stores ? "stores" : "atomics", ts[ST_CONT], ratio, h_floor_pct / 100.0,
+         double(ts[ST_SOLO]) / ops, double(ts[ST_CONT]) / ops, ts[ST_WORST_SOLO], ts[ST_WORST_CONT]);
+  for (uint32_t w = 1; w <= stream_warps; ++w) {
+    const uint64_t* ls = st.data() + w * ST_WORDS;
+    if (ls[ST_END_T] < ts[ST_END_T]) {
+      printf("*** error: warp %u's stream ended %lu cycles before the tensor work it runs beside\n",
+             w, ts[ST_END_T] - ls[ST_END_T]);
+      ++errors;
+    }
+  }
+  if (ratio < h_floor_pct / 100.0) {
+    printf("*** error: the row reads fell to %.3f of their solo rate beside the stream\n", ratio);
+    ++errors;
+  }
+}
+
 int main(int argc, char *argv[]) {
   parse_args(argc, argv);
 
@@ -249,7 +277,7 @@ int main(int argc, char *argv[]) {
   uint64_t num_warps;
   RT_CHECK(vx_device_query(device, VX_CAPS_NUM_WARPS, &num_warps));
   const uint32_t tcu_blocks = issue_width;
-  const uint32_t warps = (mode == MODE_STARVE && cta_warps != 0) ? cta_warps : tcu_blocks;
+  const uint32_t warps = (mode != MODE_RACE && cta_warps != 0) ? cta_warps : tcu_blocks;
   if (tcu_blocks < 4 || warps < 2 || warps > num_warps || warps > 24) {
     std::cout << "Error: the test needs four TCU blocks (ISSUE_WIDTH >= 4) and a CTA of 2 to 24 of the core's warps!" << std::endl;
     cleanup();
@@ -291,9 +319,14 @@ int main(int argc, char *argv[]) {
     printf("RDPORT_RACE: warps=%u NT=%u row_bytes=%u region_rows=%u cols=%u copies=%u reps=%u gens=%u/%u/%u\n",
            warps, (uint32_t)NT, row_bytes, NUM_SUBS * sub_words * 4 / row_bytes, cols, copies, reps,
            last_gen[0], last_gen[1], last_gen[2]);
-  } else if (mode == MODE_STARVE) {
+  } else if (mode == MODE_STARVE || mode == MODE_HOLD) {
     if (N == 0) {
       N = cfg::xtileN;
+    }
+    if (mode == MODE_HOLD && !hold_stores && !has_amo) {
+      std::cout << "Error: the atomics stream needs the A extension!" << std::endl;
+      cleanup();
+      return -1;
     }
     if ((N % cfg::xtileN) != 0 || N == 0 || N / cfg::tcN > 128 || ops == 0 || outlast == 0 || sweeps == 0
      || span == 0 || (span % 8) != 0) {
@@ -331,6 +364,7 @@ int main(int argc, char *argv[]) {
   kernel_arg.span       = span;
   kernel_arg.conflict   = conflict;
   kernel_arg.use_cp     = use_cp;
+  kernel_arg.stores     = hold_stores;
   kernel_arg.outlast    = outlast;
 
   std::cout << "allocate device memory" << std::endl;
@@ -390,6 +424,8 @@ int main(int argc, char *argv[]) {
   std::cout << "verify result" << std::endl;
   if (mode == MODE_RACE) {
     check_race(h_out, copy_words, sub_words, last_gen);
+  } else if (mode == MODE_HOLD) {
+    check_hold(h_stat, warps - 1);
   } else {
     check_starve(h_stat, warps - 1);
   }

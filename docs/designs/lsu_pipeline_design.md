@@ -356,8 +356,11 @@ the two ports apart:
   keep coming, and a row read waits while a pass of the read engine is at the
   banks. Each side waits at most one cycle for the other; with both
   continuous each gets every other cycle (64 B per clock of row reads at 16
-  banks of 8 B, and one read pass per two cycles; the first engine is not
-  affected).
+  banks of 8 B, and one read pass per two cycles). The first engine's passes
+  that read the banks take the same turns as the read engine's, so in any
+  cycle the banks are read by one row read or by the engines' passes, never
+  both: a cycle reads one row's worth of bytes at most, as when the row reads
+  use the DMA port. The first engine's stores pass regardless.
 - **A write in the same row.** The second port returns an undefined word when
   the first port writes it in the same cycle. A row read therefore waits
   while a DMA write or a store lands in its row and is served the cycle

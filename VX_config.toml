@@ -446,8 +446,10 @@ VX_CFG_LMEM_SIZE = "expr: pow(2, $VX_CFG_LMEM_LOG_SIZE)"
 # byte the DXA stages and the tensor unit reads crosses that port twice. 1: the
 # banks' read-only port, which only exists with several LSU blocks
 # (NUM_LSU_BLOCKS > 1; the build refuses 1 otherwise) and which the second LSU
-# read engine uses: the two take it in turn, each waiting at most one cycle
-# for the other, and a row read waits while a write lands in its row. The DMA
+# read engine uses: the row reads and the LSU's read passes take the banks in
+# turn, each waiting at most one cycle for the other, so a cycle still reads
+# one row's worth of bytes at most, and a row read waits while a write lands
+# in its row. The DMA
 # port then carries the DXA's writes alone. No effect without WGMMA operands.
 VX_CFG_LMEM_TCU_RDPORT = 0
 

@@ -39,7 +39,10 @@
 // shares the port with the read engine in turn: the read engine issues no pass
 // in the first cycle a request is seen, nor in every other cycle while requests
 // keep coming, and a row read waits while a pass of the read engine is at the
-// banks, so each waits at most one cycle for the other. The second port returns
+// banks, so each waits at most one cycle for the other. The first engine's
+// passes that read the banks take the same turns, so a row read has the banks'
+// read data to itself: a cycle reads one row's worth of bytes at most, by a
+// row read or by the two engines' passes. Its stores pass regardless. The second port returns
 // an undefined word when the first port writes it in the same cycle, so a row
 // read also waits while a DMA write or a store lands in its row and is served
 // the cycle after, with the row as written. A row read held up by an atomic or
@@ -176,6 +179,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
 
     wire  pass_en;
     wire  a_pass_en;
+    wire  a_read_en;
     wire  b_pass_en;
     wire  a_pass_amo;
 
@@ -357,6 +361,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         .busy         (a_busy),
         .holds_write  (a_holds_write),
         .pass_en      (a_pass_en),
+        .read_en      (a_read_en),
         .pass_amo     (a_pass_amo),
         .bank_valid   (a_bank_valid),
         .bank_rw      (a_bank_rw),
@@ -417,6 +422,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             .busy         (b_busy),
             .holds_write  (b_holds_write),
             .pass_en      (b_pass_en),
+            .read_en      (1'b1),
             .pass_amo     (b_pass_amo),
             .bank_valid   (b_bank_valid),
             .bank_rw      (b_bank_rw),
@@ -622,6 +628,9 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             end
         end
         assign b_pass_en = pass_en && ~(rd_valid && ~b_held_r);
+        assign a_read_en = ~(rd_valid && ~b_held_r);
+        // a pass of the first engine reads the banks this cycle
+        wire a_read_at_banks = (| a_bank_valid) && ~a_bank_rw;
 
         // a row read an atomic or a write in its row held up, not yet served
         reg rd_wait_r;
@@ -637,7 +646,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
                        && (BANK_ADDR_WIDTH'(dma_bus_if.req_data.addr) == rd_addr));
 
         wire rd_rsp_buf_ready;
-        wire rd_ready = rd_slot_r && ~amo_stall && ~(| b_bank_valid) && ~rd_row_wr && rd_rsp_buf_ready;
+        wire rd_ready = rd_slot_r && ~amo_stall && ~(| b_bank_valid) && ~a_read_at_banks && ~rd_row_wr && rd_rsp_buf_ready;
         assign rd_fire = rd_valid && rd_ready;
         assign rd_bus_if.req_ready = rd_ready;
 
@@ -649,8 +658,8 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             end
         end
 
-        `RUNTIME_ASSERT(~(rd_fire && (| b_bank_valid)),
-            ("%t: %s: a row read and the read engine's pass at the banks together", $time, INSTANCE_ID))
+        `RUNTIME_ASSERT(~(rd_fire && ((| b_bank_valid) || a_read_at_banks)),
+            ("%t: %s: a row read and a pass's reads at the banks together", $time, INSTANCE_ID))
 
         // the tag follows the SRAM read to its output register
         VX_pipe_buffer #(
@@ -689,6 +698,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
 
     end else begin : g_no_rd
         assign a_pass_en          = pass_en;
+        assign a_read_en          = 1'b1;
         assign b_pass_en          = pass_en;
         assign rd_fire            = 1'b0;
         assign rd_bus_if.req_ready = 1'b0;

@@ -79,6 +79,8 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
 
     // the banks are free for a pass this cycle
     input wire                                       pass_en,
+    // and for a pass that reads them; a store passes without it
+    input wire                                       read_en,
     // an atomic pass went out
     output wire                                      pass_amo,
 
@@ -227,7 +229,7 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
 
     reg [CREDIT_WIDTH-1:0] credits;
     wire has_rsp    = ~s1_rw;
-    wire pass_fire  = s1_valid && s1_ready && pass_en && (~has_rsp || (credits != '0));
+    wire pass_fire  = s1_valid && s1_ready && pass_en && (s1_rw || read_en) && (~has_rsp || (credits != '0));
     wire s1_release = pass_fire && s1_last;
     assign s1_free  = ~s1_valid || s1_release;
     wire   s1_load  = s0_valid && s1_free;

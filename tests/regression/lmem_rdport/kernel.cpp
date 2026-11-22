@@ -218,9 +218,42 @@ static inline __attribute__((always_inline)) void kernel_starve(kernel_arg_t* __
     tm::commit(op_bar, 2);
     vx_barrier(op_bar, 2);
   };
+  const bool hold = (arg->mode == MODE_HOLD);
+  // As tensor_work, and the longest an op waited to be issued.
+  auto tensor_work_worst = [&](uint32_t ops, uint64_t& worst) -> uint64_t {
+    uint64_t prev = vx_rdcycle();
+    worst = 0;
+    for (uint32_t i = 0; i < ops; ++i) {
+      if (use_cp) {
+        tm::cp(taddr, opnd, N);
+      } else {
+        tm::mma(idesc, a_desc, b_desc);
+      }
+      uint64_t now = vx_rdcycle();
+      worst = (now - prev > worst) ? (now - prev) : worst;
+      prev = now;
+    }
+    return prev;
+  };
+  // The other warps' stream: loads, or what holds a row read up: atomics in
+  // the warp's window (a zero is added, so the value stays), or stores of the
+  // zeros already there over the operands' rows.
   auto load_work = [&](uint32_t sweeps) -> uint64_t {
     for (uint32_t s = 0; s < sweeps; ++s) {
-      sum += sweep(win, span);
+      if (!hold) {
+        sum += sweep(win, span);
+      } else if (arg->stores) {
+        for (uint32_t i = t; i < opnd_words; i += kNT) {
+          opnd[i] = 0;
+        }
+      } else {
+#ifdef VX_CFG_EXT_A_ENABLE
+        auto w = const_cast<uint32_t*>(win);
+        for (uint32_t j = 0; j < span; ++j) {
+          __atomic_fetch_add(w + j, 0u, __ATOMIC_SEQ_CST);
+        }
+#endif
+      }
     }
     return vx_rdcycle();
   };
@@ -233,15 +266,17 @@ static inline __attribute__((always_inline)) void kernel_starve(kernel_arg_t* __
 
   // each side's fixed work alone
   if (warp_rank == 0) {
+    uint64_t worst = 0;
     uint64_t c0 = vx_rdcycle();
-    uint64_t c1 = tensor_work(arg->ops);
+    uint64_t c1 = hold ? tensor_work_worst(arg->ops, worst) : tensor_work(arg->ops);
     tensor_done();
     if (t == 0) {
       t_stat[ST_SOLO] = c1 - c0;
+      t_stat[ST_WORST_SOLO] = worst;
     }
   }
   vx_barrier(sync_bar, num_warps);
-  if (warp_rank != 0) {
+  if (warp_rank != 0 && !hold) {
     uint64_t c0 = vx_rdcycle();
     uint64_t c1 = load_work(arg->sweeps);
     if (t == 0) {
@@ -252,12 +287,14 @@ static inline __attribute__((always_inline)) void kernel_starve(kernel_arg_t* __
 
   // the fixed tensor work beside loads that outlast it
   if (warp_rank == 0) {
+    uint64_t worst = 0;
     uint64_t c0 = vx_rdcycle();
-    uint64_t c1 = tensor_work(arg->ops);
+    uint64_t c1 = hold ? tensor_work_worst(arg->ops, worst) : tensor_work(arg->ops);
     tensor_done();
     if (t == 0) {
       t_stat[ST_CONT] = c1 - c0;
       t_stat[ST_END_T] = c1;
+      t_stat[ST_WORST_CONT] = worst;
     }
   } else {
     uint64_t c1 = load_work(arg->sweeps * arg->outlast);
@@ -268,7 +305,8 @@ static inline __attribute__((always_inline)) void kernel_starve(kernel_arg_t* __
   vx_barrier(sync_bar, num_warps);
 
   // the fixed loads beside tensor work that outlasts them
-  if (warp_rank == 0) {
+  if (hold) {
+  } else if (warp_rank == 0) {
     uint64_t c1 = tensor_work(arg->ops * arg->outlast);
     tensor_done();
     if (t == 0) {

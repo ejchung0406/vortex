@@ -5,6 +5,7 @@
 
 #define MODE_RACE   0 // writers overwrite the rows the tensor engine is copying
 #define MODE_STARVE 1 // the tensor engine's row reads beside the warps' loads
+#define MODE_HOLD   2 // the row reads beside a stream that holds them up: atomics, or stores to their rows
 
 // Shared memory starts with the CTA's TMEM column and the warps' flags,
 // padded to a bank row.
@@ -29,7 +30,9 @@
 #define ST_CONT   1  // the same work beside the other side
 #define ST_END_T  2  // the cycle the warp's work ended in the phase that times the tensor work
 #define ST_END_L  3  // and in the phase that times the loads
-#define ST_WORDS  4
+#define ST_WORST_SOLO 4  // tensor warp, MODE_HOLD: the longest wait to issue an op, alone
+#define ST_WORST_CONT 5  // and beside the stream
+#define ST_WORDS  6
 
 typedef struct {
   uint32_t mode;
@@ -48,6 +51,7 @@ typedef struct {
   uint32_t outlast;     // how many times the fixed work the other side does beside it
   uint32_t span;        // loads per thread in a sweep
   uint32_t conflict;    // 1: a warp's lanes read one bank, a pass each
+  uint32_t stores;      // MODE_HOLD: the stream stores to the operands' rows instead of atomics elsewhere
   uint32_t use_cp;      // the tensor ops are tc.cp of N columns instead of tc.mma
   uint64_t out_addr;
   uint64_t stat_addr;
