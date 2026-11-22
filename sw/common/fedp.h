@@ -48,10 +48,14 @@ public:
   }
 
   // Switch the input format, keeping the term buffers (a caller evaluating
-  // several formats can hold one object).
+  // several formats can hold one object). For the debug traces it starts over
+  // as a newly built object would: the ctor line, request numbering from 0.
   void set_format(int exp_bits, int sig_bits) {
     exp_bits_ = exp_bits;
     sig_bits_ = sig_bits;
+    req_id_ = 0;
+    FEDP_LOG("[ctor] fmt=e%dm%d, frm=%d, W=%d, renorm_=%s, no_window_=%s\n",
+        exp_bits_, sig_bits_, frm_, W_, (renorm_ ? "true" : "false"), (no_window_ ? "true" : "false"));
     assert(exp_bits_ > 0 && exp_bits_ <= 8);
     assert(sig_bits_ > 0 && sig_bits_ <= 10);
   }
@@ -745,12 +749,14 @@ private:
     const uint32_t mask = (1ULL << WA) - 1;
     int global_sticky = 0;
 
-    if (W <= 28) {
+    if (W >= 22 && W <= 28) {
       // A term's shift k = L - its exponent is never negative. Placed 32 + MANT
       // bits up in 64 bits and shifted down by k, the high word is the window
-      // value and the low word the bits shifted out (a magnitude is below
-      // 2^24, so past k = WA + MANT the window part is 0 and the low word holds
-      // the whole magnitude: capping k at 32 + MANT keeps every bit).
+      // value and the low word the bits shifted out. A magnitude is below
+      // 2^24 <= 2^WA (hence W >= 22), so past k = WA + MANT the window part is
+      // 0 and the low word holds the whole magnitude: capping k at 32 + MANT
+      // keeps every bit. That holds while WA <= 32; the path is taken up to
+      // W = 28, the widest the differential test sweeps with it.
       for (uint32_t i = 0; i < nt; ++i) {
         const int MANT = (i + 1 == nt) ? (W - 24) : (W - 23);
         const uint64_t placed = uint64_t(uint32_t(mp[i])) << (32 + MANT);

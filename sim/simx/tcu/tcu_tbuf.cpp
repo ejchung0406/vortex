@@ -266,12 +266,6 @@ bool TcuTbuf::filling_a(uint32_t b) const { return impl_->buf(kAOffset + b).fill
 bool TcuTbuf::filling_b() const           { return impl_->buf(kBOffset).filling(); }
 uint64_t TcuTbuf::done_b() const          { return impl_->buf(kBOffset).done_; }
 
-std::shared_ptr<mem_block_t> TcuTbuf::read_a(uint32_t b, uint64_t line_addr) const {
-  return impl_->buf(kAOffset + b).read(line_addr);
-}
-std::shared_ptr<mem_block_t> TcuTbuf::read_b(uint64_t line_addr) const {
-  return impl_->buf(kBOffset).read(line_addr);
-}
 
 const mem_block_t* TcuTbuf::line_a(uint32_t b, uint64_t line_addr) const {
   return impl_->buf(kAOffset + b).line(line_addr);

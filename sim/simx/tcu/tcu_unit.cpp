@@ -2599,7 +2599,7 @@ private:
 
   // Gather one 32-bit operand word from a TCU line cache.
   // `read_line` is supplied by the caller and routes to the right per-role
-  // buffer inside TcuTbuf (A → read_a, B → read_b). For sub-32-bit formats,
+  // buffer inside TcuTbuf (A → line_a, B → line_b). For sub-32-bit formats,
   // packs `ratio = 32 / e_bits` adjacent elements along the K direction
   // (col for A, row for B via pack_along_row).
   template <typename ReadLine>
