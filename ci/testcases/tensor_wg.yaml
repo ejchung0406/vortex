@@ -117,6 +117,18 @@ tests:
   app: sgemm_tcu_wg
   configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
     -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=8 -DWGMMA_SS -DWGMMA_KMAJOR_B -DB_PAD_K=1 -DB_OFF_K=1 -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1
+# The first warp's A descriptor is the B descriptor, and B's 32 rows run past
+# that warp's 8 rows of A into the other warps': the tile buffer routes a word
+# by the operand that reads it, not by its address.
+- id: sgemm_tcu_wg-ab-alias
+  via: blackbox
+  drivers:
+  - simx
+  - rtlsim
+  app: sgemm_tcu_wg
+  args: -k64
+  configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_TCU_WGMMA_ENABLE
+    -DITYPE=fp16 -DOTYPE=fp32 -DWGMMA_NRC=32 -DWGMMA_SS -DWGMMA_RMAJOR_A -DWGMMA_KMAJOR_B -DWGMMA_AB_ALIAS -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=1 -DVX_CFG_NUM_FPU_BLOCKS=1
 
 - id: sgemm_tcu_wg_sp-1
   via: blackbox
