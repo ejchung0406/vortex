@@ -865,4 +865,27 @@ void LsuUnit::on_tick() {
 		this->process_request_step(b);
 		this->ingest_inputs(b, queue_room, reads_held);
 	}
+
+	// Sleep when no block holds a request, a result or a fence and nothing is
+	// on its way in: the next tick would change nothing. A response can only
+	// answer an entry of the pending tables, so none can arrive.
+	if (pending_loads_ != 0)
+		return;
+#ifdef TCU_META_ENABLE
+	for (uint32_t p = 0; p < TCU_AGU_PORTS; ++p) {
+		if (TcuReqIn.at(p).size() != 0)
+			return;
+	}
+#endif
+	for (uint32_t b = 0; b < VX_CFG_NUM_LSU_BLOCKS; ++b) {
+		auto& state = states_.at(b);
+		if (!state.req_queue.empty() || !state.pending_reqs.empty()
+		 || state.staged_reads != 0 || !state.meta_reqs.empty()
+		 || state.fence.locked() || state.fence_token || state.remain_addrs != 0
+		 || Inputs.at(b).size() != 0
+		 || rsp_bufs_.at(b).size() != 0 || no_rsp_bufs_.at(b).size() != 0
+		 || core_->lmem_switch(b)->RspOut.size() != 0)
+			return;
+	}
+	this->tick_sleep();
 }

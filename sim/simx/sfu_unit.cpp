@@ -599,6 +599,18 @@ void SfuUnit::on_tick() {
 			res_rr_[r] = (winner[r] + 1) % VX_CFG_NUM_SFU_BLOCKS;
 		}
 	}
+
+#if !defined(VX_CFG_EXT_RTU_ENABLE) && !defined(VX_CFG_EXT_TEX_ENABLE) && !defined(VX_CFG_EXT_RASTER_ENABLE)
+	// Without the units that answer or pull on their own, a tick with no op in
+	// or on its way in changes nothing: sleep until one is sent.
+	bool idle = true;
+	for (auto& input : Inputs) {
+		idle &= (input.size() == 0);
+	}
+	if (idle) {
+		this->tick_sleep();
+	}
+#endif
 }
 
 void SfuUnit::on_reset() {
