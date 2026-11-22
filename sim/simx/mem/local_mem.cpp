@@ -48,7 +48,9 @@ using namespace vortex;
 // read engine issues no pass in the first cycle a request is seen, nor in
 // every other cycle while requests keep coming, and a row read waits a cycle
 // behind a pass of the read engine. A row read also waits while a DMA write
-// or a store lands in its row, and then returns the row as written.
+// or a store lands in its row, and then returns the row as written. A row read
+// held up by an atomic or by a write in its row stops the first engine's
+// passes until it is served.
 // The model does a pass's bank accesses when it is issued. Every access keeps
 // its order relative to the others, so this is the order the banks see.
 class LocalMem::Impl {
@@ -123,6 +125,8 @@ protected:
   bool      rd_slot_;
   // the read engine was held back for a row read in the last cycle
   bool      b_held_;
+  // a row read an atomic or a write in its row held up, not yet served
+  bool      rd_wait_;
   // rows written this cycle: by the DMA port, and by the store pass issued
   // the cycle before
   std::vector<uint64_t> wr_rows_;
@@ -340,21 +344,28 @@ protected:
     return false;
   }
 
-  // Serve the row read port's request, unless a write lands in its row.
-  void rd_fire() {
-    for (uint32_t p = 0; p < simobject_->RdInputs.size(); ++p) {
-      auto& in = simobject_->RdInputs.at(p);
+  // A write lands this cycle in a row the row read port's request reads.
+  bool rd_row_written() const {
+    for (auto& in : simobject_->RdInputs) {
       if (in.empty()) {
         continue;
-      }
-      if (simobject_->RdOutputs.at(p).full()) {
-        return;
       }
       uint64_t row = this->row_of(in.peek().addr);
       for (auto w : wr_rows_) {
         if (w == row) {
-          return;
+          return true;
         }
+      }
+    }
+    return false;
+  }
+
+  // Serve the row read port's request. Returns false when its response
+  // cannot be taken.
+  bool rd_fire() {
+    for (uint32_t p = 0; p < simobject_->RdInputs.size(); ++p) {
+      if (!simobject_->RdInputs.at(p).empty() && simobject_->RdOutputs.at(p).full()) {
+        return false;
       }
     }
     for (uint32_t p = 0; p < simobject_->RdInputs.size(); ++p) {
@@ -372,6 +383,7 @@ protected:
       DT(4, simobject_->name() << "-rd req : " << req);
       in.pop();
     }
+    return true;
   }
 
   // Issue an engine's next pass. Returns true when it was the request's last,
@@ -517,6 +529,7 @@ public:
     , dma_last_grant_(0)
     , rd_slot_(false)
     , b_held_(false)
+    , rd_wait_(false)
   {
     for (auto& e : engines_) {
       e.pending = BitVector<>(config.num_lanes);
@@ -549,6 +562,7 @@ public:
     dma_last_grant_ = config_.dma_clients ? (config_.dma_clients - 1) : 0;
     rd_slot_ = false;
     b_held_ = false;
+    rd_wait_ = false;
     wr_rows_.clear();
     store_rows_.clear();
   }
@@ -621,23 +635,25 @@ public:
     for (auto& e : engines_) {
       e.passed = false;
     }
+    bool a_hold = rd_wait_;
     if (stall_cycles_ != 0) {
       --stall_cycles_;
       dma_slot_ = false;
       rd_slot_ = false;
+      rd_wait_ = rd_valid;
     } else {
       bool dma_valid = this->dma_pending();
       if (dma_slot_) {
         this->dma_fire();
       }
       dma_slot_ = dma_valid;
-      if (rd_slot_ && rd_valid && !b_at_banks) {
-        this->rd_fire();
-      }
+      bool row_written = rd_valid && this->rd_row_written();
+      bool rd_fired = rd_slot_ && rd_valid && !b_at_banks && !row_written && this->rd_fire();
+      rd_wait_ = rd_valid && !rd_fired && (rd_wait_ || row_written);
       rd_slot_ = rd_valid;
       if (!dma_valid) {
         for (uint32_t k = 0; k < num_engines; ++k) {
-          if (can_pass.at(k) && !(k == 1 && b_hold)) {
+          if (can_pass.at(k) && !(k == 0 && a_hold) && !(k == 1 && b_hold)) {
             s1_ready.at(k) = this->issue_pass(engines_.at(k), rsp_count.at(k));
           }
         }
@@ -667,7 +683,7 @@ public:
     }
 
     bool idle = (stall_cycles_ == 0) && !dma_slot_ && !a_sel_.valid && !b_sel_.valid
-             && !rd_slot_ && !b_held_ && store_rows_.empty();
+             && !rd_slot_ && !b_held_ && !rd_wait_ && store_rows_.empty();
     for (auto& e : engines_) {
       idle = idle && e.s0.empty() && !e.s1_valid && e.rsp_queue.empty();
     }

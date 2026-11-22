@@ -198,12 +198,12 @@ public:
     // The DXA writes and the TCU tile-buffer reads share the row-wide DMA
     // port, round-robin, unless the reads use the banks' second port
     // (LMEM_TCU_RDPORT), which several LSU blocks bring.
-    static_assert(VX_CFG_LMEM_TCU_RDPORT == 0 || VX_CFG_NUM_LSU_BLOCKS > 1,
-                  "LMEM_TCU_RDPORT=1 needs the banks' read-only port: NUM_LSU_BLOCKS > 1");
     static_assert(uint64_t(VX_CFG_LMEM_SIZE) <= (uint64_t(1) << VX_CFG_LMEM_LOG_SIZE)
                && 2 * uint64_t(VX_CFG_LMEM_SIZE) > (uint64_t(1) << VX_CFG_LMEM_LOG_SIZE),
                   "LMEM_LOG_SIZE must be clog2(LMEM_SIZE)");
   #ifdef VX_CFG_LMEM_ENABLE
+    static_assert(VX_CFG_LMEM_TCU_RDPORT == 0 || VX_CFG_NUM_LSU_BLOCKS > 1,
+                  "LMEM_TCU_RDPORT=1 needs the banks' read-only port: NUM_LSU_BLOCKS > 1");
     static_assert(0 == (uint64_t(VX_CFG_LMEM_SIZE) % (VX_CFG_MEM_BLOCK_SIZE * VX_CFG_LMEM_NUM_BANKS)),
                   "LMEM_SIZE must be a whole number of block rows across the banks");
     // The window ends at the next alignment boundary above its base.

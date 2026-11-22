@@ -356,13 +356,21 @@ the two ports apart:
   keep coming, and a row read waits while a pass of the read engine is at the
   banks. Each side waits at most one cycle for the other; with both
   continuous each gets every other cycle (64 B per clock of row reads at 16
-  banks, and one read pass per two cycles; the first engine is not affected).
+  banks of 8 B, and one read pass per two cycles; the first engine is not
+  affected).
 - **A write in the same row.** The second port returns an undefined word when
   the first port writes it in the same cycle. A row read therefore waits
   while a DMA write or a store lands in its row and is served the cycle
   after, with the row as written; writes to other rows do not hold it.
 - **Atomics.** No row read is served in the read, capture and write-back
-  cycles of an atomic, as for the DMA port.
+  cycles of an atomic.
+- **No indefinite wait.** A row read that an atomic or a write in its row
+  held up stops the first engine's passes until it is served, so a stream of
+  atomics or of stores to its row delays it by a few cycles, not for good.
+
+The model compares rows by memory block when a bank row is narrower than a
+block (fewer than 8 banks at XLEN 64, fewer than 16 at XLEN 32), so there a
+row read may wait in the model for a write to another row of its block.
 
 ### 5.3 Global path
 
