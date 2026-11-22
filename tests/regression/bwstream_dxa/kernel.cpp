@@ -69,7 +69,7 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   stream(arg);
 }
 
-// A separate entry, so the untimed kernel's instruction stream stays as it is.
+// A separate entry, so the untimed kernel carries no timing code.
 __kernel void kernel_timed(timed_arg_t* arg) {
   const uint64_t c0 = vx_rdcycle();
   stream(&arg->stream);
