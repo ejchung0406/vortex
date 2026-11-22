@@ -1258,7 +1258,7 @@ private:
       }
       bank_req_t bank_req;
       mshr_.dequeue(&bank_req);
-      pipe_req_->push(bank_req);
+      pipe_req_->push(std::move(bank_req));
       DT(3, this->name() << " replay-deq: " << bank_req);
       return;
     }
@@ -1590,7 +1590,7 @@ private:
         bank_req.merge_queued = true;
         ++perf_stats_.write_misses;
       }
-      pipe_req_->push(bank_req);
+      pipe_req_->push(std::move(bank_req));
       DT(3, this->name() << " core-req: " << core_req);
       // pending_mshr_size_ tracks Core-typed in-flight requests so the
       // MSHR pre-reservation in processInputs is conservative. AmoProbe
@@ -1794,8 +1794,8 @@ private:
     mshr_.dequeue(&req);
     MemRsp rsp{req.req_tag, req.hart_id, req.uuid};
     rsp.data = fwd_data_;
-    rsp.merged_tags = req.merged_tags;
-    this->core_rsp_out.send(rsp);
+    rsp.merged_tags = std::move(req.merged_tags);
+    this->core_rsp_out.send(std::move(rsp));
     DT(3, this->name() << " fwd-rsp: " << rsp);
     return true;
   }
@@ -1909,7 +1909,7 @@ private:
   // Debug: a write-through cache holds each write at the head of bank 0's
   // queue for a fixed delay, the requests behind it included, so requests
   // through the other banks overtake it unless something orders them.
-  void send_mem_req(const MemReq& req) {
+  void send_mem_req(MemReq req) {
   #ifdef DBG_MEM_BANK0_WDELAY
     if (bank_id_ == 0 && !config_.write_back) {
       constexpr uint64_t DBG_WDELAY = 2048;
@@ -1917,11 +1917,11 @@ private:
       uint64_t head = std::max(now, dbg_mem_req_free_);
       uint64_t leave = head + (req.is_write() ? DBG_WDELAY : 0);
       dbg_mem_req_free_ = leave + 1;
-      this->mem_req_out.send(req, mem_req_delay_ + (leave - now));
+      this->mem_req_out.send(std::move(req), mem_req_delay_ + (leave - now));
       return;
     }
   #endif
-    this->mem_req_out.send(req, mem_req_delay_);
+    this->mem_req_out.send(std::move(req), mem_req_delay_);
   }
 
   // Emit a write-through store downstream, with the optional core response.
@@ -1956,7 +1956,7 @@ private:
 #endif
     if (need_rsp) {
       MemRsp rsp{rsp_tag, hart_id, uuid};
-      this->core_rsp_out.send(rsp);
+      this->core_rsp_out.send(std::move(rsp));
       crsp_sent_ = true;
       DT(3, this->name() << " core-rsp: " << rsp);
     }
@@ -2193,7 +2193,7 @@ private:
         if (!bank_req.write)
           rsp.data = hit_sec.data;
         rsp.merged_tags = bank_req.merged_tags;
-        this->core_rsp_out.send(rsp);
+        this->core_rsp_out.send(std::move(rsp));
         crsp_sent_ = true;
         DT(3, this->name() << " replay-rsp: " << rsp);
       }
@@ -2339,7 +2339,7 @@ private:
           if (!bank_req.write)
             rsp.data = hit_sec.data;
           rsp.merged_tags = bank_req.merged_tags;
-          this->core_rsp_out.send(rsp);
+          this->core_rsp_out.send(std::move(rsp));
           crsp_sent_ = true;
           DT(3, this->name() << " core-rsp: " << rsp);
         }
@@ -2414,7 +2414,7 @@ private:
             fill.tag   = mshr_id; // routes the fill response back here
             fill.hart_id   = bank_req.hart_id;
             fill.uuid  = bank_req.uuid;
-            this->send_mem_req(fill);
+            this->send_mem_req(std::move(fill));
             DT(3, this->name() << " fill-req: " << fill);
             ++pending_fill_reqs_;
           }

@@ -1524,6 +1524,10 @@ public:
     channel_.send(value, delay_);
   }
 
+  void push(Type&& value) {
+    channel_.send(std::move(value), delay_);
+  }
+
   const Type& peek() const {
     if (channel_.empty()) {
       throw std::runtime_error("FIFO is empty");
