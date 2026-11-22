@@ -699,9 +699,10 @@ private:
 
     int diff = max_E - min_E;
 
-    // Align smaller term
+    // Align smaller term. A zero product may have the larger exponent field
+    // (diff < 0); it aligns to 0, as any shift of it does.
     int64_t aligned = 0;
-    if (diff >= 32) {
+    if (diff >= 32 || diff < 0) {
       aligned = 0;
     } else if (diff == 0) {
       aligned = min_P;

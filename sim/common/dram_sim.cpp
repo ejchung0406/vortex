@@ -108,6 +108,7 @@ private:
     uint32_t pending;
     channel_t* channel;
     uint32_t in_dram;  // its reads Ramulator holds, whose callbacks point here
+    bool dropped;      // abandoned by reset(): those reads answer nothing
   };
 
   struct mem_tx_t {
@@ -286,6 +287,12 @@ private:
       // Two pointers: held inside the std::function, no allocation.
       callback = [this, request = tx.request](Ramulator::Request& /*dram_req*/) {
         --request->in_dram;
+        if (request->dropped) {
+          if (request->in_dram == 0) {
+            request->channel->free_requests.push_back(request);
+          }
+          return;
+        }
         request->channel->read_rsps.push_back({request, this->cycle_ + 1 + this->config_.latency});
       };
     }
@@ -338,12 +345,14 @@ public:
       channel.read_rsps.clear();
       channel.write_rsps.clear();
       channel.inflight = 0;
-      // Ramulator is not reset: a read it still holds answers later into
-      // read_rsps and retires its request as it would have (a request kept
-      // alive by its callback). Only requests nothing refers to are reused.
+      // Ramulator is not reset: a read it still holds completes there, but
+      // its requester was reset with this memory, so it answers nothing, as
+      // the transactions dropped above. Its request is reused once Ramulator
+      // has let go of it.
       channel.free_requests.clear();
       for (auto& request : channel.requests) {
-        if (request.in_dram == 0) {
+        request.dropped = (request.in_dram != 0);
+        if (!request.dropped) {
           channel.free_requests.push_back(&request);
         }
       }
@@ -381,7 +390,7 @@ public:
     }
     request_t* request = ch.free_requests.back();
     ch.free_requests.pop_back();
-    *request = request_t{response_cb, arg, n, &ch, 0};
+    *request = request_t{response_cb, arg, n, &ch, 0, false};
     for (uint32_t i = 0; i < n; ++i) {
       ch.pending_txs.push({dram_addr(base + i * tx_size_), is_write, request});
     }
