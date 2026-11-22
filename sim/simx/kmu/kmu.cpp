@@ -12,6 +12,7 @@
 // limitations under the License.
 
 #include "kmu.h"
+#include <algorithm>
 #include <cassert>
 
 using namespace vortex;
@@ -79,8 +80,13 @@ void Kmu::on_reset() {
   // zero-initialized at construction.
   running_         = false;
   cta_id_          = 0;
-  for (uint32_t l = 0; l < routers_.size(); ++l) {
-    routers_[l].assign(routers_[l].size(), router_t{0, false, 0, std::vector<uint32_t>(fanout_[l], 0)});
+  // The routers' pointers and credits are device state: the RTL clears them
+  // only with the device, and a launch keeps them. No message is open
+  // between launches, so no lock carries over.
+  if (!SimPlatform::instance().launch_resetting()) {
+    for (uint32_t l = 0; l < routers_.size(); ++l) {
+      routers_[l].assign(routers_[l].size(), router_t{0, false, 0, std::vector<uint32_t>(fanout_[l], 0)});
+    }
   }
   for (auto& level : links_) {
     for (auto& link : level) {
@@ -142,11 +148,16 @@ void Kmu::start() {
   }
 }
 
+// The RTL registers the counts at each router, a cycle or more after the DCR
+// write; a mask write precedes the launch it applies to by far more, so taking
+// them at the write is not observable.
 void Kmu::update_weights() {
   out_cores_.resize(fanout_.size());
   weighted_.resize(fanout_.size());
   for (uint32_t l = 0; l < fanout_.size(); ++l) {
     const uint32_t n = fanout_[l];
+    std::vector<uint32_t> prev = out_cores_[l];
+    prev.resize(routers_[l].size() * n, 0);
     out_cores_[l].assign(routers_[l].size() * n, 0);
     weighted_[l].assign(routers_[l].size(), false);
     for (uint32_t child = 0; child < out_cores_[l].size(); ++child) {
@@ -156,6 +167,11 @@ void Kmu::update_weights() {
     }
     for (uint32_t node = 0; node < routers_[l].size(); ++node) {
       const uint32_t* cores = &out_cores_[l][node * n];
+      // Credits loaded for other counts would start the next launch part-way
+      // into a window of the old mask.
+      if (!std::equal(cores, cores + n, prev.begin() + node * n)) {
+        routers_[l][node].credit.assign(n, 0);
+      }
       for (uint32_t i = 0; i < n; ++i) {
         for (uint32_t j = i + 1; j < n; ++j) {
           if (cores[i] != 0 && cores[j] != 0 && cores[i] != cores[j]) {

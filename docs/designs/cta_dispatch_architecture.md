@@ -222,7 +222,7 @@ Two things are worth noticing about what is *not* here:
 
 ### 2.4 Routing — and why the two kinds differ
 
-`kind` selects the fan-out rule ([`VX_kmu_bus_arb.sv:234-235`](../../hw/rtl/core/VX_kmu_bus_arb.sv#L234)):
+`kind` selects the fan-out rule ([`VX_kmu_bus_arb.sv:252-253`](../../hw/rtl/core/VX_kmu_bus_arb.sv#L252)):
 
 - **COMPUTE** → round-robin over the ready outputs. A cluster carries no
   placement hint, so the fan-out drops its first member on any ready core and
@@ -251,7 +251,10 @@ enabled output in the same cycle. With every output equally ready, each
 reload window gives every output one message per enabled core below it, so
 each enabled core gets an equal share (a per-launch TPC mask on an H200
 spreads CTAs over the enabled SMs the same way). When the counts are equal,
-the unmasked case among them, the plain round-robin runs. Fragment routing
+the unmasked case among them, the plain round-robin runs. Each level
+registers its counts (they change only on a mask write, which precedes the
+launch by many cycles) and clears its credits when they change; otherwise the
+credits, like `rr_ptr`, run on from one launch to the next. Fragment routing
 ignores the mask. The mask is kept across launches; with every core masked no
 compute message is ever accepted, so the launch does not finish.
 
@@ -494,7 +497,7 @@ fixed **before** a message is sent — a locked cluster's remaining members go
 only to the core that took the first, and a new message walks the same tree
 as the RTL fan-out: each level, from a round-robin pointer and credits of its
 own, takes the nearest child with a ready, unmasked core below it
-([`kmu.cpp:184-297`](../../sim/simx/kmu/kmu.cpp#L184)).
+([`kmu.cpp:200-313`](../../sim/simx/kmu/kmu.cpp#L200)).
 
 **Why this is load-bearing rather than an optimisation.** The obvious
 consequence of a split cluster is that LMEM peers resolve to another CTA's
