@@ -355,6 +355,24 @@ of all blocks wait while any block stores, and a block's ready then depends on
 the other blocks' requests of the same cycle. A store engine's write breaks a
 reservation on its word as the first engine's does.
 
+With `VX_CFG_LMEM_RD_ROW` (needs `LMEM_WR_ROW`) the store engines become the
+blocks' engines for every plain request, and the shared read engine is not
+built. A block's loads and stores go through its engine in the order the block
+sends them; a warp always uses the same LSU block (its issue slice), so this
+is the order its program needs, and warps of different blocks are ordered only
+by barriers and atomics, which wait for the engines to drain. Read passes use
+the banks' read-only port and take the row read port's turns as the read
+engine did. The grant gives a bank to one engine per cycle whichever kind its
+pass is, so a read never meets a write of its word and loads and stores
+together move up to one bank row per cycle. No kind holds the other: the
+engine after the last cycle's first taker chooses first, so an engine with a
+pass to issue has first choice of its banks within `NUM_LSU_BLOCKS` cycles
+that issue a pass (cycles a DXA beat, a row read or an atomic holds the banks
+do not count). The first engine keeps the atomics. An atomic enters only while
+the block engines are empty and they take nothing while it is in the first
+engine; when atomics and plain requests both wait they alternate, one atomic
+and then the plain requests waiting with it.
+
 The direct-memory clients (the DXA writes and the tensor unit's reads) take
 whole bank rows on the first port: a DMA request seen in one cycle stops the
 passes and gets the banks the next.

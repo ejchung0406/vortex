@@ -33,6 +33,7 @@ const char* kernel_file = "kernel.vxbin";
 uint32_t kind  = 0;
 uint32_t warps = 1;
 uint32_t iters = 64;
+uint32_t fair  = 0;
 
 vx_device_h device = nullptr;
 vx_buffer_h out_buffer = nullptr;
@@ -42,16 +43,17 @@ vx_kernel_h kernel  = nullptr;
 kernel_arg_t kernel_arg = {};
 
 static void show_usage() {
-  std::cout << "Usage: [-k kind 0.." << WR_NKINDS - 1 << "] [-w warps] [-i iterations] [-h]" << std::endl;
+  std::cout << "Usage: [-k kind 0.." << WR_NKINDS - 1 << "] [-w warps] [-i iterations] [-f percent: mix fails when one group's time is above that share of the other's] [-h]" << std::endl;
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "k:w:i:h")) != -1) {
+  while ((c = getopt(argc, argv, "k:w:i:f:h")) != -1) {
     switch (c) {
     case 'k': kind  = atoi(optarg); break;
     case 'w': warps = atoi(optarg); break;
     case 'i': iters = atoi(optarg); break;
+    case 'f': fair  = atoi(optarg); break;
     case 'h': show_usage(); exit(0);
     default:  show_usage(); exit(-1);
     }
@@ -201,6 +203,11 @@ int main(int argc, char *argv[]) {
   }
   if (errors == 0 && kind == WR_MIX) {
     printf("mix: cyc_per_iter store_warps=%.2f load_warps=%.2f\n", (double)worst_store / iters, (double)worst_load / iters);
+    uint64_t hi_t = std::max(worst_store, worst_load), lo_t = std::min(worst_store, worst_load);
+    if (fair != 0 && hi_t * 100 > lo_t * fair) {
+      printf("*** error: the slower group takes %.0f%% of the other's time, above %u%%\n", 100.0 * hi_t / lo_t, fair);
+      ++errors;
+    }
   }
   cleanup();
   if (errors != 0) {

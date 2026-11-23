@@ -405,6 +405,75 @@ tests:
   app: lmem_lrsc_store
   args: -w4
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_A_ENABLE -DVX_CFG_LMEM_WR_ROW=1
+# Every plain request through its LSU block's own engine (VX_CFG_LMEM_RD_ROW):
+# loads and stores of one warp to the same words in program order with an
+# atomic between, stores whose lanes meet in one word, the reservation against
+# a foreign store, streams of loads and of stores, and a block storing beside
+# three loading, where neither kind may take more than half again the other's
+# time.
+- id: parity-lmem-rd-row-order
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lmem_rw_order
+  args: -w8
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_A_ENABLE -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1 -DVX_CFG_LMEM_RD_ROW=1
+- id: parity-lmem-rd-row-order-noamo
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lmem_rw_order
+  args: -w8
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1 -DVX_CFG_LMEM_RD_ROW=1
+- id: parity-lmem-rd-row-access
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lmem_access
+  args: -n16 -s
+  configs: -DVX_CFG_NUM_THREADS=16 -DVX_CFG_EXT_A_ENABLE -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1 -DVX_CFG_LMEM_RD_ROW=1
+- id: parity-lmem-rd-row-merge
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lmem_wr_merge
+  args: -w8
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1 -DVX_CFG_LMEM_RD_ROW=1
+- id: parity-lmem-rd-row-lrsc-store
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lmem_lrsc_store
+  args: -w4
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_A_ENABLE -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1 -DVX_CFG_LMEM_RD_ROW=1
+- id: parity-smem-rate-lds4-rd-row
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: smem_rate
+  args: -k14 -w8 -i16
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1 -DVX_CFG_LMEM_RD_ROW=1
+- id: parity-smem-rate-lds-rd-row
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: smem_rate
+  args: -k9 -w8 -i16
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1 -DVX_CFG_LMEM_RD_ROW=1
+- id: parity-smem-rate-sts4-rd-row
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: smem_rate
+  args: -k13 -w8 -i16
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1 -DVX_CFG_LMEM_RD_ROW=1
+- id: parity-smem-rate-mix-rd-row
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: smem_rate
+  args: -k22 -w8 -i16 -f150
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1 -DVX_CFG_LMEM_RD_ROW=1
 # Wide loads and stores: SimX and RTL expand and time them alike.
 - id: parity-ldst-wide
   check: model_parity
