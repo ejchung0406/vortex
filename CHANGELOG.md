@@ -9,6 +9,16 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
 
 ### Added
 
+- **Shared-memory stores bounded by the banks (`VX_CFG_LMEM_WR_MERGE`, `VX_CFG_LMEM_WR_ROW`, default 0).** The local-memory
+  unit wrote through one pass engine that takes one LSU block's request per cycle, and two store lanes in one bank word each
+  took a pass, so a warp's store of 4-byte elements held the unit for three cycles per block request. With `LMEM_WR_MERGE`
+  the lanes of a plain store that write different bytes of one word share its bank access (lanes writing the same bytes still
+  go in lane order). With `LMEM_WR_ROW` every LSU block's stores have a pass engine of their own and the engines' passes share
+  a cycle when they take different banks, up to one bank row per cycle in all; reads and atomics keep the two engines they
+  had, and every store keeps its order against every read. Both in the RTL and in SimX; the defaults keep the timing as it
+  was. New tests `lmem_wr_merge` (stores whose lanes meet in one word) and `smem_rate` (shared store and load rates with
+  4-byte and word spacing). [hw/rtl/mem/VX_lmem_unit.sv](hw/rtl/mem/VX_lmem_unit.sv),
+  [hw/rtl/mem/VX_lmem_engine.sv](hw/rtl/mem/VX_lmem_engine.sv), [sim/simx/mem/local_mem.cpp](sim/simx/mem/local_mem.cpp).
 - **Fetch ahead of a lone warp (`VX_CFG_FETCH_INFLIGHT`, default 1).** A warp is stalled from its fetch pick until decode, so a
   warp alone on a core issues one instruction per fetch round trip. With N > 1 (a power of two; EXT_C off) a warp that is the only
   runnable warp of its frontend slice keeps fetching sequentially, up to N fetches between pick and decode. Decode drops what was

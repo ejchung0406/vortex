@@ -208,6 +208,8 @@ public:
   #ifdef VX_CFG_LMEM_ENABLE
     static_assert(VX_CFG_LMEM_TCU_RDPORT == 0 || VX_CFG_NUM_LSU_BLOCKS > 1,
                   "LMEM_TCU_RDPORT=1 needs the banks' read-only port: NUM_LSU_BLOCKS > 1");
+    static_assert(VX_CFG_LMEM_WR_ROW == 0 || VX_CFG_NUM_LSU_BLOCKS > 1,
+                  "LMEM_WR_ROW=1 shares the banks between LSU blocks: NUM_LSU_BLOCKS > 1");
     static_assert(0 == (uint64_t(VX_CFG_LMEM_SIZE) % (VX_CFG_MEM_BLOCK_SIZE * VX_CFG_LMEM_NUM_BANKS)),
                   "LMEM_SIZE must be a whole number of block rows across the banks");
     // The window ends at the next alignment boundary above its base.

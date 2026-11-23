@@ -16,8 +16,11 @@
 // One pass engine of the warp-wide local memory. It takes a whole warp request
 // and gives it to the banks in passes: in a pass every bank goes to the lowest
 // pending lane that maps to it, and a plain read also serves every pending lane
-// reading that lane's word. Lanes left over replay in the next passes, and the
-// request retires before the next one starts.
+// reading that lane's word. With WR_MERGE a plain-store lane also goes with
+// its bank's winner when every lower pending lane of the bank writes other
+// bytes of the same word. Lanes left over replay in the next passes, and the
+// request retires before the next one starts. A pass is issued when pass_en
+// allows: the unit withholds it from a store engine whose banks another has.
 //
 //   S0  the engine's input queue of two requests; the head's lanes' words are
 //       compared pairwise
@@ -49,6 +52,9 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
     parameter ATTR_WIDTH      = 1,
     parameter NUM_BLOCKS      = 1,
     parameter RSP_QUEUE_SIZE  = 8,
+    // plain-store lanes writing different bytes of one word share its bank
+    // access; the payload's low bits are then {byte enables, word}
+    parameter WR_MERGE        = 0,
 
     parameter WORD_WIDTH      = WORD_SIZE * 8,
     parameter BLOCK_WIDTH     = `UP(`CLOG2(NUM_BLOCKS)),
@@ -83,6 +89,9 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
     input wire                                       read_en,
     // an atomic pass went out
     output wire                                      pass_amo,
+    // a pass is ready to be issued, and the banks it takes
+    output wire                                      pass_want,
+    output wire [NUM_BANKS-1:0]                      pass_banks,
 
     // bank requests, registered
     output wire [NUM_BANKS-1:0]                      bank_valid,
@@ -159,6 +168,7 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
     wire [NUM_LANES-1:0][NUM_LANES-1:0] s0_same_bank;
     wire [NUM_LANES-1:0][NUM_LANES-1:0] s0_same_word;
     wire [NUM_LANES-1:0][NUM_LANES-1:0] s0_conflict;
+    wire [NUM_LANES-1:0][NUM_LANES-1:0] s0_wr_join;
     for (genvar i = 0; i < NUM_LANES; ++i) begin : g_cmp_i
         for (genvar j = 0; j < NUM_LANES; ++j) begin : g_cmp_j
             if (j < i) begin : g_lower
@@ -168,12 +178,20 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
                     assign s0_same_bank[i][j] = 1'b1;
                 end
                 assign s0_same_word[i][j] = (s0_addr[i] == s0_addr[j]);
+                if (WR_MERGE != 0) begin : g_wr_join
+                    // two plain-store lanes of one word that write different bytes
+                    assign s0_wr_join[i][j] = s0_rw && ~s0_amo && s0_same_word[i][j]
+                                           && ~(| (s0_payload[i][WORD_WIDTH +: WORD_SIZE] & s0_payload[j][WORD_WIDTH +: WORD_SIZE]));
+                end else begin : g_no_wr_join
+                    assign s0_wr_join[i][j] = 1'b0;
+                end
                 // two lanes that need different passes
                 assign s0_conflict[i][j] = s0_mask[i] && s0_mask[j] && s0_same_bank[i][j]
-                                        && ~(s0_read && s0_same_word[i][j]);
+                                        && ~(s0_read && s0_same_word[i][j]) && ~s0_wr_join[i][j];
             end else begin : g_none
                 assign s0_same_bank[i][j] = 1'b0;
                 assign s0_same_word[i][j] = 1'b0;
+                assign s0_wr_join[i][j]   = 1'b0;
                 assign s0_conflict[i][j]  = 1'b0;
             end
         end
@@ -186,6 +204,15 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
         assign s0_first[i] = s0_mask[i] && ~(| (s0_mask & s0_same_bank[i]));
     end
 
+    // A store lane rides along with its bank's winner when every lower lane of
+    // the bank writes other bytes of the same word: lanes writing the same
+    // bytes still go in lane order, one pass each.
+    wire [NUM_LANES-1:0] s0_riders;
+    for (genvar i = 0; i < NUM_LANES; ++i) begin : g_s0_riders
+        assign s0_riders[i] = s0_mask[i] && (| (s0_mask & s0_same_bank[i]))
+                           && ~(| (s0_mask & s0_same_bank[i] & ~s0_wr_join[i]));
+    end
+
     // S1
 
     reg                          s1_valid;
@@ -194,6 +221,8 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
     // the next pass serves every pending lane
     reg                                    s1_last;
     reg [NUM_LANES-1:0]                    s1_winners;
+    reg [NUM_LANES-1:0]                    s1_riders;
+    reg [NUM_LANES-1:0][NUM_LANES-1:0]     s1_wr_join;
     reg [BLOCK_WIDTH-1:0]                  s1_block;
     reg                                    s1_rw;
     reg                                    s1_read;
@@ -213,16 +242,20 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
 
     wire [NUM_LANES-1:0] served;
     for (genvar i = 0; i < NUM_LANES; ++i) begin : g_served
-        assign served[i] = s1_winners[i] || (s1_read && s1_pending[i] && (| (s1_winners & s1_same_word[i])));
+        assign served[i] = s1_winners[i] || (s1_read && s1_pending[i] && (| (s1_winners & s1_same_word[i])))
+                        || s1_riders[i];
     end
 
     wire [NUM_LANES-1:0]                winners_n;
+    wire [NUM_LANES-1:0]                riders_n;
     wire [NUM_LANES-1:0][NUM_LANES-1:0] pending_conflict;
     for (genvar i = 0; i < NUM_LANES; ++i) begin : g_winners_n
         assign winners_n[i] = s1_pending[i] && ~(| (s1_pending & s1_same_bank[i]));
+        assign riders_n[i]  = s1_pending[i] && (| (s1_pending & s1_same_bank[i]))
+                           && ~(| (s1_pending & s1_same_bank[i] & ~s1_wr_join[i]));
         for (genvar j = 0; j < NUM_LANES; ++j) begin : g_conflict
             assign pending_conflict[i][j] = s1_pending[i] && s1_pending[j] && s1_same_bank[i][j]
-                                         && ~(s1_read && s1_same_word[i][j]);
+                                         && ~(s1_read && s1_same_word[i][j]) && ~s1_wr_join[i][j];
         end
     end
     wire last_n = ~(| pending_conflict);
@@ -246,6 +279,8 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
             s1_ready     <= 1'b1;
             s1_last      <= s0_one_pass;
             s1_winners   <= s0_first;
+            s1_riders    <= s0_riders;
+            s1_wr_join   <= s0_wr_join;
             s1_pending   <= s0_mask;
             s1_block     <= s0_block;
             s1_rw        <= s0_rw;
@@ -264,6 +299,7 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
             s1_ready     <= 1'b1;
             s1_last      <= last_n;
             s1_winners   <= winners_n;
+            s1_riders    <= riders_n;
         end
     end
 
@@ -321,6 +357,37 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
             .data_out ({sel_addr, sel_payload})
         );
 
+        wire [PAYLOAD_WIDTH-1:0] bank_payload_n;
+        if (WR_MERGE != 0) begin : g_merge
+            // The winner's and the riders' bytes: they write different bytes of
+            // the word, so each byte is the OR of the lanes that enable it.
+            reg [WORD_WIDTH-1:0] m_data;
+            reg [WORD_SIZE-1:0]  m_byteen;
+            always @(*) begin
+                m_data   = '0;
+                m_byteen = '0;
+                for (integer i = 0; i < NUM_LANES; ++i) begin
+                    if ((sel[i] || s1_riders[i]) && (s1_bank[i] == BANK_SEL_WIDTH'(b))) begin
+                        for (integer k = 0; k < WORD_SIZE; ++k) begin
+                            m_data[k*8 +: 8] = m_data[k*8 +: 8]
+                                             | (s1_payload[i][k*8 +: 8] & {8{s1_payload[i][WORD_WIDTH + k]}});
+                        end
+                        m_byteen = m_byteen | s1_payload[i][WORD_WIDTH +: WORD_SIZE];
+                    end
+                end
+            end
+            `UNUSED_VAR (sel_payload[WORD_WIDTH + WORD_SIZE - 1 : 0])
+            if (PAYLOAD_WIDTH > (WORD_WIDTH + WORD_SIZE)) begin : g_sideband
+                assign bank_payload_n = {sel_payload[PAYLOAD_WIDTH-1 : WORD_WIDTH + WORD_SIZE], m_byteen, m_data};
+            end else begin : g_no_sideband
+                assign bank_payload_n = {m_byteen, m_data};
+            end
+        end else begin : g_no_merge
+            assign bank_payload_n = sel_payload;
+        end
+
+        assign pass_banks[b] = (| sel);
+
         always @(posedge clk) begin
             if (reset) begin
                 bank_valid_r[b] <= 1'b0;
@@ -328,9 +395,11 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
                 bank_valid_r[b] <= pass_fire && (| sel);
             end
             bank_addr_r[b]    <= sel_addr;
-            bank_payload_r[b] <= sel_payload;
+            bank_payload_r[b] <= bank_payload_n;
         end
     end
+
+    assign pass_want = s1_valid && s1_ready;
 
     always @(posedge clk) begin
         bank_rw_r   <= s1_rw;

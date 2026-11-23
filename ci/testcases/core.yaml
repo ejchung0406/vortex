@@ -312,6 +312,70 @@ tests:
   app: lmem_access
   args: -n16 -s
   configs: -DVX_CFG_NUM_THREADS=16 -DVX_CFG_EXT_A_ENABLE -DVX_CFG_ISSUE_WIDTH=2
+# Store lanes that write different bytes of one bank word share its access
+# (VX_CFG_LMEM_WR_MERGE), and each LSU block's stores have a pass engine of
+# their own, the engines sharing a cycle on different banks
+# (VX_CFG_LMEM_WR_ROW): stores of every size whose lanes meet in one word,
+# then streams of 4-byte-spaced and word-spaced stores from every warp.
+- id: parity-lmem-wr-merge
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lmem_wr_merge
+  args: -w4
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_LMEM_WR_MERGE=1
+- id: parity-lmem-wr-row
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lmem_wr_merge
+  args: -w4
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_LMEM_WR_ROW=1
+- id: parity-lmem-wr-merge-row
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lmem_wr_merge
+  args: -w8
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1
+- id: parity-smem-rate-sts4-merge-row
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: smem_rate
+  args: -k13 -w8 -i16
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1
+- id: parity-smem-rate-sts-row
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: smem_rate
+  args: -k11 -w8 -i16
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_LMEM_WR_ROW=1
+- id: parity-smem-rate-lds4-row
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: smem_rate
+  args: -k20 -w8 -i16
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1
+# A plain store from another LSU block between a warp's load-reserved and
+# store-conditional on a shared word breaks the reservation, through the first
+# engine and through a store engine.
+- id: parity-lmem-lrsc-store
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lmem_lrsc_store
+  args: -w4
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_A_ENABLE
+- id: parity-lmem-lrsc-store-row
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lmem_lrsc_store
+  args: -w4
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_A_ENABLE -DVX_CFG_LMEM_WR_ROW=1
 # Wide loads and stores: SimX and RTL expand and time them alike.
 - id: parity-ldst-wide
   check: model_parity
