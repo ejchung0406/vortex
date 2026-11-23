@@ -65,7 +65,7 @@ static void put(std::vector<uint8_t>& r, uint32_t off, V v) {
 }
 
 // a warp's region after the kernel: the stores applied in thread order
-static std::vector<uint8_t> reference(uint32_t w, uint32_t T) {
+static std::vector<uint8_t> reference(uint32_t w, uint32_t T, uint32_t nw) {
   std::vector<uint8_t> r(WM_REGION, 0);
   for (uint32_t t = 0; t < T; ++t) {
     if (cases & 1)  put<uint8_t>(r, WM_BYTES + t, uint8_t(0x80 | t));
@@ -83,6 +83,17 @@ static std::vector<uint8_t> reference(uint32_t w, uint32_t T) {
       put<uint32_t>(r, WM_SEQ + 4 * t, (0x66000000u | (w << 8) | t));
       put<uint8_t>(r, WM_SEQ + 4 * t + 1, uint8_t(0xee));
     }
+    if ((cases & 256) && (t % 3) != 0) {
+      put<uint32_t>(r, WM_MASKED + 4 * t, 0x3a000000u | (w << 8) | t);
+    }
+    if ((cases & 512) && (t % 8) < 3) {
+      uint32_t off = ((t % 8) == 1) ? WM_ROW : (((t % 8) == 2) ? 4 : 0);
+      put<uint32_t>(r, WM_XROW + 8 * (t / 8) + off, 0x5c000000u | (w << 8) | t);
+    }
+    if (cases & 1024) {
+      put<uint32_t>(r, WM_XWARP + 4 * t, 0x77000000u | (w << 8) | t);
+      put<uint32_t>(r, WM_XWRES + 4 * t, 0x77000000u | (((w + 1) % nw) << 8) | t);
+    }
   }
   return r;
 }
@@ -96,8 +107,8 @@ int main(int argc, char *argv[]) {
   uint64_t num_threads, num_warps;
   RT_CHECK(vx_device_query(device, VX_CAPS_NUM_THREADS, &num_threads));
   RT_CHECK(vx_device_query(device, VX_CAPS_NUM_WARPS, &num_warps));
-  if (warps > num_warps || WM_SEQ + 4 * num_threads > WM_REGION || (num_threads % 8) != 0) {
-    std::cout << "Error: needs warps <= " << num_warps << " and 8..88 threads, a multiple of 8" << std::endl;
+  if (warps > num_warps || 4 * num_threads > 128) {
+    std::cout << "Error: needs warps <= " << num_warps << " and at most 32 threads" << std::endl;
     return -1;
   }
 
@@ -128,7 +139,7 @@ int main(int argc, char *argv[]) {
 
   int errors = 0;
   for (uint32_t w = 0; w < warps; ++w) {
-    auto ref = reference(w, (uint32_t)num_threads);
+    auto ref = reference(w, (uint32_t)num_threads, warps);
     for (uint32_t b = 0; b < WM_REGION; ++b) {
       uint8_t got = h_out[(uint64_t)w * WM_REGION + b];
       if (got != ref[b]) {

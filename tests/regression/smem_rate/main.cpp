@@ -27,7 +27,7 @@
 
 static const char* kNames[WR_NKINDS] = {
   "int_dep", "int_ind4", "int_ind8", "fma_dep", "fma_ind4", "fma_ind8",
-  "br_every1", "br_every4", "br_every16", "lds_own", "lds_chase", "sts_own", "lds_nouse", "sts_own4", "lds_nouse4", "sts_own8", "csr", "splitjoin", "bar", "div", "lds_own4", "sts_same"};
+  "br_every1", "br_every4", "br_every16", "lds_own", "lds_chase", "sts_own", "lds_nouse", "sts_own4", "lds_nouse4", "sts_own8", "csr", "splitjoin", "bar", "div", "lds_own4", "sts_same", "mix"};
 
 const char* kernel_file = "kernel.vxbin";
 uint32_t kind  = 0;
@@ -64,7 +64,7 @@ static void parse_args(int argc, char **argv) {
 
 // What kernel_main leaves in out[] for thread t: the registers of its class
 // after `iters` iterations, folded as the kernel folds them.
-static uint64_t reference(uint32_t kind, uint32_t iters, uint32_t t, uint64_t word_size) {
+static uint64_t reference(uint32_t kind, uint32_t iters, uint32_t t, uint64_t word_size, bool mix_store) {
   uint64_t y = 3 + (kind & 1), n = iters;
   uint64_t a[8];
   float f[8];
@@ -95,6 +95,9 @@ static uint64_t reference(uint32_t kind, uint32_t iters, uint32_t t, uint64_t wo
   case WR_LDS_NOUSE4:
   case WR_LDS_NOUSE: for (auto& v : a) v = 0; break;
   case WR_LDS_CHASE: a[0] = 0; break;
+  case WR_MIX:
+    if (!mix_store) { for (auto& v : a) v = 0; }
+    break;
   case WR_DIV:       a[0] = t % y; break;
   default:           break; // WR_BR1, WR_STS_OWN: no register changes
   }
@@ -164,6 +167,7 @@ int main(int argc, char *argv[]) {
   vx_event_release(launch_ev);
 
   uint64_t lo = UINT64_MAX, hi = 0, worst = 0;
+  uint64_t worst_store = 0, worst_load = 0;
   int errors = 0;
   for (uint32_t w = 0; w < warps; ++w) {
     uint64_t c0 = h_out[2 * w], c1 = h_out[2 * w + 1];
@@ -175,11 +179,13 @@ int main(int argc, char *argv[]) {
     lo = std::min(lo, c0);
     hi = std::max(hi, c1);
     worst = std::max(worst, c1 - c0);
+    if ((w & 3) == 0) worst_store = std::max(worst_store, c1 - c0);
+    else              worst_load  = std::max(worst_load, c1 - c0);
   }
   uint64_t hash = 1469598103934665603ull;
   uint64_t word_size = h_out[warps * 2 + nthreads];
   for (uint64_t i = 0; i < nthreads; ++i) {
-    uint64_t got = h_out[warps * 2 + i], ref = reference(kind, iters, i, word_size);
+    uint64_t got = h_out[warps * 2 + i], ref = reference(kind, iters, i, word_size, ((i / num_threads) & 3) == 0);
     if (got != ref) {
       if (errors < 16) {
         printf("*** error: thread %llu registers=%016llx, expected=%016llx\n", (unsigned long long)i,
@@ -192,6 +198,9 @@ int main(int argc, char *argv[]) {
   if (errors == 0) {
     printf("kind=%s W=%u iters=%u cyc_per_iter_warp=%.2f cyc_per_iter_sm=%.2f hash=%016llx\n", kNames[kind], warps, iters,
            (double)worst / iters, (double)(hi - lo) / iters, (unsigned long long)hash);
+  }
+  if (errors == 0 && kind == WR_MIX) {
+    printf("mix: cyc_per_iter store_warps=%.2f load_warps=%.2f\n", (double)worst_store / iters, (double)worst_load / iters);
   }
   cleanup();
   if (errors != 0) {

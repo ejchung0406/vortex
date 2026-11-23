@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 // bytes of shared memory each warp works in
-#define WM_REGION 1024
+#define WM_REGION 2048
 
 // offsets of the cases in a warp's region; t is the thread within the warp
 #define WM_BYTES   0    // sb at +t: 8 lanes per bank word, all different bytes
@@ -16,9 +16,16 @@
 #define WM_RDBACK  400  // sw at +4t, read back by the same thread
 #define WM_RESULT  528  // what it read back, complemented, sw at +4t
 #define WM_SEQ     656  // sw at +4t, then sb at +4t+1: the later store's byte stays
+#define WM_MASKED  784  // sw at +4t from two threads of every three: a partial thread mask
+#define WM_XROW    1024 // per 8 threads: sw at +0, sw one bank row further (+128), sw at +4:
+                        // a lane of another word of the bank between two that could share one
+#define WM_XWARP   1280 // sw at +4t, read by the next warp after a barrier
+#define WM_XWRES   1408 // what a warp read from the next one's WM_XWARP, sw at +4t
+#define WM_ROW     128  // bytes of a bank row at the 16-bank, 8-byte shapes the case is laid out for
 
-// one bit per case, in the order above (bit 6: read back and result, bit 7: sequence)
-#define WM_ALL 0xff
+// one bit per case, in the order above (bit 6: read back and result, bit 7:
+// sequence, bit 8: masked, bit 9: other row, bit 10: across warps)
+#define WM_ALL 0x7ff
 
 typedef struct {
   uint64_t out_addr;  // WM_REGION / 8 words per warp

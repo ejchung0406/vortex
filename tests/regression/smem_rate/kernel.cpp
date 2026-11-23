@@ -43,7 +43,8 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   auto out = reinterpret_cast<uint64_t*>(arg->out_addr);
   auto lmem = reinterpret_cast<uintptr_t*>(__local_mem());
   uintptr_t myword = (uintptr_t)(lmem + t);
-  if (kind == WR_STS_OWN4 || kind == WR_LDS_NOUSE4 || kind == WR_LDS_OWN4) {
+  const bool mix_store = (kind == WR_MIX) && (((t / vx_num_threads()) & 3) == 0);
+  if (kind == WR_STS_OWN4 || kind == WR_LDS_NOUSE4 || kind == WR_LDS_OWN4 || kind == WR_MIX) {
     auto l4 = reinterpret_cast<uint32_t*>(lmem);
     l4[t] = t;
     myword = (uintptr_t)(l4 + t);
@@ -109,6 +110,16 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
     for (uint32_t i = 0; i < iters; ++i)
       __asm__ volatile(R128(LDP " %0, 0(%0)\n\t") : "+r"(a0) :: "memory");
     break;
+  case WR_MIX:
+    // warp-uniform: a warp runs one of the two loops
+    if (mix_store) {
+      for (uint32_t i = 0; i < iters; ++i)
+        __asm__ volatile(R128("sw %1, 0(%0)\n\t") :: "r"(myword), "r"(a1) : "memory");
+    } else {
+      for (uint32_t i = 0; i < iters; ++i)
+        __asm__ volatile(R16(LDN8) : "=&r"(a0), "=&r"(a1), "=&r"(a2), "=&r"(a3), "=&r"(a4), "=&r"(a5), "=&r"(a6), "=&r"(a7) : "r"(myword) : "memory");
+    }
+    break;
   case WR_STS_SAME:
   case WR_STS_OWN4:
   case WR_STS_OWN:
@@ -155,7 +166,7 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   if (kind == WR_LDS_CHASE) {
     a0 -= myword;
   }
-  if (kind == WR_LDS_NOUSE4 || kind == WR_LDS_OWN4) {
+  if (kind == WR_LDS_NOUSE4 || kind == WR_LDS_OWN4 || (kind == WR_MIX && !mix_store)) {
     a0 -= t; a1 -= t; a2 -= t; a3 -= t; a4 -= t; a5 -= t; a6 -= t; a7 -= t;
   }
   if (kind == WR_LDS_OWN || kind == WR_LDS_NOUSE) {

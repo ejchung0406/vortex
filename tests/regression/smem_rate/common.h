@@ -27,7 +27,8 @@
 #define WR_DIV        19  // 128 dependent remuw
 #define WR_LDS_OWN4   20  // 16 x (8 loads of the thread's own 4-byte-spaced word + 8 xors)
 #define WR_STS_SAME   21  // 128 stores of one word per warp from every thread: one bank, a pass per lane
-#define WR_NKINDS     22
+#define WR_MIX        22  // every fourth warp stores (as sts_own4), the others load (as lds_nouse4)
+#define WR_NKINDS     23
 
 typedef struct {
   uint32_t kind;

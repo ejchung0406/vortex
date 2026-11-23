@@ -48,6 +48,25 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
     *reinterpret_cast<volatile uint32_t*>(reg + WM_SEQ + 4 * t) = 0x66000000u | (w << 8) | t;
     *reinterpret_cast<volatile uint8_t*>(reg + WM_SEQ + 4 * t + 1) = 0xee;
   }
+  if ((cases & 256) && (t % 3) != 0) {
+    *reinterpret_cast<volatile uint32_t*>(reg + WM_MASKED + 4 * t) = 0x3a000000u | (w << 8) | t;
+  }
+  if ((cases & 512) && (t % 8) < 3) {
+    // threads 0 and 2 of the group write the halves of one word, thread 1 the
+    // word of the same bank one row further
+    const uint32_t off = ((t % 8) == 1) ? WM_ROW : (((t % 8) == 2) ? 4 : 0);
+    *reinterpret_cast<volatile uint32_t*>(reg + WM_XROW + 8 * (t / 8) + off) = 0x5c000000u | (w << 8) | t;
+  }
+  if (cases & 1024) {
+    *reinterpret_cast<volatile uint32_t*>(reg + WM_XWARP + 4 * t) = 0x77000000u | (w << 8) | t;
+  }
+  __syncthreads();
+  if (cases & 1024) {
+    const uint32_t nw = blockDim.x / T;
+    auto next = reinterpret_cast<uint8_t*>(__local_mem()) + ((w + 1) % nw) * WM_REGION;
+    const uint32_t seen = *reinterpret_cast<volatile uint32_t*>(next + WM_XWARP + 4 * t);
+    *reinterpret_cast<volatile uint32_t*>(reg + WM_XWRES + 4 * t) = seen;
+  }
   __syncthreads();
 
   for (uint32_t i = t; i < nwords; i += T) {

@@ -359,6 +359,23 @@ tests:
   app: smem_rate
   args: -k20 -w8 -i16
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1
+# A plain store from another LSU block between a warp's load-reserved and
+# store-conditional on a shared word breaks the reservation, through the first
+# engine and through a store engine.
+- id: parity-lmem-lrsc-store
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lmem_lrsc_store
+  args: -w4
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_A_ENABLE
+- id: parity-lmem-lrsc-store-row
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lmem_lrsc_store
+  args: -w4
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=16 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_A_ENABLE -DVX_CFG_LMEM_WR_ROW=1
 # Wide loads and stores: SimX and RTL expand and time them alike.
 - id: parity-ldst-wide
   check: model_parity
