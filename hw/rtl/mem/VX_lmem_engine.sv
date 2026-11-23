@@ -16,8 +16,11 @@
 // One pass engine of the warp-wide local memory. It takes a whole warp request
 // and gives it to the banks in passes: in a pass every bank goes to the lowest
 // pending lane that maps to it, and a plain read also serves every pending lane
-// reading that lane's word. Lanes left over replay in the next passes, and the
-// request retires before the next one starts.
+// reading that lane's word. With WR_MERGE a plain-store lane also goes with
+// its bank's winner when every lower pending lane of the bank writes other
+// bytes of the same word. Lanes left over replay in the next passes, and the
+// request retires before the next one starts. A pass is issued when pass_en
+// allows: the unit withholds it from a store engine whose banks another has.
 //
 //   S0  the engine's input queue of two requests; the head's lanes' words are
 //       compared pairwise
@@ -356,23 +359,24 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
 
         wire [PAYLOAD_WIDTH-1:0] bank_payload_n;
         if (WR_MERGE != 0) begin : g_merge
-            // the winner's payload with the riders' bytes laid over it
+            // The winner's and the riders' bytes: they write different bytes of
+            // the word, so each byte is the OR of the lanes that enable it.
             reg [WORD_WIDTH-1:0] m_data;
             reg [WORD_SIZE-1:0]  m_byteen;
             always @(*) begin
-                m_data   = sel_payload[WORD_WIDTH-1:0];
-                m_byteen = sel_payload[WORD_WIDTH +: WORD_SIZE];
+                m_data   = '0;
+                m_byteen = '0;
                 for (integer i = 0; i < NUM_LANES; ++i) begin
-                    if (s1_riders[i] && (s1_bank[i] == BANK_SEL_WIDTH'(b))) begin
+                    if ((sel[i] || s1_riders[i]) && (s1_bank[i] == BANK_SEL_WIDTH'(b))) begin
                         for (integer k = 0; k < WORD_SIZE; ++k) begin
-                            if (s1_payload[i][WORD_WIDTH + k]) begin
-                                m_data[k*8 +: 8] = s1_payload[i][k*8 +: 8];
-                                m_byteen[k]      = 1'b1;
-                            end
+                            m_data[k*8 +: 8] = m_data[k*8 +: 8]
+                                             | (s1_payload[i][k*8 +: 8] & {8{s1_payload[i][WORD_WIDTH + k]}});
                         end
+                        m_byteen = m_byteen | s1_payload[i][WORD_WIDTH +: WORD_SIZE];
                     end
                 end
             end
+            `UNUSED_VAR (sel_payload[WORD_WIDTH + WORD_SIZE - 1 : 0])
             if (PAYLOAD_WIDTH > (WORD_WIDTH + WORD_SIZE)) begin : g_sideband
                 assign bank_payload_n = {sel_payload[PAYLOAD_WIDTH-1 : WORD_WIDTH + WORD_SIZE], m_byteen, m_data};
             end else begin : g_no_sideband

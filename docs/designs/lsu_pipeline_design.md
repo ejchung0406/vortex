@@ -339,6 +339,22 @@ waited at an input the cycle before, or in a cycle the first engine may be
 taking one. Each engine's block is chosen a cycle ahead, so the ready a block
 sees comes from registers.
 
+Two knobs, both off by default, change the store path. With
+`VX_CFG_LMEM_WR_MERGE` the lanes of a plain store that write different bytes of
+one bank word (elements narrower than the XLEN-wide bank word) take its access
+together; a lane goes with its bank's winner only when no lower pending lane of
+the bank writes any of its bytes, so lanes writing the same bytes still land in
+lane order. With `VX_CFG_LMEM_WR_ROW` the plain stores leave the first engine:
+every LSU block has a store engine of its own, and the engines' passes share a
+cycle whenever they take different banks, the engine after the last cycle's
+first taker choosing first, so the banks bound the stores at one row per cycle
+in all. A store enters its engine only while the first and the read engine are
+empty, and those take nothing while a store is at an input or in a store
+engine: every store keeps its order against every read, the loads and atomics
+of all blocks wait while any block stores, and a block's ready then depends on
+the other blocks' requests of the same cycle. A store engine's write breaks a
+reservation on its word as the first engine's does.
+
 The direct-memory clients (the DXA writes and the tensor unit's reads) take
 whole bank rows on the first port: a DMA request seen in one cycle stops the
 passes and gets the banks the next.

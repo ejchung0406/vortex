@@ -593,7 +593,7 @@ public:
     , engines_((config.num_blocks > 1) ? 2 : 1)
     , s_rr_(0)
     , wr_merge_(VX_CFG_LMEM_WR_MERGE != 0)
-    , wr_row_((VX_CFG_LMEM_WR_ROW != 0) && (config.num_blocks > 1))
+    , wr_row_(VX_CFG_LMEM_WR_ROW != 0)
     , rsp_regs_(config.num_blocks)
     , arb_last_(engines_.size(), 0)
     , write_waiting_r_(false)

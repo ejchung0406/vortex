@@ -447,6 +447,7 @@ Atomics with `.aq`/`.rl` get these steps around them. All of it is skipped when 
 **How it works:**
 - `VX_lmem_unit` takes a whole warp request per cycle and serves it in passes (`VX_lmem_engine`). In each pass every bank goes to the lowest pending lane that maps to it, and every pending read lane of the same word rides along. Lanes left over replay in the next pass.
 - A request retires before the next one starts, so the banks see every lane in program order.
+- Optional (`VX_CFG_LMEM_WR_MERGE`, `VX_CFG_LMEM_WR_ROW`, default 0): store lanes writing different bytes of one bank word share its access, and each LSU block's stores go through a store engine of its own, the engines' passes sharing a cycle on different banks (see [lsu_pipeline_design.md](lsu_pipeline_design.md)).
 - With several LSU blocks, a second, read-only engine uses the banks' second port (`VX_1rw1r_ram`), so two warps' reads go through each cycle. Stores and atomics use the first engine alone and are ordered against every read.
 - Each block's response leaves from its own register; the response queue is bypassed when it is empty, so no latency is added.
 - The DMA port (DXA writes, TCU reads) takes whole bank rows, in the cycle after its request is seen.
