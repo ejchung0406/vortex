@@ -172,6 +172,10 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
 
 ### Fixed
 
+- **Fetch-ahead instruction-buffer credits.** With `VX_CFG_FETCH_INFLIGHT > 1`, RTL and SimX reserve an instruction-buffer
+  slot for each fetch pick and release it when the instruction leaves the buffer or decode drops the response. This prevents
+  a response for a full buffer from holding up other warps in the same frontend slice.
+  [VX_warp_sched.sv](hw/rtl/core/VX_warp_sched.sv), [sim/simx/core.cpp](sim/simx/core.cpp).
 - **SimX lane dispatch with fewer lanes than threads.** Two differences from the RTL when a unit takes a warp in packets (SIMD
   widths above 12). The LSU's input held two packets where the RTL holds three (the packet register and the two-entry skid
   buffer), so a split load or store took one cycle more per op; and with one batch per unit, a block that had finished its op
