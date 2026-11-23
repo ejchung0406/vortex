@@ -1,6 +1,6 @@
 # rover as a third place to run Vortex simulations (set up 2026-11-22)
 
-rover (`ssh rover` from Phoenix, user echung67; rover.cc.gt.atl.ga.us) is a
+rover (`ssh rover` from Phoenix) is a
 shared lab server, not a cluster: 2 x Xeon E5-2696 v4 (88 threads, 2.2 GHz),
 251 GB RAM, Ubuntu 24.04, gcc 13.3, no Slurm and no time limit. Its use is the
 long rtlsim reference runs that do not fit Phoenix's or ICE's limits.
