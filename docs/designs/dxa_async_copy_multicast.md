@@ -87,6 +87,7 @@ queue out to `NUM_DXA_UNITS` workers.
 | [`VX_dxa_addr_gen.sv`](../../hw/rtl/dxa/VX_dxa_addr_gen.sv) | Single rolling-cursor `gmem_cursor_r` + 4-level ripple odometer; one beat/cycle. |
 | [`VX_dxa_gmem_req.sv`](../../hw/rtl/dxa/VX_dxa_gmem_req.sv) | Issues GMEM reads; `slot_table_r[MAX_OUTSTANDING]` per-tag credit model (≤8 inflight); direct-drains responses to smem_wr. |
 | [`VX_dxa_smem_wr.sv`](../../hw/rtl/dxa/VX_dxa_smem_wr.sv) | Barrel-shift drain → 1 LMEM word/beat; K-major per-element scatter; serial multicast replay; completion flag on last write. |
+| [`VX_dxa_lmem_arb.sv`](../../hw/rtl/dxa/VX_dxa_lmem_arb.sv) | With `DXA_LMEM_ROW`: the workers' LMEM writes, one bank row per cycle from up to one worker per line-wide part of the row (see the rates below). |
 | [`VX_dxa_completion.sv`](../../hw/rtl/dxa/VX_dxa_completion.sv) | Instantiated **per core** in [`VX_mem_unit.sv:183`](../../hw/rtl/core/VX_mem_unit.sv#L183) (LMEM side): snoops bank writes, reads the completion attr, pushes `bar_addr` into a depth-`NUM_WARPS` FIFO → `txbar_bus_if`. |
 | [`VX_dxa_watchdog.sv`](../../hw/rtl/dxa/VX_dxa_watchdog.sv) | `RUNTIME_ASSERT` on `STALL_TIMEOUT` cycles of no progress. |
 
@@ -124,6 +125,22 @@ queue out to `NUM_DXA_UNITS` workers.
    priority arbiter (DXA = idx 0, TCU = idx 1). `VX_dxa_completion` snoops
    the bank fire, reads the attr, and releases barriers via `txbar_bus_if`;
    software `arrive_and_wait` unblocks the consumer.
+
+**Rates (knobs, default off).** The engine moves a line per cycle from
+memory through one port, one line per cycle into the LMEM (half a row when
+a bank row is two lines wide), and each worker takes a line every other
+cycle. `DXA_GMEM_PORTS` = P gives it P ports, port i sharing the socket's
+memory port i below the caches and serving workers i, i+P, ... with an
+arbiter of its own (and a unit-MMU lane under VM). `DXA_LMEM_ROW` writes a
+whole bank row per cycle: next to the round-robin's beat, each line-wide
+part of the row the beat leaves empty takes the beat of another worker that
+lies wholly in that part, for the same core and not completing a transfer;
+the parts land at rows of their own (part 0 at the request address, the
+others at addresses carried in the DMA attribute), so a cycle still writes
+each bank at most once. `DXA_LINE_PER_CYCLE` lets smem_wr's holding register
+take a line in the cycle its line moves to the fill buffer. The LMEM rule is
+unchanged: a DMA write takes the banks for its cycle and no LSU pass is
+issued in a cycle a DMA request is seen.
 
 **K-major / TCU tie-in.** `dest_kmajor` produces the transposed SMEM
 layout `smem[i0·tile1 + i1]` that the WGMMA B-tile path consumes directly

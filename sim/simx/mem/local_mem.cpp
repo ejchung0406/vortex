@@ -375,17 +375,20 @@ protected:
         auto& req = in.peek();
         uint64_t line_addr = to_local_addr(req.addr) & ~uint64_t(VX_CFG_MEM_BLOCK_SIZE - 1);
         if (req.is_write()) {
-          for (uint32_t b = 0; req.data && b < VX_CFG_MEM_BLOCK_SIZE; ++b) {
-            if (req.byteen & (1ull << b)) {
-              uint8_t value = (*req.data)[b];
-              ram_.write(&value, line_addr + b, 1);
+          // a row part a write leaves empty arrives with no byte enabled
+          if (req.byteen != 0) {
+            for (uint32_t b = 0; req.data && b < VX_CFG_MEM_BLOCK_SIZE; ++b) {
+              if (req.byteen & (1ull << b)) {
+                uint8_t value = (*req.data)[b];
+                ram_.write(&value, line_addr + b, 1);
+              }
             }
-          }
 #if VX_CFG_EXT_A_ENABLED
-          amo_unit_.invalidate(to_local_addr(req.addr), req.hart_id);
+            amo_unit_.invalidate(to_local_addr(req.addr), req.hart_id);
 #endif
-          if (config_.rd_port) {
-            wr_rows_.push_back(this->row_of(req.addr));
+            if (config_.rd_port) {
+              wr_rows_.push_back(this->row_of(req.addr));
+            }
           }
         } else {
           MemRsp rsp{req.tag, req.hart_id, req.uuid};

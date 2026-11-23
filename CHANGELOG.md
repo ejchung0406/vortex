@@ -9,6 +9,15 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
 
 ### Added
 
+- **DXA engine at two lines per cycle (`VX_CFG_DXA_GMEM_PORTS`, `VX_CFG_DXA_LMEM_ROW`, `VX_CFG_DXA_LINE_PER_CYCLE`, default
+  1/0/0).** The engine's memory side had one port in the RTL (SimX already modelled `DXA_GMEM_PORTS`); its shared-memory
+  writes took one worker's beat per cycle, half of a 128-byte bank row; and a worker took a line every other cycle. Now port i
+  shares the socket's memory port i below the caches and serves workers i, i+P, ... (both models); with `DXA_LMEM_ROW` the
+  lines of up to one worker per line-wide part of a bank row are written in one cycle, each part at its own row, still each
+  bank at most once per cycle; with `DXA_LINE_PER_CYCLE` a worker takes a line every cycle. The defaults keep the timing as it
+  was. New test `dxa_rowmix` (concurrent copies at mixed alignments, checked byte by byte).
+  [hw/rtl/dxa/VX_dxa_lmem_arb.sv](hw/rtl/dxa/VX_dxa_lmem_arb.sv), [hw/rtl/dxa/VX_dxa_core.sv](hw/rtl/dxa/VX_dxa_core.sv),
+  [hw/rtl/mem/VX_lmem_unit.sv](hw/rtl/mem/VX_lmem_unit.sv), [sim/simx/dxa/dxa_core.cpp](sim/simx/dxa/dxa_core.cpp).
 - **Shared-memory stores bounded by the banks (`VX_CFG_LMEM_WR_MERGE`, `VX_CFG_LMEM_WR_ROW`, default 0).** The local-memory
   unit wrote through one pass engine that takes one LSU block's request per cycle, and two store lanes in one bank word each
   took a pass, so a warp's store of 4-byte elements held the unit for three cycles per block request. With `LMEM_WR_MERGE`

@@ -782,7 +782,11 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
     VX_mem_bus_if #(
         .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
         .TAG_WIDTH (SOCKET_MEM_TAG_WIDTH)
-    ) dxa_gmem_bus_if[1]();
+    ) dxa_gmem_bus_if[`VX_CFG_DXA_GMEM_PORTS]();
+
+    // DXA port i shares the socket's memory port i, below the caches.
+    `STATIC_ASSERT((`VX_CFG_DXA_GMEM_PORTS >= 1) && (`VX_CFG_DXA_GMEM_PORTS <= L1_MEM_PORTS),
+        ("invalid parameter: DXA_GMEM_PORTS=%0d must be 1..L1_MEM_PORTS=%0d", `VX_CFG_DXA_GMEM_PORTS, L1_MEM_PORTS))
 
     VX_mem_bus_if #(
         .DATA_SIZE   (DXA_LMEM_WORD_SIZE),
@@ -803,7 +807,7 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
     VX_dxa_core #(
         .INSTANCE_ID    (`SFORMATF(("%s-dxa", INSTANCE_ID))),
         .NUM_REQS       (`VX_CFG_SOCKET_SIZE),
-        .GMEM_OUT_PORTS (1)
+        .GMEM_OUT_PORTS (`VX_CFG_DXA_GMEM_PORTS)
     ) dxa_core (
         .clk              (clk),
         .reset            (reset),
@@ -880,7 +884,9 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
     `ASSIGN_VX_MEM_BUS_IF_EX (unit_mem_bus_if[UMMU_RTCACHE_IDX], rtcache_mem_bus_tmp_if[0], SOCKET_MEM_TAG_WIDTH, RTCACHE_MEM_TAG_WIDTH, UUID_WIDTH);
 `endif
 `ifdef VX_CFG_EXT_DXA_ENABLE
-    `ASSIGN_VX_MEM_BUS_IF (unit_mem_bus_if[UMMU_DXA_IDX], dxa_gmem_bus_if[0]);
+    for (genvar i = 0; i < `VX_CFG_DXA_GMEM_PORTS; ++i) begin : g_ummu_dxa
+        `ASSIGN_VX_MEM_BUS_IF (unit_mem_bus_if[UMMU_DXA_IDX + i], dxa_gmem_bus_if[i]);
+    end
 `endif
 
     VX_mmu_fault_if ummu_fault_if();
@@ -932,6 +938,8 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
     ///////////////////////////////////////////////////////////////////////////
 
     wire mem_arb_empty;
+    wire [L1_MEM_PORTS-1:0] port_arb_empty;
+    assign mem_arb_empty = (& port_arb_empty);
 
     // L2-facing memory ports. Port 0 arbitrates icache and dcache with the
     // socket-resident units' memory ports (tcache, rtcache, DXA gmem) as
@@ -1002,10 +1010,65 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
                 .reset    (reset),
                 .in_fire  (arb_in_fire),
                 .out_fire (socket_arb_out_if[0].req_valid && socket_arb_out_if[0].req_ready),
-                .empty    (mem_arb_empty)
+                .empty    (port_arb_empty[0])
             );
 
             `ASSIGN_VX_MEM_BUS_IF (mem_bus_if[0], socket_arb_out_if[0]);
+        end else if (`VX_CFG_EXT_DXA_ENABLED && (i < `VX_CFG_DXA_GMEM_PORTS)) begin : g_i_dxa
+            // the dcache's port i ahead of the DXA's port i
+            localparam PORT_ARB_TAG_WIDTH = SOCKET_MEM_TAG_WIDTH + 1;
+            VX_mem_bus_if #(
+                .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+                .TAG_WIDTH (SOCKET_MEM_TAG_WIDTH)
+            ) port_arb_in_if[2]();
+
+            VX_mem_bus_if #(
+                .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+                .TAG_WIDTH (PORT_ARB_TAG_WIDTH)
+            ) port_arb_out_if[1]();
+
+            `ASSIGN_VX_MEM_BUS_IF_EX (port_arb_in_if[0], dcache_mem_bus_if[i], SOCKET_MEM_TAG_WIDTH, DCACHE_MEM_TAG_WIDTH, UUID_WIDTH);
+        `ifdef VX_CFG_EXT_DXA_ENABLE
+        `ifdef SOCKET_UNIT_MMU_ENABLE
+            `ASSIGN_VX_MEM_BUS_IF (port_arb_in_if[1], unit_phys_bus_if[UMMU_DXA_IDX + i]);
+        `else
+            `ASSIGN_VX_MEM_BUS_IF (port_arb_in_if[1], dxa_gmem_bus_if[i]);
+        `endif
+        `endif
+
+            VX_mem_bus_arb #(
+                .NUM_INPUTS (2),
+                .NUM_OUTPUTS(1),
+                .DATA_SIZE  (`VX_CFG_L1_LINE_SIZE),
+                .TAG_WIDTH  (SOCKET_MEM_TAG_WIDTH),
+                .TAG_SEL_IDX(0),
+                .ARBITER    ("P"), // dcache first
+                // unregistered, as the port's path was without the DXA
+                .REQ_OUT_BUF(0),
+                .RSP_OUT_BUF(0)
+            ) mem_arb (
+                .clk        (clk),
+                .reset      (reset),
+                .bus_in_if  (port_arb_in_if),
+                .bus_out_if (port_arb_out_if)
+            );
+
+            wire [1:0] arb_in_fire;
+            for (genvar j = 0; j < 2; ++j) begin : g_arb_in_fire
+                assign arb_in_fire[j] = port_arb_in_if[j].req_valid && port_arb_in_if[j].req_ready;
+            end
+            VX_mem_req_pending #(
+                .NUM_INPUTS  (2),
+                .NUM_OUTPUTS (1)
+            ) mem_arb_pending (
+                .clk      (clk),
+                .reset    (reset),
+                .in_fire  (arb_in_fire),
+                .out_fire (port_arb_out_if[0].req_valid && port_arb_out_if[0].req_ready),
+                .empty    (port_arb_empty[i])
+            );
+
+            `ASSIGN_VX_MEM_BUS_IF_EX (mem_bus_if[i], port_arb_out_if[0], SOCKET_MEM_ARB_TAG_WIDTH, PORT_ARB_TAG_WIDTH, UUID_WIDTH);
         end else begin : g_i
             VX_mem_bus_if #(
                 .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
@@ -1014,6 +1077,7 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
 
             `ASSIGN_VX_MEM_BUS_IF_EX (l1_mem_arb_bus_if, dcache_mem_bus_if[i], SOCKET_MEM_ARB_TAG_WIDTH, DCACHE_MEM_TAG_WIDTH, UUID_WIDTH);
             `ASSIGN_VX_MEM_BUS_IF (mem_bus_if[i], l1_mem_arb_bus_if);
+            assign port_arb_empty[i] = 1'b1;
         end
     end
 

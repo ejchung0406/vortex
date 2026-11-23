@@ -555,12 +555,26 @@ VX_CFG_TCU_TMEM_A_BANKROW = 0
 # Cluster-level DXA engine count, decoupled from cores/socket size.
 VX_CFG_NUM_DXA_CORES = "expr: max(1, up($VX_CFG_NUM_CORES / 8))"
 VX_CFG_DXA_MEM_PORTS = "expr: min($VX_CFG_NUM_DXA_CORES, up($VX_CFG_NUM_CORES / $VX_CFG_SOCKET_SIZE) * $VX_CFG_L1_MEM_PORTS)"
-# Memory ports of a socket's DXA engine toward L2. Port i shares the socket's
-# L1 memory port i with the caches, below them in priority, and the engine's
-# workers are split evenly over the ports. SimX only: the RTL engine has one.
+# Memory ports of a socket's DXA engine toward L2, one line per cycle each.
+# Port i shares the socket's L1 memory port i with the caches, below them in
+# priority, and serves workers i, i + DXA_GMEM_PORTS, ... with an arbiter of
+# its own. At most L1_MEM_PORTS and NUM_DXA_CORES.
 VX_CFG_DXA_GMEM_PORTS = 1
 VX_CFG_DXA_QUEUE_SIZE = 16
 VX_CFG_DXA_MAX_INFLIGHT = 8
+# 1: a shared-memory write of the DXA takes a whole bank row: next to the
+# beat the round-robin picks, every other line-wide part of the row takes the
+# beat of another worker that lies wholly in that part, at its own row of the
+# banks, so two 64 B lines reach a 128 B row in one cycle. A beat carrying a
+# transfer's completion goes alone. Still one write per cycle: each bank is
+# written at most once, one row's worth in all. 0: one worker's beat per
+# cycle (half a row when the row is two lines wide). No effect when a bank
+# row is no wider than a line.
+VX_CFG_DXA_LMEM_ROW = 0
+# 1: a worker takes a line from memory every cycle: its holding register
+# refills in the cycle its line moves on to the write buffer. 0: every
+# other cycle at best.
+VX_CFG_DXA_LINE_PER_CYCLE = 0
 
 [rtu]
 # RTU (Ray-Tracing Unit)

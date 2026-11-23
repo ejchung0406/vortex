@@ -2209,5 +2209,7 @@ using MemArbiter  = TxRxArbiter<MemReq, MemRsp>;
 using MemCrossBar = TxRxCrossBar<MemReq, MemRsp>;
 using MemReqSlice = RegSlice<MemReq>;
 using MemRspSlice = RegSlice<MemRsp>;
+using MemReqMerge = RegMerge<MemReq>;
+using MemRspSplit = RegSplit<MemRsp>;
 
 }

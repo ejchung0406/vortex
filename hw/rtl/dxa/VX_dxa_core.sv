@@ -188,42 +188,104 @@ module VX_dxa_core import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
 `else
     localparam GMEM_OUT_REG = 0;
 `endif
-    VX_mem_bus_arb #(
-        .NUM_INPUTS  (`VX_CFG_NUM_DXA_CORES),
-        .NUM_OUTPUTS (GMEM_OUT_PORTS),
-        .DATA_SIZE   (`VX_CFG_L1_LINE_SIZE),
-        .TAG_WIDTH   (WORKER_GMEM_TAG_WIDTH),
-        .ARBITER     ("R"),
-        // Registered whenever its consumer needs a flop to start from: the
-        // arbiter's merge, or the unit MMU's TLB lookup under VM.
-        .REQ_OUT_BUF (((`VX_CFG_NUM_DXA_CORES > 1) || GMEM_OUT_REG) ? 3 : 0)
-    ) gmem_arb (
-        .clk        (clk),
-        .reset      (reset),
-        .bus_in_if  (worker_gmem_bus_if),
-        .bus_out_if (gmem_bus_if)
-    );
+    if (GMEM_OUT_PORTS == 1) begin : g_gmem_arb
+        VX_mem_bus_arb #(
+            .NUM_INPUTS  (`VX_CFG_NUM_DXA_CORES),
+            .NUM_OUTPUTS (1),
+            .DATA_SIZE   (`VX_CFG_L1_LINE_SIZE),
+            .TAG_WIDTH   (WORKER_GMEM_TAG_WIDTH),
+            .ARBITER     ("R"),
+            // Registered whenever its consumer needs a flop to start from: the
+            // arbiter's merge, or the unit MMU's TLB lookup under VM.
+            .REQ_OUT_BUF (((`VX_CFG_NUM_DXA_CORES > 1) || GMEM_OUT_REG) ? 3 : 0)
+        ) gmem_arb (
+            .clk        (clk),
+            .reset      (reset),
+            .bus_in_if  (worker_gmem_bus_if),
+            .bus_out_if (gmem_bus_if)
+        );
+    end else begin : g_gmem_ports
+        // Port p serves workers p, p + GMEM_OUT_PORTS, ... with an arbiter of
+        // its own, so the ports move independently (an N:P stream arbiter
+        // grants one group of workers across all its outputs per cycle) and a
+        // dispatch that fills the lowest idle workers first uses every port.
+        `STATIC_ASSERT((GMEM_OUT_PORTS <= `VX_CFG_NUM_DXA_CORES),
+            ("invalid parameter: DXA_GMEM_PORTS=%0d leaves a port without a worker (NUM_DXA_CORES=%0d)", GMEM_OUT_PORTS, `VX_CFG_NUM_DXA_CORES))
+        for (genvar p = 0; p < GMEM_OUT_PORTS; ++p) begin : g_port
+            localparam SIZE = (`VX_CFG_NUM_DXA_CORES - p + GMEM_OUT_PORTS - 1) / GMEM_OUT_PORTS;
+            localparam PORT_TAG_WIDTH = WORKER_GMEM_TAG_WIDTH + `ARB_SEL_BITS(SIZE, 1);
 
-    VX_mem_bus_arb #(
-        .NUM_INPUTS  (`VX_CFG_NUM_DXA_CORES),
-        .NUM_OUTPUTS (1),
-        .DATA_SIZE   (DXA_LMEM_WORD_SIZE),
-        .TAG_WIDTH   (DXA_LMEM_TAG_W),
-        .TAG_SEL_IDX (DXA_LMEM_TAG_W - UUID_WIDTH),
-        .ATTR_WIDTH  (DXA_LMEM_ATTR_W),
-        .ADDR_WIDTH  (DXA_LMEM_ADDR_W),
-        .ARBITER     ("R"),
-        // Register the SMEM write request at the DXA boundary: the tiled
-        // dest-address is a deep cone whose sink is the far-away core LMEM BRAM,
-        // so terminate it at a local flop to keep placement compact and isolate
-        // the long DXA→core route into its own cycle.
-        .REQ_OUT_BUF (3)
-    ) lmem_arb (
-        .clk        (clk),
-        .reset      (reset),
-        .bus_in_if  (worker_smem_bus_if),
-        .bus_out_if (smem_bus_if)
-    );
+            VX_mem_bus_if #(
+                .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+                .TAG_WIDTH (WORKER_GMEM_TAG_WIDTH)
+            ) slice_bus_if[SIZE]();
+
+            for (genvar j = 0; j < SIZE; ++j) begin : g_slice
+                `ASSIGN_VX_MEM_BUS_IF (slice_bus_if[j], worker_gmem_bus_if[p + j * GMEM_OUT_PORTS]);
+            end
+
+            VX_mem_bus_if #(
+                .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+                .TAG_WIDTH (PORT_TAG_WIDTH)
+            ) port_bus_if[1]();
+
+            VX_mem_bus_arb #(
+                .NUM_INPUTS  (SIZE),
+                .NUM_OUTPUTS (1),
+                .DATA_SIZE   (`VX_CFG_L1_LINE_SIZE),
+                .TAG_WIDTH   (WORKER_GMEM_TAG_WIDTH),
+                .ARBITER     ("R"),
+                .REQ_OUT_BUF (((SIZE > 1) || GMEM_OUT_REG) ? 3 : 0)
+            ) gmem_arb (
+                .clk        (clk),
+                .reset      (reset),
+                .bus_in_if  (slice_bus_if),
+                .bus_out_if (port_bus_if)
+            );
+
+            `ASSIGN_VX_MEM_BUS_IF_EX (gmem_bus_if[p], port_bus_if[0], SOCKET_MEM_TAG_WIDTH, PORT_TAG_WIDTH, UUID_WIDTH);
+        end
+    end
+
+    // Register the SMEM write request at the DXA boundary: the tiled
+    // dest-address is a deep cone whose sink is the far-away core LMEM BRAM,
+    // so terminate it at a local flop to keep placement compact and isolate
+    // the long DXA→core route into its own cycle.
+    if (DXA_LMEM_PARTS > 1) begin : g_lmem_row_arb
+        VX_dxa_lmem_arb #(
+            .NUM_INPUTS  (`VX_CFG_NUM_DXA_CORES),
+            .PARTS       (DXA_LMEM_PARTS),
+            .DATA_SIZE   (DXA_LMEM_WORD_SIZE),
+            .ADDR_WIDTH  (DXA_LMEM_ADDR_W),
+            .TAG_WIDTH   (DXA_LMEM_TAG_W),
+            .TAG_SEL_IDX (DXA_LMEM_TAG_W - UUID_WIDTH),
+            .DONE_WIDTH  (DXA_LMEM_DONE_W),
+            .ATTR_WIDTH  (DXA_LMEM_ATTR_W),
+            .REQ_OUT_BUF (3)
+        ) lmem_arb (
+            .clk        (clk),
+            .reset      (reset),
+            .bus_in_if  (worker_smem_bus_if),
+            .bus_out_if (smem_bus_if)
+        );
+    end else begin : g_lmem_arb
+        VX_mem_bus_arb #(
+            .NUM_INPUTS  (`VX_CFG_NUM_DXA_CORES),
+            .NUM_OUTPUTS (1),
+            .DATA_SIZE   (DXA_LMEM_WORD_SIZE),
+            .TAG_WIDTH   (DXA_LMEM_TAG_W),
+            .TAG_SEL_IDX (DXA_LMEM_TAG_W - UUID_WIDTH),
+            .ATTR_WIDTH  (DXA_LMEM_ATTR_W),
+            .ADDR_WIDTH  (DXA_LMEM_ADDR_W),
+            .ARBITER     ("R"),
+            .REQ_OUT_BUF (3)
+        ) lmem_arb (
+            .clk        (clk),
+            .reset      (reset),
+            .bus_in_if  (worker_smem_bus_if),
+            .bus_out_if (smem_bus_if)
+        );
+    end
 
     // ================================================================
     // Busy / perf
