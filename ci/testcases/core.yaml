@@ -291,6 +291,35 @@ tests:
   via: blackbox
   app: uniform_ld
   configs: -DVX_CFG_NUM_THREADS=16
+# More coalescer channels than the lanes' bytes in words (VX_CFG_DCACHE_CHANNELS):
+# 8 lanes of 8 bytes on a 64-byte word, in two and in four lane groups. Lanes
+# in one, two, three and eight words, with one LSU block and with two; then a
+# line-aligned load stream, whose two channels read one word per load.
+- id: parity-dcache-ch2-lane-words
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lane_words
+  configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_DCACHE_WORD_SIZE=64 -DVX_CFG_DCACHE_CHANNELS=2
+- id: parity-dcache-ch2-lane-words-iw2
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lane_words
+  configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_DCACHE_WORD_SIZE=64 -DVX_CFG_DCACHE_CHANNELS=2 -DVX_CFG_ISSUE_WIDTH=2
+- id: parity-dcache-ch4-lane-words
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: lane_words
+  configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_DCACHE_WORD_SIZE=64 -DVX_CFG_DCACHE_CHANNELS=4
+- id: parity-dcache-ch2-ldstream-line
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: ldstream
+  args: -t32 -b8 -u4 -m0.125 -l
+  configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_DCACHE_WORD_SIZE=64 -DVX_CFG_DCACHE_CHANNELS=2
 # Warp-wide local memory: broadcast reads, bank-conflict replays, sub-word and
 # same-word stores, with one LSU block and with two, where the read engine
 # works the banks' second port.
