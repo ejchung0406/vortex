@@ -671,3 +671,58 @@ with EXT_A at 16x32 fails its LR/SC count (details in notes/sm-rate.md).
 C/E/D/F one-cycle items parked. Profile text for LANE_DISPATCH_GAPLESS still
 says "accepted overshoot": reword to a plain gap. Findings lists / study/ need
 a sync with everything since 2026-11-22 17:00.
+
+## Update 2026-11-23 (03:00 EST)
+
+Pushed head of `feature/dxa-borrowing` on the fork: `5f855c2ae`.
+
+Merged since the 01:45 update
+- `88077548c` h200s turns the shared-memory store knobs on. Knob-on SimX baselines (rover, source `vlmw`):
+  gemm_block 576,342, gemm_tmem_decode 1,320,528, fetch_squash 10,018, warp_rate 113,382, tmem_roof 62,075,
+  war_order 342,988, bwstream -n2048 452,761 (all unchanged); bar_vis 127,357 -> 148,003.
+- `feature/fetch-credit` (Codex finished it: 4e95ed5c4, 4829b9222, 180e49dcb; merge 5f855c2ae). rtlsim h200s
+  bwstream -n512 depth 4: 140,758 -> 102,481 (depth 1: 102,205; SimX 104,279). n=2048 rtlsim (`fcr3_r_n2048`)
+  still running at the time of writing; expected about 395,000. h200s baselines after this merge not re-taken yet.
+- Findings 51-56 and measurement notes M3-M4 in both language lists; study/ mirrored (66ad11f49, fd151ee95).
+
+User decisions today
+- No reviewer chains: I look over each change once myself and merge. A separate reviewer only for large
+  changes (NoC).
+- Shared-memory loads (`VX_CFG_LMEM_RD_ROW`, branch `feature/lmem-rd`): to be merged, not parked.
+- Per-SM memory rate: option A2 for the DXA engine (two lines per cycle on the memory side, a full 128 B
+  shared-memory row per cycle, workers take a line every cycle; 16 workers is our choice, not a part value)
+  and B2 for plain loads (dcache word 64 B + response queue 16). The issue-loop cost (610 cycles per tile
+  against 290-302) is not in A2.
+- The decode-kernel gap is to be fixed.
+
+Running
+- Agent `dxa-rate` (Opus): A2 on branch `feature/dxa-rate`, notes in `dxa-rate.md`, rover prefix `dxr_`.
+- Agent `sm-rate`: finishing `feature/lmem-rd` for merge (in-flight checks, why lmem_access is 6.5% slower
+  with RD_ROW, commit series, h200s enable as a separate last commit). Interim: 4-byte loads 0.49 -> 0.79
+  per clock; mixed store/load no longer starves (64 warps 10,471 / 26,848 -> 10,476 / 10,472 cycles);
+  gemm_block 576,342 -> 540,149.
+- B2, mine: rover SimX points `b2a_*` (base), `b2b_*` (word 64), `b2c_*` (word 64 + CRSQ 16), source `vlmw`,
+  kernels ldl/ldp (ldstream -t2048 -b8 -u8 -m16 -a [-l]), bw, gb, dec, roof, war, wr. Next: rtlsim check, then
+  the h200s profile.
+- Barrier gap (finding 56), mine: SimX counters (`tmp/bar-probe` 75a6fe4f0, rover `bp_s_k0`): of 113,490
+  blocked barrier evaluations, 103,029 are "an LSU block's request queue is not empty", 3,373 dcache
+  adapter/coalescer, 2,668 own pending instructions, 1,148 dcache request out, 952 local-memory store. The
+  queue rules read the same in both models (reads enter only with room in the pending table; leave when
+  memory accepts), so the neighbours' loads leave more slowly in SimX. rtlsim at scope 0 (`spb0_r_k0`) running.
+- NoC review by Codex: cut off by its limit after 7 minutes; `noc-review-codex.md` has 9 lines, verdict
+  pending. It notes the author's +4.0% / -2.6% do not match fin5_res.txt (+5.94% / -0.75%). Resume with
+  `codex-tasks/noc-review.txt` after the reset (about 06:20 EST).
+
+New open item
+- Decode kernel, SimX faster than RTL at either fetch depth (h200s, gemm_tmem_decode -k1024): depth 4
+  rtlsim 401,699 / SimX 348,388; depth 1 404,210 / 363,388. Scoreboard stalls 21% / 23% and 12% / 11%. No owner
+  yet; mine after the barrier.
+
+Branches not merged: feature/lmem-rd (in progress), feature/dxa-rate (in progress), feature/noc (+ noc-apps,
+noc-kmu; review pending), feature/lsu-accept / wce-cexp / wce-tb (parked one-cycle items C/E), perf/mt3 and
+perf/build2 (parked, not to be merged), tmp/bar-probe (throwaway). Merged branches deleted: barvis-parity,
+fetch-credit, sm-rate, sm-rate-f.
+
+rover script changes today: `rover_point.sh` takes a per-tree build lock (two points sharing a MODEL raced
+on the runtime build); use PERFCLASS, not PERF, to reuse a model; pass `</dev/null` to rover_start.sh inside
+a read loop.
