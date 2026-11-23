@@ -27,6 +27,16 @@
 // the first engine may be taking one. A write therefore never meets a read of
 // the other port in a bank, and keeps its order against every read.
 //
+// With WR_ROW the plain stores leave the first engine: each LSU block has a
+// store engine of its own, and their passes share a cycle whenever they take
+// different banks, so the banks bound the stores (one row's worth per cycle in
+// all) instead of one engine. The order against reads is kept by phases: a
+// store enters its engine only while the first and the read engine are empty,
+// and those take nothing while a store is at an input or in a store engine.
+// A block's ready then depends on the other blocks' requests of the cycle.
+// With WR_MERGE the lanes of a plain store that write different bytes of one
+// bank word take its access together.
+//
 // The DMA port (row writes and reads) takes whole bank rows. A DMA request seen
 // in one cycle gets the banks the next: no pass is issued in a cycle a DMA
 // request is seen, and it is accepted in the cycle that follows. An atomic owns
@@ -248,7 +258,8 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     // store against every read is kept as before: a store enters only while
     // both of those engines are empty, and they take nothing while a store is
     // at an input or in a store engine.
-    localparam ROW = (WR_ROW != 0) && DUAL;
+    localparam ROW = (WR_ROW != 0);
+    `STATIC_ASSERT((WR_ROW == 0) || DUAL, ("the store engines share the banks between LSU blocks: NUM_BLOCKS > 1"))
 
     wire [NUM_BLOCKS-1:0] in_store;
     wire [NUM_BLOCKS-1:0] ab_valid;
@@ -631,6 +642,15 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             assign st_addr[i]   = addr;
             assign st_data[i]   = data;
             assign st_byteen[i] = byteen;
+
+            wire [NUM_BLOCKS-1:0] st_takers;
+            for (genvar k = 0; k < NUM_BLOCKS; ++k) begin : g_takers
+                assign st_takers[k] = s_bank_valid[k][i];
+            end
+            `RUNTIME_ASSERT($onehot0(st_takers),
+                ("%t: %s bank %0d: two store engines' passes in one cycle (%b)", $time, INSTANCE_ID, i, st_takers))
+            `RUNTIME_ASSERT(~(wr && (a_bank_valid[i] || b_bank_valid[i])),
+                ("%t: %s bank %0d: a store engine's write with a pass of the first or the read engine", $time, INSTANCE_ID, i))
         end
 
         `POP_COUNT(st_perf_served, s_perf_served);
@@ -987,18 +1007,24 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             reg [BANK_ADDR_WIDTH-1:0] res_addr_r;
             reg [HART_ID_WIDTH-1:0]   res_hart_id_r;
 
+            // A store engine's write is a plain store like the first engine's
+            // and reaches the stage the same way; the two never have the bank in
+            // one cycle.
+            wire res_in = lsu_active || st_wr[i];
+            wire [BANK_ADDR_WIDTH-1:0] res_addr_in = st_wr[i] ? st_addr[i] : a_bank_addr[i];
+
             always @(posedge clk) begin
                 if (reset) begin
                     res_valid_r <= 1'b0;
                 end else begin
-                    res_valid_r <= lsu_active;
+                    res_valid_r <= res_in;
                 end
-                if (lsu_active) begin
-                    res_is_lr_r    <= is_lr_in;
-                    res_is_sc_r    <= is_sc_in;
-                    res_is_amo_r   <= a_bank_amo;
-                    res_is_store_r <= a_bank_rw;
-                    res_addr_r     <= a_bank_addr[i];
+                if (res_in) begin
+                    res_is_lr_r    <= lsu_active && is_lr_in;
+                    res_is_sc_r    <= lsu_active && is_sc_in;
+                    res_is_amo_r   <= lsu_active && a_bank_amo;
+                    res_is_store_r <= st_wr[i] || (lsu_active && a_bank_rw);
+                    res_addr_r     <= res_addr_in;
                     res_hart_id_r  <= req_hart_id;
                 end
             end
@@ -1140,7 +1166,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
                 .res_invalidate   (res_valid_r && res_commits_store),
                 .res_hart_id      (res_hart_id_r),
                 .res_line_addr    (res_addr_r),
-                .res_line_addr_n  (a_bank_addr[i]),
+                .res_line_addr_n  (res_addr_in),
                 .res_check        (res_check)
             );
             `UNUSED_VAR (amo_ret_word)
