@@ -695,11 +695,10 @@ public:
 
     scheduler_->schedule_begin();
 
-    // Each frontend slice picks among its own warps whose ibuffer is not full; a
-    // buffer is full at exactly IBUF_SIZE entries, a flag registered at the end
-    // of the previous cycle. With an L1, once every warp's buffer is full any
-    // ready warp may fetch, its instruction waiting at decode.
+    // The all-full bypass is limited to single-fetch mode. With fetch ahead,
+    // each pick reserves a slot so responses can drain without waiting on issue.
     bool all_full = (VX_CFG_ICACHE_ENABLED || VX_CFG_DCACHE_ENABLED)
+                 && (VX_CFG_FETCH_INFLIGHT == 1)
                  && (ibuf_full_r_.count() == VX_CFG_NUM_WARPS);
     // the cycle is idle when no slice has a warp to fetch, its latch free or not
     bool any_cand = false;
@@ -826,6 +825,7 @@ public:
       // it. The buffer's full flag is registered: a slot it frees this cycle
       // takes an instruction from the next.
       bool ibuf_room = !ibuf_queue_full_r_.test(trace->wid);
+      __assert(ibuf_room || VX_CFG_FETCH_INFLIGHT == 1, "a fetch ahead waits for its warp's buffer");
     #ifdef VX_CFG_EXT_C_ENABLE
       // Decompressor classifies the rsp: emit-ready (sets trace->code) or
       // queues a refetch internally for cross-word 32-bit completion.
@@ -1293,13 +1293,11 @@ public:
     this->ibuf_count_changed(wid);
   }
 
-  // A warp's buffer is full at IBUF_SIZE instructions in flight (exactly that
-  // many without fetch ahead; a warp picked once every buffer is full goes
-  // past its slots, and with fetch ahead must read as full there), its queue
-  // at IBUF_SIZE or more past the icache; schedule() registers both.
+  // Exact equality ends the depth-one bypass after a warp overfetches.
   void ibuf_count_changed(uint32_t wid) {
-    ibuf_full_.set(wid, (VX_CFG_FETCH_INFLIGHT > 1) ? (ibuf_inflight_[wid] >= VX_CFG_IBUF_SIZE)
-                                                    : (ibuf_inflight_[wid] == VX_CFG_IBUF_SIZE));
+    __assert(VX_CFG_FETCH_INFLIGHT == 1 || ibuf_inflight_[wid] <= VX_CFG_IBUF_SIZE,
+             "fetch ahead picked past the instruction buffer");
+    ibuf_full_.set(wid, ibuf_inflight_[wid] == VX_CFG_IBUF_SIZE);
     ibuf_queue_full_.set(wid, ibuf_queued_[wid] >= VX_CFG_IBUF_SIZE);
   }
 

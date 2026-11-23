@@ -37,6 +37,9 @@ module VX_ibuffer import VX_gpu_pkg::*; #(
     wire [PER_ISSUE_WARPS-1:0] ibuf_ready_in;
     assign decode_if.ready = ibuf_ready_in[decode_wis];
 
+    `RUNTIME_ASSERT(~(FETCH_AHEAD && decode_if.valid && ~decode_if.ready),
+        ("%t: %s an instruction waits for its warp's buffer, wid=%0d", $time, INSTANCE_ID, decode_if.data.wid))
+
     for (genvar w = 0; w < PER_ISSUE_WARPS; ++w) begin : g_bufs
         VX_ibuffer_if ibuffer_tmp_if();
         VX_elastic_buffer #(
