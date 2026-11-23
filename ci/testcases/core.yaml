@@ -581,6 +581,14 @@ tests:
   app: bar_vis
   args: -w4
   configs: -DVX_CFG_NUM_WARPS=16 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_BAR_DRAIN_SCOPE=1 -DVX_CFG_L1_LINK_LATENCY=8
+# The barrier must wait for a cold first LSU packet after the others hit.
+- id: parity-bar-vis-split-load
+  check: model_parity
+  via: blackbox
+  app: bar_vis
+  xlen: [64]
+  args: -b -g2 -w4 -r8 -n65536
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_BAR_DRAIN_SCOPE=1 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_PLATFORM_MEMORY_LATENCY=200
 # The same at the h200s unit shape and its front-end settings: 32-thread warps
 # on 16 ALU and 8 LSU lanes, four CTAs of four warps on an 8-warp core. A
 # checking CTA runs beside a loading one, and the two loading CTAs run apart
