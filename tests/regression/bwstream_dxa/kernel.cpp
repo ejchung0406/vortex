@@ -12,7 +12,7 @@
 // of it, which leaves the DXA's delivery as the only work per tile.
 constexpr uint32_t kDescSrc = 0;
 
-__kernel void kernel_main(kernel_arg_t* arg) {
+__kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   auto out = reinterpret_cast<float*>(arg->out_addr);
   const uint32_t tile  = arg->tile_elems;
   const uint32_t tiles = arg->tiles;
