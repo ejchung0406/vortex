@@ -58,6 +58,8 @@ class SimObjectBase;
 template <typename T> class SimChannel;
 template <typename T> class SimEventLink;
 template <typename T> class RegSlice;
+template <typename T> class RegMerge;
+template <typename T> class RegSplit;
 
 class SimContext {
 private:
@@ -851,6 +853,8 @@ private:
   template <typename U> friend class SimChannel;
   template <typename U> friend class SimEventLink;
   template <typename U> friend class RegSlice;
+  template <typename U> friend class RegMerge;
+  template <typename U> friend class RegSplit;
   friend class SimChannelBase;
 };
 

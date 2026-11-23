@@ -352,7 +352,9 @@ module VX_dxa_smem_wr import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
     wire sw_is_last_defer = sw_valid && sw_last && (sw_outstanding > SEQ_W'(1));
     wire can_defer        = sw_is_last_defer && ~defer_valid_r;
 
-    wire can_capture_pend = ~pend_valid_r;
+    // DXA_LINE_PER_CYCLE: pend also takes a line in the cycle its own moves
+    // to the fill buffer, so a worker takes a line every cycle.
+    wire can_capture_pend;
 
     // sw_ready conditions:
     //   - If sw is the last-to-defer: defer is empty → accept.
@@ -386,6 +388,11 @@ module VX_dxa_smem_wr import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
     // fb-load source select (pend preferred over a promoted defer) + metadata.
     // ════════════════════════════════════════════════════════════════════
     wire use_pend_for_fb  = load_pend_to_fb;
+    if (`VX_CFG_DXA_LINE_PER_CYCLE != 0) begin : g_pend_refill
+        assign can_capture_pend = ~pend_valid_r || use_pend_for_fb;
+    end else begin : g_pend_hold
+        assign can_capture_pend = ~pend_valid_r;
+    end
     wire use_defer_for_fb = promote_defer && ~use_pend_for_fb;
     wire fb_load_now      = use_pend_for_fb || use_defer_for_fb;
 
@@ -739,7 +746,7 @@ module VX_dxa_smem_wr import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
     assign smem_bus_if.req_data.addr   = smem_wr_addr;
     assign smem_bus_if.req_data.data   = fb_word_data;
     assign smem_bus_if.req_data.byteen = fb_word_byteen;
-    assign smem_bus_if.req_data.attr   = {smem_wr_attr_last, smem_wr_attr_bar};
+    assign smem_bus_if.req_data.attr   = DXA_LMEM_ATTR_W'({smem_wr_attr_last, smem_wr_attr_bar});
     assign smem_bus_if.req_data.tag.uuid  = active_uuid;   // tag DXA write with its issuing uuid
     assign smem_bus_if.req_data.tag.value = SMEM_TAG_VALUE_W'(active_core_id) << ENGINE_VALUE_W;
     assign smem_bus_if.rsp_ready       = 1'b0;

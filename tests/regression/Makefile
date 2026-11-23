@@ -13,7 +13,7 @@ TESTS := \
     sgemm_tcu sgemm_tcu_mx sgemm_tcu_sp_mx sgemm_tcu_wg sgemm_tcu_wg_mx sgemm_tcu_sp sgemm_tcu_wg_sp  \
     sgemm2_dxa sgemm2_tcu sgemm_tcu_wg_dxa sgemm_tcu_wg_sp_dxa        \
     sgemm2_dxa_mcast sgemm_tcu_wg_dxa_mcast                           \
-    dxa_copy dxa_copy_mcast dxa_kmajor_check                          \
+    dxa_copy dxa_copy_mcast dxa_kmajor_check dxa_rowmix dxa_corun     \
     async_barrier async_gbarrier gbar_phase bar_slot_phase packld wgather wsync quad_lod \
     occupancy multikernel reopen module_reload icache_flush single_cta \
     flush_coherence lazy_fetch sector_merge raw_order war_order bar_vis cache_ways chase warp_rate smem_rate lmem_wr_merge lmem_rw_order fetch_squash \

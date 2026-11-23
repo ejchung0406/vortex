@@ -2039,8 +2039,10 @@ package VX_gpu_pkg;
         logic                                                       eop;
     } lsu_rsp_data_t;
 
-    // DXA lmem tag and attr widths for DMA arb.
-    localparam DXA_LMEM_ATTR_W = (BAR_ADDR_W + 1);
+    // DXA lmem tag and attr widths for DMA arb. The attr's low bits are the
+    // completion {last, bar}; with DXA_LMEM_ROW the row addresses of the row
+    // parts 1.. follow (part 0 is at the request address).
+    localparam DXA_LMEM_DONE_W = (BAR_ADDR_W + 1);
     localparam DXA_LMEM_ENGINE_TAG_W = UUID_WIDTH + 1;
     localparam DXA_LMEM_TAG_W = DXA_LMEM_ENGINE_TAG_W + NC_BITS;
     localparam DXA_LMEM_OUT_TAG_W = DXA_LMEM_TAG_W + `ARB_SEL_BITS(`VX_CFG_NUM_DXA_CORES, 1);
@@ -2058,6 +2060,10 @@ package VX_gpu_pkg;
     localparam LMEM_DMA_EN         = (`VX_CFG_EXT_DXA_ENABLED + `VX_CFG_TCU_WGMMA_ENABLED) != 0;
     localparam LMEM_DMA_DATA_SIZE  = `VX_CFG_LMEM_NUM_BANKS * LSU_WORD_SIZE;
     localparam LMEM_DMA_ADDR_WIDTH = `VX_CFG_LMEM_LOG_SIZE - `CLOG2(`VX_CFG_LMEM_NUM_BANKS * LSU_WORD_SIZE);
+    localparam DXA_LMEM_PARTS      = (`VX_CFG_EXT_DXA_ENABLED && (`VX_CFG_DXA_LMEM_ROW != 0)
+                                      && (LMEM_DMA_DATA_SIZE > `VX_CFG_MEM_BLOCK_SIZE))
+                                   ? (LMEM_DMA_DATA_SIZE / `VX_CFG_MEM_BLOCK_SIZE) : 1;
+    localparam DXA_LMEM_ATTR_W     = DXA_LMEM_DONE_W + (DXA_LMEM_PARTS - 1) * LMEM_DMA_ADDR_WIDTH;
     localparam LMEM_DMA_ATTR_W     = `MAX(DXA_LMEM_ATTR_W, TCU_LMEM_ATTR_W);
     localparam LMEM_DMA_DXA_IDX    = 0;
     localparam LMEM_DMA_TCU_IDX    = LMEM_DMA_DXA_IDX + `VX_CFG_EXT_DXA_ENABLED;
@@ -2337,7 +2343,7 @@ package VX_gpu_pkg;
     localparam UMMU_TCACHE_IDX      = 0;
     localparam UMMU_RTCACHE_IDX     = UMMU_TCACHE_IDX + `VX_CFG_EXT_TEX_ENABLED;
     localparam UMMU_DXA_IDX         = UMMU_RTCACHE_IDX + `VX_CFG_EXT_RTU_ENABLED;
-    localparam UMMU_NUM_REQS        = `VX_CFG_EXT_TEX_ENABLED + `VX_CFG_EXT_RTU_ENABLED + `VX_CFG_EXT_DXA_ENABLED;
+    localparam UMMU_NUM_REQS        = `VX_CFG_EXT_TEX_ENABLED + `VX_CFG_EXT_RTU_ENABLED + `VX_CFG_EXT_DXA_ENABLED * `VX_CFG_DXA_GMEM_PORTS;
 
     // Widest tag among the socket arb inputs. The DXA's is a worker's in-flight
     // slot behind the worker select, with the UUID.

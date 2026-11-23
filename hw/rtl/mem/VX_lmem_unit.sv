@@ -90,6 +90,12 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     // Enable DMA port
     parameter DMA_ENABLE    = 0,
     parameter DMA_TAG_WIDTH = 1,
+    // A DMA write's row parts (NUM_BANKS / DMA_PARTS banks each) land at rows
+    // of their own: part 0 at the request address, part p > 0 at the address
+    // in the attribute's bits DMA_PADDR_LSB + (p-1) * DMA_PADDR_W.
+    parameter DMA_PARTS     = 1,
+    parameter DMA_PADDR_LSB = 0,
+    parameter DMA_PADDR_W   = 1,
 
     // Enable the row read port on the banks' second port
     parameter RD_ENABLE     = 0,
@@ -856,6 +862,17 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     wire dma_rsp_buf_ready;
     wire dma_fire = dma_slot_r && dma_valid && (dma_bus_if.req_data.rw || dma_rsp_buf_ready);
     wire dma_rd_fire = dma_fire && ~dma_bus_if.req_data.rw;
+
+    // bank row of each row part (reads take one row)
+    localparam DMA_PART_BANKS = NUM_BANKS / DMA_PARTS;
+    `STATIC_ASSERT ((DMA_PARTS >= 1) && `IS_DIVISBLE(NUM_BANKS, DMA_PARTS), ("invalid parameter"))
+    wire [DMA_PARTS-1:0][BANK_ADDR_WIDTH-1:0] dma_part_addr;
+    assign dma_part_addr[0] = BANK_ADDR_WIDTH'(dma_bus_if.req_data.addr);
+    for (genvar p = 1; p < DMA_PARTS; ++p) begin : g_dma_part_addr
+        assign dma_part_addr[p] = dma_bus_if.req_data.rw
+            ? BANK_ADDR_WIDTH'(dma_bus_if.req_data.attr[DMA_PADDR_LSB + (p - 1) * DMA_PADDR_W +: DMA_PADDR_W])
+            : dma_part_addr[0];
+    end
     wire [NUM_BANKS-1:0][WORD_WIDTH-1:0] per_bank_rdata_a;
 
     if (DMA_ENABLE) begin : g_dma_enable
@@ -950,9 +967,20 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         for (genvar i = 0; i < NUM_BANKS; ++i) begin : g_rd_st_hit
             assign rd_st_hit[i] = st_wr[i] && (st_addr[i] == rd_addr);
         end
+        wire rd_dma_hit;
+        if (DMA_PARTS > 1) begin : g_rd_dma_parts
+            wire [DMA_PARTS-1:0] part_hit;
+            for (genvar p = 0; p < DMA_PARTS; ++p) begin : g_part_hit
+                localparam PART_BYTES = DMA_PART_BANKS * WORD_SIZE;
+                assign part_hit[p] = (| dma_bus_if.req_data.byteen[p * PART_BYTES +: PART_BYTES])
+                                  && (dma_part_addr[p] == rd_addr);
+            end
+            assign rd_dma_hit = (| part_hit);
+        end else begin : g_rd_dma_row
+            assign rd_dma_hit = (dma_part_addr[0] == rd_addr);
+        end
         wire rd_row_wr = (a_bank_rw && (| rd_store_hit)) || (| rd_st_hit)
-                      || (dma_fire && dma_bus_if.req_data.rw
-                       && (BANK_ADDR_WIDTH'(dma_bus_if.req_data.addr) == rd_addr));
+                      || (dma_fire && dma_bus_if.req_data.rw && rd_dma_hit);
 
         wire rd_rsp_buf_ready;
         wire rd_ready = rd_slot_r && ~amo_stall && ~(| b_bank_valid) && ~a_read_at_banks && ~rd_row_wr && rd_rsp_buf_ready;
@@ -1296,7 +1324,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         wire [WORD_WIDTH-1:0]      bank_sram_wdata;
         wire [WORD_SIZE-1:0]       bank_sram_wren;
 
-        assign bank_sram_addr  = dma_fire     ? BANK_ADDR_WIDTH'(dma_bus_if.req_data.addr)
+        assign bank_sram_addr  = dma_fire     ? dma_part_addr[i / DMA_PART_BANKS]
                                : amo_wb_store ? amo_wb_addr
                                : st_wr[i]     ? st_addr[i]
                                               : a_bank_addr[i];

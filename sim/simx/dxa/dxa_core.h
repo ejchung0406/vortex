@@ -53,11 +53,11 @@ public:
   // each core's DxaUnit::req_out here.
   std::vector<SimChannel<DxaReq>>  dxa_req_in;
 
-  // GMEM ports to L2 (size = kDxaMemPorts). Internally fed by gmem_arb_
-  // from VX_CFG_NUM_DXA_CORES worker outputs.
+  // GMEM ports to L2 (size = kDxaMemPorts). Port p is fed by gmem_arbs_[p]
+  // from workers p, p + kDxaMemPorts, ...
   std::vector<SimChannel<MemReq>>  gmem_req_out;
   std::vector<SimChannel<MemRsp>>  gmem_rsp_in;
-  MemArbiter::Ptr                  gmem_arb_;
+  std::vector<MemArbiter::Ptr>     gmem_arbs_;
   std::vector<MemReqSlice::Ptr>    gmem_out_regs_;
 
   // LMEM row width the RTL drains per cycle: one DXA write beat covers the

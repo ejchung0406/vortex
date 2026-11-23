@@ -66,6 +66,8 @@ namespace vortex {
 // The registered boundary stage (sim/simx/regslice.h) lives in the outer
 // namespace so one declaration serves both kernels.
 template <typename T> class RegSlice;
+template <typename T> class RegMerge;
+template <typename T> class RegSplit;
 
 inline namespace sim_functional {
 
@@ -830,6 +832,8 @@ private:
   template <typename U> friend class SimChannel;
   template <typename U> friend class SimEventLink;
   template <typename U> friend class ::vortex::RegSlice;
+  template <typename U> friend class ::vortex::RegMerge;
+  template <typename U> friend class ::vortex::RegSplit;
   friend class SimChannelBase;
 };
 

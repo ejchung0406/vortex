@@ -298,12 +298,30 @@ public:
     for (uint32_t i = 1; i < VX_CFG_L1_MEM_PORTS; ++i) {
     #ifdef VX_CFG_EXT_DXA_ENABLE
       if (i < VX_CFG_DXA_GMEM_PORTS) {
-        snprintf(sname, 100, "%s-mem_arb%d", name.c_str(), i);
-        auto port_arb = MemArbiter::Create(sname, ArbiterType::Priority, 2, 1);
-        dcaches_->mem_req_out.at(i).bind(&port_arb->ReqIn.at(0));
-        port_arb->RspOut.at(0).bind(&dcaches_->mem_rsp_in.at(i));
-        bind_unit_port(port_arb, 1, UMMU_DXA_IDX + i, dxa_core_->gmem_req_out.at(i), dxa_core_->gmem_rsp_in.at(i));
-        bind_mem_port(i, port_arb->ReqOut.at(0), port_arb->RspIn.at(0));
+        // The port's registered stages take the DXA's port i below the
+        // dcache's, as the RTL's combinational 2:1 arbiter in front of them:
+        // the dcache's path keeps its slots and cycles.
+        snprintf(sname, 100, "%s-breq%d", name.c_str(), i);
+        auto breq = MemReqMerge::Create(sname, 2, 1);
+        snprintf(sname, 100, "%s-brsp%d", name.c_str(), i);
+        MemRspSplit::Ptr brsp;
+        {
+          SimPlatform::DomainScope uncore_scope(0u);
+          brsp = MemRspSplit::Create(sname, 2, 1);
+        }
+        dcaches_->mem_req_out.at(i).bind(&breq->In.at(0));
+        brsp->Out.at(0).bind(&dcaches_->mem_rsp_in.at(i));
+      #ifdef SIMX_SOCKET_UNIT_MMU
+        dxa_core_->gmem_req_out.at(i).bind(&unit_mmu_->ReqIn.at(UMMU_DXA_IDX + i));
+        unit_mmu_->RspOut.at(UMMU_DXA_IDX + i).bind(&dxa_core_->gmem_rsp_in.at(i));
+        unit_mmu_->ReqOut.at(UMMU_DXA_IDX + i).bind(&breq->In.at(1));
+        brsp->Out.at(1).bind(&unit_mmu_->RspIn.at(UMMU_DXA_IDX + i));
+      #else
+        dxa_core_->gmem_req_out.at(i).bind(&breq->In.at(1));
+        brsp->Out.at(1).bind(&dxa_core_->gmem_rsp_in.at(i));
+      #endif
+        breq->Out.bind(&simobject_->mem_req_out.at(i));
+        simobject_->mem_rsp_in.at(i).bind(&brsp->In);
         continue;
       }
     #endif

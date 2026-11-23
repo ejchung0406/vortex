@@ -176,12 +176,12 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
         VX_dxa_completion #(
             .INSTANCE_ID (`SFORMATF(("%s-lmem-dma-compl_det", INSTANCE_ID))),
             .NUM_BANKS   (`VX_CFG_LMEM_NUM_BANKS),
-            .ATTR_WIDTH  (DXA_LMEM_ATTR_W)
+            .ATTR_WIDTH  (DXA_LMEM_DONE_W)
         ) dxa_completion_detect (
             .clk           (clk),
             .reset         (reset),
             .bank_wr_fire  (dxa_bank_wr_fire),
-            .bank_wr_attr  (DXA_LMEM_ATTR_W'(lmem_dma_if.req_data.attr)),
+            .bank_wr_attr  (DXA_LMEM_DONE_W'(lmem_dma_if.req_data.attr)),
             .txbar_bus_if  (dxa_txbar_bus_if)
         );
 
@@ -219,6 +219,9 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
         .TAG_WIDTH     (LSU_TAG_WIDTH),
         .DMA_ENABLE    (LMEM_DMA_EN),
         .DMA_TAG_WIDTH (LMEM_DMA_TAG_WIDTH),
+        .DMA_PARTS     (DXA_LMEM_PARTS),
+        .DMA_PADDR_LSB (DXA_LMEM_DONE_W),
+        .DMA_PADDR_W   (LMEM_DMA_ADDR_WIDTH),
         .RD_ENABLE     (LMEM_TCU_RD),
         .RD_TAG_WIDTH  (TCU_LMEM_TAG_W),
         .AMO_ENABLE    (`VX_CFG_EXT_A_ENABLED),

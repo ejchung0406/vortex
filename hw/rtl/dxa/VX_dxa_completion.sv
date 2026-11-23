@@ -16,7 +16,7 @@
 module VX_dxa_completion import VX_gpu_pkg::*, VX_dxa_pkg::*; #(
     parameter `STRING INSTANCE_ID = "",
     parameter NUM_BANKS = 1,
-    parameter ATTR_WIDTH = DXA_LMEM_ATTR_W
+    parameter ATTR_WIDTH = DXA_LMEM_DONE_W
 ) (
     input  wire                                clk,
     input  wire                                reset,
