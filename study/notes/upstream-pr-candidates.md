@@ -640,7 +640,8 @@ Sources: `open-threads.md` ("Update 2026-11-22"), `simx-perf.md` sections 8-15, 
 - **Where**: `VX_warp_sched.sv` (credit `ibuf_size_r`, the "all buffers full" pick), `VX_scheduler.sv`, `VX_ibuffer.sv:38`; SimX `core.cpp`. With `VX_CFG_FETCH_INFLIGHT` > 1 "full" is `size >= IBUF_SIZE`, so a core whose buffers are all full stays in the all-full path and keeps picking; `decode_if.ready` is the picked warp's buffer and decode has no stage, so one warp waiting on a load blocks the front end.
 - **Evidence** (h200s, one SM, rtlsim on `rover`, RTL 602af5c84, `bwstream -u4 -b32`): depth 4 against depth 1, n=512 140,758 / 102,205 cycles, n=2048 548,386 / 395,381; fetch and buffer stalls 128% / 171% of cycles at depth 4, 4% / 2% at depth 1. SimX at the same points: 126,128 / 104,270 and 419,474 / 405,204, so the two models also disagree by 10-24% at depth 4.
 - **Fix** (approved 2026-11-22; no new knob): with fetch ahead a warp is picked only while its credit is below the buffer size; the all-full path is gone; depth 1 is unchanged. SimX with the fix: n=512 104,279, n=2048 406,539; `fetch_squash` 10,018, `warp_rate` 113,382, `tmem_roof` 62,075, `sgemm` 792,837 unchanged. The RTL runs with the fix are not finished; not merged.
-- **Not explained by it**: the barrier difference (item 56) and the decode kernel (`gemm_tmem_decode -k1024`, depth 4: rtlsim 401,699, SimX 348,388).
+- **RTL confirmed and merged** (5f855c2ae): depth 4 with the fix, rtlsim / SimX: n=512 102,481 / 104,279, n=2048 395,176 / 406,539.
+- **Not explained by it**: item 56 (see 58) and the decode kernel (closed by item 60).
 
 ### 52. Shared-memory stores take a bank row per clock behind two knobs (design; merged bd7aa26ba, default off; on in `h200s` at 88077548c, local)
 - Follows item 43. `VX_CFG_LMEM_WR_MERGE`: store lanes writing different bytes of one 8-byte word share an access. `VX_CFG_LMEM_WR_ROW`: a store engine per LSU block, one row per cycle.
@@ -660,6 +661,30 @@ Sources: `open-threads.md` ("Update 2026-11-22"), `simx-perf.md` sections 8-15, 
 ### 56. A warp at a barrier beside loading neighbours: SimX is 3-5 times slower than the RTL (SimX/RTL divergence, timing; open, cause not found)
 - **Evidence** (h200s, 64 warps, `smprobe -k0 -n2 -i20 -d5000`): rtlsim 50,477 cycles, SimX 89,793 (94,455 with the fix of item 51); the probing warp's median iteration 485 cycles in rtlsim, 2,282 in SimX. Not the front end: the RTL's fetch and buffer stalls are 4% / 0%, and depth 1 gives 500.
 - The conditions of `VX_CFG_BAR_DRAIN_SCOPE` 1 read the same in the two models term by term (`VX_wctl_unit.sv:192`, `VX_core.sv:162`, `VX_socket.sv:1029`; `sfu_unit.cpp` `bar_lsu_drained`, `core.cpp` `lsu_stores_landed`), so one of the terms stays busy longer in SimX. In progress: counters per term in SimX, and an RTL run at scope 0 (SimX at scope 0: 294,648 cycles, median 9,580).
+
+### 57. SimX retired a split load on its last issued packet, not its last response (bug, SimX; fixed b653c05dd, by Codex)
+- A load that goes out in several packets ended in SimX when the last ISSUED packet came back, though an earlier one could still be outstanding; the warp's pending count dropped and a barrier of the same warp passed 211 cycles early in the reproducer. The RTL ends the instruction on the last outstanding response (`VX_lsu_block.sv`). Fix: one condition in `Core::retire`. New case `parity-bar-vis-split-load`: 15.44% before, 0.28% after.
+- It does not explain item 56 (no cycle changes on the six h200s points).
+
+### 58. Item 56 renamed: not the barrier, the memory phases between barriers (SimX/RTL divergence, timing; open)
+- With the neighbours' work made equal (Codex, source 602af5c84, h200s): 33,148 cycles in rtlsim, 25,395 in SimX. Median cycles per phase, rtlsim / SimX: global loads then shared-memory stores 6,212 / 3,705; first barrier 832 / 802; shared-memory reads 4,836 / 2,387; second barrier 146 / 194. The barrier brackets agree.
+- Still present on the current head (ccd8d3974): `smprobe -i20 -d5000`, rtlsim / SimX: `-k2 -n2` 39,238 / 45,984, `-k0 -n2` 45,597 / 61,399; the control `-k2 -n1` 37,950 / 40,787 (item 59 is in it). Neighbour loads per cycle 5.4 / 7.4.
+- `lmem_rw_order -w64` at h200s shows the same sign and size (16,434 / 18,579 without `LMEM_RD_ROW`, 14,370 / 16,407 with), and agrees within 1.4% without the profile.
+
+### 59. SimX gains less than the RTL from the 64-byte dcache word on two channels (SimX/RTL divergence, timing; open)
+- `VX_CFG_DCACHE_CHANNELS` (merged 8f0fcea63): a 64-byte word with two channels per LSU block; with one channel a block whose lanes touch two words needs two rounds (`gemm_block` +18%, `war_order` +23%). Beacon: the second channel costs +7.9k LUT / +13.9k FF on a two-core build; a 64-byte AMO unit is 15k LUT per bank against 3.3k (open: narrow it).
+- h200s `ldstream` lean, rtlsim / SimX: old shape (word 32, no response queue) 252,467 / 245,673; profile shape (word 64, 2 channels, `DCACHE_CRSQ_SIZE` 16) 168,615 / 182,466. The RTL gains 33%, SimX 26%. The small parity case agrees (23,624 / 23,611). Task written: `codex-tasks/dcache-ch2-gap.txt`.
+- With the response queue `war_order` closes: 321,222 / 321,423 (329,894 / 343,220 without).
+
+### 60. DXA engine: two memory ports and a bank row per write (design; merged 07a68b311, on in h200s)
+- `VX_CFG_DXA_GMEM_PORTS` now honoured by the RTL, `VX_CFG_DXA_LMEM_ROW`, `VX_CFG_DXA_LINE_PER_CYCLE` (off: it made two of three shapes 15-17% slower, unexplained). h200s SimX, B per clock: 51.1 -> 64.8, 53.9 -> 72.1, 49.6 -> 64.9; decode 51.4 -> 58.9; part 105-108. h200s rtlsim 27% faster; the rtlsim/SimX gap on the copy 12.5% -> 7.1%; the decode kernel's gap 13% -> 1.8% (401,699 / 348,388 -> 319,643 / 314,040).
+- **Open**: one transfer alone moves 10.5 B per clock (256 lines in 1,145 cycles) against the part's 1.67 lines per clock; a transfer belongs to one worker. Four ports: 50.3 / 82.3 / 58.0 (not adopted). What binds now: the path behind the ports and, with few CTAs, the issuing loop (610 cycles per tile against 290-302).
+- **Pre-existing bug found**: the RTL address generator checks out-of-bounds on the outer dimensions only and reads past a row's right edge where SimX writes the fill value.
+- **Observation for the study** (not measured on the part): 8 copy CTAs beside 20 plain-load CTAs take 384,963 cycles against 47,426 alone; the loads slow by 0.6%. Same with the knobs off.
+
+### 61. h200s now has shared-memory loads through the block engines and the LSU dispatch without gaps (calibration; d353c1c33)
+- `LMEM_RD_ROW` 1 and `LANE_DISPATCH_GAPLESS` 3: 4-byte loads and stores 0.98 per clock at 64 warps (part 1.000; 0.68 at 8 warps), one warp 4.88 / 4.80 cycles per load / store (part 4.98-5.05 / 4.06-4.30), a store/load mix no longer starves the loads (10,483 / 26,849 -> 8,438 / 8,437 cycles per iteration). h200s rtlsim / SimX: loads 139,078 / 138,910, stores 139,755 / 139,668, mix 140,238 / 139,944.
+- `gemm_block` rtlsim / SimX 555,376 / 519,881 (SimX 6.4% faster; 5.3% at 602af5c84): an open divergence not listed before.
 
 ## Plain-load calibration (not adopted)
 Sources: `notes/ld_calib.patch` (load-calibration copy `src_ld`, SimX only, with path counters behind `PATH_STATS`), runs `results/ld_*` and `results/wrr_ld*`.
