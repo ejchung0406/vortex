@@ -18,7 +18,12 @@
 #define WR_LDS_CHASE  10  // 128 dependent shared loads (self pointer)
 #define WR_STS_OWN    11  // 128 stores of the thread's own shared word
 #define WR_LDS_NOUSE  12  // 128 shared loads into 8 rotating registers, never read
-#define WR_NKINDS     13
+// 8 x (4 muls on 4 chains + 12 adds on 4 more): the integer and multiply/divide
+// units' results meet at one ALU block's result switch. Built only with
+// -DWR_MUL_ADD_ENABLE in CONFIGS, so that the other kinds' kernel code, and
+// their timing, stay as they are.
+#define WR_MUL_ADD    13
+#define WR_NKINDS     14
 
 typedef struct {
   uint32_t kind;

@@ -110,13 +110,14 @@ class Spec:
         # driver (it elaborates the RTL, so build/matrix placement is right) and
         # the runner drives simx as the second leg itself.
         self.check = entry.get("check", "")
-        # model_parity / perf_gate are 32-bit-only gates: the SimX timing model
-        # and the perf baselines are validated against RV32 rtlsim; RV64 is not
-        # gated. Pin the check gates to xlen 32 regardless of the category file's
-        # default (which still governs that file's functional cases), so 64-bit
-        # coverage can't creep back in per-file.
+        # model_parity / perf_gate gate cycle counts, and a count is only
+        # meaningful at the xlen it was measured at. By default that is RV32:
+        # a check gate ignores the category file's default xlen (which still
+        # governs that file's functional cases), so 64-bit gating can't creep
+        # in per-file. A case that names its own `xlen` is gated at exactly
+        # that xlen, because that is where its numbers were taken.
         if self.check in ("model_parity", "perf_gate"):
-            self.xlens = [32]
+            self.xlens = [int(x) for x in entry["xlen"]] if "xlen" in entry else [32]
         # release_parity: a debug run (its flags carry --debug) must report
         # exactly the cycles of the same run built release. A debug build widens
         # the RTL UUID to 44 bits and enables assertions and traces; none of that

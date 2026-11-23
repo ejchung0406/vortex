@@ -35,8 +35,9 @@
 # See docs/designs/continuous_integration.md §3.3 (parity) and §3.4 (perf).
 category: core
 defaults:
-  # 32-bit only: the SimX timing model and the perf baselines are both validated
-  # against RV32 rtlsim. (The planner also pins any check case to xlen 32.)
+  # 32-bit by default: the SimX timing model and the perf baselines are
+  # validated against RV32 rtlsim. A check case runs at XLEN 32 unless it names
+  # its own xlen, and is then gated at exactly that xlen.
   xlen:
   - 32
   tier: full
@@ -441,30 +442,35 @@ tests:
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k2 -w4 -i256
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 - id: parity-warp-rate-ahead-fma
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k5 -w4 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 - id: parity-warp-rate-ahead-branch
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k7 -w4 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 - id: parity-warp-rate-ahead-lds
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k9 -w1 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_FETCH_INFLIGHT=2 -DVX_CFG_FFLAGS_ACCUM=1
 - id: parity-warp-rate-ahead-shared
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k5 -w8 -i64
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 # A resolved branch sent to the scheduler from the ALU's result register,
@@ -474,12 +480,14 @@ tests:
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k6 -w8 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_BRANCH_REG=0
 - id: parity-warp-rate-branch-noreg-ahead
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k8 -w4 -i256
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_BRANCH_REG=0 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 # A fetch pick sent straight into the fetch unit's request buffer
@@ -489,12 +497,14 @@ tests:
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k6 -w8 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_REQ_BUF=0
 - id: parity-warp-rate-fetch-nobuf-ahead
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k7 -w4 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FETCH_REQ_BUF=0 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 # The first frontend slice's fetches merged with the cache flush without the
@@ -504,12 +514,14 @@ tests:
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k6 -w1 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FLUSH_REQ_BUF=0
 - id: parity-warp-rate-flush-nobuf-ahead
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k0 -w1 -i128
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_FLUSH_REQ_BUF=0 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
 # Two operand collectors per issue slice merged without a register
@@ -519,14 +531,29 @@ tests:
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k2 -w8 -i64
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_OPCS=2 -DVX_CFG_OPC_MERGE_BUF=0
 - id: parity-warp-rate-opc-merge-nobuf-lds
   check: model_parity
   via: blackbox
   app: warp_rate
+  xlen: [64]
   args: -k9 -w8 -i64
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_OPCS=2 -DVX_CFG_OPC_MERGE_BUF=0
+# Multiplies beside adds from eight warps on one issue slot, so the ALU block's
+# integer and multiply/divide results meet at its result switch every few
+# cycles: the switch alternates, and an integer result that waits there holds
+# the integer unit and the block's input. Tighter than the default: without
+# either, SimX runs 0.24% fast here.
+- id: parity-warp-rate-mul-add
+  check: model_parity
+  tolerance: 0.002
+  via: blackbox
+  app: warp_rate
+  xlen: [64]
+  args: -k13 -w8 -i16
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=8 -DVX_CFG_ISSUE_WIDTH=1 -DWR_MUL_ADD_ENABLE
 # 32-thread warps on a 16-lane ALU with the lane dispatch's empty cycle removed
 # (VX_CFG_LANE_DISPATCH_GAPLESS bit 0): independent integer adds, a lone warp
 # fetching ahead on a core with one issue slot (built from backend slices), and

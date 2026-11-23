@@ -26,6 +26,13 @@
              "lw %4, 0(%12)\n\tlw %5, 0(%12)\n\tlw %6, 0(%12)\n\tlw %7, 0(%12)\n\t" \
              "xor %8, %8, %0\n\txor %8, %8, %1\n\txor %9, %9, %2\n\txor %9, %9, %3\n\t" \
              "xor %10, %10, %4\n\txor %10, %10, %5\n\txor %11, %11, %6\n\txor %11, %11, %7\n\t"
+#ifdef WR_MUL_ADD_ENABLE
+// a multiply every four instructions, beside adds
+#define MULADD16 "mul %0, %0, %8\n\tadd %4, %4, %8\n\tadd %5, %5, %8\n\tadd %6, %6, %8\n\t" \
+                 "mul %1, %1, %8\n\tadd %7, %7, %8\n\tadd %4, %4, %8\n\tadd %5, %5, %8\n\t" \
+                 "mul %2, %2, %8\n\tadd %6, %6, %8\n\tadd %7, %7, %8\n\tadd %4, %4, %8\n\t" \
+                 "mul %3, %3, %8\n\tadd %5, %5, %8\n\tadd %6, %6, %8\n\tadd %7, %7, %8\n\t"
+#endif
 #if __riscv_xlen == 64
 #define LDP "ld"
 #else
@@ -106,6 +113,12 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
     for (uint32_t i = 0; i < iters; ++i)
       __asm__ volatile(R16(LDN8) : "=&r"(a0), "=&r"(a1), "=&r"(a2), "=&r"(a3), "=&r"(a4), "=&r"(a5), "=&r"(a6), "=&r"(a7) : "r"(myword) : "memory");
     break;
+#ifdef WR_MUL_ADD_ENABLE
+  case WR_MUL_ADD:
+    for (uint32_t i = 0; i < iters; ++i)
+      __asm__ volatile(R8(MULADD16) : "+r"(a0), "+r"(a1), "+r"(a2), "+r"(a3), "+r"(a4), "+r"(a5), "+r"(a6), "+r"(a7) : "r"(y));
+    break;
+#endif
   default:
     break;
   }

@@ -14,7 +14,6 @@
 #include "alu_unit.h"
 #include <iostream>
 #include <iomanip>
-#include <algorithm>
 #include <string.h>
 #include <assert.h>
 #include <util.h>
@@ -26,7 +25,8 @@
 using namespace vortex;
 
 AluUnit::AluUnit(const SimContext& ctx, const char* name, Core* core)
-	// The output channel also counts results still in flight: it covers the
+	// The output channel's capacity also bounds the results still in the
+	// units, which the unit counts against it as it takes an op: it covers the
 	// deepest path plus the result waiting for the commit side, so the
 	// multiplier keeps one result per cycle.
 	: FuncUnit<VX_CFG_NUM_ALU_BLOCKS>(ctx, name, core, kMulDivLatency + (kGather ? 1 : 0) + 2)
@@ -42,9 +42,9 @@ AluUnit::AluUnit(const SimContext& ctx, const char* name, Core* core)
 	}
 }
 
-// Cycles from this unit's execute to its output, beyond the commit-queue hop.
-// Execute stands for the integer ALU's registered result (the branch_ctl
-// stage), so a plain op leaves at once.
+// Cycles from the unit taking an op to its result reaching the block's result
+// switch. Taking it stands for the integer ALU's registered result (the
+// branch_ctl stage), so a plain op reaches the switch at once.
 uint32_t AluUnit::latency_of(const instr_trace_t* trace) const {
 	if (std::get_if<AluType>(&trace->op_type)) {
 		auto alu_type = std::get<AluType>(trace->op_type);
@@ -573,66 +573,58 @@ void AluUnit::execute(instr_trace_t* trace) {
 }
 
 void AluUnit::on_reset() {
-  for (auto& pending : out_ready_) {
-    pending.clear();
-  }
-  out_free_.fill(0);
-}
-
-uint32_t AluUnit::output_wait(uint32_t b, uint64_t ready) {
-  auto& pending = out_ready_.at(b);
-  auto& free = out_free_.at(b);
-  uint64_t now = SimPlatform::instance().cycles();
-  // Same-cycle arrivals leave in send order, behind every earlier arrival.
-  pending.insert(std::upper_bound(pending.begin(), pending.end(), ready), ready);
-  uint64_t next = free;
-  uint64_t gone_free = free;
-  uint32_t wait = 0;
-  size_t gone = 0;
-  for (size_t i = 0; i < pending.size(); ++i) {
-    uint64_t leave = std::max(pending[i], next);
-    next = leave + 1;
-    if (leave < now) {
-      gone = i + 1;
-      gone_free = next;
-    }
-    if (pending[i] == ready) {
-      wait = leave - ready;
+  for (auto& pes : pe_results_) {
+    for (auto& q : pes) {
+      q.clear();
     }
   }
-  pending.erase(pending.begin(), pending.begin() + gone);
-  free = gone_free;
-  return wait;
+  // the switch starts as if it had just granted the multiply/divide unit
+  pe_last_.fill(1);
 }
 
 void AluUnit::on_tick() {
+  uint64_t now = SimPlatform::instance().cycles();
   bool idle = true;
   for (uint32_t b = 0; b < VX_CFG_NUM_ALU_BLOCKS; ++b) {
     auto& input = Inputs.at(b);
-    if (!input.empty()) {
-      auto& output = Outputs.at(b);
-      if (!output.full()) {
-        auto trace = input.peek();
-        this->execute(trace);
-        uint32_t latency = this->latency_of(trace) + (kGather ? 1 : 0);
-        uint32_t wait = this->output_wait(b, SimPlatform::instance().cycles() + latency);
-        // A branch releases its warp as it resolves, not when its result
-        // retires: the result register, then the branch register if there is
-        // one (BRANCH_REG). It resolves
-        // as its result leaves the integer unit, behind a multiply or divide
-        // result that the unit's result switch takes first.
-        if (std::get_if<BrType>(&trace->op_type) && trace->eop && trace->resume_warp) {
-          branch_ctl_out.send(trace->wid, (VX_CFG_BRANCH_REG ? 2 : 1) + wait);
-          trace->resume_warp = false;
-        }
-        output.send(trace, latency);
-        input.pop();
-        if (!kGather && trace->eop) {
-          ReleaseOut.send(trace, 0);
-        }
+    auto& output = Outputs.at(b);
+    auto& pes = pe_results_.at(b);
+    // The output channel counts the results still in the units too. The
+    // integer unit holds one result: while it waits at the switch the unit,
+    // and an integer op at the block's input behind it, wait too; the
+    // multiply/divide unit's output buffer takes the wait instead.
+    bool to_mdv = !input.empty() && std::get_if<MdvType>(&input.peek()->op_type);
+    if (!input.empty() && !output.full()
+     && (output.size() + pes[0].size() + pes[1].size()) < output.capacity()
+     && (to_mdv || pes[0].empty())) {
+      auto trace = input.peek();
+      this->execute(trace);
+      uint32_t pe = to_mdv ? 1 : 0;
+      pes[pe].emplace_back(now + this->latency_of(trace), trace);
+      input.pop();
+      if (!kGather && trace->eop) {
+        ReleaseOut.send(trace, 0);
       }
     }
-    idle &= (input.size() == 0);
+    // The block's result switch takes one result per cycle; when both units
+    // have one, it alternates, starting from the unit it did not take last.
+    bool ready0 = !pes[0].empty() && pes[0].front().first <= now;
+    bool ready1 = !pes[1].empty() && pes[1].front().first <= now;
+    if ((ready0 || ready1) && !output.full()) {
+      uint32_t pe = (ready0 && ready1) ? (1 - pe_last_.at(b)) : (ready1 ? 1 : 0);
+      pe_last_.at(b) = pe;
+      auto trace = pes[pe].front().second;
+      pes[pe].pop_front();
+      // A branch releases its warp as it resolves, not when its result
+      // retires: as its result leaves the switch, through the result register,
+      // then the branch register if there is one (BRANCH_REG).
+      if (std::get_if<BrType>(&trace->op_type) && trace->eop && trace->resume_warp) {
+        branch_ctl_out.send(trace->wid, VX_CFG_BRANCH_REG ? 2 : 1);
+        trace->resume_warp = false;
+      }
+      output.send(trace, kGather ? 1 : 0);
+    }
+    idle &= (input.size() == 0) && pes[0].empty() && pes[1].empty();
   }
   // sleep until a new trace is reserved toward an input.
   if (idle) {

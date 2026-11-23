@@ -27,7 +27,7 @@
 
 static const char* kNames[WR_NKINDS] = {
   "int_dep", "int_ind4", "int_ind8", "fma_dep", "fma_ind4", "fma_ind8",
-  "br_every1", "br_every4", "br_every16", "lds_own", "lds_chase", "sts_own", "lds_nouse"};
+  "br_every1", "br_every4", "br_every16", "lds_own", "lds_chase", "sts_own", "lds_nouse", "mul_add"};
 
 const char* kernel_file = "kernel.vxbin";
 uint32_t kind  = 0;
@@ -60,6 +60,12 @@ static void parse_args(int argc, char **argv) {
     show_usage();
     exit(-1);
   }
+#ifndef WR_MUL_ADD_ENABLE
+  if (kind == WR_MUL_ADD) {
+    std::cout << "kind " << WR_MUL_ADD << " needs -DWR_MUL_ADD_ENABLE in CONFIGS" << std::endl;
+    exit(-1);
+  }
+#endif
 }
 
 // What kernel_main leaves in out[] for thread t: the registers of its class
@@ -81,6 +87,11 @@ static uint64_t reference(uint32_t kind, uint32_t iters, uint32_t t, uint64_t wo
     for (uint32_t i = first; i <= last; ++i)
       a[i] += reps * y;
   };
+  auto mul = [&](uint32_t first, uint32_t last, uint64_t reps) {
+    for (uint32_t i = first; i <= last; ++i)
+      for (uint64_t r = 0; r < reps; ++r)
+        a[i] *= y;
+  };
   switch (kind) {
   case WR_INT_DEP:   add(0, 0, 128 * n); break;
   case WR_INT_IND4:  add(0, 3, 32 * n); break;
@@ -93,6 +104,7 @@ static uint64_t reference(uint32_t kind, uint32_t iters, uint32_t t, uint64_t wo
   case WR_LDS_OWN:
   case WR_LDS_NOUSE: for (auto& v : a) v = 0; break;
   case WR_LDS_CHASE: a[0] = 0; break;
+  case WR_MUL_ADD:   mul(0, 3, 8 * n); add(4, 7, 24 * n); break;
   default:           break; // WR_BR1, WR_STS_OWN: no register changes
   }
   float fv = f[0];
