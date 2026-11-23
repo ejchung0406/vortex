@@ -52,8 +52,7 @@ static constexpr uint32_t ilog2(uint32_t x) { return (x > 1) ? 1 + ilog2(x >> 1)
 // The dcache's banks follow its request count, which the host config does not
 // carry: LSU blocks x channels, as sim/simx/constants.h derives it.
 static constexpr uint32_t pow2_ceil(uint32_t x) { return (x > 1) ? 2 * pow2_ceil((x + 1) / 2) : 1; }
-static const uint32_t dcache_channels = ((VX_CFG_NUM_LSU_LANES * (VX_CFG_XLEN / 8)) / VX_CFG_DCACHE_WORD_SIZE > 1)
-                                      ? (VX_CFG_NUM_LSU_LANES * (VX_CFG_XLEN / 8)) / VX_CFG_DCACHE_WORD_SIZE : 1;
+static const uint32_t dcache_channels = VX_CFG_DCACHE_CHANNELS;
 static const uint32_t dcache_reqs     = VX_CFG_NUM_LSU_BLOCKS * dcache_channels;
 static const uint32_t dcache_banks    = pow2_ceil(dcache_reqs < 16 ? dcache_reqs : 16);
 static const uint32_t set_bits = ilog2(llc_size / (llc_ways * llc_line * dcache_banks));

@@ -355,6 +355,15 @@ VX_CFG_DCACHE_NUM_WAYS = 4
 # reduced ~sqrt(lanes) below the block so banks scale for MLP while the word/bus
 # stays moderate: NT 1/2/4/8/16/32/64 -> word 4/8/8/16/16/32/32, banks 1/1/2/2/4/4/8.
 VX_CFG_DCACHE_WORD_SIZE = "expr: min($VX_CFG_L1_LINE_SIZE, min($VX_CFG_MEM_BLOCK_SIZE, ($VX_CFG_XLEN / 8) * pow(2, (clog2($VX_CFG_NUM_LSU_LANES) + 1) / 2)))"
+# Coalescer output channels per LSU block, each one word wide. The coalescer
+# splits the block's lanes into this many equal groups, and a group's lanes
+# that share a word go out together on its channel. The default is the lanes'
+# bytes in words. More channels let a block whose lanes touch several words
+# issue them in one round when each group touches one, at the cost of more
+# dcache ports; same-word reads on a block's channels share one bank access
+# (DCACHE_READ_MERGE). Must divide NUM_LSU_LANES, and equal it when the word is
+# no wider than a lane's (no coalescer).
+VX_CFG_DCACHE_CHANNELS = "expr: up(($VX_CFG_NUM_LSU_LANES * ($VX_CFG_XLEN // 8)) // $VX_CFG_DCACHE_WORD_SIZE)"
 VX_CFG_DCACHE_WRITEBACK = "expr: int($dcache_is_llc and $single_core)"
 # LAZY_FETCH: a store miss allocates its line without a fill and a later read
 # fetches and merges under the dirty bytes (write-validate, as GPU L2s do). It
