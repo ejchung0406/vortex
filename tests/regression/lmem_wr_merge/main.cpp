@@ -87,7 +87,7 @@ static std::vector<uint8_t> reference(uint32_t w, uint32_t T, uint32_t nw) {
       put<uint32_t>(r, WM_MASKED + 4 * t, 0x3a000000u | (w << 8) | t);
     }
     if ((cases & 512) && (t % 8) < 3) {
-      uint32_t off = ((t % 8) == 1) ? WM_ROW : (((t % 8) == 2) ? 4 : 0);
+      uint32_t off = ((t % 8) == 0) ? WM_ROW : (((t % 8) == 2) ? 4 : 0);
       put<uint32_t>(r, WM_XROW + 8 * (t / 8) + off, 0x5c000000u | (w << 8) | t);
     }
     if (cases & 1024) {

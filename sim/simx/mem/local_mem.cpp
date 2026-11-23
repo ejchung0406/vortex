@@ -235,6 +235,22 @@ protected:
         }
       }
     }
+    if (merge) {
+      // The lanes sharing a bank's access write different bytes of one word.
+      // The lanes are written one by one here, so only this check shows a
+      // lane taken along to another word.
+      std::vector<uint32_t> bytes(num_banks, 0);
+      for (uint32_t i = 0; i < pending.size(); ++i) {
+        if (!served.test(i)) {
+          continue;
+        }
+        uint32_t b = this->bank_of(req.addrs.at(i));
+        __assert(this->bank_word(req.addrs.at(i)) == this->bank_word(req.addrs.at(winner.at(b))),
+                 "LocalMem: merged store lanes of different words");
+        __assert((bytes.at(b) & this->word_bytes(req, i)) == 0, "LocalMem: merged store lanes enable a byte twice");
+        bytes.at(b) |= this->word_bytes(req, i);
+      }
+    }
     return served;
   }
 

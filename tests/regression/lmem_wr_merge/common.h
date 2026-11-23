@@ -17,8 +17,8 @@
 #define WM_RESULT  528  // what it read back, complemented, sw at +4t
 #define WM_SEQ     656  // sw at +4t, then sb at +4t+1: the later store's byte stays
 #define WM_MASKED  784  // sw at +4t from two threads of every three: a partial thread mask
-#define WM_XROW    1024 // per 8 threads: sw at +0, sw one bank row further (+128), sw at +4:
-                        // a lane of another word of the bank between two that could share one
+#define WM_XROW    1024 // per 8 threads: sw one bank row further (+128), sw at +0, sw at +4:
+                        // a lane of another word of the bank below two that share one
 #define WM_XWARP   1280 // sw at +4t, read by the next warp after a barrier
 #define WM_XWRES   1408 // what a warp read from the next one's WM_XWARP, sw at +4t
 #define WM_ROW     128  // bytes of a bank row at the 16-bank, 8-byte shapes the case is laid out for
