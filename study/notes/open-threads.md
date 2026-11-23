@@ -775,3 +775,27 @@ clock; needs a transfer split over workers or two lines per beat. Co-run (dxa_co
 h200s SimX): copy 47,426 cycles alone, 384,963 beside the loads; loads 338,253 -> 340,402. Same with the knobs off. Not
 measured on the part. GMEM_PORTS=4: 50.3 / 82.3 / 58.0 B/clk (not adopted). Pre-existing: RTL addr_gen checks OOB on
 outer dims only.
+
+## Update 2026-11-23 (16:30 EST)
+Pushed head ccd8d3974. Since 08:15: d353c1c33 (h200s: LMEM_RD_ROW=1, LANE_DISPATCH_GAPLESS=3), fix/bar-load
+(b653c05dd, by Codex: SimX retired a split load on its last ISSUED packet instead of its last response; new case
+parity-bar-vis-split-load 15.44% -> 0.28%).
+
+h200s rtlsim / SimX at the current profile (rover):
+- smem_rate -w64 -i16: -k14 (4-byte loads) 139,078 / 138,910; -k13 (stores) 139,755 / 139,668; -k22 -f150 (mix)
+  140,238 / 139,944, store and load warps 8,320 cycles per iteration each in both.
+- gemm_block 555,376 / 519,881 (SimX -6.4%; at 602af5c84 608,849 / 576,342, -5.3%).
+- gemm_tmem_decode -k1024: 319,643 / 314,040 (-1.8%; yesterday 401,699 / 348,388, -13%). Closed by the DXA change.
+- war_order with CRSQ 16: 321,222 / 321,423.
+- ldstream lean: new dcache shape (word 64, 2 channels, CRSQ 16) 168,615 / 182,466 (SimX +8.2%); old shape (word 32,
+  CRSQ 0, same source) 252,467 / 245,673 (SimX -2.7%). The RTL gains 33% from the new shape, SimX 26%: SimX
+  under-models something of the 64 B / 2-channel path at 64 warps (the small parity case agrees: 23,611 / 23,624).
+  OPEN, no owner. First suspects: the same-word read on both channels served by one bank access (READ_MERGE), and
+  the response queue.
+- smprobe -i20 -d5000 (finding 56) is still there: -k2 -n2 39,238 / 45,984 (+17%), -k0 -n2 45,597 / 61,399 (+35%),
+  -k2 -n1 37,950 / 40,787 (+7.5%, was 1% before the dcache change). Neighbour loads per cycle 5.4 / 7.4.
+  Codex's work (notes/barrier-gap.md): with equal work at 602af5c84 SimX takes 23% fewer cycles; the barrier brackets
+  agree (832 / 802, 146 / 194); the difference is in the intervals between them (global loads then shared stores
+  6,212 / 3,705; shared reads 4,836 / 2,387). So finding 56 is not a barrier defect; the name was wrong. The split-load
+  fix has no effect on it. Next: the same phase timing on the current head (scratch app in results/bg_phase1_602.*).
+- NoC review: not resumed (Codex quota); notes/noc-review-codex.md still 9 lines.
