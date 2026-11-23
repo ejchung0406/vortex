@@ -519,6 +519,31 @@ tests:
   - rtlsim
   app: dxa_kmajor_check
   configs: -DVX_CFG_EXT_DXA_ENABLE
+# Concurrent copies at mixed alignments into 128-byte bank rows (16 banks at
+# XLEN 64), checked byte by byte: with the engine at two lines per cycle
+# (DXA_GMEM_PORTS=2 on two socket memory ports, DXA_LMEM_ROW,
+# DXA_LINE_PER_CYCLE) two workers' lines share a row write and a line that
+# straddles two row parts goes alone; without, the same copies one half-row
+# beat at a time.
+- id: dxa_rowmix-row
+  via: blackbox
+  xlen: [64]
+  drivers:
+  - simx
+  - rtlsim
+  app: dxa_rowmix
+  args: -x8 -r3 -g4
+  configs: -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_LMEM_NUM_BANKS=16 -DVX_CFG_DCACHE_NUM_BANKS=2 -DVX_CFG_NUM_DXA_CORES=4
+    -DVX_CFG_DXA_GMEM_PORTS=2 -DVX_CFG_DXA_LMEM_ROW=1 -DVX_CFG_DXA_LINE_PER_CYCLE=1
+- id: dxa_rowmix-base
+  via: blackbox
+  xlen: [64]
+  drivers:
+  - simx
+  - rtlsim
+  app: dxa_rowmix
+  args: -x8 -r3 -g4
+  configs: -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_LMEM_NUM_BANKS=16
 
 # SimX<->rtlsim cycle parity on the DXA engine: same config on both drivers,
 # cycles must agree within tolerance (see core.yaml).
@@ -530,6 +555,17 @@ tests:
   app: dxa_copy
   configs: -DVX_CFG_EXT_DXA_ENABLE
   args: -d1
+
+# The engine at two lines per cycle (see dxa_rowmix-row): copies that pair
+# two workers' lines into one row write, and lines that go alone.
+- id: model_parity-rowmix-row
+  check: model_parity
+  via: blackbox
+  xlen: [64]
+  app: dxa_rowmix
+  args: -x8 -r16 -g8
+  configs: -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_LMEM_NUM_BANKS=16 -DVX_CFG_DCACHE_NUM_BANKS=2 -DVX_CFG_NUM_DXA_CORES=4
+    -DVX_CFG_DXA_GMEM_PORTS=2 -DVX_CFG_DXA_LMEM_ROW=1 -DVX_CFG_DXA_LINE_PER_CYCLE=1
 
 # Perf-regression twin of the model_parity-copy benchmark (same run, cycles-vs-baseline).
 - id: perf_gate-copy
