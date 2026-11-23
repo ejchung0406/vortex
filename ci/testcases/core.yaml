@@ -697,6 +697,18 @@ tests:
   xlen: [64]
   args: -k12 -w1 -i32
   configs: -DVX_CFG_NUM_WARPS=4 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1 -DVX_CFG_LANE_DISPATCH_GAPLESS=2
+# Slow memory lets dependent loads fill every warp's instruction buffer.
+- id: parity-bwstream-fetch-credit
+  check: model_parity
+  tolerance: 0.005
+  via: blackbox
+  app: bwstream
+  xlen: [64]
+  args: -n256 -u4 -b32
+  configs: >-
+    -DVX_CFG_NUM_WARPS=32 -DVX_CFG_NUM_THREADS=4 -DVX_CFG_ISSUE_WIDTH=4
+    -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+    -DVX_CFG_PLATFORM_MEMORY_LATENCY=300
 # SGEMM with local-memory tiling (kernel-managed shared memory).
 - id: parity-sgemmx
   check: model_parity
