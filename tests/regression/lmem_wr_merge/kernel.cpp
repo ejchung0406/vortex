@@ -52,9 +52,10 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
     *reinterpret_cast<volatile uint32_t*>(reg + WM_MASKED + 4 * t) = 0x3a000000u | (w << 8) | t;
   }
   if ((cases & 512) && (t % 8) < 3) {
-    // threads 0 and 2 of the group write the halves of one word, thread 1 the
-    // word of the same bank one row further
-    const uint32_t off = ((t % 8) == 1) ? WM_ROW : (((t % 8) == 2) ? 4 : 0);
+    // threads 1 and 2 of the group write the halves of one word; thread 0,
+    // the bank's lowest lane, the low half of the word one row further, whose
+    // high half thread 2's store would take if it went with that access
+    const uint32_t off = ((t % 8) == 0) ? WM_ROW : (((t % 8) == 2) ? 4 : 0);
     *reinterpret_cast<volatile uint32_t*>(reg + WM_XROW + 8 * (t / 8) + off) = 0x5c000000u | (w << 8) | t;
   }
   if (cases & 1024) {

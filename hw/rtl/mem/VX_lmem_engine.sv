@@ -377,6 +377,21 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
                 end
             end
             `UNUSED_VAR (sel_payload[WORD_WIDTH + WORD_SIZE - 1 : 0])
+
+        `ifdef SIMULATION
+            // The OR is the merge only while no two of the lanes enable a byte.
+            reg [`CLOG2(NUM_LANES * WORD_SIZE + 1)-1:0] m_bytes;
+            always @(*) begin
+                m_bytes = '0;
+                for (integer i = 0; i < NUM_LANES; ++i) begin
+                    if ((sel[i] || s1_riders[i]) && (s1_bank[i] == BANK_SEL_WIDTH'(b))) begin
+                        m_bytes = m_bytes + `CLOG2(NUM_LANES * WORD_SIZE + 1)'($countones(s1_payload[i][WORD_WIDTH +: WORD_SIZE]));
+                    end
+                end
+            end
+            `RUNTIME_ASSERT(~(pass_fire && s1_rw) || (m_bytes == `CLOG2(NUM_LANES * WORD_SIZE + 1)'($countones(m_byteen))),
+                ("%t: %s bank %0d: merged store lanes enable a byte twice", $time, INSTANCE_ID, b))
+        `endif
             if (PAYLOAD_WIDTH > (WORD_WIDTH + WORD_SIZE)) begin : g_sideband
                 assign bank_payload_n = {sel_payload[PAYLOAD_WIDTH-1 : WORD_WIDTH + WORD_SIZE], m_byteen, m_data};
             end else begin : g_no_sideband
