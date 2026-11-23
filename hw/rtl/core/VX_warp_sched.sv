@@ -64,8 +64,7 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
     localparam NPS_BITS = `CLOG2(NPS);
     localparam PSW     = SW / NPS;           // warps per SFU port
     localparam KW      = `LOG2UP(PSW);
-    // with fetch ahead the count must hold the one pick past the buffer's slots
-    localparam IBUF_CW = $clog2(`VX_CFG_IBUF_SIZE + 1 + FETCH_AHEAD);
+    localparam IBUF_CW = $clog2(`VX_CFG_IBUF_SIZE + 1);
     localparam IFL_W   = $clog2(FETCH_INFLIGHT + 1);
 
     `STATIC_ASSERT((FETCH_INFLIGHT >= 1) && `IS_POW2(FETCH_INFLIGHT), ("invalid parameter: VX_CFG_FETCH_INFLIGHT must be a power of two"))
@@ -372,11 +371,12 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
                 ibuf_full_r <= ibuf_full_n[l];
             end
         end
-        // a warp picked once every buffer is full goes past its slots, and with
-        // fetch ahead must read as full there
-        assign ibuf_full_n[l] = FETCH_AHEAD ? (ibuf_size_n >= IBUF_CW'(`VX_CFG_IBUF_SIZE))
-                                            : (ibuf_size_n == IBUF_CW'(`VX_CFG_IBUF_SIZE));
+        // Exact equality ends the depth-one bypass after a warp overfetches.
+        assign ibuf_full_n[l] = (ibuf_size_n == IBUF_CW'(`VX_CFG_IBUF_SIZE));
         assign ibuf_full[l]   = ibuf_full_r;
+
+        `RUNTIME_ASSERT(!FETCH_AHEAD || !ibuf_incr || (ibuf_size_r < IBUF_CW'(`VX_CFG_IBUF_SIZE)),
+            ("%t: %s fetch ahead picked past the instruction buffer, wid=%0d", $time, INSTANCE_ID, wfs_to_wid(LID, slice_id)))
 
         if (FETCH_AHEAD) begin : g_fetch_ahead
             // Fetches between pick and decode, the position of the next one in
@@ -471,8 +471,9 @@ module VX_warp_sched import VX_gpu_pkg::*; #(
     wire [SW-1:0] schedule_warps = preferred_warps;
     `UNUSED_VAR (sched_if.slice_ibuf_full)
 `else
-    // once every ibuffer of the core is full, any ready warp may fetch
-    wire [SW-1:0] full_warps     = ready_warps;
+    // With fetch ahead, reserve a slot for every pick so an arriving
+    // instruction cannot block other responses in the slice.
+    wire [SW-1:0] full_warps     = FETCH_AHEAD ? preferred_warps : ready_warps;
     wire [SW-1:0] schedule_warps = (& sched_if.slice_ibuf_full) ? full_warps : preferred_warps;
 `endif
 

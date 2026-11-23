@@ -82,11 +82,12 @@ VX_CFG_IBUF_SIZE = 4
 # Fetches one warp may have between its fetch pick and decode: 1, or a power
 # of two. 1 stalls the warp from its pick until decode, or for a branch or
 # warp-control instruction until that resolves. More lets a warp that is the
-# only runnable warp of its frontend slice fetch sequentially ahead, within
-# its instruction-buffer slots (IBUF_SIZE) and, with VM, within the page of
-# its last fetch. Decode drops what was fetched behind a stalling instruction
-# and a fetch that arrives ahead of an older one, and the warp refetches from
-# there once the dropped fetches have all returned. Requires EXT_C off.
+# only runnable warp of its frontend slice fetch sequentially ahead. Each
+# fetch reserves an instruction-buffer slot (IBUF_SIZE), so the core cannot
+# bypass a full buffer. With VM, a speculative fetch stays within the page of
+# the previous fetch. Decode drops responses behind a stalling instruction
+# and responses that overtake an older fetch. The warp restarts after the
+# outstanding responses drain. Requires EXT_C off.
 VX_CFG_FETCH_INFLIGHT = 1
 # 1 buffers a fetch pick in the warp scheduler before the fetch unit's
 # request buffer; 0 sends the pick straight to that buffer, so the request
