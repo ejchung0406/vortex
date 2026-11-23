@@ -761,3 +761,17 @@ The "211 GB build" alarm was wrong: rover's mem.log is whole-machine; per-job pe
 Pending from sm-rate: h200s rtlsim numbers with RD_ROW (ICE), why lmem_access is slower with RD_ROW, before/after table
 for enabling RD_ROW and LANE_DISPATCH_GAPLESS=3 in h200s (user decides). Pending from dxa-rate: transparent SimX port
 arbiter, single-transfer rate, co-run with plain loads; then merge feature/dxa-rate.
+
+## Update 2026-11-23 (08:15 EST)
+Merged feature/dxa-rate (07a68b311): DXA_GMEM_PORTS honoured in RTL, DXA_LMEM_ROW, DXA_LINE_PER_CYCLE (off); h200s: 16
+workers, 2 ports, row writes. Checked at the merged head (rover `md_*`, `mdq_*`): h200s SimX fetch_squash 10,018,
+warp_rate 113,382, tmem_roof 62,072, bwstream 403,996, war_order 321,423, ldstream lean 181,614, lmem_access 7,917,484
+(all as before the merge); gemm_block 574,021 -> 549,551; gemm_tmem_decode 1,317,208 -> 1,151,794; bwstream_dxa
+-e4096 -n256 -d4 191,936, -d2 404,284, -e2048 -n512 -d4 483,968 (all pass). Small shape with the DXA, store and load
+knobs together (8 warps x 16 threads, IW 4, dxa_rowmix -x8 -r16 -g8): rtlsim 245,108 / SimX 245,592; with RD_ROW
+245,109 / 245,465.
+Open from dxa-rate: one transfer alone moves 10.5 B/clk (256 lines in 1,145 cycles) against the part's 1.67 lines per
+clock; needs a transfer split over workers or two lines per beat. Co-run (dxa_corun, 8 copy CTAs beside 20 load CTAs,
+h200s SimX): copy 47,426 cycles alone, 384,963 beside the loads; loads 338,253 -> 340,402. Same with the knobs off. Not
+measured on the part. GMEM_PORTS=4: 50.3 / 82.3 / 58.0 B/clk (not adopted). Pre-existing: RTL addr_gen checks OOB on
+outer dims only.
