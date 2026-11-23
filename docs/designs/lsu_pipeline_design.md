@@ -412,12 +412,23 @@ word is wider than an LSU word; otherwise the path is a pass-through that
 asserts the cache's tag can hold the pool's slot index. An atomic lane is
 marked `no_merge`: two read-modify-writes to one word are two operations.
 
-The number of cache ports follows from the word sizes:
+The number of cache ports is a knob (`VX_CFG_DCACHE_CHANNELS`) whose default
+follows from the word sizes:
 
 ```
-DCACHE_CHANNELS = max(1, NUM_LSU_LANES × LSU_WORD_SIZE / DCACHE_WORD_SIZE)
+DCACHE_CHANNELS = max(1, NUM_LSU_LANES × LSU_WORD_SIZE / DCACHE_WORD_SIZE)   (default)
 DCACHE_NUM_REQS = NUM_LSU_BLOCKS × DCACHE_CHANNELS
 ```
+
+Channel `o` serves the fixed lane group `[o·G, (o+1)·G)`, `G = NUM_LSU_LANES /
+DCACHE_CHANNELS`. Each round, every group takes its lowest lane not yet sent
+and, with it, the group's other unsent lanes in the same cache word; the
+round goes out on all channels at once, and the request leaves the coalescer
+with its last round. A round that is not a request's last counts one
+coalescer miss. Above the default, `G` is smaller than a word's lane count:
+a block whose groups each touch one word goes out in one round, and when
+two groups read one word (a line-aligned stream) the cache's read merge
+serves both channels with one bank access.
 
 ### 5.4 Busy reporting
 

@@ -84,10 +84,15 @@ module VX_mem_coalescer #(
     `STATIC_ASSERT ((NUM_REQS > 1), ("invalid parameter"))
     `STATIC_ASSERT (`IS_DIVISBLE(NUM_REQS * DATA_IN_WIDTH, DATA_OUT_WIDTH), ("invalid parameter"))
     `STATIC_ASSERT ((NUM_REQS * DATA_IN_WIDTH >= DATA_OUT_WIDTH), ("invalid parameter"))
+    `STATIC_ASSERT (`IS_DIVISBLE(NUM_REQS, OUT_REQS), ("invalid parameter"))
     `RUNTIME_ASSERT ((~in_req_valid || in_req_mask != 0), ("invalid request mask"))
     `RUNTIME_ASSERT ((~out_rsp_valid || out_rsp_mask != 0), ("invalid request mask"))
 
     localparam TAG_ID_WIDTH = TAG_WIDTH - UUID_WIDTH;
+    // Each output takes a fixed group of input lanes; more outputs than
+    // NUM_REQS / DATA_RATIO give a group fewer lanes than a word has slots.
+    localparam GROUP_SIZE   = NUM_REQS / OUT_REQS;
+    localparam GROUP_SIZE_W = `LOG2UP(GROUP_SIZE);
     //                           tag          + mask     + offset
     localparam IBUF_DATA_WIDTH = TAG_ID_WIDTH + NUM_REQS + (NUM_REQS * DATA_RATIO_W);
 
@@ -128,13 +133,13 @@ module VX_mem_coalescer #(
     end
 
     for (genvar i = 0; i < OUT_REQS; ++i) begin : g_seed_gen
-        wire [DATA_RATIO-1:0] batch_mask;
-        wire [DATA_RATIO_W-1:0] batch_idx;
+        wire [GROUP_SIZE-1:0] batch_mask;
+        wire [GROUP_SIZE_W-1:0] batch_idx;
 
-        assign batch_mask = in_req_mask[i * DATA_RATIO +: DATA_RATIO] & req_rem_mask_r[i * DATA_RATIO +: DATA_RATIO];
+        assign batch_mask = in_req_mask[i * GROUP_SIZE +: GROUP_SIZE] & req_rem_mask_r[i * GROUP_SIZE +: GROUP_SIZE];
 
         VX_priority_encoder #(
-            .N (DATA_RATIO)
+            .N (GROUP_SIZE)
         ) batch_sel (
             .data_in    (batch_mask),
             .index_out  (batch_idx),
@@ -142,25 +147,25 @@ module VX_mem_coalescer #(
             `UNUSED_PIN (onehot_out)
         );
 
-        wire [DATA_RATIO-1:0][OUT_ADDR_WIDTH-1:0] addr_base;
-        for (genvar j = 0; j < DATA_RATIO; ++j) begin : g_addr_base
-            assign addr_base[j] = in_req_addr[DATA_RATIO * i + j][ADDR_WIDTH-1:DATA_RATIO_W];
+        wire [GROUP_SIZE-1:0][OUT_ADDR_WIDTH-1:0] addr_base;
+        for (genvar j = 0; j < GROUP_SIZE; ++j) begin : g_addr_base
+            assign addr_base[j] = in_req_addr[GROUP_SIZE * i + j][ADDR_WIDTH-1:DATA_RATIO_W];
         end
 
-        wire [DATA_RATIO-1:0][`UP(USER_WIDTH)-1:0] req_user;
-        for (genvar j = 0; j < DATA_RATIO; ++j) begin : g_req_user
-            assign req_user[j] = in_req_user[DATA_RATIO * i + j];
+        wire [GROUP_SIZE-1:0][`UP(USER_WIDTH)-1:0] req_user;
+        for (genvar j = 0; j < GROUP_SIZE; ++j) begin : g_req_user
+            assign req_user[j] = in_req_user[GROUP_SIZE * i + j];
         end
 
         assign seed_addr_n[i] = addr_base[batch_idx];
         assign seed_user_n[i] = req_user[batch_idx];
 
         // disable coalescing when in_req_no_merge is asserted.
-        for (genvar j = 0; j < DATA_RATIO; ++j) begin : g_addr_matches_n
-            assign addr_matches_n[i * DATA_RATIO + j] =
+        for (genvar j = 0; j < GROUP_SIZE; ++j) begin : g_addr_matches_n
+            assign addr_matches_n[i * GROUP_SIZE + j] =
                 (addr_base[j] == seed_addr_n[i])
              && (~in_req_no_merge
-                 || (DATA_RATIO_W'(j) == batch_idx));
+                 || (GROUP_SIZE_W'(j) == batch_idx));
         end
     end
 
@@ -175,12 +180,12 @@ module VX_mem_coalescer #(
         always @(*) begin
             byteen_merged = '0;
             data_merged = 'x;
-            for (integer j = 0; j < DATA_RATIO; ++j) begin
+            for (integer j = 0; j < GROUP_SIZE; ++j) begin
                 for (integer k = 0; k < DATA_IN_SIZE; ++k) begin
                     // perform byte-level merge since each thread may have different bytes enabled
-                    if (current_pmask[i * DATA_RATIO + j] && in_req_byteen[DATA_RATIO * i + j][k]) begin
-                        byteen_merged[in_addr_offset[DATA_RATIO * i + j]][k] = 1'b1;
-                        data_merged[in_addr_offset[DATA_RATIO * i + j]][k * 8 +: 8] = in_req_data[DATA_RATIO * i + j][k * 8 +: 8];
+                    if (current_pmask[i * GROUP_SIZE + j] && in_req_byteen[GROUP_SIZE * i + j][k]) begin
+                        byteen_merged[in_addr_offset[GROUP_SIZE * i + j]][k] = 1'b1;
+                        data_merged[in_addr_offset[GROUP_SIZE * i + j]][k * 8 +: 8] = in_req_data[GROUP_SIZE * i + j][k * 8 +: 8];
                     end
                 end
             end
@@ -321,15 +326,15 @@ module VX_mem_coalescer #(
 
     wire [NUM_REQS-1:0][DATA_IN_WIDTH-1:0] in_rsp_data_n;
     for (genvar i = 0; i < OUT_REQS; ++i) begin : g_in_rsp_data_n
-        for (genvar j = 0; j < DATA_RATIO; ++j) begin : g_j
-            assign in_rsp_data_n[i * DATA_RATIO + j] = out_rsp_data[i][ibuf_dout_offset[i * DATA_RATIO + j] * DATA_IN_WIDTH +: DATA_IN_WIDTH];
+        for (genvar j = 0; j < GROUP_SIZE; ++j) begin : g_j
+            assign in_rsp_data_n[i * GROUP_SIZE + j] = out_rsp_data[i][ibuf_dout_offset[i * GROUP_SIZE + j] * DATA_IN_WIDTH +: DATA_IN_WIDTH];
         end
     end
 
     wire [NUM_REQS-1:0] in_rsp_mask_n;
     for (genvar i = 0; i < OUT_REQS; ++i) begin : g_in_rsp_mask_n
-        for (genvar j = 0; j < DATA_RATIO; ++j) begin : g_j
-            assign in_rsp_mask_n[i * DATA_RATIO + j] = out_rsp_mask[i] && ibuf_dout_pmask[i * DATA_RATIO + j];
+        for (genvar j = 0; j < GROUP_SIZE; ++j) begin : g_j
+            assign in_rsp_mask_n[i * GROUP_SIZE + j] = out_rsp_mask[i] && ibuf_dout_pmask[i * GROUP_SIZE + j];
         end
     end
 

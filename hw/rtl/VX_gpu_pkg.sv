@@ -2122,7 +2122,7 @@ package VX_gpu_pkg;
     localparam DCACHE_SECTOR_SIZE   = `VX_CFG_DCACHE_SECTOR_SIZE;
 
     // Input request size (using coalesced memory blocks)
-    localparam DCACHE_CHANNELS	    = `UP((`VX_CFG_NUM_LSU_LANES * LSU_WORD_SIZE) / DCACHE_WORD_SIZE);
+    localparam DCACHE_CHANNELS	    = `VX_CFG_DCACHE_CHANNELS;
     localparam DCACHE_NUM_REQS	    = `VX_CFG_NUM_LSU_BLOCKS * DCACHE_CHANNELS;
     localparam DCACHE_NUM_BANKS     = `VX_CFG_DCACHE_NUM_BANKS;
     localparam L1_MEM_PORTS         = `VX_CFG_L1_MEM_PORTS;

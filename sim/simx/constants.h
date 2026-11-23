@@ -83,7 +83,12 @@ inline constexpr uint32_t LSU_QUEUE_OUT_SIZE = (VX_CFG_LSU_PENDING_SIZE > (VX_CF
 // is decoupled from LSU_LINE_SIZE via VX_CFG_DCACHE_WORD_SIZE so channels/banks
 // scale independently of the LSU pipe count (Feature A). Default = LSU_LINE_SIZE.
 inline constexpr uint32_t DCACHE_WORD_SIZE= VX_CFG_DCACHE_WORD_SIZE;
-inline constexpr uint32_t DCACHE_CHANNELS = __UP((VX_CFG_NUM_LSU_LANES * XLENB) / DCACHE_WORD_SIZE);
+inline constexpr uint32_t DCACHE_CHANNELS = VX_CFG_DCACHE_CHANNELS;
+static_assert(DCACHE_CHANNELS != 0 && (VX_CFG_NUM_LSU_LANES % DCACHE_CHANNELS) == 0,
+              "DCACHE_CHANNELS must divide NUM_LSU_LANES");
+static_assert((VX_CFG_NUM_LSU_LANES > 1 && DCACHE_WORD_SIZE > LSU_WORD_SIZE)
+           || DCACHE_CHANNELS == VX_CFG_NUM_LSU_LANES,
+              "without a coalescer, DCACHE_CHANNELS must equal NUM_LSU_LANES");
 inline constexpr uint32_t VX_CFG_DCACHE_NUM_REQS	= (VX_CFG_NUM_LSU_BLOCKS * DCACHE_CHANNELS);
 
 inline constexpr uint32_t NUM_SOCKETS     = __UP(VX_CFG_NUM_CORES / VX_CFG_SOCKET_SIZE);

@@ -155,6 +155,7 @@ module VX_lsu_mem_path import VX_gpu_pkg::*; #(
             .NUM_REQS       (`VX_CFG_NUM_LSU_LANES),
             .DATA_IN_SIZE   (LSU_WORD_SIZE),
             .DATA_OUT_SIZE  (DCACHE_WORD_SIZE),
+            .OUT_REQS       (DCACHE_CHANNELS),
             .ADDR_WIDTH     (LSU_ADDR_WIDTH),
             .USER_WIDTH     (MEM_ATTR_WIDTH),
             .TAG_WIDTH      (LSU_TAG_WIDTH),
@@ -217,6 +218,7 @@ module VX_lsu_mem_path import VX_gpu_pkg::*; #(
         // DCACHE_CORE_TAG_WIDTH: the dcache tag-id space must cover the
         // mem-scheduler slot id or responses alias.
         `STATIC_ASSERT (DCACHE_CORE_TAG_WIDTH >= LSU_TAG_WIDTH, ("dcache tag-id space cannot hold the LSU outstanding slot id"))
+        `STATIC_ASSERT (DCACHE_CHANNELS == `VX_CFG_NUM_LSU_LANES, ("without a coalescer, DCACHE_CHANNELS must equal NUM_LSU_LANES"))
 
         `ASSIGN_VX_MEM_BUS_IF (dcache_coalesced_if, lsu_dcache_if);
     `ifdef PERF_ENABLE
