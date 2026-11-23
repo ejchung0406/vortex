@@ -726,3 +726,38 @@ fetch-credit, sm-rate, sm-rate-f.
 rover script changes today: `rover_point.sh` takes a per-tree build lock (two points sharing a MODEL raced
 on the runtime build); use PERFCLASS, not PERF, to reuse a model; pass `</dev/null` to rover_start.sh inside
 a read loop.
+
+## Update 2026-11-23 (06:30 EST)
+
+- fetch-credit: n=2048 rtlsim 395,176 (depth 1: 395,381; SimX 406,539). Done.
+- Barrier gap (finding 56) narrowed: rtlsim scope 0 = 800,681 cycles (SimX 294,648), the sign flips. Runs separating
+  barrier and loads (rover `spr_r_*`, `spq_s_*`; table in codex-tasks/barrier-gap.txt): the models agree within 1% when
+  the neighbours only load, and disagree whenever the neighbours load AND take a barrier, even with no barrier in the
+  probe. A loading warp's own barrier costs more in the RTL. Next: small-configuration repro and trace
+  (codex-tasks/barrier-gap.txt).
+- B2: dcache word 64 with ONE channel per block slows gemm_block +18% and war_order +23% (coalescer misses); with TWO
+  channels the loss is gone. Agent `dc-chan`, branch feature/dcache-channels 879f87625 (knob VX_CFG_DCACHE_CHANNELS):
+  h200s SimX ldstream -l 244,813 -> 187,314 (181,614 with CRSQ 16), others unchanged; parity 0.1%; Beacon: the channel
+  costs +7.9k LUT / +13.9k FF; a 64 B AMO unit is 15k LUT per bank against 3.3k (open: narrow it). h200s rtlsim pending.
+- A2: agent `dxa-rate`, branch feature/dxa-rate 319a8c4e3: 51.1 -> 65.0, 53.9 -> 72.4, 49.6 -> 70.1 B/clk, decode 51.4 ->
+  58.9; h200s rtlsim 27% faster, parity gap 12.5% -> 7.1%. LINE_PER_CYCLE slower (off). Asked before merge: make the SimX
+  shared-port arbiter transparent (bwstream 452,761 -> 416,774 in SimX only), single-transfer rate, co-run with plain
+  loads. 4 ports give 88.9 B/clk on 7 CTAs x D2 (option for the user). Pre-existing: RTL addr_gen checks OOB on outer
+  dims only.
+- feature/lmem-rd 50b830511: 26 planner cases pass, identity holds; with LANE_DISPATCH_GAPLESS=3 loads/stores reach
+  0.98 per clock. h200s rtlsim build with RD_ROW died at 211 GB on rover three times; cause being isolated on ICE.
+  dxa-rate built an h200s rtlsim model from fd151ee95 (store knobs on) without trouble, so RD_ROW is the suspect.
+- Codex resets 06:19 EST: tasks ready in codex-tasks/: noc-review.txt (resume), barrier-gap.txt.
+
+## Update 2026-11-23 (07:15 EST)
+Pushed head 2e5c1c09a. Merged today after the 06:30 note: feature/dcache-channels (8f0fcea63; h200s: word 64, 2 channels),
+728d50414 (h200s DCACHE_CRSQ_SIZE=16), feature/lmem-rd (2e5c1c09a; LMEM_RD_ROW default off, off in h200s).
+h200s SimX baselines at 2e5c1c09a (rover `h8_s_*`, `m2_*`): fetch_squash 10,018; warp_rate 113,382; tmem_roof -n512 -i8
+62,072; bwstream -n2048 -u4 -b32 403,996; gemm_block 574,021; gemm_tmem_decode 1,317,208; war_order 321,423;
+ldstream lean 181,614; ldstream 315,885; lmem_access 7,917,484.
+h200s rtlsim at 64 B / 2 channels without CRSQ (dc-chan): ldstream lean 172,345 (SimX 187,314, -8.0%), war_order 329,894
+(SimX 343,220). With CRSQ 16: rover `h8_r_war`, `h8_r_ldl` running (model mh8_h200s).
+The "211 GB build" alarm was wrong: rover's mem.log is whole-machine; per-job peaks on ICE are 63-85 GB in every state.
+Pending from sm-rate: h200s rtlsim numbers with RD_ROW (ICE), why lmem_access is slower with RD_ROW, before/after table
+for enabling RD_ROW and LANE_DISPATCH_GAPLESS=3 in h200s (user decides). Pending from dxa-rate: transparent SimX port
+arbiter, single-transfer rate, co-run with plain loads; then merge feature/dxa-rate.
