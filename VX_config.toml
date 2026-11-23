@@ -482,6 +482,18 @@ VX_CFG_LMEM_SIZE = "expr: pow(2, $VX_CFG_LMEM_LOG_SIZE)"
 # and then stops the first engine until it is served. The DMA
 # port then carries the DXA's writes alone. No effect without WGMMA operands.
 VX_CFG_LMEM_TCU_RDPORT = 0
+# 1: plain-store lanes of one request that write different bytes of one bank
+# word (4-byte or narrower elements in XLEN-wide banks) share the word's bank
+# access, their byte enables merged, instead of each taking a pass of its own.
+# Lanes writing the same bytes still go one pass each, in lane order.
+VX_CFG_LMEM_WR_MERGE = 0
+# 1: every LSU block's stores have a pass engine of their own, and the engines'
+# passes share a cycle whenever they take different banks, so the banks, not the
+# single write engine, bound the stores: up to one bank row (LMEM_NUM_BANKS
+# words) per cycle from all blocks together. Reads and atomics keep the two
+# engines they have, and every store keeps its order against every read. Needs
+# several LSU blocks; with one there is nothing to share.
+VX_CFG_LMEM_WR_ROW = 0
 
 [tcu]
 # string enum: 'DPI'|'DSP'|'BHF'|'TFR'|'FPNEW'; TFR is the universal default. On

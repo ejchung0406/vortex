@@ -53,6 +53,14 @@ using namespace vortex;
 // or a store lands in its row, and then returns the row as written. A row read
 // held up by an atomic or by a write in its row stops the first engine's
 // passes until it is served.
+// With LMEM_WR_MERGE the lanes of a plain store that write different bytes of
+// one bank word take its access together. With LMEM_WR_ROW (several LSU
+// blocks) a plain store goes to its block's own store engine instead of the
+// first engine: it enters only while the first and the read engine are empty,
+// and those take nothing while a store is at an input or in a store engine.
+// The store engines' passes share a cycle when they take different banks, in a
+// rotating order of choice; a row read held up by a write stops their passes
+// as it stops the first engine's.
 // The model does a pass's bank accesses when it is issued. Every access keeps
 // its order relative to the others, so this is the order the banks see.
 class LocalMem::Impl {
@@ -108,6 +116,17 @@ protected:
 #endif
   uint32_t  stall_cycles_;
   std::vector<Engine> engines_;
+  // LMEM_WR_ROW: one store engine per LSU block. A plain store goes to its
+  // block's engine and the two engines above keep the reads and the atomics:
+  // a store enters only while both of those are empty, and they take nothing
+  // while a store is at an input or in a store engine, so every store keeps
+  // its order against every read. The store engines' passes share a cycle when
+  // they take different banks: the one after the last cycle's first taker
+  // chooses first, and each later one in turn passes if its banks are free.
+  std::vector<Engine> store_engines_;
+  uint32_t  s_rr_;
+  bool      wr_merge_;
+  bool      wr_row_;
   struct RspReg {
     bool     valid = false;
     uint32_t engine = 0;
@@ -163,6 +182,14 @@ protected:
     return !req.is_write() && !req.is_amo();
   }
 
+  static bool is_plain_store(const LsuReq& req) {
+    return req.is_write() && !req.is_amo();
+  }
+
+  static bool busy(const Engine& e) {
+    return !e.s0.empty() || e.s1_valid;
+  }
+
   static bool holds_write(const Engine& e) {
     for (auto& r : e.s0) {
       if (!is_plain_read(r.req)) {
@@ -175,12 +202,15 @@ protected:
   // The lanes one pass serves: each bank goes to its lowest pending lane, and
   // a plain read also serves every pending lane reading the same word. A
   // store or an atomic takes its bank alone, so lanes writing one word land
-  // in lane order and the highest lane's bytes are the ones left.
+  // in lane order and the highest lane's bytes are the ones left. With
+  // LMEM_WR_MERGE a plain-store lane also rides along when every lower
+  // pending lane of its bank writes other bytes of the same word.
   BitVector<> select_pass(const LsuReq& req, const BitVector<>& pending) const {
     uint32_t num_banks = 1u << config_.B;
     std::vector<int32_t> winner(num_banks, -1);
     BitVector<> served(pending.size());
     bool join = is_plain_read(req);
+    bool merge = wr_merge_ && is_plain_store(req);
     for (uint32_t i = 0; i < pending.size(); ++i) {
       if (!pending.test(i)) {
         continue;
@@ -191,9 +221,28 @@ protected:
         served.set(i);
       } else if (join && this->bank_word(req.addrs.at(i)) == this->bank_word(req.addrs.at(winner.at(b)))) {
         served.set(i);
+      } else if (merge) {
+        bool rides = true;
+        for (uint32_t k = 0; k < i && rides; ++k) {
+          if (!pending.test(k) || this->bank_of(req.addrs.at(k)) != b) {
+            continue;
+          }
+          rides = (this->bank_word(req.addrs.at(k)) == this->bank_word(req.addrs.at(i)))
+               && (this->word_bytes(req, k) & this->word_bytes(req, i)) == 0;
+        }
+        if (rides) {
+          served.set(i);
+        }
       }
     }
     return served;
+  }
+
+  // the bytes of its bank word a store lane writes
+  uint32_t word_bytes(const LsuReq& req, uint32_t i) const {
+    uint64_t la = to_local_addr(req.addrs.at(i));
+    uint32_t shift = (uint32_t)(la & (VX_CFG_MEM_BLOCK_SIZE - 1)) & ~(config_.word_size - 1);
+    return (uint32_t)((req.byteen.at(i) >> shift) & ((1u << config_.word_size) - 1));
   }
 
   // Do one lane's bank access and return the word the lane gets back, if any.
@@ -468,20 +517,35 @@ protected:
   // engine is idle, and the read engine takes nothing in that cycle. The read
   // engine takes a read only while no store or atomic waited at an input the
   // cycle before or sits in the first engine.
-  void arbitrate(const std::vector<bool>& s0_ready, bool a_write, bool b_busy) {
+  void arbitrate(const std::vector<bool>& s0_ready, bool a_write, bool a_busy, bool b_busy,
+                 const std::vector<bool>& s_ready, bool s_busy) {
     uint32_t n = config_.num_blocks;
     std::vector<bool> in_valid(n);
     std::vector<bool> in_read(n);
+    std::vector<bool> in_store(n, false);
     std::vector<bool> fired(n, false);
+    bool any_store = false;
     for (uint32_t b = 0; b < n; ++b) {
       auto& in = simobject_->ReqIn.at(b);
       in_valid.at(b) = !in.empty();
       in_read.at(b)  = in_valid.at(b) && is_plain_read(in.peek());
+      if (wr_row_ && in_valid.at(b) && is_plain_store(in.peek())) {
+        // the store engines' requests: the two engines below do not see them
+        in_store.at(b) = true;
+        in_valid.at(b) = false;
+        any_store = true;
+      }
     }
-    bool a_take = a_sel_.valid && s0_ready.at(0) && (a_sel_.read || !b_busy);
+    bool rd_gate = !any_store && !s_busy;
+    bool a_take = a_sel_.valid && s0_ready.at(0) && (a_sel_.read || !b_busy) && rd_gate;
     bool b_take = b_sel_.valid && s0_ready.at(1) && !a_write && !write_waiting_r_
-               && !(a_take && !a_sel_.read);
+               && !(a_take && !a_sel_.read) && rd_gate;
     bool b_fired = false;
+    for (uint32_t b = 0; b < n; ++b) {
+      if (in_store.at(b) && s_ready.at(b) && !a_busy && !b_busy) {
+        this->take(store_engines_.at(b), b);
+      }
+    }
     if (a_take && in_valid.at(a_sel_.block)) {
       this->take(engines_.at(0), a_sel_.block);
       fired.at(a_sel_.block) = true;
@@ -527,6 +591,9 @@ public:
 #endif
     , stall_cycles_(0)
     , engines_((config.num_blocks > 1) ? 2 : 1)
+    , s_rr_(0)
+    , wr_merge_(VX_CFG_LMEM_WR_MERGE != 0)
+    , wr_row_((VX_CFG_LMEM_WR_ROW != 0) && (config.num_blocks > 1))
     , rsp_regs_(config.num_blocks)
     , arb_last_(engines_.size(), 0)
     , write_waiting_r_(false)
@@ -538,6 +605,12 @@ public:
   {
     for (auto& e : engines_) {
       e.pending = BitVector<>(config.num_lanes);
+    }
+    if (wr_row_) {
+      store_engines_.resize(config.num_blocks);
+      for (auto& e : store_engines_) {
+        e.pending = BitVector<>(config.num_lanes);
+      }
     }
   }
 
@@ -556,6 +629,13 @@ public:
       e.rsp_queue.clear();
       e.passed = false;
     }
+    for (auto& e : store_engines_) {
+      e.s0.clear();
+      e.s1_valid = false;
+      e.pending.reset();
+      e.passed = false;
+    }
+    s_rr_ = 0;
     for (auto& r : rsp_regs_) {
       r.valid = false;
     }
@@ -610,10 +690,26 @@ public:
 
     // the arbiter's view of the engines, as registered at the cycle start
     bool a_write = holds_write(engines_.at(0));
+    bool a_busy  = busy(engines_.at(0));
     bool b_busy  = (num_engines > 1) && (!engines_.at(1).s0.empty() || engines_.at(1).s1_valid);
     std::vector<bool> s0_ready(num_engines);
     for (uint32_t k = 0; k < num_engines; ++k) {
       s0_ready.at(k) = (engines_.at(k).s0.size() < S0_SIZE);
+    }
+    uint32_t num_stores = store_engines_.size();
+    bool s_busy = false;
+    std::vector<bool> s_ready(config_.num_blocks, false);
+    std::vector<bool> s_s1_ready(num_stores);
+    std::vector<bool> s_can_pass(num_stores);
+    for (uint32_t k = 0; k < num_stores; ++k) {
+      auto& e = store_engines_.at(k);
+      s_busy = s_busy || busy(e);
+      s_ready.at(k) = (e.s0.size() < S0_SIZE);
+      s_s1_ready.at(k) = !e.s1_valid;
+      s_can_pass.at(k) = e.s1_valid && e.ready;
+      if (e.s1_valid && !e.ready) {
+        e.ready = true;
+      }
     }
 
     // S1: a DMA access, or the engines' passes. A DMA request seen in one
@@ -643,6 +739,9 @@ public:
     for (auto& e : engines_) {
       e.passed = false;
     }
+    for (auto& e : store_engines_) {
+      e.passed = false;
+    }
     bool a_hold = rd_wait_;
     if (stall_cycles_ != 0) {
       --stall_cycles_;
@@ -665,6 +764,43 @@ public:
             s1_ready.at(k) = this->issue_pass(engines_.at(k), rsp_count.at(k));
           }
         }
+        if (!a_hold) {
+          uint32_t taken = 0;
+          bool first = true;
+          uint32_t rr = s_rr_;
+          for (uint32_t p = 0; p < num_stores; ++p) {
+            uint32_t k = (rr + p) % num_stores;
+            if (!s_can_pass.at(k)) {
+              continue;
+            }
+            auto& e = store_engines_.at(k);
+            uint32_t banks = 0;
+            for (uint32_t i = 0; i < config_.num_lanes; ++i) {
+              if (e.pending.test(i)) {
+                banks |= 1u << this->bank_of(e.s1.req.addrs.at(i));
+              }
+            }
+            if (banks & taken) {
+              continue;
+            }
+            taken |= banks;
+            if (first) {
+              s_rr_ = (k + 1) % num_stores;
+              first = false;
+            }
+            s_s1_ready.at(k) = this->issue_pass(e, 0);
+          }
+        }
+      }
+    }
+    for (uint32_t k = 0; k < num_stores; ++k) {
+      auto& e = store_engines_.at(k);
+      if (s_s1_ready.at(k) && !e.s0.empty()) {
+        e.s1 = std::move(e.s0.front());
+        e.s0.pop_front();
+        e.s1_valid = true;
+        e.pending = e.s1.req.mask;
+        e.ready = true;
       }
     }
 
@@ -687,13 +823,16 @@ public:
         this->take(engines_.at(0), 0);
       }
     } else {
-      this->arbitrate(s0_ready, a_write, b_busy);
+      this->arbitrate(s0_ready, a_write, a_busy, b_busy, s_ready, s_busy);
     }
 
     bool idle = (stall_cycles_ == 0) && !dma_slot_ && !a_sel_.valid && !b_sel_.valid
              && !rd_slot_ && !b_held_ && !rd_wait_ && store_rows_.empty();
     for (auto& e : engines_) {
       idle = idle && e.s0.empty() && !e.s1_valid && e.rsp_queue.empty();
+    }
+    for (auto& e : store_engines_) {
+      idle = idle && e.s0.empty() && !e.s1_valid;
     }
     for (auto& r : rsp_regs_) {
       idle = idle && !r.valid;
@@ -722,6 +861,11 @@ public:
   bool holds_store() const {
     for (auto& in : simobject_->ReqIn) {
       if (!in.empty() && !is_plain_read(in.peek())) {
+        return true;
+      }
+    }
+    for (auto& e : store_engines_) {
+      if (busy(e)) {
         return true;
       }
     }

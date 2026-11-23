@@ -221,7 +221,9 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
         .DMA_TAG_WIDTH (LMEM_DMA_TAG_WIDTH),
         .RD_ENABLE     (LMEM_TCU_RD),
         .RD_TAG_WIDTH  (TCU_LMEM_TAG_W),
-        .AMO_ENABLE    (`VX_CFG_EXT_A_ENABLED)
+        .AMO_ENABLE    (`VX_CFG_EXT_A_ENABLED),
+        .WR_MERGE      (`VX_CFG_LMEM_WR_MERGE),
+        .WR_ROW        (`VX_CFG_LMEM_WR_ROW)
     ) lmem_unit (
         .clk           (clk),
         .reset         (reset),
