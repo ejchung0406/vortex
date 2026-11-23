@@ -636,6 +636,31 @@ Sources: `open-threads.md` ("Update 2026-11-22"), `simx-perf.md` sections 8-15, 
 - **The sweep tool defect** (`perf/sweep/run.sh`, `simx-perf.md` section 11): rows were read with `IFS=$'\t' read`; tab is IFS whitespace, so a row with an empty CONFIGS field collapsed, the command was lost, `bash -c ""` returned 0 with an empty log, and the comparison counted two empty logs as identical. 45 of the 310 cases never ran; the stack was merged on a claim of "310 identical" that was really 265. After the fix and a rerun all 45 are identical; whole sweep: 310 identical, 289 with a cycle count, 301 PASSED (9 OpenCL host cases do not build on this cluster on either side). Rule adopted for every comparison: it must fail when nothing ran.
 - **Parked, not to be merged**: `perf/mt3` (multi-thread SimX: 425 of 425 runs cycle-identical, 3.5x at 22 SMs, ThreadSanitizer never ran) and `perf/build2`.
 
+### 51. With fetch ahead, a warp is fetched past its full instruction buffer, and warps queue behind the slowest load (bug, performance; fix on `feature/fetch-credit`, in verification)
+- **Where**: `VX_warp_sched.sv` (credit `ibuf_size_r`, the "all buffers full" pick), `VX_scheduler.sv`, `VX_ibuffer.sv:38`; SimX `core.cpp`. With `VX_CFG_FETCH_INFLIGHT` > 1 "full" is `size >= IBUF_SIZE`, so a core whose buffers are all full stays in the all-full path and keeps picking; `decode_if.ready` is the picked warp's buffer and decode has no stage, so one warp waiting on a load blocks the front end.
+- **Evidence** (h200s, one SM, rtlsim on `rover`, RTL 602af5c84, `bwstream -u4 -b32`): depth 4 against depth 1, n=512 140,758 / 102,205 cycles, n=2048 548,386 / 395,381; fetch and buffer stalls 128% / 171% of cycles at depth 4, 4% / 2% at depth 1. SimX at the same points: 126,128 / 104,270 and 419,474 / 405,204, so the two models also disagree by 10-24% at depth 4.
+- **Fix** (approved 2026-11-22; no new knob): with fetch ahead a warp is picked only while its credit is below the buffer size; the all-full path is gone; depth 1 is unchanged. SimX with the fix: n=512 104,279, n=2048 406,539; `fetch_squash` 10,018, `warp_rate` 113,382, `tmem_roof` 62,075, `sgemm` 792,837 unchanged. The RTL runs with the fix are not finished; not merged.
+- **Not explained by it**: the barrier difference (item 56) and the decode kernel (`gemm_tmem_decode -k1024`, depth 4: rtlsim 401,699, SimX 348,388).
+
+### 52. Shared-memory stores take a bank row per clock behind two knobs (design; merged bd7aa26ba, default off; on in `h200s` at 88077548c, local)
+- Follows item 43. `VX_CFG_LMEM_WR_MERGE`: store lanes writing different bytes of one 8-byte word share an access. `VX_CFG_LMEM_WR_ROW`: a store engine per LSU block, one row per cycle.
+- **Effect** (h200s SimX, 4-byte stores, one CTA): one warp 12.4 -> 5.6 cycles per store; 0.083 -> 0.62 / 0.74 / 0.78 stores per clock at 8 / 16 / 32 warps. The part (M4): 1.000 per clock, one warp 4.06 cycles. rtlsim and SimX within 0.16% on the store kinds.
+- **With the knobs on, the other h200s baselines do not move**: `gemm_block` 576,342, `gemm_tmem_decode` 1,320,528, `fetch_squash` 10,018, `warp_rate` 113,382, `tmem_roof` 62,075, `war_order` 342,988. `bar_vis` moves 127,357 -> 148,003 (item 41: not a yardstick).
+- **Open, deferred by the user 2026-11-23**: 4-byte loads reach 0.49 per clock against the part's 1.000 (8-byte: 0.98); stores and loads do not share one row per clock as the part does (M4). Designed as `VX_CFG_LMEM_RD_ROW` (`sm-rate.md`), not implemented.
+
+### 53. A plain store through a store engine did not break an LR reservation (bug, found in review of item 52; fixed 27111bf5a, test `lmem_lrsc_store`)
+- Separate and open: on unmodified RTL, `lmem_access` fails its LR/SC check in rtlsim with the A extension at 16 warps x 32 threads (expected +512, got +13 / +9). No owner.
+
+### 54. SimX: the ALU block's result switch and two lane-dispatch details now follow the RTL (SimX/RTL divergence, timing; merged be7eb6c39, dd94ad142)
+- Follows item 40. The LSU input holds 3 packets when the dispatch has a packet register; a lane-dispatch block without batches is independent of the others; the ALU block's result switch alternates between the integer and the multiply/divide units and the integer unit holds its result.
+
+### 55. `ci/testcase.py` ran parity and cycle-gate cases at XLEN 32 whatever `xlen` the case named (bug, CI; fixed dd94ad142)
+- Cases written with `xlen: [64]` were planned at 32 without a message, so the new 64-bit parity cases checked nothing they were written for. The planner now honours an explicit key; cases that name none stay at 32, as upstream validates SimX timing at RV32 only.
+
+### 56. A warp at a barrier beside loading neighbours: SimX is 3-5 times slower than the RTL (SimX/RTL divergence, timing; open, cause not found)
+- **Evidence** (h200s, 64 warps, `smprobe -k0 -n2 -i20 -d5000`): rtlsim 50,477 cycles, SimX 89,793 (94,455 with the fix of item 51); the probing warp's median iteration 485 cycles in rtlsim, 2,282 in SimX. Not the front end: the RTL's fetch and buffer stalls are 4% / 0%, and depth 1 gives 500.
+- The conditions of `VX_CFG_BAR_DRAIN_SCOPE` 1 read the same in the two models term by term (`VX_wctl_unit.sv:192`, `VX_core.sv:162`, `VX_socket.sv:1029`; `sfu_unit.cpp` `bar_lsu_drained`, `core.cpp` `lsu_stores_landed`), so one of the terms stays busy longer in SimX. In progress: counters per term in SimX, and an RTL run at scope 0 (SimX at scope 0: 294,648 cycles, median 9,580).
+
 ## Plain-load calibration (not adopted)
 Sources: `notes/ld_calib.patch` (load-calibration copy `src_ld`, SimX only, with path counters behind `PATH_STATS`), runs `results/ld_*` and `results/wrr_ld*`.
 - **The L1 input limit.** A warp's 64 B coalesced line is two 32 B dcache requests to one bank: the dcache's read merge takes reads of the same word only. One SM streaming plain loads plateaus at **~139 GB/s per SM** (`ldstream` lean, one SM: L2-resident `ld_fa_ll_a32` / `_a64` 140.7 / 138.8; DRAM `wrr_ldl64_def` 139.0, `_k2f` 139.7, `_k4f` 138.4). The real H200's per-SM ingress is 215-230 GB/s (item 21, `h200-l2-structure.md`).
@@ -655,6 +680,16 @@ Sources: `notes/ld_calib.patch` (load-calibration copy `src_ld`, SimX only, with
 - One warpgroup reaches 4,096 FLOPs per clock with operands from shared memory at N >= 64 (N = 8 / 16 / 32: 910 / 1,638 / 2,731, bound by 128 B per clock of operand reads); more warpgroups or CTAs never add throughput.
 - The clock is the actual SM clock: 1.800 GHz on tensor-active SMs while NVML reports 1980 MHz. "3,786 per clock" (989.5 TFLOPS / 132 / 1.98 GHz) is therefore the wrong normalisation.
 - **Consequence**: items 14, 17 and 19 and the `h200s` sources text compare against 3,786; read them against 4,096. Not rewritten here.
+
+### M3. Branches per clock on a full SM depend on the code size, and a second CTA on an SM barely runs (`results_gpu/h200_brcap_summary.txt`)
+- 32 warps: 1.58 branches per clock with 1.6 KB of code, 1.08 with 12.4 KB, 0.93 with 24.7 KB.
+- Two CTAs of 32 warps on one SM: the older takes about 99.7% of the issue slots, so earlier "64-warp" figures of the part are 32-warp figures.
+
+### M4. Shared memory moves one bank row per clock, shared between stores and loads (`results_gpu/h200_smr_summary.txt`)
+- One CTA, 4-byte accesses: stores 1.000 per clock at 8 / 16 / 32 warps (one warp: 4.06 cycles per store); loads 1.000 (5.05). At 8 and 16 bytes the bytes per clock stay 128.
+- Stores and loads together sum to 1.000 per clock: interleaved 0.400 + 0.600, halves 0.563 + 0.437, 8 + 24 warps 0.200 + 0.800, 24 + 8 warps 0.667 + 0.333.
+- TMA: no engine plateau up to 16 outstanding transfers, ceiling 105-108 B per clock; one transfer 1.67 lines per clock after about 340 cycles; issue cost 104 cycles bare, 290-302 in the full loop. TMA writes hardly slow loads (0.9998 -> 0.977) but share with stores (stores 0.636; TMA 80.8 -> 37.7 B per clock).
+- L1-resident loads: 128 B per clock at any width.
 
 ## How these were found (for the talk)
 - Rule that produced most of them: match a real H200, never provision above it, and when a number looks wrong test several hypotheses instead of tuning.

@@ -535,3 +535,139 @@ with fixes (a)+(b), small shapes agree within 0.62% (rtlsim/SimX: 16x32 scope 0
 Shared-memory atomics (SimX 309,992 vs rtlsim 141,498 at 32 threads); DXA deep
 in-flight +-9%; h200s-size rtlsim beyond four short tests (waits for `rover`);
 logic depth of every new knob.
+
+## Update 2026-11-22 (17:25): pushed f55faaa2d; agents stopped by the account's weekly limit (resets 2026-11-25 06:00 ET)
+
+Pushed to the fork: `feature/dxa-borrowing` = f55faaa2d (final h200s profile:
+FETCH_REQ_BUF/FLUSH_REQ_BUF/OPC_MERGE_BUF = 0, LANE_DISPATCH_GAPLESS = 1;
+SimX lane-parity fixes (a)+(b) with parity cases; fedp reduce_f8 and DRAM
+reset fixes; war_order CI case; findings 37-50).
+SimX baselines on it (h200s, one SM, run_point): fetch_squash 10,018;
+warp_rate 113,382; tmem_roof -n512 -i8 62,075; gemm_block -m16 -n1024 -k4096
+-s1 (MTILES=1) 562,462; gemm_tmem_decode -m16 -n8192 -k4096 1,320,528;
+bwstream -n2048 -u4 -b32 449,189; bar_vis 127,357 (bistable); sgemm -n64
+792,351.
+
+### h200s-size rtlsim references (lab server `rover`, RTL 602af5c84 = f55faaa2d RTL)
+warp_rate 113,406 (SimX -0.02%); tmem_roof 61,749 (+0.5%); fetch_squash
+10,068 (-0.5%); war_order 329,817 (SimX 344,196, +4.4%); bar_vis 145,029
+(SimX 146,121 before the lane fixes, 127,357 after: bistable test).
+**bwstream -u4 -b32: rtlsim 38,956 / 140,758 / 548,386 at n = 128 / 512 /
+2048; SimX (602af5c84) 38,539 / 126,128 / 419,474; SimX f55faaa2d at n=2048
+449,189. SimX is 18-24% fast and the gap grows with stream length. Not
+root-caused: top priority.** Still running on rover when this was written:
+gemm_block (SimX 562,462 after / 574,100 before), gemm_tmem_decode
+(1,320,528 / 1,319,938); requested next: smprobe -k0 -n2 -i20 -d5000 with
+-DPATH_STATS (SimX 77,636 before the lane fixes, 89,793 after; decides
+whether fix (a) moved toward the RTL with the SM full), then -i40, -k1 -i80,
+-d2000 variants; bwstream n=1024 rtlsim and SimX f55faaa2d at the three sizes.
+Check with `vortex-exp/rover/rover_status.sh`, fetch with `rover_fetch.sh`.
+
+### H200 measurements today (results_gpu/h200_smr_summary.txt, h200_brcap_summary.txt)
+One CTA, 4-byte shared memory: 1.000 stores and 1.000 loads per clock at
+8/16/32 warps (one warp 4.06 / 5.05 cycles). L1-resident loads: 128 B per
+clock (two lines) regardless of width. TMA: no engine plateau up to 16
+outstanding transfers, one ceiling of 105-108 B/clock, one transfer streams
+1.67 lines/clock after ~340 cycles; issue cost 104 cycles bare, 290-302 full
+loop. Branch rate with the SM full depends on code size (1.58 branches/clock
+at 1.6 KB, 1.08 at 12.4 KB, 32 warps). Two CTAs of 32 warps on one SM: the
+older takes 99.7%, so earlier "64-warp" part figures are 32-warp figures.
+
+### Unmerged, with state
+- `feature/noc` 2910aa910 (contains f55faaa2d): steps 0-1; ungated-groups gap
+  fixed (L2 bank count no longer follows the group's lanes); open: DXA +
+  limiter (+4.0 added) and DXA + groups + gate (-2.6) at the lane shape; the
+  last commits are not independently reviewed. Tables: notes/nocb/fin5_res.txt.
+- `feature/barvis-parity` b7d1f6953: ALU result switch alternation + integer
+  unit hold + warp_rate mul_add kind and parity case; re-review verdict "land
+  after one fix" = the XLEN issue below.
+- `feature/sm-rate` (12 commits, experiments; notes/sm-rate.md): LMEM store
+  diagnosis confirmed on rtlsim (4.3 cycles per store, 12.2 with 4-byte
+  spacing; SimX within 0.1%). Implementation of fixes 1/2/7 NOT started.
+  bwstream_dxa kernel argument lacks __UNIFORM__ (one CTA 26.8 -> 32.8
+  B/clock when fixed); other kernels not scanned yet.
+- `feature/lsu-accept`, `wce-cexp`: item E (held-path pop under back-pressure)
+  in progress; item C found to be core-wide (every unit accepts one cycle late
+  and returns one cycle early; fix = core slot-queue delay 2 -> 1 plus the
+  commit arbiter's output register): finding only, no commit.
+- Parked: `perf/mt3`, `perf/build2`.
+
+### Defect found in our own CI cases
+`ci/testcase.py:113-119` pins every model_parity / perf_gate case to XLEN 32;
+the `xlen: [64]` key on the ~22 parity cases this work added is ignored, and
+they were only ever measured at XLEN 64 (no 32-bit toolchain here). Decision:
+make the planner honour an explicit xlen key (unkeyed cases stay at 32), with
+a CHANGELOG correction. Not done yet. Upstream validates SimX timing at RV32
+only; this study runs RV64.
+
+### Other open items
+smprobe -n2 at 64 warps moved +12-15% with fix (a) (steady, scales with
+occupancy; suspected: barrier drain waits on a deeper LSU input) and
+gemm_block / gemm_tmem moved -6.1% / -4.6% at full problem size only: both
+provisional until the rover references land. DRAM boundary delay 3 vs 2 (D),
+page walk (F), front-end start-up divergence at 64 warps with VM, DXA
+half-row beats (SimX writes two per cycle 13% of the time; RTL one write
+bus). Phoenix CPU account gts-hkim358 nearly spent: use ICE and rover.
+
+## Update 2026-11-23 (01:45 EST): state before a context compaction
+
+Work branch: pushed bd7aa26ba; local head a470ffa5c (= bd7aa26ba + 88077548c
+h200s sets LMEM_WR_MERGE=1 and LMEM_WR_ROW=1 + merge of feature/sm-rate-f).
+Not pushed yet: waiting for the knob-on SimX baselines (rover points ckv_*,
+source copy vlmw, models slmw_*).
+Merged since the 17:25 update: dd94ad142 (ALU result switch alternation +
+integer hold; ci/testcase.py honours an explicit xlen key on parity cases),
+bd7aa26ba (LMEM store knobs, default off; reviewed twice, LR/SC reservation
+bug under WR_ROW found by review and fixed).
+
+### Rules corrected by the user (also in memory)
+- There is NO "never faster than the part" rule: match the part, either sign
+  is the same kind of error.
+- Delegate to Codex first to save Claude tokens. The plugin's Codex cannot run
+  a local shell here (bwrap cannot create the Slurm scratch tmp dir); the user
+  starts Codex by hand in the repo and tells it to read a prompt file under
+  vortex-exp/codex-tasks/. Codex's 5-hour limit is tight: one task at a time.
+- rover: nobody else uses it; use it freely (rover_point.sh: 2 rtlsim build
+  slots, 6 SimX). H200 GPU jobs are not rationed.
+
+### The big rtlsim/SimX gaps at h200s size (found on rover)
+1. Fetch ahead (VX_CFG_FETCH_INFLIGHT=4): the "all ibuffers full, fetch one
+   more" path never switches off at depth > 1, so warps chain behind the
+   slowest load. bwstream -u4 -b32, rtlsim / SimX: n=512 depth 4 140,758 /
+   126,128, depth 1 102,205 / 104,270; n=1024 depth 4 211,928 / 208,994;
+   n=2048 depth 4 548,386 / 419,474, depth 1 395,381 / 405,204 (two-level
+   behaviour: the chain forms or not). gemm_tmem_decode -m16 -n8192 -k4096:
+   rtlsim 1,554,320, SimX 1,320,528 (-15%); gemm_block 608,849 / 576,342.
+   Fix = pick a warp only while its credit < IBUF_SIZE (WIP 871067f3f on
+   feature/fetch-credit, worktree wt_fcred; note notes/fetch-credit.md).
+   SimX with the fix: n=512 104,279, n=2048 406,539. Full-size rtlsim of the
+   fix on rover: source vfcred, model mfcred_h200s, points fcr_r_n512,
+   fcr2_r_n2048, fcr2_r_smp (+ SimX twins). Codex (started by the user,
+   prompt codex-tasks/fetch-credit.txt) is finishing it: step 1 review done,
+   step 2 collecting results; it appends "Codex progress" to the note.
+   Decode-kernel depth pair still running on rover: gtq_r_fi4 / gtq_r_fi1
+   (-k1024; SimX 348,388 / 363,388).
+2. Barrier beside loading neighbours (smprobe, 64 warps): probe iteration
+   p50 rtlsim 485 (k0 i20) and 658 (k1 i80) against SimX 2,282 and ~1,350;
+   total cycles rtlsim 50,477 / 90,995 / 147,024 / 85,145 against SimX
+   89,793 / 160,587 / 265,536 / 154,184 (instruction counts differ: poll
+   loops). Not the front end (RTL fetch stall 4%; SimX depth 1 p50 1,332;
+   rtlsim depth 1 p50 500). SimX with BAR_DRAIN_SCOPE=0: p50 9,580
+   (294,648 cycles); the rtlsim scope-0 model m602_h200s_bs0 was building
+   (point spb0_r_k0). Cause not found; suspect what SimX counts as "queued in
+   the LSU" for scope 1. Unassigned (a Codex task was planned).
+### LMEM
+Stores: knobs merged; h200s sets them locally. H200 (one CTA, 4-byte):
+stores and loads share ONE row per clock (sum 1.000; 0.4 + 0.6 interleaved);
+per block about 0.25 stores or 0.5 loads per clock; TMA writes barely touch
+loads but contend with stores (results_gpu/h200_smr_summary.txt, Job 2).
+Read side + fairness (knob VX_CFG_LMEM_RD_ROW, rotating grant, design note in
+notes/sm-rate.md): approved, NOT implemented (agent stopped for token budget;
+branch feature/lmem-rd may hold WIP).
+### Other open
+feature/noc 2910aa910 needs an independent review before merge (the Codex
+review failed for lack of a local shell). Pre-existing: rtlsim lmem_access
+with EXT_A at 16x32 fails its LR/SC count (details in notes/sm-rate.md).
+C/E/D/F one-cycle items parked. Profile text for LANE_DISPATCH_GAPLESS still
+says "accepted overshoot": reword to a plain gap. Findings lists / study/ need
+a sync with everything since 2026-11-22 17:00.
