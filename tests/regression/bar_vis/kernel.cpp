@@ -1,6 +1,26 @@
 #include <vx_spawn2.h>
 #include "common.h"
 
+static void check_split_load(kernel_arg_t* __UNIFORM__ arg, uint32_t gid,
+                             uint32_t lane, uint32_t lanes) {
+  auto src = reinterpret_cast<const volatile uint32_t*>(arg->noise_addr);
+  uint32_t diff = src[gid] ^ gid;
+  __syncthreads();
+
+  // The first LSU packet misses while the later packets hit the warmed lines.
+  const bool cold = lane < lanes / 4;
+  const uint32_t stride = gridDim.x * blockDim.x * BAR_TEST_LINE_WORDS;
+  uint32_t cold_index = arg->noise_words / 2 + gid * BAR_TEST_LINE_WORDS;
+  for (uint32_t r = 0; r < arg->rounds; ++r) {
+    const uint32_t index = cold ? cold_index : gid;
+    const uint32_t value = src[index];
+    __syncthreads();
+    diff |= value ^ index;
+    cold_index += stride;
+  }
+  reinterpret_cast<uint32_t*>(arg->err_addr)[gid] = diff ? BAR_ERR_GMEM : 0;
+}
+
 // The even CTAs check what a barrier orders: in each round every thread stores
 // a value of the round to its shared-memory word and to its global word, as
 // late as its warp's delay makes it, so that its warp reaches the barrier with
@@ -25,6 +45,12 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
   const uint32_t W = get_num_sub_groups();
   const uint32_t warp = get_sub_group_id();
   const uint32_t gid = blockIdx.x * T + t;
+  const uint32_t lanes = T / W;
+
+  if (arg->split_load) {
+    check_split_load(arg, gid, t % lanes, lanes);
+    return;
+  }
 
   if (blockIdx.x & 1) {
     auto src = reinterpret_cast<const volatile uint32_t*>(arg->noise_addr);
@@ -40,7 +66,6 @@ __kernel void kernel_main(kernel_arg_t* __UNIFORM__ arg) {
 
   auto smem = reinterpret_cast<volatile uint32_t*>(__local_mem());
   auto gmem = reinterpret_cast<volatile uint32_t*>(arg->gbuf_addr) + blockIdx.x * T;
-  const uint32_t lanes = T / W;
   uint32_t err = 0;
   for (uint32_t r = 0; r < arg->rounds; ++r) {
     uint32_t delay = ((r + warp) % arg->delay_sweep) * arg->delay_step;

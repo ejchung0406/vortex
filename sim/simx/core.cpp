@@ -1508,7 +1508,7 @@ public:
     // cache responses can complete out of order, so a SIMD-split eop
     // packet may reach commit before its peers; releasing on eop would
     // expose stale lanes to the next dependent instruction's
-    // fetch_operands. Perf accounting still gates on eop.
+    // fetch_operands.
     if (trace->wb) {
       operands_.at(iw)->writeback(trace);
       if (scoreboard_->commit_packet(trace)) {
@@ -1519,8 +1519,8 @@ public:
       scoreboard_->release_fcsr(trace);
     }
 
-    if (trace->eop) {
-
+    // The last issued load packet can return before earlier packets.
+    if (trace->rsp_tracked ? trace->rsp_last : trace->eop) {
       // instruction mix profiling
       switch (trace->fu_type) {
       case FUType::ALU: ++perf_stats_.alu_instrs; break;

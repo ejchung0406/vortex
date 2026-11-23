@@ -31,10 +31,11 @@ uint32_t    delay_sweep = 4;
 uint32_t    delay_step  = 16;
 uint32_t    noise_loads = 64;
 uint32_t    noise_words = 1u << 20;
+bool        split_load  = false;
 
 void parse_args(int argc, char** argv) {
     int c;
-    while ((c = getopt(argc, argv, "g:w:r:s:d:l:n:k:h")) != -1) {
+    while ((c = getopt(argc, argv, "g:w:r:s:d:l:n:k:bh")) != -1) {
         switch (c) {
             case 'g': ctas        = std::atoi(optarg); break;
             case 'w': warps       = std::atoi(optarg); break;
@@ -44,9 +45,11 @@ void parse_args(int argc, char** argv) {
             case 'l': noise_loads = std::atoi(optarg); break;
             case 'n': noise_words = std::atoi(optarg); break;
             case 'k': kernel_file = optarg;            break;
+            case 'b': split_load  = true;              break;
             default:
                 std::cout << "Usage: [-g CTAs, even ones check, odd ones load] [-w warps per CTA] [-r rounds] "
-                             "[-s delay sweep] [-d delay step] [-l loads per loading thread] [-n words they walk] [-k kernel] [-h]" << std::endl;
+                             "[-s delay sweep] [-d delay step] [-l loads per loading thread] [-n buffer words] "
+                             "[-b split loads followed by barriers] [-k kernel] [-h]" << std::endl;
                 std::exit(c == 'h' ? 0 : -1);
         }
     }
@@ -71,6 +74,12 @@ int main(int argc, char** argv) {
         return 1;
     }
     const uint32_t T = warps * static_cast<uint32_t>(nt);
+    const uint32_t cold_lines = (noise_words - noise_words / 2) / BAR_TEST_LINE_WORDS;
+    if (split_load && (rounds == 0 || uint64_t(ctas) * T > cold_lines / rounds)) {
+        std::cerr << "-b requires at least one round and room for a cold cache line per thread per round" << std::endl;
+        vx_device_release(dev);
+        return 1;
+    }
     const uint32_t threads = ctas * T;
     std::cout << "bar_vis: ctas=" << ctas << " warps_per_cta=" << warps << " threads=" << threads
               << " rounds=" << rounds << " delay=" << delay_sweep << "x" << delay_step
@@ -99,6 +108,7 @@ int main(int argc, char** argv) {
     kernel_arg.delay_step  = delay_step;
     kernel_arg.noise_loads = noise_loads;
     kernel_arg.noise_words = noise_words;
+    kernel_arg.split_load  = split_load;
     CHECK(vx_buffer_address(noise_buf, &kernel_arg.noise_addr));
     CHECK(vx_buffer_address(sink_buf,  &kernel_arg.sink_addr));
     CHECK(vx_buffer_address(gbuf,      &kernel_arg.gbuf_addr));
@@ -130,7 +140,9 @@ int main(int argc, char** argv) {
     int errors = 0;
     uint32_t bits = 0;
     for (uint32_t i = 0; i < threads; ++i) {
-        if ((i / T) & 1) continue; // a loading CTA
+        if (!split_load && ((i / T) & 1)) {
+            continue;
+        }
         if (h_err[i] != 0) {
             if (errors < 16)
                 std::printf("*** CTA %u thread %u: err=0x%x\n", i / T, i % T, h_err[i]);
