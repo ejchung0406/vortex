@@ -35,8 +35,9 @@
 # See docs/designs/continuous_integration.md §3.3 (parity) and §3.4 (perf).
 category: core
 defaults:
-  # 32-bit only: the SimX timing model and the perf baselines are both validated
-  # against RV32 rtlsim. (The planner also pins any check case to xlen 32.)
+  # 32-bit by default: the SimX timing model and the perf baselines are
+  # validated against RV32 rtlsim. A check case runs at XLEN 32 unless it names
+  # its own xlen, and is then gated at exactly that xlen.
   xlen:
   - 32
   tier: full
