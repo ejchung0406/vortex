@@ -494,6 +494,14 @@ VX_CFG_LMEM_WR_MERGE = 0
 # engines they have, and every store keeps its order against every read. Needs
 # several LSU blocks (NUM_LSU_BLOCKS > 1; the build refuses 1).
 VX_CFG_LMEM_WR_ROW = 0
+# 1: the blocks' store engines take their plain loads too, on the banks'
+# read-only port, and the shared read engine is not built: loads and stores
+# together get up to one bank row per cycle, and a block's loads and stores
+# reach the banks in the order it sent them. No store holds the other blocks'
+# loads: an engine with a pass to issue chooses its banks first within
+# NUM_LSU_BLOCKS cycles that issue one. Atomics keep the first engine and take
+# turns with the plain requests. Needs LMEM_WR_ROW=1 (the build refuses 0).
+VX_CFG_LMEM_RD_ROW = 0
 
 [tcu]
 # string enum: 'DPI'|'DSP'|'BHF'|'TFR'|'FPNEW'; TFR is the universal default. On

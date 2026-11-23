@@ -61,6 +61,14 @@ using namespace vortex;
 // The store engines' passes share a cycle when they take different banks, in a
 // rotating order of choice; a row read held up by a write stops their passes
 // as it stops the first engine's.
+// With LMEM_RD_ROW the store engines are the blocks' engines for every plain
+// request: a block's loads and stores enter its engine in the order it sends
+// them, read passes use the banks' second port and take the row read port's
+// turns, and the read engine is unused. One engine has a bank in a cycle, so a
+// read never meets a write of its word and loads and stores together move up
+// to a bank row per cycle. The first engine keeps the atomics: one enters only
+// while the block engines are empty, they take nothing while it is there, and
+// when both kinds wait they take turns.
 // The model does a pass's bank accesses when it is issued. Every access keeps
 // its order relative to the others, so this is the order the banks see.
 class LocalMem::Impl {
@@ -127,6 +135,10 @@ protected:
   uint32_t  s_rr_;
   bool      wr_merge_;
   bool      wr_row_;
+  bool      rd_row_;
+  // LMEM_RD_ROW: the last request taken was an atomic, so the plain requests
+  // waiting go next
+  bool      amo_last_;
   struct RspReg {
     bool     valid = false;
     uint32_t engine = 0;
@@ -541,30 +553,39 @@ protected:
     std::vector<bool> in_store(n, false);
     std::vector<bool> fired(n, false);
     bool any_store = false;
+    bool any_amo = false;
     for (uint32_t b = 0; b < n; ++b) {
       auto& in = simobject_->ReqIn.at(b);
       in_valid.at(b) = !in.empty();
       in_read.at(b)  = in_valid.at(b) && is_plain_read(in.peek());
-      if (wr_row_ && in_valid.at(b) && is_plain_store(in.peek())) {
-        // the store engines' requests: the two engines below do not see them
+      if (wr_row_ && in_valid.at(b) && (rd_row_ ? !in.peek().is_amo() : is_plain_store(in.peek()))) {
+        // the block engines' requests: the two engines below do not see them
         in_store.at(b) = true;
         in_valid.at(b) = false;
+        in_read.at(b)  = false;
         any_store = true;
       }
+      any_amo = any_amo || in_valid.at(b);
     }
-    bool rd_gate = !any_store && !s_busy;
+    bool rd_gate = rd_row_ ? (!s_busy && (!any_store || !amo_last_)) : (!any_store && !s_busy);
     bool a_take = a_sel_.valid && s0_ready.at(0) && (a_sel_.read || !b_busy) && rd_gate;
     bool b_take = b_sel_.valid && s0_ready.at(1) && !a_write && !write_waiting_r_
-               && !(a_take && !a_sel_.read) && rd_gate;
+               && !(a_take && !a_sel_.read) && rd_gate && !rd_row_;
     bool b_fired = false;
+    bool s_gate = rd_row_ ? (!a_busy && (!any_amo || amo_last_)) : (!a_busy && !b_busy);
+    bool s_fired = false;
     for (uint32_t b = 0; b < n; ++b) {
-      if (in_store.at(b) && s_ready.at(b) && !a_busy && !b_busy) {
+      if (in_store.at(b) && s_ready.at(b) && s_gate) {
         this->take(store_engines_.at(b), b);
+        s_fired = true;
       }
     }
     if (a_take && in_valid.at(a_sel_.block)) {
       this->take(engines_.at(0), a_sel_.block);
       fired.at(a_sel_.block) = true;
+      amo_last_ = true;
+    } else if (s_fired) {
+      amo_last_ = false;
     }
     if (b_take && in_valid.at(b_sel_.block)) {
       this->take(engines_.at(1), b_sel_.block);
@@ -610,6 +631,8 @@ public:
     , s_rr_(0)
     , wr_merge_(VX_CFG_LMEM_WR_MERGE != 0)
     , wr_row_(VX_CFG_LMEM_WR_ROW != 0)
+    , rd_row_(VX_CFG_LMEM_RD_ROW != 0)
+    , amo_last_(false)
     , rsp_regs_(config.num_blocks)
     , arb_last_(engines_.size(), 0)
     , write_waiting_r_(false)
@@ -649,9 +672,11 @@ public:
       e.s0.clear();
       e.s1_valid = false;
       e.pending.reset();
+      e.rsp_queue.clear();
       e.passed = false;
     }
     s_rr_ = 0;
+    amo_last_ = false;
     for (auto& r : rsp_regs_) {
       r.valid = false;
     }
@@ -675,9 +700,14 @@ public:
     // Responses. Each block's response register goes to the block; a free
     // one then takes the first engine's queue head ahead of the read engine's.
     // An engine's slots count the responses in its queue and in the registers.
-    std::vector<uint32_t> rsp_count(num_engines);
+    // (a block engine's index follows the two engines')
+    uint32_t num_stores = store_engines_.size();
+    std::vector<uint32_t> rsp_count(num_engines + num_stores);
     for (uint32_t k = 0; k < num_engines; ++k) {
       rsp_count.at(k) = engines_.at(k).rsp_queue.size();
+    }
+    for (uint32_t k = 0; k < num_stores; ++k) {
+      rsp_count.at(num_engines + k) = store_engines_.at(k).rsp_queue.size();
     }
     for (auto& r : rsp_regs_) {
       rsp_count.at(r.engine) += r.valid;
@@ -703,6 +733,17 @@ public:
       r.rsp    = std::move(e.rsp_queue.front().rsp);
       e.rsp_queue.pop_front();
     }
+    for (uint32_t k = 0; k < num_stores; ++k) {
+      auto& e = store_engines_.at(k);
+      auto& r = rsp_regs_.at(k);
+      if (e.rsp_queue.empty() || e.rsp_queue.front().ready > now || r.valid) {
+        continue;
+      }
+      r.valid  = true;
+      r.engine = num_engines + k;
+      r.rsp    = std::move(e.rsp_queue.front().rsp);
+      e.rsp_queue.pop_front();
+    }
 
     // the arbiter's view of the engines, as registered at the cycle start
     bool a_write = holds_write(engines_.at(0));
@@ -712,7 +753,6 @@ public:
     for (uint32_t k = 0; k < num_engines; ++k) {
       s0_ready.at(k) = (engines_.at(k).s0.size() < S0_SIZE);
     }
-    uint32_t num_stores = store_engines_.size();
     bool s_busy = false;
     std::vector<bool> s_ready(config_.num_blocks, false);
     std::vector<bool> s_s1_ready(num_stores);
@@ -748,6 +788,9 @@ public:
     b_held_ = b_hold;
     bool banks_read = config_.rd_port && (engines_.at(1).passed
                    || (engines_.at(0).passed && engines_.at(0).passed_read));
+    for (auto& e : store_engines_) {
+      banks_read = banks_read || (config_.rd_port && e.passed && e.passed_read);
+    }
     auto& a_req = engines_.at(0).s1.req;
     bool a_reads = !a_req.is_write() || a_req.is_amo();
     wr_rows_.swap(store_rows_);
@@ -790,6 +833,11 @@ public:
               continue;
             }
             auto& e = store_engines_.at(k);
+            if (!e.s1.req.is_write() && (b_hold || rsp_count.at(num_engines + k) >= RSP_QUEUE_SIZE)) {
+              // a read pass does not ask in the row read port's cycle, nor
+              // without a response slot
+              continue;
+            }
             uint32_t banks = 0;
             for (uint32_t i = 0; i < config_.num_lanes; ++i) {
               if (e.pending.test(i)) {
@@ -804,7 +852,7 @@ public:
               s_rr_ = (k + 1) % num_stores;
               first = false;
             }
-            s_s1_ready.at(k) = this->issue_pass(e, 0);
+            s_s1_ready.at(k) = this->issue_pass(e, rsp_count.at(num_engines + k));
           }
         }
       }
@@ -848,7 +896,7 @@ public:
       idle = idle && e.s0.empty() && !e.s1_valid && e.rsp_queue.empty();
     }
     for (auto& e : store_engines_) {
-      idle = idle && e.s0.empty() && !e.s1_valid;
+      idle = idle && e.s0.empty() && !e.s1_valid && e.rsp_queue.empty();
     }
     for (auto& r : rsp_regs_) {
       idle = idle && !r.valid;
@@ -881,7 +929,7 @@ public:
       }
     }
     for (auto& e : store_engines_) {
-      if (busy(e)) {
+      if (rd_row_ ? holds_write(e) : busy(e)) {
         return true;
       }
     }

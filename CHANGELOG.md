@@ -19,6 +19,14 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
   was. New tests `lmem_wr_merge` (stores whose lanes meet in one word) and `smem_rate` (shared store and load rates with
   4-byte and word spacing). [hw/rtl/mem/VX_lmem_unit.sv](hw/rtl/mem/VX_lmem_unit.sv),
   [hw/rtl/mem/VX_lmem_engine.sv](hw/rtl/mem/VX_lmem_engine.sv), [sim/simx/mem/local_mem.cpp](sim/simx/mem/local_mem.cpp).
+- **Shared-memory loads through the blocks' engines (`VX_CFG_LMEM_RD_ROW`, default 0; needs `LMEM_WR_ROW`).** Plain loads went
+  through two shared engines, one LSU block's request each per cycle, and with `LMEM_WR_ROW` waited while any block stored.
+  With `LMEM_RD_ROW` each block's store engine takes its plain loads too, in the order the block sends them, on the banks'
+  read-only port; the shared read engine is not built. A bank goes to one engine per cycle, so loads and stores together move
+  up to one bank row per cycle and neither kind holds the other; atomics keep the first engine and take turns with the plain
+  requests. Both in the RTL and in SimX; the default keeps the timing as it was. New test `lmem_rw_order` (loads and stores
+  of the same words in program order, an atomic between); `smem_rate -k22 -f<percent>` bounds one kind's time by the other's.
+  [hw/rtl/mem/VX_lmem_unit.sv](hw/rtl/mem/VX_lmem_unit.sv), [sim/simx/mem/local_mem.cpp](sim/simx/mem/local_mem.cpp).
 - **Fetch ahead of a lone warp (`VX_CFG_FETCH_INFLIGHT`, default 1).** A warp is stalled from its fetch pick until decode, so a
   warp alone on a core issues one instruction per fetch round trip. With N > 1 (a power of two; EXT_C off) a warp that is the only
   runnable warp of its frontend slice keeps fetching sequentially, up to N fetches between pick and decode. Decode drops what was

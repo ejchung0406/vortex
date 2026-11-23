@@ -91,6 +91,7 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
     output wire                                      pass_amo,
     // a pass is ready to be issued, and the banks it takes
     output wire                                      pass_want,
+    output wire                                      pass_rw,
     output wire [NUM_BANKS-1:0]                      pass_banks,
 
     // bank requests, registered
@@ -414,7 +415,8 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
         end
     end
 
-    assign pass_want = s1_valid && s1_ready;
+    assign pass_want = s1_valid && s1_ready && (~has_rsp || (credits != '0));
+    assign pass_rw   = s1_rw;
 
     always @(posedge clk) begin
         bank_rw_r   <= s1_rw;

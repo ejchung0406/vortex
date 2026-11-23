@@ -37,6 +37,17 @@
 // With WR_MERGE the lanes of a plain store that write different bytes of one
 // bank word take its access together.
 //
+// With RD_ROW the store engines are the blocks' engines for every plain
+// request and the read engine is not built. A block's loads and stores enter
+// its engine in the order it sends them, which is the order a warp needs: a
+// warp always uses the same block. Read passes take the banks' second port and
+// the row read port's turns, and the responses leave through the block's
+// response register. One engine has a bank in a cycle, so a read never meets a
+// write of its word, no kind holds the other, and loads and stores together
+// move up to a bank row per cycle. The first engine keeps the atomics: one
+// enters only while the block engines are empty, they take nothing while it is
+// there, and when both kinds wait they take turns.
+//
 // The DMA port (row writes and reads) takes whole bank rows. A DMA request seen
 // in one cycle gets the banks the next: no pass is issued in a cycle a DMA
 // request is seen, and it is accepted in the cycle that follows. An atomic owns
@@ -91,7 +102,9 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     parameter WR_MERGE      = 0,
     // Each LSU block's stores have their own engine, and the engines' passes
     // share a cycle when they take different banks (NUM_BLOCKS > 1)
-    parameter WR_ROW        = 0
+    parameter WR_ROW        = 0,
+    // the blocks' store engines take their plain loads too
+    parameter RD_ROW        = 0
 ) (
     input wire clk,
     input wire reset,
@@ -259,6 +272,10 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     // both of those engines are empty, and they take nothing while a store is
     // at an input or in a store engine.
     localparam ROW = (WR_ROW != 0);
+    // Block engines (RD_ROW): the store engines take their blocks' plain loads
+    // too, and the read engine is not built.
+    localparam RDROW = (RD_ROW != 0);
+    `STATIC_ASSERT((RD_ROW == 0) || (WR_ROW != 0), ("the loads go through the blocks' store engines: WR_ROW=1"))
     `STATIC_ASSERT((WR_ROW == 0) || DUAL, ("the store engines share the banks between LSU blocks: NUM_BLOCKS > 1"))
 
     wire [NUM_BLOCKS-1:0] in_store;
@@ -271,9 +288,21 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     wire [NUM_BANKS-1:0][WORD_WIDTH-1:0]      st_data;
     wire [NUM_BANKS-1:0][WORD_SIZE-1:0]       st_byteen;
     wire [`CLOG2(NUM_BLOCKS*NUM_LANES+1)-1:0] st_perf_served;
+    wire [`CLOG2(NUM_BLOCKS*NUM_LANES+1)-1:0] sr_perf_served;
+    wire [NUM_BLOCKS-1:0]                      s_holds_write;
+    // the block engines' read passes at the banks' second port, and their responses
+    wire [NUM_BANKS-1:0]                       rb_valid;
+    wire [NUM_BANKS-1:0][BANK_ADDR_WIDTH-1:0]  rb_addr;
+    wire [NUM_BLOCKS-1:0]                                 e_rsp_valid;
+    wire [NUM_BLOCKS-1:0][NUM_LANES-1:0]                  e_rsp_mask;
+    wire [NUM_BLOCKS-1:0][NUM_LANES-1:0][WORD_WIDTH-1:0]  e_rsp_data;
+    wire [NUM_BLOCKS-1:0][TAG_WIDTH-1:0]                  e_rsp_tag;
+    wire [NUM_BLOCKS-1:0]                                 e_rsp_take;
+    wire [NUM_BLOCKS-1:0]                                 e_rsp_done;
     wire [`CLOG2(NUM_BLOCKS+1)-1:0]           st_perf_replay;
 
-    assign store_empty = ~(| (in_valid & ~in_read)) && ~a_holds_write && ~(| s_busy);
+    assign store_empty = ~(| (in_valid & ~in_read)) && ~a_holds_write
+                      && ~(RDROW ? (| s_holds_write) : (| s_busy));
 
     if (DUAL) begin : g_dual_arb
 
@@ -289,7 +318,9 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
                    && ~(a_take && ~a_sel_read_r) && rd_gate;
 
         for (genvar k = 0; k < NUM_BLOCKS; ++k) begin : g_ready
-            assign in_ready[k] = (a_take && (a_sel_r == BLOCK_WIDTH'(k)))
+            // with block engines the choice made a cycle ahead may meet a
+            // request that is not the first engine's
+            assign in_ready[k] = (a_take && (a_sel_r == BLOCK_WIDTH'(k)) && (ab_valid[k] || (RDROW == 0)))
                               || (b_take && (b_sel_r == BLOCK_WIDTH'(k)))
                               || s_take[k];
         end
@@ -300,7 +331,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         assign b_req_block = b_sel_r;
 
         // the next cycle's choices, from the requests waiting now
-        wire [NUM_BLOCKS-1:0] known_read = in_valid & in_read & ~in_fire;
+        wire [NUM_BLOCKS-1:0] known_read = (RDROW != 0) ? '0 : (in_valid & in_read & ~in_fire);
         wire b_busy_n = b_busy || (b_req_valid && b_req_ready);
         wire [NUM_BLOCKS-1:0] a_eligible = known_read | (ab_valid & {NUM_BLOCKS{~b_busy_n}});
 
@@ -403,6 +434,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         .read_en      (a_read_en),
         .pass_amo     (a_pass_amo),
         `UNUSED_PIN (pass_want),
+        `UNUSED_PIN (pass_rw),
         `UNUSED_PIN (pass_banks),
         .bank_valid   (a_bank_valid),
         .bank_rw      (a_bank_rw),
@@ -424,7 +456,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     );
     `UNUSED_VAR (a_busy)
 
-    if (DUAL) begin : g_read_engine
+    if (DUAL && (RDROW == 0)) begin : g_read_engine
 
         wire [NUM_LANES-1:0][0:0] b_req_payload = '0;
         wire                      b_bank_rw;
@@ -466,6 +498,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             .read_en      (1'b1),
             .pass_amo     (b_pass_amo),
             `UNUSED_PIN (pass_want),
+            `UNUSED_PIN (pass_rw),
             `UNUSED_PIN (pass_banks),
             .bank_valid   (b_bank_valid),
             .bank_rw      (b_bank_rw),
@@ -490,8 +523,8 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     end else begin : g_no_read_engine
 
         assign b_busy        = 1'b0;
-        assign b_bank_valid  = '0;
-        assign b_bank_addr   = '0;
+        assign b_bank_valid  = rb_valid;
+        assign b_bank_addr   = rb_addr;
         assign b_rsp_valid   = 1'b0;
         assign b_rsp_block   = '0;
         assign b_rsp_mask    = '0;
@@ -499,7 +532,9 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         assign b_rsp_tag     = '0;
         assign b_perf_served = '0;
         assign b_perf_replay = 1'b0;
-        `UNUSED_VAR (b_bank_rdata)
+        if (RDROW == 0) begin : g_rdata_unused
+            `UNUSED_VAR (b_bank_rdata)
+        end
         `UNUSED_VAR (b_rsp_take)
         `UNUSED_VAR (b_rsp_done)
         `UNUSED_VAR (a_holds_write)
@@ -523,14 +558,46 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         wire [NUM_BLOCKS-1:0][NUM_BANKS-1:0][PAYLOAD_WIDTH-1:0]   s_bank_payload;
         reg  [NUM_BLOCKS-1:0]                                     s_grant;
 
-        assign in_store = in_valid & in_rw;
-        assign ab_valid = in_valid & ~in_rw;
-        assign rd_gate  = ~(| in_store) && ~(| s_busy);
-        assign s_take   = in_store & s_req_ready & {NUM_BLOCKS{~a_busy && ~b_busy}};
+        wire [NUM_BLOCKS-1:0] s_pass_rw;
+        wire [NUM_BLOCKS-1:0] s_bank_rw;
+        wire [NUM_BLOCKS-1:0] s_perf_store;
+
+        if (RDROW != 0) begin : g_block_take
+            // Every plain request goes to its block's engine, in the order the
+            // block sends them; the first engine keeps the atomics. An atomic
+            // enters only while the block engines are empty and they take
+            // nothing while it is in the first engine, and when both kinds
+            // wait they take turns: one atomic, then the plain requests
+            // waiting with it.
+            assign in_store = in_valid & ~in_amo;
+            assign ab_valid = in_valid & in_amo;
+            reg amo_last_r;
+            wire a_fire = a_req_valid && a_req_ready;
+            always @(posedge clk) begin
+                if (reset) begin
+                    amo_last_r <= 1'b0;
+                end else if (a_fire) begin
+                    amo_last_r <= 1'b1;
+                end else if (| s_take) begin
+                    amo_last_r <= 1'b0;
+                end
+            end
+            assign rd_gate = ~(| s_busy) && (~(| in_store) || ~amo_last_r);
+            assign s_take  = in_store & s_req_ready & {NUM_BLOCKS{~a_busy && (~(| ab_valid) || amo_last_r)}};
+            `UNUSED_VAR (b_busy)
+        end else begin : g_store_take
+            assign in_store = in_valid & in_rw;
+            assign ab_valid = in_valid & ~in_rw;
+            assign rd_gate  = ~(| in_store) && ~(| s_busy);
+            assign s_take   = in_store & s_req_ready & {NUM_BLOCKS{~a_busy && ~b_busy}};
+        end
 
         // The engines' passes share a cycle when they take different banks. The
         // one after the last cycle's first taker chooses first, and each later
-        // one in turn passes if its banks are still free.
+        // one in turn passes if its banks are still free: an engine with a pass
+        // to issue is the first to choose within NUM_BLOCKS cycles that issue
+        // one. A read pass does not ask in a cycle the row read port has.
+        wire [NUM_BLOCKS-1:0] s_ask = s_want & (s_pass_rw | {NUM_BLOCKS{a_read_en}});
         reg [BLOCK_WIDTH-1:0] s_rr_r;
         reg [BLOCK_WIDTH-1:0] s_rr_n;
         reg                   s_any;
@@ -546,7 +613,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
                 if (idx >= (BLOCK_WIDTH+1)'(NUM_BLOCKS)) begin
                     idx = idx - (BLOCK_WIDTH+1)'(NUM_BLOCKS);
                 end
-                if (s_want[idx[BLOCK_WIDTH-1:0]] && ~(| (s_pass_banks[idx[BLOCK_WIDTH-1:0]] & taken))) begin
+                if (s_ask[idx[BLOCK_WIDTH-1:0]] && ~(| (s_pass_banks[idx[BLOCK_WIDTH-1:0]] & taken))) begin
                     s_grant[idx[BLOCK_WIDTH-1:0]] = 1'b1;
                     taken = taken | s_pass_banks[idx[BLOCK_WIDTH-1:0]];
                     if (~s_any) begin
@@ -582,8 +649,8 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
                 .reset        (reset),
                 .req_valid    (s_take[k]),
                 .req_block    (BLOCK_WIDTH'(k)),
-                .req_rw       (1'b1),
-                .req_read     (1'b0),
+                .req_rw       (in_rw[k]),
+                .req_read     (in_read[k]),
                 .req_amo      (1'b0),
                 .req_attr     ('0),
                 .req_mask     (in_mask[k]),
@@ -592,28 +659,29 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
                 .req_tag      (in_tag[k]),
                 .req_ready    (s_req_ready[k]),
                 .busy         (s_busy[k]),
-                `UNUSED_PIN (holds_write),
+                .holds_write  (s_holds_write[k]),
                 .pass_en      (a_pass_en_w && s_grant[k]),
-                .read_en      (1'b1),
+                .read_en      (a_read_en),
                 `UNUSED_PIN (pass_amo),
                 .pass_want    (s_want[k]),
+                .pass_rw      (s_pass_rw[k]),
                 .pass_banks   (s_pass_banks[k]),
                 .bank_valid   (s_bank_valid[k]),
-                `UNUSED_PIN (bank_rw),
+                .bank_rw      (s_bank_rw[k]),
                 `UNUSED_PIN (bank_amo),
                 `UNUSED_PIN (bank_attr),
                 .bank_addr    (s_bank_addr[k]),
                 .bank_payload (s_bank_payload[k]),
-                .bank_rdata   ('0),
-                `UNUSED_PIN (rsp_valid),
+                .bank_rdata   ((RDROW != 0) ? b_bank_rdata : '0),
+                .rsp_valid    (e_rsp_valid[k]),
                 `UNUSED_PIN (rsp_block),
-                `UNUSED_PIN (rsp_mask),
-                `UNUSED_PIN (rsp_data),
-                `UNUSED_PIN (rsp_tag),
-                .rsp_take     (1'b0),
-                .rsp_done     ('0),
+                .rsp_mask     (e_rsp_mask[k]),
+                .rsp_data     (e_rsp_data[k]),
+                .rsp_tag      (e_rsp_tag[k]),
+                .rsp_take     ((RDROW != 0) && e_rsp_take[k]),
+                .rsp_done     ((RDROW != 0) ? DONE_WIDTH'(e_rsp_done[k]) : '0),
                 .perf_served  (s_perf_served[k]),
-                `UNUSED_PIN (perf_store),
+                .perf_store   (s_perf_store[k]),
                 .perf_replay  (s_perf_replay[k])
             );
         end
@@ -621,23 +689,29 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         // each bank takes the row and bytes of the engine whose pass has it
         for (genvar i = 0; i < NUM_BANKS; ++i) begin : g_st_bank
             reg                       wr;
+            reg                       rd;
             reg [BANK_ADDR_WIDTH-1:0] addr;
             reg [WORD_WIDTH-1:0]      data;
             reg [WORD_SIZE-1:0]       byteen;
             always @(*) begin
                 wr     = 1'b0;
+                rd     = 1'b0;
                 addr   = '0;
                 data   = '0;
                 byteen = '0;
                 for (integer k = 0; k < NUM_BLOCKS; ++k) begin
                     if (s_bank_valid[k][i]) begin
-                        wr     = 1'b1;
+                        wr     = wr || s_bank_rw[k];
+                        rd     = rd || ~s_bank_rw[k];
                         addr   = addr | s_bank_addr[k][i];
                         data   = data | s_bank_payload[k][i][WORD_WIDTH-1:0];
                         byteen = byteen | s_bank_payload[k][i][WORD_WIDTH +: WORD_SIZE];
                     end
                 end
             end
+            // one engine has the bank in a cycle, so the row is its pass's
+            assign rb_valid[i]  = rd;
+            assign rb_addr[i]   = addr;
             assign st_wr[i]     = wr;
             assign st_addr[i]   = addr;
             assign st_data[i]   = data;
@@ -648,13 +722,23 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
                 assign st_takers[k] = s_bank_valid[k][i];
             end
             `RUNTIME_ASSERT($onehot0(st_takers),
-                ("%t: %s bank %0d: two store engines' passes in one cycle (%b)", $time, INSTANCE_ID, i, st_takers))
+                ("%t: %s bank %0d: two block engines' passes in one cycle (%b)", $time, INSTANCE_ID, i, st_takers))
             `RUNTIME_ASSERT(~(wr && (a_bank_valid[i] || b_bank_valid[i])),
                 ("%t: %s bank %0d: a store engine's write with a pass of the first or the read engine", $time, INSTANCE_ID, i))
         end
 
-        `POP_COUNT(st_perf_served, s_perf_served);
+        wire [NUM_BLOCKS-1:0][NUM_LANES-1:0] s_served_wr;
+        wire [NUM_BLOCKS-1:0][NUM_LANES-1:0] s_served_rd;
+        for (genvar k = 0; k < NUM_BLOCKS; ++k) begin : g_served
+            assign s_served_wr[k] = s_perf_served[k] & {NUM_LANES{s_perf_store[k]}};
+            assign s_served_rd[k] = s_perf_served[k] & {NUM_LANES{~s_perf_store[k]}};
+        end
+        `POP_COUNT(st_perf_served, s_served_wr);
+        `POP_COUNT(sr_perf_served, s_served_rd);
         `POP_COUNT(st_perf_replay, s_perf_replay);
+        if (RDROW == 0) begin : g_no_block_rsp
+            `UNUSED_VAR ({rb_valid, rb_addr, e_rsp_valid, e_rsp_mask, e_rsp_data, e_rsp_tag, s_holds_write})
+        end
 
     end else begin : g_no_store_engines
 
@@ -668,7 +752,16 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         assign st_data        = '0;
         assign st_byteen      = '0;
         assign st_perf_served = '0;
+        assign sr_perf_served = '0;
         assign st_perf_replay = '0;
+        assign s_holds_write  = '0;
+        assign rb_valid       = '0;
+        assign rb_addr        = '0;
+        assign e_rsp_valid    = '0;
+        assign e_rsp_mask     = '0;
+        assign e_rsp_data     = '0;
+        assign e_rsp_tag      = '0;
+        `UNUSED_VAR ({e_rsp_take, e_rsp_done, rb_valid, rb_addr})
         `UNUSED_VAR ({a_pass_en_w, in_store})
 
     end
@@ -693,7 +786,11 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         wire rsp_fire = rsp_valid_r && lsu_mem_if[k].rsp_ready;
         wire rsp_free = ~rsp_valid_r || lsu_mem_if[k].rsp_ready;
         wire a_hit    = a_rsp_valid && (a_rsp_block == BLOCK_WIDTH'(k));
-        wire b_hit    = b_rsp_valid && (b_rsp_block == BLOCK_WIDTH'(k));
+        // the read engine's response, or the block's own engine's
+        wire b_hit    = (RDROW != 0) ? e_rsp_valid[k] : (b_rsp_valid && (b_rsp_block == BLOCK_WIDTH'(k)));
+        wire [NUM_LANES-1:0]                 bk_rsp_mask = (RDROW != 0) ? e_rsp_mask[k] : b_rsp_mask;
+        wire [NUM_LANES-1:0][WORD_WIDTH-1:0] bk_rsp_data = (RDROW != 0) ? e_rsp_data[k] : b_rsp_data;
+        wire [TAG_WIDTH-1:0]                 bk_rsp_tag  = (RDROW != 0) ? e_rsp_tag[k]  : b_rsp_tag;
 
         assign a_load[k] = rsp_free && a_hit;
         assign b_load[k] = rsp_free && ~a_hit && b_hit;
@@ -708,9 +805,9 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             end
             if (rsp_free) begin
                 rsp_from_b_r <= ~a_hit;
-                rsp_mask_r   <= a_hit ? a_rsp_mask : b_rsp_mask;
-                rsp_data_r   <= a_hit ? a_rsp_data : b_rsp_data;
-                rsp_tag_r    <= a_hit ? a_rsp_tag  : b_rsp_tag;
+                rsp_mask_r   <= a_hit ? a_rsp_mask : bk_rsp_mask;
+                rsp_data_r   <= a_hit ? a_rsp_data : bk_rsp_data;
+                rsp_tag_r    <= a_hit ? a_rsp_tag  : bk_rsp_tag;
             end
         end
 
@@ -724,6 +821,8 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     `POP_COUNT(b_rsp_done, b_done);
     assign a_rsp_take = (| a_load);
     assign b_rsp_take = (| b_load);
+    assign e_rsp_take = b_load;
+    assign e_rsp_done = b_done;
 
     // DMA and atomic slots
 
@@ -1298,7 +1397,8 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             perf_bank_stalls <= '0;
             perf_crsp_stalls <= '0;
         end else begin
-            perf_reads       <= perf_reads + PERF_CTR_BITS'(a_perf_store ? 0 : perf_a_served) + PERF_CTR_BITS'(perf_b_served);
+            perf_reads       <= perf_reads + PERF_CTR_BITS'(a_perf_store ? 0 : perf_a_served) + PERF_CTR_BITS'(perf_b_served)
+                              + PERF_CTR_BITS'(sr_perf_served);
             perf_writes      <= perf_writes + PERF_CTR_BITS'(a_perf_store ? perf_a_served : 0) + PERF_CTR_BITS'(st_perf_served);
             perf_bank_stalls <= perf_bank_stalls + PERF_CTR_BITS'(a_perf_replay) + PERF_CTR_BITS'(b_perf_replay)
                               + PERF_CTR_BITS'(st_perf_replay);
@@ -1311,7 +1411,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     assign lmem_perf.bank_stalls = perf_bank_stalls;
     assign lmem_perf.crsp_stalls = perf_crsp_stalls;
 `else
-    `UNUSED_VAR ({a_perf_served, a_perf_store, a_perf_replay, b_perf_served, b_perf_replay, st_perf_served, st_perf_replay})
+    `UNUSED_VAR ({a_perf_served, a_perf_store, a_perf_replay, b_perf_served, b_perf_replay, st_perf_served, sr_perf_served, st_perf_replay})
 `endif
 
 
