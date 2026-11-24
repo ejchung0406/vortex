@@ -119,7 +119,7 @@ private:
 // returns to the port its tag names. Each direction is a crossbar with one
 // round-robin arbiter per output and a registered two-entry output buffer
 // (VX_stream_xbar): an output with more than 1.5 x 8 inputs arbitrates them in
-// registered slices of 8 and then the slices, a cycle more.
+// registered slices of 8, and each join may be sliced again.
 //
 // The L2 serves a flush token when it heads the input it arrived on and holds
 // every input's cacheable requests meanwhile. With one private link per port
@@ -279,30 +279,33 @@ private:
 
     // Registered slice levels ahead of an output's join arbiter.
     static uint32_t tree_levels(uint32_t inputs) {
-      return (inputs > kMaxFanout + kMaxFanout / 2) ? 1 : 0;
+      uint32_t levels = 0;
+      for (; inputs > kSliceThreshold; inputs = slice_count(inputs)) {
+        ++levels;
+      }
+      return levels;
     }
 
     Xbar(SimObjectBase* owner, uint32_t inputs, uint32_t outputs)
       : inputs_(inputs)
       , outputs_(outputs)
-      , slices_(tree_levels(inputs) ? (inputs + kMaxFanout - 1) / kMaxFanout : 0)
-      , slice_rr_(outputs * slices_)
       , join_rr_(outputs)
-      , slice_buf_(outputs * slices_, SimChannel<Pkt>(owner, 2))
       , requests_(outputs) {
-      for (auto& buf : slice_buf_) {
-        buf.set_registered_ready(true);
+      for (uint32_t n = inputs; n > kSliceThreshold; n = slice_count(n)) {
+        levels_.emplace_back(owner, n, outputs);
       }
-      __assert(slices_ <= kMaxFanout + kMaxFanout / 2, "a crossbar output takes one slice level");
       this->reset();
     }
 
     void reset() {
-      // a round-robin arbiter first grants its request 0
-      for (uint32_t i = 0; i < slice_rr_.size(); ++i) {
-        slice_rr_[i] = this->slice_size(i % slices_) - 1;
+      // A round-robin arbiter first grants its input 0.
+      for (auto& level : levels_) {
+        for (uint32_t i = 0; i < level.last.size(); ++i) {
+          level.last[i] = level.slice_size(i % level.slices) - 1;
+        }
       }
-      std::fill(join_rr_.begin(), join_rr_.end(), (slices_ ? slices_ : inputs_) - 1);
+      uint32_t join_inputs = levels_.empty() ? inputs_ : levels_.back().slices;
+      std::fill(join_rr_.begin(), join_rr_.end(), join_inputs - 1);
     }
 
     // One cycle. `eligible(i, pkt)` holds input i's head back, `select(pkt)`
@@ -325,83 +328,113 @@ private:
         requests_.at(select(ch.peek())).push_back(i);
       }
       for (uint32_t o = 0; o < outputs_; ++o) {
-        auto& reqs = requests_[o];
-        if (slices_ == 0) {
-          // one arbiter over the inputs
-          if (reqs.empty()) {
-            continue;
-          }
-          uint32_t g = pick(reqs, join_rr_[o], inputs_, 0);
+        const auto& reqs = requests_[o];
+        auto accept = [&](uint32_t g, SimChannel<Pkt>& dst, uint32_t& last, uint32_t lo) {
           auto& ch = in.at(g);
-          if (out.at(o).try_send(convert(g, ch.peek()), 1)) {
+          if (dst.try_send(convert(g, ch.peek()), 1)) {
             taken(g, ch.peek());
             ch.pop();
-            join_rr_[o] = g;
+            last = g - lo;
+          }
+        };
+        if (levels_.empty()) {
+          if (!reqs.empty()) {
+            auto& last = join_rr_[o];
+            accept(pick(reqs.begin(), reqs.end(), last, inputs_, 0), out.at(o), last, 0);
           }
           continue;
         }
-        uint32_t base = o * slices_;
-        scratch_.clear();
-        for (uint32_t s = 0; s < slices_; ++s) {
-          auto& buf = slice_buf_[base + s];
-          busy |= (buf.size() != 0);
-          if (!buf.empty()) {
-            scratch_.push_back(s);
+
+        auto& top = levels_.back();
+        busy |= transfer(top, o, 0, top.slices, out.at(o), join_rr_[o]);
+        for (size_t l = levels_.size() - 1; l > 0; --l) {
+          auto& prev = levels_[l - 1];
+          auto& level = levels_[l];
+          uint32_t base = o * level.slices;
+          for (uint32_t s = 0; s < level.slices; ++s) {
+            busy |= transfer(prev, o, s * kMaxFanout, level.slice_size(s),
+                             level.buffers[base + s], level.last[base + s]);
           }
         }
-        if (!scratch_.empty()) {
-          uint32_t g = pick(scratch_, join_rr_[o], slices_, 0);
-          auto& buf = slice_buf_[base + g];
-          if (out.at(o).try_send(buf.peek(), 1)) {
-            buf.pop();
-            join_rr_[o] = g;
-          }
-        }
-        // requests arrive in input order, so each slice's are contiguous
-        for (size_t k = 0; k < reqs.size();) {
-          uint32_t s = reqs[k] / kMaxFanout;
-          scratch_.clear();
-          while (k < reqs.size() && reqs[k] / kMaxFanout == s) {
-            scratch_.push_back(reqs[k++]);
-          }
+
+        auto& leaves = levels_.front();
+        uint32_t base = o * leaves.slices;
+        // Requests arrive in input order, so the requests to one slice are contiguous.
+        for (auto first = reqs.begin(); first != reqs.end();) {
+          uint32_t s = *first / kMaxFanout;
           uint32_t lo = s * kMaxFanout;
-          uint32_t g = pick(scratch_, slice_rr_[base + s], this->slice_size(s), lo);
-          auto& ch = in.at(g);
-          if (slice_buf_[base + s].try_send(convert(g, ch.peek()), 1)) {
-            taken(g, ch.peek());
-            ch.pop();
-            slice_rr_[base + s] = g - lo;
+          auto end = first + 1;
+          while (end != reqs.end() && *end - lo < kMaxFanout) {
+            ++end;
           }
+          auto& last = leaves.last[base + s];
+          accept(pick(first, end, last, leaves.slice_size(s), lo), leaves.buffers[base + s], last, lo);
+          first = end;
         }
       }
       return busy;
     }
 
   private:
-    uint32_t slice_size(uint32_t s) const {
-      return slices_ ? std::min(kMaxFanout, inputs_ - s * kMaxFanout) : inputs_;
+    static constexpr uint32_t kSliceThreshold = kMaxFanout + kMaxFanout / 2;
+
+    static uint32_t slice_count(uint32_t inputs) {
+      return inputs / kMaxFanout + (inputs % kMaxFanout != 0);
     }
 
-    // Round-robin: the first of `reqs` (ascending, offset by `lo`) after `last`.
-    static uint32_t pick(const std::vector<uint32_t>& reqs, uint32_t last, uint32_t size, uint32_t lo) {
-      uint32_t start = (last + 1) % size;
-      for (uint32_t r : reqs) {
-        if (r - lo >= start) {
-          return r;
+    struct SliceLevel {
+      uint32_t inputs;
+      uint32_t slices;
+      std::vector<SimChannel<Pkt>> buffers;
+      std::vector<uint32_t> last;
+
+      SliceLevel(SimObjectBase* owner, uint32_t inputs, uint32_t outputs)
+        : inputs(inputs)
+        , slices(slice_count(inputs))
+        , buffers(outputs * slices, SimChannel<Pkt>(owner, 2))
+        , last(outputs * slices) {
+        for (auto& buf : buffers) {
+          buf.set_registered_ready(true);
         }
       }
-      return reqs.front();
+
+      uint32_t slice_size(uint32_t s) const {
+        return std::min(kMaxFanout, inputs - s * kMaxFanout);
+      }
+    };
+
+    static bool transfer(SliceLevel& prev, uint32_t output, uint32_t lo, uint32_t size,
+                         SimChannel<Pkt>& dst, uint32_t& last) {
+      bool busy = false;
+      uint32_t base = output * prev.slices + lo;
+      for (uint32_t k = 0; k < size; ++k) {
+        uint32_t g = (last + 1 + k) % size;
+        auto& buf = prev.buffers[base + g];
+        busy |= (buf.size() != 0);
+        if (!buf.empty()) {
+          if (dst.try_send(buf.peek(), 1)) {
+            buf.pop();
+            last = g;
+          }
+          return true;
+        }
+      }
+      return busy;
+    }
+
+    // Round-robin: the first request (ascending, offset by `lo`) after `last`.
+    using RequestIter = std::vector<uint32_t>::const_iterator;
+    static uint32_t pick(RequestIter first, RequestIter end, uint32_t last, uint32_t size, uint32_t lo) {
+      uint32_t start = lo + (last + 1) % size;
+      auto match = std::lower_bound(first, end, start);
+      return match == end ? *first : *match;
     }
 
     uint32_t inputs_;
     uint32_t outputs_;
-    uint32_t slices_;
-    std::vector<uint32_t> slice_rr_;
+    std::vector<SliceLevel> levels_;
     std::vector<uint32_t> join_rr_;
-    // an output's slice buffers: registered, two entries each
-    std::vector<SimChannel<Pkt>> slice_buf_;
     std::vector<std::vector<uint32_t>> requests_;
-    std::vector<uint32_t> scratch_;
   };
 
   struct Delivery {

@@ -267,6 +267,14 @@ tests:
   args: -n256 -u4 -b4
   configs: -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=4 -DVX_CFG_NOC_UPLINK_PORTS=4 -DVX_CFG_NOC_UPLINK_BYTES=160
   shape: {cores: 8, l2cache: true}
+# Four ports per socket give 72 inputs and 128 default uplink lanes.
+- id: noc-recursive-fanin
+  via: blackbox
+  drivers: [simx]
+  xlen: [64]
+  app: demo
+  configs: -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_NOC_GROUP_SIZE=18
+  shape: {cores: 18, l2cache: true}
 # A socket's issue limit below what its four ports ask for (a line per 4 cycles).
 - id: parity-bwstream-ingress
   check: model_parity

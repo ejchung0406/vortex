@@ -250,14 +250,25 @@ module VX_noc_switch import VX_gpu_pkg::*; #(
         assign rsp_ready_out[p] = port_bus_if[p].rsp_ready;
     end
 
-    // responses inside the crossbar: two per output buffer, per slice level too
+    function automatic integer xbar_buffers_per_output(integer inputs);
+        integer buffers, slices;
+        buffers = 1;
+        slices = inputs;
+        while (slices > (`MAX_FANOUT + `MAX_FANOUT / 2)) begin
+            slices = `CDIV(slices, `MAX_FANOUT);
+            buffers += slices;
+        end
+        return buffers;
+    endfunction
+
+    // Responses can occupy any of the two-entry buffers of the join tree.
     wire [NUM_LANES-1:0] rsp_fire_in  = rsp_valid_in & rsp_ready_in;
     wire [NUM_PORTS-1:0] rsp_fire_out = rsp_valid_out & rsp_ready_out;
 
     VX_mem_req_pending #(
         .NUM_INPUTS  (NUM_LANES),
         .NUM_OUTPUTS (NUM_PORTS),
-        .SIZE        (2 * NUM_PORTS * (1 + `CDIV(NUM_LANES, `MAX_FANOUT)))
+        .SIZE        (`MAX(NUM_LANES, 2 * NUM_PORTS * xbar_buffers_per_output(NUM_LANES)))
     ) rsp_pending (
         .clk      (clk),
         .reset    (reset),
