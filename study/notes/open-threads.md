@@ -871,3 +871,14 @@ Codex results (all three finished):
   2 / 4 workers raise the single transfer to 0.73 / 1.21 lines per clock but cost concurrency. User decision: do
   the read overlap now (codex-tasks/tma-read-overlap.txt, branch feature/lmem-dma-rd); line-granular scheduling
   later, after seeing it in RTL.
+
+## Update 2026-11-24 (16:15 EST)
+Merged feature/noc3 (ecaa43a00, 38 commits; merge 313246121): network model steps 0, 1 and 4, knobs default off.
+Codex's check on the rebased branch (notes/noc-fix.md, last section): knobs off identical at 22 SMs on eight kernels
+and on 51 CI legs; 15 parity pairs pass (max 2.0%); grouped VM/PTW, fence and flush cases pass with the new L2
+replacement; two-core Beacon on rover (inside the capped slice): 26 levels on and off, LUT +0.7%, FF +4% with the
+knobs on. One-SM SimX at the merged head equals the values before the merge: fetch_squash 10,017, gemm_block
+513,734, ldstream lean 173,098, war_order 320,317, smem_rate -k22 139,931, bwstream_dxa -d2 400,310.
+No multi-SM profile (h200g2 / h200g4 of noc-model-design.md) is in profiles/ yet.
+Next for Codex (NoC session): codex-tasks/noc-step2-slice-bind.txt (branch feature/noc-step2, notes/noc-step2.md).
+TMA session: feature/lmem-dma-rd (read overlap), based on 00186b8b3; needs a rebase onto 313246121 before merging.

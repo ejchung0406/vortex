@@ -204,3 +204,127 @@ All 17 paired workloads retired equal instruction counts. The flush stress is RT
 - If `fix/smem-phase` or `fix/cache-repl` lands first, reconcile the shared CI and cache-subsystem files. Recheck L2 admission and fence ordering, repeat the grouped VM/PTW pair, and retake the disabled h200s comparisons against the new destination revision.
 
 All ICE jobs for this task reached terminal states and their logs were fetched. Both owned ICE source copies were removed after collection. The candidate worktree and the fetched evidence are retained locally.
+
+## NoC3 rebase onto cache replacement — 2026-11-24
+
+`feature/noc3` is at `ecaa43a001fcddbc8a47197aafd8cd114dd0c555` in [wt_noc3](../wt_noc3). The base is `00186b8b3039560c078bdd3f3798544a83158876`, the merge that brought in stages 1 and 2 of `fix/cache-repl`. The rebase carries all 38 NoC2 commits. `git range-diff` matched 37 patches exactly. The sixth patch resolves a shared insertion point in `ci/testcases/core.yaml` by preserving the three-way `parity-chase-l2-plru` case and the NoC cases. `docs/designs/cache_subsystem.md` merged both sets of documentation. Catalog lint passed for 1,152 cases across 28 categories. The candidate worktree is clean and `git diff --check` passed.
+
+The inherited cache changes give each PLRU way a distinct leaf, take the lowest invalid way on fill, and update recency on fill and hit. The independent R3 integration review checked the admission and fence boundaries. RTL still counts acceptance at the L2 valid/ready handshake. SimX counts the cache input pop, then delivers that event to the switch. The switch waits for prior requests to enter L2 before sending the port’s flush token and holds subsequent requests until the token is acknowledged. The PTW still uses a dedicated L2 client outside the groups and contributes to bank sizing based on the flat client count.
+
+### Knobs off — 22-core h200s identity (XLEN64 SimX)
+
+| Workload | Retired instructions on both | Base cycles | Candidate cycles | Logs |
+| --- | ---: | ---: | ---: | --- |
+| `fetch_squash` | 978 | 10,109 | 10,109 | [Base](../results/noc3_g18vgwmw_base_h200_00/fetch_squash.log) · [Candidate](../results/noc3_g18vgwmw_head_h200_00/fetch_squash.log) |
+| `warp_rate` | 8,511 | 113,488 | 113,488 | [Base](../results/noc3_g18vgwmw_base_h200_00/warp_rate.log) · [Candidate](../results/noc3_g18vgwmw_head_h200_00/warp_rate.log) |
+| `tmem_roof -n512 -i8` | 8,925 | 62,546 | 62,546 | [Base](../results/noc3_g18vgwmw_base_h200_00/tmem_roof.log) · [Candidate](../results/noc3_g18vgwmw_head_h200_00/tmem_roof.log) |
+| `bwstream -n2048 -u4 -b32` | 10,227,712 | 1,017,729 | 1,017,729 | [Base](../results/noc3_g18vgwmw_base_h200_00/bwstream.log) · [Candidate](../results/noc3_g18vgwmw_head_h200_00/bwstream.log) |
+| `gemm_block -m16 -n1024 -k4096 -s1` | 814,144 | 132,029 | 132,029 | [Base](../results/noc3_g18vgwmw_base_h200_00/gemm_block.log) · [Candidate](../results/noc3_g18vgwmw_head_h200_00/gemm_block.log) |
+| `gemm_tmem_decode -m16 -n8192 -k4096` | expected rejection | — | — | [Base](../results/noc3_g18vgwmw_base_h200_00/gemm_tmem_decode.log) · [Candidate](../results/noc3_g18vgwmw_head_h200_00/gemm_tmem_decode.log) |
+| `war_order` | 361,856 | 24,497 | 24,497 | [Base](../results/noc3_g18vgwmw_base_h200_00/war_order.log) · [Candidate](../results/noc3_g18vgwmw_head_h200_00/war_order.log) |
+| `ldstream -t2048 -b8 -u8 -m16 -a -l` | 5,504,312 | 1,206,207 | 1,206,207 | [Base](../results/noc3_g18vgwmw_base_h200_00/ldstream.log) · [Candidate](../results/noc3_g18vgwmw_head_h200_00/ldstream.log) |
+| `gemm_tmem_decode -m16 -n11264 -k4096` | 312,532 | 263,417 | 263,417 | [Base](../results/noc3_g18vgwmw_base_h200_decode_00/decode_full.log) · [Candidate](../results/noc3_g18vgwmw_head_h200_decode_00/decode_full.log) |
+
+Both decode sizes use `-DKSTEPS=2 -DPIPE=6 -DXFER=8192`. The smaller size rejects before launch on both revisions and reports zero instructions and cycles. `gemm_block` uses `-DMTILES=1 -DPROFILE_ENABLE`. The h200s profile exercises the new PLRU code with a 33-way L2.
+
+Compared with the previous work-branch base, the cache replacement merge reduces the common cycle totals by 4,749 for bwstream, 3,842 for gemm_block, 1,688 for ldstream, and 483 for the valid decode size. The other four successful inputs retain their earlier totals.
+
+### Touched XLEN64 catalog
+
+Off matches across revisions for 51/51 case/driver legs. On completed 51/51 case/driver legs. The off runs remove the NoC and ingress limits and the bwstream launch mask, placement check and relaunch arguments. DXA port counts and other architectural parameters remain as specified. The `perf` field in each linked metrics file records instructions and cycles in that order.
+
+| Case | Off SimX instr / cycles | Off RTL instr / cycles | On SimX instr / cycles | On RTL instr / cycles | On gap |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| [`amo-noc`](../results/noc3_g18vgwmw_head_matrix_33/metrics.jsonl) | 330,585 / 1,402,034 | 356,493 / 1,524,641 | 298,335 / 1,396,127 | 354,863 / 1,493,163 | — |
+| [`amo-noc-gate-req`](../results/noc3_g18vgwmw_head_matrix_33/metrics.jsonl) | 330,585 / 1,402,034 | 356,493 / 1,524,641 | 305,908 / 1,535,470 | 366,413 / 1,640,328 | — |
+| [`dxa_rowmix-ingress`](../results/noc3_g18vgwmw_head_matrix_32/metrics.jsonl) | 60,568 / 146,974 | 60,568 / 146,790 | 60,568 / 146,994 | 60,568 / 146,812 | — |
+| [`fence-noc`](../results/noc3_g18vgwmw_head_matrix_33/metrics.jsonl) | 9,776 / 7,087 | 9,776 / 7,085 | 9,776 / 7,103 | 9,776 / 7,055 | — |
+| [`fence-noc-one-port`](../results/noc3_g18vgwmw_head_matrix_33/metrics.jsonl) | 2,444 / 7,146 | 2,444 / 7,158 | 2,444 / 7,173 | 2,444 / 7,183 | — |
+| [`fence-noc-stress`](../results/noc3_g18vgwmw_head_matrix_24/metrics.jsonl) | — | 9,776 / 33,116 | — | 9,776 / 24,611 | — |
+| [`fence_mp-noc-1`](../results/noc3_g18vgwmw_head_matrix_33/metrics.jsonl) | 10,071 / 150,157 | 10,051 / 149,858 | 10,071 / 150,157 | 10,051 / 149,858 | — |
+| [`fence_mp-noc-2`](../results/noc3_g18vgwmw_head_matrix_33/metrics.jsonl) | 10,071 / 150,157 | 9,991 / 149,858 | 10,071 / 150,157 | 10,011 / 150,205 | — |
+| [`flush_coherence-noc`](../results/noc3_g18vgwmw_head_matrix_33/metrics.jsonl) | 378,880 / 286,518 | 378,880 / 286,534 | 378,880 / 286,393 | 378,880 / 286,452 | — |
+| [`flush_coherence-noc-stress`](../results/noc3_g18vgwmw_head_matrix_25/metrics.jsonl) | — | 1,209,344 / 2,235,537 | — | 1,209,344 / 2,248,413 | — |
+| [`model_parity-bwstream-dxa-group-gate`](../results/noc3_g18vgwmw_head_matrix_32/metrics.jsonl) | 22,816 / 16,022 | 22,816 / 15,893 | 22,816 / 16,917 | 22,816 / 17,005 | -0.517% |
+| [`model_parity-bwstream-dxa-ports`](../results/noc3_g18vgwmw_head_matrix_32/metrics.jsonl) | 22,816 / 16,752 | 22,816 / 15,598 | 22,816 / 16,638 | 22,816 / 16,387 | +1.532% |
+| [`model_parity-dxa-corun-ingress`](../results/noc3_g18vgwmw_head_matrix_32/metrics.jsonl) | 6,936 / 21,731 | 6,936 / 21,422 | 6,936 / 21,950 | 6,936 / 21,516 | +2.017% |
+| [`noc-recursive-fanin`](../results/noc3_g18vgwmw_head_matrix_31/metrics.jsonl) | 44,424 / 6,537 | — | 44,424 / 6,615 | — | — |
+| [`parity-bwstream-coremask`](../results/noc3_g18vgwmw_head_matrix_28/metrics.jsonl) | 83,136 / 74,445 | 83,136 / 74,519 | 41,744 / 73,937 | 41,744 / 73,941 | -0.005% |
+| [`parity-bwstream-coremask-relaunch`](../results/noc3_g18vgwmw_head_matrix_28/metrics.jsonl) | 13,560 / 19,224 | 13,560 / 19,221 | 41,340 / 54,637 | 41,340 / 54,679 | -0.077% |
+| [`parity-bwstream-coremask-uneven`](../results/noc3_g18vgwmw_head_matrix_28/metrics.jsonl) | 83,136 / 74,445 | 83,136 / 74,519 | 62,616 / 74,307 | 62,616 / 74,423 | -0.156% |
+| [`parity-bwstream-coremask-uneven-clusters`](../results/noc3_g18vgwmw_head_matrix_28/metrics.jsonl) | 43,392 / 19,855 | 43,392 / 20,115 | 22,048 / 19,886 | 22,048 / 20,101 | -1.070% |
+| [`parity-bwstream-coremask-uneven012`](../results/noc3_g18vgwmw_head_matrix_28/metrics.jsonl) | 83,136 / 74,445 | 83,136 / 74,519 | 62,616 / 74,307 | 62,616 / 74,425 | -0.159% |
+| [`parity-bwstream-ingress`](../results/noc3_g18vgwmw_head_matrix_32/metrics.jsonl) | 3,940 / 13,786 | 3,940 / 13,658 | 3,940 / 13,861 | 3,940 / 13,732 | +0.939% |
+| [`parity-bwstream-noc-gate`](../results/noc3_g18vgwmw_head_matrix_31/metrics.jsonl) | 15,760 / 17,483 | 15,760 / 16,609 | 15,760 / 18,291 | 15,760 / 18,275 | +0.088% |
+| [`parity-bwstream-noc-gate-req`](../results/noc3_g18vgwmw_head_matrix_31/metrics.jsonl) | 15,760 / 17,483 | 15,760 / 16,609 | 15,760 / 18,231 | 15,760 / 18,224 | +0.038% |
+| [`parity-bwstream-noc-relaunch`](../results/noc3_g18vgwmw_head_matrix_31/metrics.jsonl) | 2,685 / 8,715 | 2,685 / 8,669 | 8,055 / 23,815 | 8,055 / 23,759 | +0.236% |
+| [`parity-bwstream-noc-slices`](../results/noc3_g18vgwmw_head_matrix_31/metrics.jsonl) | 31,520 / 16,628 | 31,520 / 16,379 | 31,520 / 16,590 | 31,520 / 16,295 | +1.810% |
+| [`parity-chase-noc`](../results/noc3_g18vgwmw_head_matrix_30/metrics.jsonl) | 6,810 / 219,700 | 6,810 / 219,704 | 6,810 / 219,700 | 6,810 / 219,704 | -0.002% |
+| [`parity-chase-noc-ptw`](../results/noc3_g18vgwmw_head_matrix_30/metrics.jsonl) | 6,817 / 122,459 | 6,817 / 122,478 | 6,817 / 127,588 | 6,817 / 127,607 | -0.015% |
+| [`war_order-noc`](../results/noc3_g18vgwmw_head_matrix_33/metrics.jsonl) | 2,688,240 / 1,744,705 | 2,688,240 / 1,745,829 | 2,688,240 / 1,745,144 | 2,688,240 / 1,745,473 | — |
+
+All parity comparisons use the catalog tolerance and exact retired-instruction equality. The gap is signed as (SimX − RTL) / RTL.
+
+| Standalone RV64IM on 4 cores / 2 per socket | Base | Candidate |
+| --- | ---: | ---: |
+| `run-simx-64im` | [PASS](../results/noc3_g18vgwmw_base_standalone_isa_00/isa-64im-standalone-kmu-fanout.log) | [PASS](../results/noc3_g18vgwmw_head_standalone_isa_00/isa-64im-standalone-kmu-fanout.log) |
+
+### Selected fin5 replay (XLEN64)
+
+| Case | Retired instructions | SimX cycles | rtlsim cycles | Gap |
+| --- | ---: | ---: | ---: | ---: |
+| [`P_grp`](../results/noc3_g18vgwmw_head_matrix_34/metrics.jsonl) | 31,520 | 17,779 | 17,458 | +1.839% |
+| [`P_gate`](../results/noc3_g18vgwmw_head_matrix_34/metrics.jsonl) | 31,520 | 18,923 | 18,752 | +0.912% |
+| [`P_gateq`](../results/noc3_g18vgwmw_head_matrix_34/metrics.jsonl) | 31,520 | 18,836 | 18,749 | +0.464% |
+| [`P_dxoff`](../results/noc3_g18vgwmw_head_matrix_29/metrics.jsonl) | 22,816 | 16,115 | 15,873 | +1.525% |
+| [`P_dxp2`](../results/noc3_g18vgwmw_head_matrix_28/metrics.jsonl) | 22,816 | 16,752 | 15,598 | +7.398% |
+| [`P_dxp2i`](../results/noc3_g18vgwmw_head_matrix_32/metrics.jsonl) | 22,816 | 16,638 | 16,387 | +1.532% |
+| [`P_dxgrp`](../results/noc3_g18vgwmw_head_matrix_34/metrics.jsonl) | 22,816 | 17,508 | 16,755 | +4.494% |
+| [`j_gate`](../results/noc3_g18vgwmw_head_matrix_31/metrics.jsonl) | 15,760 | 18,291 | 18,275 | +0.088% |
+| [`j_gateq`](../results/noc3_g18vgwmw_head_matrix_31/metrics.jsonl) | 15,760 | 18,231 | 18,224 | +0.038% |
+| [`j_slices`](../results/noc3_g18vgwmw_head_matrix_31/metrics.jsonl) | 31,520 | 16,590 | 16,295 | +1.810% |
+| [`j_chase`](../results/noc3_g18vgwmw_head_matrix_30/metrics.jsonl) | 6,810 | 219,700 | 219,704 | -0.002% |
+| [`j_dxap`](../results/noc3_g18vgwmw_head_matrix_34/metrics.jsonl) | 2,852 | 7,993 | 8,330 | -4.046% |
+| [`j_one`](../results/noc3_g18vgwmw_head_matrix_33/metrics.jsonl) | 2,444 | 7,173 | 7,183 | -0.139% |
+| [`j_fstress`](../results/noc3_g18vgwmw_head_matrix_24/metrics.jsonl) | 9,776 | — | 24,611 | — |
+
+Paired knobs-off controls and PLRU probes
+
+| Case | Retired instructions | SimX cycles | rtlsim cycles | Gap |
+| --- | ---: | ---: | ---: | ---: |
+| [`P_dxoff`](../results/noc3_g18vgwmw_head_matrix_29/metrics.jsonl) | 22,816 | 16,115 | 15,873 | +1.525% |
+| [`P_dxp2`](../results/noc3_g18vgwmw_head_matrix_28/metrics.jsonl) | 22,816 | 16,752 | 15,598 | +7.398% |
+| [`j_dxap_off`](../results/noc3_g18vgwmw_head_matrix_30/metrics.jsonl) | 2,852 | 7,984 | 8,292 | -3.714% |
+| [`parity-chase-l2-plru`](../results/noc3_g18vgwmw_head_matrix_30/metrics.jsonl) | 678 | 17,389 | 17,371 | +0.104% |
+| [`parity-chase-l2-plru-grouped`](../results/noc3_g18vgwmw_head_matrix_30/metrics.jsonl) | 678 | 18,428 | 18,411 | +0.092% |
+| [`fence-noc-stress-plru`](../results/noc3_g18vgwmw_head_matrix_26/metrics.jsonl) | 9,776 | — | 24,611 | — |
+
+### L2 admission, fencing, and page walks
+
+The grouped VM/PTW pair retires 6,817 instructions on each model. SimX takes 127,588 cycles and rtlsim takes 127,607 cycles. The flat VM/PTW controls also match the base within each model. The grouped fence, message-passing modes 1 and 2, and stalled flush and fence cases all pass. An extra RTL fence-stress run with explicit PLRU also passes in 24,611 cycles. An extra grouped three-way PLRU chase takes 18,428 SimX cycles and 18,411 RTL cycles with 678 instructions on each, while the flat three-way PLRU case matches the base in each model. [VM/PTW SimX](../results/noc3_g18vgwmw_head_matrix_30/parity-chase-noc-ptw__ci_on.log) · [VM/PTW RTL](../results/noc3_g18vgwmw_head_matrix_18/parity-chase-noc-ptw__ci_on.log) · [PLRU fence stress](../results/noc3_g18vgwmw_head_matrix_26/fence-noc-stress-plru__plru.log)
+
+### Replay interpretation
+
+All 15 catalog model-parity pairs pass, with a maximum absolute gap of 2.017%. The `amo-noc` and `amo-noc-gate-req` functional tests pass in both engines. Their model-specific instruction counts and timings reproduce the NoC2 measurements.
+
+The selected fin5 replay covers 14 rows. Thirteen run in both models and retire the same instruction totals across models. The fence stress row runs in RTL. The three cycle gaps at or above 3% reproduce the previous replay.
+
+- `P_dxp2` is +7.398%. The wide two-port control has all NoC knobs off and exactly matches the new base in each model. Relative to `P_dxoff`, the extra DXA port adds 637 SimX cycles and saves 275 RTL cycles.
+- `P_dxgrp` is +4.494%. Grouping and the response cap add 756 SimX cycles and 1,157 RTL cycles over `P_dxp2`. The absolute difference falls by 401 cycles, from 1,154 to 753. The lighter grouped DXA catalog pair is −0.517%.
+- `j_dxap` is −4.046%. The matching no-ingress-cap control is −3.714% on the base and candidate. The ingress cap increases the absolute difference by 29 cycles, about 0.35% of the capped RTL total.
+
+### Two-core Beacon on Rover
+
+Each cell ran in `vortex.slice` through `~/vortex-rover/vxrun` under the 200 GiB memory limit. The cells ran serially under the shared RTL build lock. The common shape was `top_vortex`, XLEN64, two cores, eight threads per warp, four warps, VM and atomics enabled, and L2 with a 20-cycle link. The enabled cell used one two-socket group, two lanes, an 8 B/cycle request-side uplink cap, and a 16 B/cycle socket ingress cap.
+
+| Cell | Max logic levels | LUT | FF | BRAM | DSP | Estimated MHz |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| [Base, knobs off](../results/noc3_beacon_00186b8b3_20261124/base_off.json) | 26 | 630,694 | 437,120 | 402 | 66 | 234.3 |
+| [Candidate, knobs off](../results/noc3_beacon_00186b8b3_20261124/candidate_off.json) | 26 | 630,712 | 437,138 | 402 | 66 | 234.3 |
+| [Candidate, knobs on](../results/noc3_beacon_00186b8b3_20261124/candidate_on.json) | 26 | 635,399 | 454,546 | 402 | 66 | 235.4 |
+
+The raw off/off verdict was `DEEPER` because the `BUFFER_EX` expansion moved from line 646 to 802. The old and new names map to the same `busy_r.D` register. The 13-level path from `req_pending.in_fire_r[5]` has the same operation sequence and fanout. The other 12 added and removed watched paths pair after accounting for the `g_l2_links` scope. Two KMU valid paths moved from 6 to 8 levels, below the fix threshold of 12. The off/off mean of the 50 deepest paths stayed at 23.3. [Raw diff](../results/noc3_beacon_00186b8b3_20261124/candidate_off.beacon_diff.txt) · [Base path](../results/noc3_beacon_00186b8b3_20261124/base_off.busy_path.txt) · [Candidate path](../results/noc3_beacon_00186b8b3_20261124/candidate_off.busy_path.txt)
+
+The enabled shape adds about 0.74% LUTs and 3.98% FFs relative to candidate off. Its NoC switch is 15 levels deep and both request-side gates are 9 levels. The enabled cell changes the topology, so the off/off register match applies only to the two flat cells. Hardware synthesis, physical timing, and XRT integration remain outside this run.
+
+All 56 ICE jobs reached terminal states and the results cover 219 measurement legs. The two h200s batches containing the undersized decode input have the expected nonzero batch status. Both owned ICE source copies and local source staging trees were removed after fetching. `feature/noc2` remains at `e1ce1e1452128034df4265b4982414ddd6ec27c9`. `feature/noc3` is ready for the maintainer's merge decision.
