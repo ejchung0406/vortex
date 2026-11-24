@@ -183,7 +183,7 @@ High associativity is how current NVIDIA L1s avoid these conflicts (Accel-Sim mo
 **How it works.** The way count is any number; the sets per bank stay a power of two and fill the size (`VX_cache` asserts both). The way code keeps its power-of-two width, and the codes past the last way are never used:
 - FIFO wraps from the last way to way 0.
 - Random folds a pick past the last way back onto a real way (pick − `NUM_WAYS`).
-- PLRU keeps a tree over the next power of two of ways, and folds a leaf past the last way down by the number of unused leaves.
+- PLRU uses a tree over the next power of two of ways and skips subtrees beyond the last way.
 - The flush walk stops at the last real way.
 
 These are in `VX_cache_repl` and `VX_cache_flush`. SimX's cache model takes the size in bytes and the way count instead of their log2. Power-of-two way counts produce the same logic as before. The way count is set per cache with `VX_CFG_*_NUM_WAYS`.
@@ -269,7 +269,7 @@ Controlled by `VX_CFG_{DCACHE,L2,L3}_LAZY_FETCH`. It is on in whichever cache is
 
 **Problem.** With sectored lines, a line arrives in several fills: the first installs the line, the others are sector refills into a line already present. A replacement state that steps on every fill moves the FIFO pointer once per sector. A stream reading both sectors of each 2-sector line then steps twice per line, so only every other way is ever chosen as a victim, and a new line is evicted while older lines in the skipped ways stay. The random policy steps its generator on refills too.
 
-**How it works.** `VX_cache_bank` drives the replacement update (`VX_cache_repl`) only on a fill that brings in a new line: not on a sector refill, a refetch, or a pass-through fill. FIFO then steps once per line, and every way takes its turn. PLRU, which updates on hits, is unaffected. SimX's cache model applies the same rule.
+**How it works.** `VX_cache_bank` qualifies a fill as an allocation only when it installs a new line. A sector refill or a refetch reuses the resident way, and a pass-through fill leaves cache residency alone. FIFO steps once per allocation. PLRU updates on allocating fills and lookup hits. SimX uses the same rules.
 
 **Gain:** one thread filling a set to its way count, re-reading it and adding one more line: 8 same-set lines cost 25 memory reads with the update on every fill and 9 with it on new lines only, the same as a spread-out control (simx and rtlsim). No area change: the cache DUT stays at 28,750 LUT, the sectored one goes from 31,604 to 31,607 LUT, and nothing is deeper (Beacon).
 

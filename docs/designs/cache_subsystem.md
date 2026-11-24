@@ -1042,13 +1042,14 @@ than adding arrays. Diminishing returns past 8 for typical GPU workloads.
 The way count need not be a power of two (3 or 6 ways give 48 KB, 192 KB or
 6 MB with power-of-two sets), but `SIZE / (LINE × WAYS × BANKS)`, the sets per
 bank, must be one (static assert). The replacement state and the write-back
-flush walk skip the unused way codes: FIFO wraps at the last way, and a random
-or PLRU pick past it folds back onto a real way.
+flush walk skip the unused way codes. FIFO wraps at the last way, random folds
+an unused code onto a real way, and PLRU skips subtrees with no physical ways.
 
 **`*_REPL_POLICY`** (`fifo` everywhere) — `0` random, `1` FIFO, `2` PLRU. PLRU
-gives the best hit rate on reuse-heavy workloads but stores per-set tree bits;
-FIFO is a single counter per set and within a few percent on streaming GPU
-workloads; random is cheapest and degrades gracefully.
+uses the lowest-numbered invalid way first and keeps per-set tree bits for full
+sets. A lookup hit or a new-line fill makes its way recent. FIFO uses a single
+counter per set and stays within a few percent on streaming GPU workloads.
+Random is the cheapest policy.
 
 **`*_MSHR_SIZE`** — outstanding **missed requests** per bank (see
 [§4.5](#45-mshr-and-same-line-chaining) — *not* distinct lines). Total MLP per
