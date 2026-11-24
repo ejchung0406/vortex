@@ -219,8 +219,8 @@ tests:
   args: -b262144 -w1 -i512
   configs: -DVX_CFG_L2_LINK_LATENCY=20
   shape: {l2cache: true}
-# Two dependent lines per set fit in a three-way L2, but forwarded fills
-# leave the PLRU tree unchanged and can keep replacing the same way.
+# Two dependent lines per set fit in a three-way L2. They must stay resident
+# even when fill forwarding bypasses the replay lookup.
 - id: parity-chase-l2-plru
   check: model_parity
   via: blackbox

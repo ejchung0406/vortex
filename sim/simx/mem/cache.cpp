@@ -21,7 +21,6 @@
 #endif
 #include <algorithm>
 #include <cstring>
-#include <limits>
 #include <list>
 #include <queue>
 #include <unordered_map>
@@ -326,6 +325,9 @@ struct set_t {
   }
 
   void update_plru(uint32_t way) {
+    if (plru_tree.empty()) {
+      return;
+    }
     for (size_t node = plru_tree.size() + way; node != 0;) {
       size_t parent = (node - 1) / 2;
       plru_tree.at(parent) = (node % 2) != 0;
@@ -337,19 +339,22 @@ struct set_t {
     if (policy == Cache::FIFO) {
       return fifo_ptr;
     }
-    if (policy == Cache::PLRU) {
-      size_t node = 0;
-      while (node < plru_tree.size()) {
-        node = 2 * node + 1 + plru_tree.at(node);
-      }
-      size_t way = node - plru_tree.size();
-      // Non-power-of-two associativity aliases unused leaves to real ways.
-      if (way >= lines.size()) {
-        way -= plru_tree.size() + 1 - lines.size();
-      }
+    if (int way = find_invalid_way(); way != -1) {
       return way;
     }
-    if (int way = find_invalid_way(); way != -1) return way;
+    if (policy == Cache::PLRU) {
+      size_t node = 0;
+      size_t first_way = 0;
+      for (size_t span = (plru_tree.size() + 1) / 2; span != 0; span /= 2) {
+        // A rounded tree can extend past the last physical way.
+        const bool right = (first_way + span < lines.size()) && plru_tree.at(node);
+        if (right) {
+          first_way += span;
+        }
+        node = 2 * node + 1 + right;
+      }
+      return first_way;
+    }
     return rand_idx % lines.size();
   }
 
@@ -433,7 +438,6 @@ struct bank_req_t {
   // still riding the pipe must not be ordered behind a younger request that
   // coalesced at admission).
   uint64_t adm_seq;
-  uint64_t plru_slot;
 
   // AMO state. memop_is_atomic(op) classifies the request; the LSU
   // packs rs2 into data at byte_off, so the cache extracts rhs via
@@ -463,7 +467,6 @@ struct bank_req_t {
     amo_cmp = 0;
     flags = MemFlags{};
     adm_seq = 0;
-    plru_slot = 0;
   }
 
   friend std::ostream &operator<<(std::ostream &os, const bank_req_t &req) {
@@ -982,7 +985,6 @@ public:
   // Drop every line, as an address-space change does to a read-only
   // virtually tagged cache. Called between launches, with no line in flight.
   void invalidate() {
-    plru_hits_ = {};
     for (auto &set : sets_) {
       set.reset();
     }
@@ -1038,14 +1040,11 @@ protected:
     pending_fill_reqs_ = 0;
     rand_ctr_ = 0;
     adm_seq_ctr_ = 0;
-    plru_stall_cycles_ = 0;
   #ifdef DBG_MEM_BANK0_WDELAY
     dbg_mem_req_free_ = 0;
   #endif
     // Lines persist across a launch: only a device reset or a flush drops them.
-    if (SimPlatform::instance().launch_resetting()) {
-      this->applyPlruHits(std::numeric_limits<uint64_t>::max());
-    } else {
+    if (!SimPlatform::instance().launch_resetting()) {
       this->invalidate();
     }
     mshr_.reset();
@@ -1098,9 +1097,6 @@ protected:
       uint32_t pipe_size = pipe_req_->size();
       this->processRequests();
       pipe_stall = (pipe_req_->size() == pipe_size);
-      if (pipe_stall && config_.repl_policy == Cache::PLRU) {
-        ++plru_stall_cycles_;
-      }
     }
 
     // Fill-forward drain: complete the read-prefix of a fill's pending chain
@@ -1141,29 +1137,6 @@ protected:
   }
 
 private:
-  void pushPipe(bank_req_t req) {
-    if (config_.repl_policy == Cache::PLRU) {
-      req.plru_slot = SimPlatform::instance().cycles() - plru_stall_cycles_;
-    }
-    pipe_req_->push(std::move(req));
-  }
-
-  void notePlruHit(const bank_req_t &req, uint32_t set_id, uint32_t way) {
-    if (config_.repl_policy == Cache::PLRU) {
-      plru_hits_.push({req.plru_slot, set_id, way});
-    }
-  }
-
-  void applyPlruHits(uint64_t slot) {
-    // The read-first victim lookup cannot see hits from the previous two
-    // enabled admission slots. The timed FIFO can compress bubbles on stalls.
-    while (!plru_hits_.empty() && plru_hits_.front().slot + 2 < slot) {
-      const auto &hit = plru_hits_.front();
-      sets_.at(hit.set).update_plru(hit.way);
-      plru_hits_.pop();
-    }
-  }
-
   // Pipeline front: per-tick input arbitration.
   //
   // Priority (highest → lowest):
@@ -1208,14 +1181,14 @@ private:
           park_req.mshr_id = mshr_.park_next_replay(chain_retry_);
           park_req.type    = bank_req_t::Park;
           DT(3, this->name() << " mshr-park: " << park_req);
-          this->pushPipe(std::move(park_req));
+          pipe_req_->push(std::move(park_req));
           return;
         }
       }
       bank_req_t bank_req;
       mshr_.dequeue(&bank_req);
       DT(3, this->name() << " replay-deq: " << bank_req);
-      this->pushPipe(std::move(bank_req));
+      pipe_req_->push(std::move(bank_req));
       return;
     }
 
@@ -1275,7 +1248,7 @@ private:
         bank_req.data    = mem_rsp.data;
         bank_req.refetch = root_peek.refetch;
         bank_req.refetch_retry = root_peek.refetch_retry;
-        this->pushPipe(bank_req);
+        pipe_req_->push(bank_req);
         // The chain wakes at accept: its replays enter the pipe behind the fill,
         // so they reach the array after the install. The forward window answers
         // the chain's leading reads from the staged sector meanwhile; a refetch
@@ -1321,7 +1294,7 @@ private:
         bank_req.nodata  = true;
         bank_req.refetch = root_peek.refetch;
         bank_req.refetch_retry = root_peek.refetch_retry;
-        this->pushPipe(bank_req);
+        pipe_req_->push(bank_req);
         mshr_.replay(mshr_id);
         // A looped-back refetch completes a fully written sector: like a
         // memory refetch, its chain waits for it to install.
@@ -1344,7 +1317,7 @@ private:
       wb_req.reset();
       wb_req.type = bank_req_t::AmoWb;
       wb_req.addr = amo_wb_addr_;
-      this->pushPipe(std::move(wb_req));
+      pipe_req_->push(std::move(wb_req));
       amo_wb_pending_ = false;
       amo_busy_ = false;
       return;
@@ -1547,7 +1520,7 @@ private:
         bank_req.merge_queued = true;
         ++perf_stats_.write_misses;
       }
-      this->pushPipe(std::move(bank_req));
+      pipe_req_->push(std::move(bank_req));
       DT(3, this->name() << " core-req: " << core_req);
       // pending_mshr_size_ tracks Core-typed in-flight requests so the
       // MSHR pre-reservation in processInputs is conservative. AmoProbe
@@ -1661,6 +1634,8 @@ private:
       // Only a new line advances the FIFO pointer; a sector refill keeps it.
       if (config_.repl_policy == Cache::FIFO) {
         set.fifo_ptr = (set.fifo_ptr + 1) % set.lines.size();
+      } else {
+        set.update_plru(line_id);
       }
     }
 
@@ -1710,9 +1685,9 @@ private:
   // slot stays free for new requests. The first write/AMO head closes the
   // window; it and every later chain entry drain through the regular replay
   // path, preserving program order (an older store must merge its data
-  // before a younger same-line read captures its response). Forwarded reads
-  // skip the replacement-state update: recency is tracked by pipelined
-  // lookups only.
+  // before a younger same-line read captures its response). The fill has
+  // already touched the replacement state, so forwarded reads do not add
+  // another touch.
   bool processForward() {
     if (!mshr_.has_ready_reqs()) {
       fwd_active_ = false; // chain drained
@@ -1917,7 +1892,6 @@ private:
 
   void processRequests() {
     const bank_req_t &bank_req = pipe_req_->peek();
-    this->applyPlruHits(bank_req.plru_slot);
 
     // Stores get a response when (a) the cache is configured to always emit
     // them (config_.write_reponse, global), or (b) the request opts in via
@@ -1935,10 +1909,10 @@ private:
     case bank_req_t::AmoWb: {
       if (config_.repl_policy == Cache::PLRU) {
         uint32_t set_id = params_.addr_set_id(bank_req.addr);
-        const auto &set = sets_.at(set_id);
+        auto &set = sets_.at(set_id);
         int way = set.find_resident(params_.addr_tag(bank_req.addr));
         if (way != -1 && set.lines.at(way).sectors.at(params_.addr_sector_id(bank_req.addr)).valid) {
-          this->notePlruHit(bank_req, set_id, way);
+          set.update_plru(way);
         }
       }
       pipe_req_->pop();
@@ -1995,7 +1969,7 @@ private:
       }
       if (hit) {
         if (sector_hit(set.lines.at(hit_id).sectors.at(sector_id), true)) {
-          this->notePlruHit(bank_req, set_id, hit_id);
+          set.update_plru(hit_id);
         }
         set.lines.at(hit_id).reset_sector(sector_id);
       }
@@ -2121,7 +2095,7 @@ private:
         assert(config_.is_llc && "AMO replay reached non-LLC bank");
         if (!this->commitAmo(bank_req, set, hit_id, set_id))
           return; // stall
-        this->notePlruHit(bank_req, set_id, hit_id);
+        set.update_plru(hit_id);
         pipe_req_->pop();
         return;
       }
@@ -2162,7 +2136,7 @@ private:
         this->core_rsp_out.send(std::move(rsp));
         crsp_sent_ = true;
       }
-      this->notePlruHit(bank_req, set_id, hit_id);
+      set.update_plru(hit_id);
 
       pipe_req_->pop();
     } break;
@@ -2247,7 +2221,7 @@ private:
           assert(config_.is_llc && "AMO Core+hit reached non-LLC bank");
           if (!this->commitAmo(bank_req, set, hit_id, set_id))
             return; // stall
-          this->notePlruHit(bank_req, set_id, hit_id);
+          set.update_plru(hit_id);
           --pending_mshr_size_;
           this->pipeLineErase(set_id, addr_tag);
           pipe_req_->pop();
@@ -2384,7 +2358,7 @@ private:
       }
 
       if (hit_id != -1) {
-        this->notePlruHit(bank_req, set_id, hit_id);
+        set.update_plru(hit_id);
       }
       --pending_mshr_size_;
       this->pipeLineErase(set_id, addr_tag);
@@ -2551,13 +2525,6 @@ private:
   uint64_t pending_fill_reqs_;
   uint32_t rand_ctr_;
   uint64_t adm_seq_ctr_;  // bank admission-order stamp (see bank_req_t::adm_seq)
-  struct plru_hit_t {
-    uint64_t slot;
-    uint32_t set;
-    uint32_t way;
-  };
-  std::queue<plru_hit_t> plru_hits_;
-  uint64_t plru_stall_cycles_ = 0;
 
   // Fill-forward window: chain key and sector staged by the last accepted fill.
   bool     fwd_active_;

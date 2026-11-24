@@ -149,6 +149,7 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
     typedef struct packed {            // S0-computed lookup delta (commit side)
         logic                          is_hit, is_dirty, mshr_pending;
         logic                          is_refill; // fill into an already-resident line (sector refill)
+        logic                          repl_allocate;
         logic [`CS_SECTORS_PER_LINE-1:0] evict_dirty_mask; // per-sector dirty of the evict way
         logic [`CS_TAG_SEL_BITS-1:0]   evict_tag;
         logic [MSHR_ADDR_WIDTH-1:0]    mshr_previd;
@@ -584,6 +585,8 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
     // S0 lookup: replacement + tags + way-encode + MSHR allocate
     // ========================================================================
     wire [`CS_WAY_SEL_WIDTH-1:0] victim_way;
+    wire [NUM_WAYS-1:0] victim_way_oh;
+    wire [NUM_WAYS-1:0] way_valid_st0;
     wire [NUM_WAYS-1:0] tag_matches_st0;
     wire [NUM_WAYS-1:0] line_present_st0;
     wire [`CS_WAY_SEL_WIDTH-1:0] hit_idx_st0;
@@ -619,8 +622,11 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
     // victim decode is early (replacement state is registered), and
     // line_present_st0 is one-hot by the tag-array invariant, so this selects
     // the exact way the binary path did.
-    wire [NUM_WAYS-1:0] victim_way_oh = NUM_WAYS'(1'b1) << victim_way;
     wire [NUM_WAYS-1:0] fill_way_oh_st0 = line_present_any_st0 ? line_present_st0 : victim_way_oh;
+
+    wire repl_allocate_st0 = do_fill_st0 && ~st0.req.is_passthru_fill && ~refetch_first_st0 && ~line_present_any_st0;
+    wire repl_init_st1 = st1.req.valid && st1.req.is_init;
+    wire repl_touch_st1 = repl_init_st1 || (do_lookup_st1 && st1.lk.is_hit) || (st1.req.valid && st1.lk.repl_allocate);
 
     VX_cache_repl #(
         .CACHE_SIZE  (CACHE_SIZE),
@@ -633,16 +639,16 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
         .reset        (reset),
         .stall        (pipe_stall),
         .init         (do_init_st0),
-        .lookup_valid (do_lookup_st1 && ~pipe_stall),
-        .lookup_hit   (st1.lk.is_hit),
-        .lookup_line  (st1.req.addr[`CS_LINE_SEL_BITS-1:0]),
-        .lookup_way   (st1.req.way_idx),
-        // only a new line takes a victim: a refetch merges into its resident
-        // sector and a sector refill joins its resident line
-        .repl_valid   (do_fill_st0 && ~st0.req.is_passthru_fill && ~refetch_first_st0 && ~line_present_any_st0 && ~pipe_stall),
+        .touch_valid  (repl_touch_st1),
+        .touch_init   (repl_init_st1),
+        .touch_line   (st1.req.addr[`CS_LINE_SEL_BITS-1:0]),
+        .touch_way    (st1.req.way_idx),
+        .repl_valid   (repl_allocate_st0 && ~pipe_stall),
         .repl_line    (line_idx_st0),
         .repl_line_n  (sel_req.req.addr[`CS_LINE_SEL_BITS-1:0]),
-        .repl_way     (victim_way)
+        .way_valid    (way_valid_st0),
+        .repl_way     (victim_way),
+        .repl_way_oh  (victim_way_oh)
     );
 
     wire creq_hit_order_hazard_st0;
@@ -666,6 +672,7 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
         .NUM_WAYS   (NUM_WAYS),
         .WORD_SIZE  (WORD_SIZE),
         .SECTOR_SIZE(SECTOR_SIZE),
+        .REPL_POLICY(REPL_POLICY),
         .WRITEBACK  (WRITEBACK),
         .LAZY_FETCH (LAZY_FETCH),
         .AMO_ENABLE ((AMO_ENABLE != 0) && (IS_LLC == 0))
@@ -697,6 +704,7 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
         .fill_way_oh (fill_way_oh_st0),
         .victim_way_oh (victim_way_oh),
         .tag_matches (tag_matches_st0),
+        .way_valid   (way_valid_st0),
         .line_present (line_present_st0),
         .evict_dirty (evict_dirty_st0),
         .evict_valid (evict_valid_st0),
@@ -738,6 +746,7 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
         lk_st0.is_hit       = (| tag_matches_st0) && ~partial_miss_st0 && ~creq_hit_order_hazard_st0;
         lk_st0.is_dirty     = evict_dirty_st0;
         lk_st0.is_refill    = st0.req.is_fill && line_present_any_st0;
+        lk_st0.repl_allocate = repl_allocate_st0;
         lk_st0.evict_dirty_mask = evict_dirty_mask_st0;
         lk_st0.evict_tag    = evict_tag_st0;
         lk_st0.mshr_previd  = mshr_previd;

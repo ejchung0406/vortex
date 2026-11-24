@@ -90,14 +90,16 @@ module VX_cache_repl #(
     input wire reset,
     input wire stall,
     input wire init,
-    input wire lookup_valid,
-    input wire lookup_hit,
-    input wire [`CS_LINE_SEL_BITS-1:0] lookup_line,
-    input wire [`CS_WAY_SEL_WIDTH-1:0] lookup_way,
+    input wire touch_valid,
+    input wire touch_init,
+    input wire [`CS_LINE_SEL_BITS-1:0] touch_line,
+    input wire [`CS_WAY_SEL_WIDTH-1:0] touch_way,
     input wire repl_valid,
     input wire [`CS_LINE_SEL_BITS-1:0] repl_line,
     input wire [`CS_LINE_SEL_BITS-1:0] repl_line_n, // look-ahead (next) line for sync-BRAM read
-    output wire [`CS_WAY_SEL_WIDTH-1:0] repl_way
+    input wire [NUM_WAYS-1:0] way_valid,
+    output wire [`CS_WAY_SEL_WIDTH-1:0] repl_way,
+    output wire [NUM_WAYS-1:0] repl_way_oh
 );
     localparam WAY_SEL_WIDTH = `CS_WAY_SEL_WIDTH;
     // A way count that is not a power of two leaves the top way codes unused.
@@ -105,15 +107,16 @@ module VX_cache_repl #(
     `UNUSED_VAR (reset)
     `UNUSED_VAR (init)
     `UNUSED_VAR (stall)
+    `UNUSED_VAR (touch_valid)
+    `UNUSED_VAR (touch_init)
+    `UNUSED_VAR (touch_line)
+    `UNUSED_VAR (touch_way)
+    `UNUSED_VAR (way_valid)
 
     if (NUM_WAYS > 1) begin : g_enable
         if (REPL_POLICY == `CS_REPL_PLRU) begin : g_plru
-            // Pseudo Least Recently Used replacement policy
-            `UNUSED_VAR (repl_line) // read uses repl_line_n (look-ahead)
-            `UNUSED_VAR (repl_valid) // state advances on lookup hits only
+            `UNUSED_VAR (repl_valid)
 
-            // The tree spans the ways rounded up to a power of two; a leaf
-            // past the last way picks the way TREE_WAYS - NUM_WAYS below it.
             localparam TREE_WAYS = 1 << WAY_SEL_WIDTH;
             localparam LRU_WIDTH = TREE_WAYS - 1;
 
@@ -121,11 +124,10 @@ module VX_cache_repl #(
             wire [LRU_WIDTH-1:0] plru_wdata;
             wire [LRU_WIDTH-1:0] plru_wmask;
             wire [WAY_SEL_WIDTH-1:0] plru_way;
+            wire update = touch_valid && ~stall;
+            wire [LRU_WIDTH-1:0] update_data = touch_init ? '0 : plru_wdata;
+            wire [LRU_WIDTH-1:0] update_mask = touch_init ? '1 : plru_wmask;
 
-            // Look-ahead read advances every non-stalled cycle (same idiom as
-            // the tag store) so the data always tracks the request entering
-            // S0; gating it on repl_valid would leave the victim computed
-            // from the line captured at the previous fill.
             VX_dp_ram #(
                 .DATAW (LRU_WIDTH),
                 .SIZE  (`CS_LINES_PER_BANK),
@@ -136,38 +138,66 @@ module VX_cache_repl #(
                 .clk   (clk),
                 .reset (1'b0),
                 .read  (~stall),
-                .write (init || (lookup_valid && lookup_hit)),
-                .wren  (init ? '1 : plru_wmask),
-                .waddr (lookup_line),
+                .write (update),
+                .wren  (update_mask),
+                .waddr (touch_line),
                 .raddr (repl_line_n),
-                .wdata (init ? '0 : plru_wdata),
+                .wdata (update_data),
                 .rdata (plru_rdata)
             );
 
             plru_decoder #(
                 .NUM_WAYS (TREE_WAYS)
             ) plru_dec (
-                .way_idx  (lookup_way),
+                .way_idx  (touch_way),
                 .lru_data (plru_wdata),
                 .lru_mask (plru_wmask)
             );
 
+            // The read-first array misses a same-set write on the read edge
+            // and the older operation still in the touch stage.
+            wire same_set;
+            wire [LRU_WIDTH-1:0] prior_data, prior_mask;
+            wire [LRU_WIDTH-1:0] read_collision = (update && touch_line == repl_line_n) ? update_mask : '0;
+            `BUFFER_EX(same_set, (repl_line == repl_line_n), ~stall, 1, 1);
+            `BUFFER_EX(prior_data, update_data, ~stall, LRU_WIDTH, 1);
+            `BUFFER_EX(prior_mask, read_collision, ~stall, LRU_WIDTH, 1);
+
+            wire [LRU_WIDTH-1:0] current_mask = (touch_valid && same_set) ? update_mask : '0;
+            wire [LRU_WIDTH-1:0] prior_state = (plru_rdata & ~prior_mask) | (prior_data & prior_mask);
+            wire [LRU_WIDTH-1:0] current_state = (prior_state & ~current_mask) | (update_data & current_mask);
+            wire [LRU_WIDTH-1:0] choices;
+            for (genvar i = 0; i < LRU_WIDTH; ++i) begin : g_choice
+                localparam LEVEL = $clog2(i + 2) - 1;
+                localparam LEAVES = TREE_WAYS >> LEVEL;
+                localparam FIRST_LEAF = (i - ((1 << LEVEL) - 1)) * LEAVES;
+                localparam HAS_RIGHT = FIRST_LEAF + LEAVES / 2 < NUM_WAYS;
+                assign choices[i] = HAS_RIGHT && current_state[i];
+            end
+
             plru_encoder #(
                 .NUM_WAYS (TREE_WAYS)
             ) plru_enc (
-                .lru_in  (plru_rdata),
+                .lru_in  (choices),
                 .way_idx (plru_way)
             );
 
-            assign repl_way = (WAYS_POW2 || (plru_way < WAY_SEL_WIDTH'(NUM_WAYS))) ? plru_way
-                            : (plru_way - WAY_SEL_WIDTH'(TREE_WAYS - NUM_WAYS));
+            wire has_invalid;
+            wire [WAY_SEL_WIDTH-1:0] invalid_way;
+            wire [NUM_WAYS-1:0] invalid_way_oh;
+            VX_priority_encoder #(
+                .N (NUM_WAYS)
+            ) free_way_enc (
+                .data_in    (~way_valid),
+                .onehot_out (invalid_way_oh),
+                .index_out  (invalid_way),
+                .valid_out  (has_invalid)
+            );
+            assign repl_way = has_invalid ? invalid_way : plru_way;
+            assign repl_way_oh = has_invalid ? invalid_way_oh : (NUM_WAYS'(1) << plru_way);
 
         end else if (REPL_POLICY == `CS_REPL_FIFO) begin : g_fifo
             // Fifo replacement policy
-            `UNUSED_VAR (lookup_valid)
-            `UNUSED_VAR (lookup_hit)
-            `UNUSED_VAR (lookup_line)
-            `UNUSED_VAR (lookup_way)
 
             wire [WAY_SEL_WIDTH-1:0] fifo_rdata;
             wire [WAY_SEL_WIDTH-1:0] fifo_wdata = (WAYS_POW2 || (fifo_rdata != WAY_SEL_WIDTH'(NUM_WAYS-1))) ? (fifo_rdata + 1) : '0;
@@ -194,10 +224,6 @@ module VX_cache_repl #(
             assign repl_way = fifo_rdata;
         end else begin : g_random
             // Random replacement policy
-            `UNUSED_VAR (lookup_valid)
-            `UNUSED_VAR (lookup_hit)
-            `UNUSED_VAR (lookup_line)
-            `UNUSED_VAR (lookup_way)
             `UNUSED_VAR (repl_line)
             `UNUSED_VAR (repl_line_n)
             localparam STATE_W = 2 * WAY_SEL_WIDTH;
@@ -221,14 +247,14 @@ module VX_cache_repl #(
         end
     end else begin : g_disable
         `UNUSED_VAR (clk)
-        `UNUSED_VAR (lookup_valid)
-        `UNUSED_VAR (lookup_hit)
-        `UNUSED_VAR (lookup_line)
-        `UNUSED_VAR (lookup_way)
         `UNUSED_VAR (repl_valid)
         `UNUSED_VAR (repl_line)
         `UNUSED_VAR (repl_line_n)
         assign repl_way = 1'b0;
+    end
+
+    if ((REPL_POLICY != `CS_REPL_PLRU) || (NUM_WAYS == 1)) begin : g_repl_way_oh
+        assign repl_way_oh = NUM_WAYS'(1) << repl_way;
     end
 
 endmodule

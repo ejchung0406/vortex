@@ -34,6 +34,7 @@ module VX_cache_tags import VX_gpu_pkg::*; #(
     parameter NUM_WAYS      = 1,              // Number of associative ways
     parameter WORD_SIZE     = 1,              // Size of a word in bytes
     parameter SECTOR_SIZE   = LINE_SIZE,      // Size of a sector in bytes (fill/eviction granule); = LINE_SIZE => 1 sector
+    parameter REPL_POLICY   = `CS_REPL_FIFO,
     parameter WRITEBACK     = 0,              // Enable cache writeback
     parameter LAZY_FETCH    = 0,              // Track per-sector partial (allocated-by-store) state
     parameter AMO_ENABLE    = 0               // Enable the AMO-passthrough line invalidate (non-LLC banks only)
@@ -73,6 +74,7 @@ module VX_cache_tags import VX_gpu_pkg::*; #(
 
     // outputs
     output wire [NUM_WAYS-1:0]          tag_matches,
+    output wire [NUM_WAYS-1:0]          way_valid,
     // per-way "line resident" = tag match with any sector valid, ignoring the
     // requested sector. Distinguishes a sector miss (line present, sector
     // invalid -> refill that sector into this way, no eviction) from a line
@@ -204,13 +206,6 @@ module VX_cache_tags import VX_gpu_pkg::*; #(
         // AMO passthrough invalidate: clear the requested sector's valid.
         wire do_inval = (AMO_ENABLE != 0) && invalidate && raw_hit;
 
-        // A fill into a way that already holds this line (a sector refill) sets
-        // the fetched sector in the existing valid vector; a fill into a fresh
-        // victim way installs only the fetched sector (others cleared). With
-        // 1 sector/line a fill is always to a fresh way.
-        wire fill_refill = do_fill && tag_eq && (| read_valid[i]);
-        `BUFFER_EX(rdw_refill, do_fill && fill_refill, ~stall, 1, 1);
-
         // Per-sector valid update as per-bit set/clear for the LUTRAM (no
         // read-modify-write): set the filled sector; clear the whole line on
         // init/flush, the other sectors on a fresh victim install, the requested
@@ -227,6 +222,12 @@ module VX_cache_tags import VX_gpu_pkg::*; #(
         wire [SEC-1:0] rdw_vclr;
         `BUFFER_EX(rdw_vclr, (same_set_v ? vclr_op : {SEC{1'b0}}), ~stall, SEC, 1);
         wire [SEC-1:0] cur_valid = read_valid[i] & ~rdw_vclr;
+        assign way_valid[i] = (| cur_valid);
+        // A just-cleared way that is eligible for allocation cannot also
+        // qualify as the resident copy of the requested line.
+        wire resident_valid = (REPL_POLICY == `CS_REPL_PLRU) ? way_valid[i] : (| read_valid[i]);
+        wire fill_refill = do_fill && tag_eq && resident_valid;
+        `BUFFER_EX(rdw_refill, fill_refill, ~stall, 1, 1);
         wire [SEC-1:0] fill_valid = do_fill ? (fill_refill ? (cur_valid | sec_oh) : sec_oh) : cur_valid;
         assign valid_wren[i]  = (fill ? {SEC{1'b1}} : {SEC{1'b0}}) | vclr_op;
         assign valid_wdata[i] = fill ? fill_valid : {SEC{1'b0}};
@@ -300,7 +301,7 @@ module VX_cache_tags import VX_gpu_pkg::*; #(
         assign tag_matches[i] = raw_hit;
         // line resident in this way: tag matches and at least one sector valid
         // (a same-cycle-prior fill is folded into tag_eq/read_valid).
-        assign line_present[i] = tag_eq && (| read_valid[i]);
+        assign line_present[i] = tag_eq && resident_valid;
     end
     assign fill_refill_any = (SEC > 1) && (| line_present);
 
