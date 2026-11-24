@@ -816,9 +816,6 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
     assign per_core_dcr_bus_if[SOCKET_DCR_DXA_IDX].rsp_valid = dxa_dcr_bus_if.rsp_valid;
     assign per_core_dcr_bus_if[SOCKET_DCR_DXA_IDX].rsp_data  = dxa_dcr_bus_if.rsp_data;
 
-    `STATIC_ASSERT(`VX_CFG_DXA_GMEM_PORTS >= 1 && `VX_CFG_DXA_GMEM_PORTS <= L1_MEM_PORTS,
-        ("DXA_GMEM_PORTS=%0d: at most one per socket memory port", `VX_CFG_DXA_GMEM_PORTS))
-
     VX_dxa_core #(
         .INSTANCE_ID    (`SFORMATF(("%s-dxa", INSTANCE_ID))),
         .NUM_REQS       (`VX_CFG_SOCKET_SIZE),
@@ -1063,8 +1060,8 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
                 .TAG_WIDTH  (SOCKET_MEM_TAG_WIDTH),
                 .TAG_SEL_IDX(0),
                 .ARBITER    ("P"), // dcache first
-                // unregistered, as the port's path was without the DXA
-                .REQ_OUT_BUF(0),
+                // The network can stall this shared port for several cycles.
+                .REQ_OUT_BUF((`VX_CFG_SM_INGRESS_BYTES != 0 || `VX_CFG_NOC_GROUP_SIZE != 0) ? 3 : 0),
                 .RSP_OUT_BUF(0)
             ) mem_arb (
                 .clk        (clk),

@@ -332,7 +332,15 @@ public:
         dxa_core_->gmem_req_out.at(i).bind(&breq->In.at(1));
         brsp->Out.at(1).bind(&dxa_core_->gmem_rsp_in.at(i));
       #endif
+      #if VX_CFG_SM_INGRESS_BYTES != 0
+        snprintf(sname, 100, "%s-ingress-out%d", name.c_str(), i);
+        auto port_out = MemReqSlice::Create(sname, 1);
+        breq->Out.bind(&ingress->In.at(i));
+        ingress->Out.at(i).bind(&port_out->In);
+        port_out->Out.bind(&simobject_->mem_req_out.at(i));
+      #else
         breq->Out.bind(&simobject_->mem_req_out.at(i));
+      #endif
         simobject_->mem_rsp_in.at(i).bind(&brsp->In);
         continue;
       }
