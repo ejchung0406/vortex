@@ -593,6 +593,18 @@ tests:
     -DVX_CFG_L2_LINK_LATENCY=20
   shape: {cores: 4, l2cache: true}
 
+# Check address-distinct results from both DXA ports under a stalled ingress.
+- id: dxa_rowmix-ingress
+  via: blackbox
+  xlen: [64]
+  drivers: [simx, rtlsim]
+  app: dxa_rowmix
+  args: -x8 -r3 -g4
+  configs: -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_LMEM_NUM_BANKS=16 -DVX_CFG_DCACHE_NUM_BANKS=2
+    -DVX_CFG_NUM_DXA_CORES=4 -DVX_CFG_DXA_GMEM_PORTS=2 -DVX_CFG_SM_INGRESS_BYTES=32
+    -DVX_CFG_L2_LINK_LATENCY=20
+  shape: {cores: 4, l2cache: true}
+
 - id: model_parity-bwstream-dxa-group-gate
   check: model_parity
   xlen: [64]
