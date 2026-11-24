@@ -49,6 +49,13 @@ Mmu::Mmu(const SimContext& ctx,
       in.set_registered_ready(true);
     }
   }
+  // Without a response stage a lane's response is a wire through the MMU, so
+  // the cache's response port feeds the client's input directly.
+  if (!rsp_reg) {
+    for (uint32_t p = 0; p < num_ports; ++p) {
+      RspIn.at(p).bind(&RspOut.at(p));
+    }
+  }
 }
 
 Mmu::~Mmu() {}
@@ -291,11 +298,12 @@ void Mmu::report_fault(const MemReq& req) {
 void Mmu::on_tick() {
   // 1) Forward downstream responses upstream unchanged. Kill responses go
   // first: they belong to accesses that will never reach the cache, and the
-  // warps waiting on them cannot drain until they land.
+  // warps waiting on them cannot drain until they land. Without a response
+  // stage only the kill responses are sent here; the cache's pass through.
   uint64_t rsp_delay = rsp_reg_ ? 1 : 0;
   for (uint32_t p = 0; p < num_ports_; ++p) {
     // a port with nothing to answer is skipped before its (chained) full test
-    if (fault_rsp_.at(p).empty() && !pf_slot_.at(p) && RspIn.at(p).empty()) {
+    if (fault_rsp_.at(p).empty() && !pf_slot_.at(p) && (!rsp_reg_ || RspIn.at(p).empty())) {
       continue;
     }
     if (RspOut.at(p).full()) {
@@ -311,11 +319,11 @@ void Mmu::on_tick() {
       pf_slot_.at(p).reset();
       continue;
     }
-    if (RspIn.at(p).empty()) {
+    if (!rsp_reg_ || RspIn.at(p).empty()) {
       continue;
     }
-    // Responses pass straight through, through the port's response stage
-    // when registered: the translation is charged on the request path.
+    // Responses pass through the port's response stage unchanged: the
+    // translation is charged on the request path.
     RspOut.at(p).send(RspIn.at(p).peek(), rsp_delay);
     RspIn.at(p).pop();
   }
@@ -519,7 +527,7 @@ void Mmu::on_tick() {
 
 bool Mmu::idle() const {
   for (uint32_t p = 0; p < num_ports_; ++p) {
-    if (ReqIn.at(p).size() != 0 || RspIn.at(p).size() != 0) {
+    if (ReqIn.at(p).size() != 0 || (rsp_reg_ && RspIn.at(p).size() != 0)) {
       return false;
     }
   }
