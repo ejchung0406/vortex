@@ -538,6 +538,7 @@ Core* ProcessorImpl::get_first_core() const {
 }
 
 bool ProcessorImpl::any_running() const {
+  if (kmu_->busy()) return true;
   for (auto& cluster : clusters_) {
     if (cluster->running()) return true;
   }
