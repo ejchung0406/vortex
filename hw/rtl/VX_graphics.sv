@@ -233,7 +233,8 @@ module VX_graphics import VX_gpu_pkg::*
         .reset       (reset),
         .bus_in_if   (raster_core_kmu_if),
         .bus_out_if  (raster_kmu_bus_if),
-        .out_cores   (1'b1)
+        .out_cores   (1'b1),
+        .mask_active (1'b0)
     );
 
     // Launch liveness: a fragment launch beat still in the merge -- at a raster core

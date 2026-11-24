@@ -43,8 +43,9 @@
 //              `out_cores` and the message goes to the nearest ready, enabled
 //              output in the same cycle. With equal counts the plain
 //              round-robin runs and the counters are not used. The counters
-//              clear when the counts change, and otherwise run on across
-//              launches, as the round-robin pointer does.
+//              clear when the counts change. The round-robin pointer starts a
+//              new window when masking is activated. Both carry over between
+//              consecutive launches with the same mask.
 
 module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
     parameter NUM_INPUTS  = 1,
@@ -65,7 +66,8 @@ module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
 
     // Enabled cores below each output. Static for a launch: the core mask is
     // written between launches through the KMU's DCRs.
-    input wire [NUM_OUTPUTS-1:0][`CLOG2(DEST_DIV+1)-1:0] out_cores
+    input wire [NUM_OUTPUTS-1:0][`CLOG2(DEST_DIV+1)-1:0] out_cores,
+    input wire mask_active
 );
     // Single-stage router only: a merge (N->1) or a distribute (1->M), never a
     // crossbar. A genuine N->M would chain the fan-in arbiter and the fan-out mux
@@ -206,16 +208,20 @@ module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
         // cycles, so no CTA sees the cycle of lag.
         reg [NUM_OUTPUTS-1:0][CORES_W-1:0] cores_r;
         reg weighted_r;
+        reg mask_active_r;
         always @(posedge clk) begin
             if (reset) begin
-                cores_r    <= '0;
-                weighted_r <= 1'b0;
+                cores_r       <= {NUM_OUTPUTS{CORES_W'(DEST_DIV)}};
+                weighted_r    <= 1'b0;
+                mask_active_r <= 1'b0;
             end else begin
-                cores_r    <= out_cores;
-                weighted_r <= weighted;
+                cores_r       <= out_cores;
+                weighted_r    <= weighted;
+                mask_active_r <= mask_active;
             end
         end
         wire cores_changed = (out_cores != cores_r);
+        wire mask_activated = mask_active && !mask_active_r;
 
         wire [NUM_OUTPUTS-1:0] out_enabled;
         wire [NUM_OUTPUTS-1:0] has_credit;
@@ -289,9 +295,10 @@ module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
                         end
                     end
                 end
-                // Credits loaded for other counts would start the next launch
-                // part-way into a window of the old mask.
-                if (cores_changed) begin
+                if (mask_activated) begin
+                    rr_ptr <= '0;
+                end
+                if (mask_activated || cores_changed) begin
                     credit <= '0;
                 end
             end
@@ -299,12 +306,13 @@ module VX_kmu_bus_arb import VX_gpu_pkg::*; #(
 
     end else begin : g_fanout_1
 
+        `UNUSED_VAR(mask_active)
         // Registered as at a wider level. The mask is static for a launch, so
         // gating each compute beat gates whole messages.
         reg enabled_r;
         always @(posedge clk) begin
             if (reset) begin
-                enabled_r <= 1'b0;
+                enabled_r <= 1'b1;
             end else begin
                 enabled_r <= (out_cores[0] != '0);
             end

@@ -42,8 +42,7 @@ module VX_kmu import VX_gpu_pkg::*; import VX_trace_pkg::*; #(
     `UNUSED_SPARAM (INSTANCE_ID)
 
     localparam NUM_ALL_CORES = `VX_CFG_NUM_CLUSTERS * `VX_CFG_NUM_CORES;
-    `STATIC_ASSERT(NUM_ALL_CORES <= 32 * `VX_DCR_KMU_CORE_DISABLE_WORDS,
-        ("the core-disable DCRs hold %0d cores, not %0d", 32 * `VX_DCR_KMU_CORE_DISABLE_WORDS, NUM_ALL_CORES))
+    localparam NUM_MASK_CORES = `MIN(NUM_ALL_CORES, 32 * `VX_DCR_KMU_CORE_DISABLE_WORDS);
 
     // Configuration registers
     reg [`VX_CFG_XLEN-1:0] dcr_PC;
@@ -64,7 +63,7 @@ module VX_kmu import VX_gpu_pkg::*; import VX_trace_pkg::*; #(
     // (cluster members co-resident on one core), so sized NW_WIDTH+1 at the
     // source rather than stored 32-bit and sliced at each use.
     reg [2:0][NW_WIDTH:0] dcr_cluster_dim;
-    reg [NUM_ALL_CORES-1:0] dcr_core_disable;
+    reg [NUM_MASK_CORES-1:0] dcr_core_disable;
     `UNUSED_VAR(dcr_param)
 
     // Internal counters for CTA distribution.
@@ -200,7 +199,7 @@ module VX_kmu import VX_gpu_pkg::*; import VX_trace_pkg::*; #(
                 default: ;
             endcase
             // Core-disable words: bit c of word w is core 32w + c
-            for (integer c = 0; c < NUM_ALL_CORES; ++c) begin
+            for (integer c = 0; c < NUM_MASK_CORES; ++c) begin
                 if (dcr_req_addr == VX_DCR_ADDR_WIDTH'(`VX_DCR_KMU_CORE_DISABLE0 + c / 32)) begin
                     dcr_core_disable[c] <= dcr_req_data[c % 32];
                 end
@@ -432,8 +431,8 @@ module VX_kmu import VX_gpu_pkg::*; import VX_trace_pkg::*; #(
 
     assign busy = running | raster_start_r;
 
-    // Changes only between launches; each cluster and socket registers it.
-    assign core_disable = dcr_core_disable;
+    // The DCRs cover the low core IDs. Each cluster and socket registers the mask.
+    assign core_disable = NUM_ALL_CORES'(dcr_core_disable);
 
 `ifdef DBG_TRACE_PIPELINE
     always @(posedge clk) begin

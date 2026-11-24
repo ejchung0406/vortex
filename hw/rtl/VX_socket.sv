@@ -57,6 +57,7 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
     VX_kmu_bus_if.slave     kmu_bus_if[1],
     // This socket's cores masked off for launches
     input wire [`VX_CFG_SOCKET_SIZE-1:0] core_disable,
+    input wire core_mask_active,
 
     // Global barrier
     VX_gbar_bus_if.master   gbar_bus_if,
@@ -78,7 +79,9 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
     // Registered on arrival, as the cluster registers it: the mask is static
     // for a launch, set by a DCR write many cycles before it.
     wire [`VX_CFG_SOCKET_SIZE-1:0] core_disable_r;
+    wire core_mask_active_r;
     `BUFFER(core_disable_r, core_disable);
+    `BUFFER(core_mask_active_r, core_mask_active);
 
     VX_kmu_bus_if per_core_kmu_bus_if[`VX_CFG_SOCKET_SIZE]();
 
@@ -92,7 +95,8 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .reset       (reset),
         .bus_in_if   (kmu_bus_if),
         .bus_out_if  (per_core_kmu_bus_if),
-        .out_cores   (~core_disable_r)
+        .out_cores   (~core_disable_r),
+        .mask_active (core_mask_active_r)
     );
 
     VX_gbar_bus_if per_core_gbar_bus_if[`VX_CFG_SOCKET_SIZE]();

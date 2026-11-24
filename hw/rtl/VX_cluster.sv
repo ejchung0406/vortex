@@ -39,6 +39,7 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
     VX_kmu_bus_if.slave         kmu_bus_if[1],
     // This cluster's cores masked off for launches
     input  wire [`VX_CFG_NUM_CORES-1:0] core_disable,
+    input  wire core_mask_active,
 
     // Global barrier bus to the device-level barrier unit
     VX_gbar_bus_if.master       gbar_bus_if,
@@ -111,7 +112,9 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
     // It changes only on a DCR write, which precedes the launch it applies to
     // by many cycles, so the cycle of lag never reaches a CTA.
     wire [`VX_CFG_NUM_CORES-1:0] core_disable_r;
+    wire core_mask_active_r;
     `BUFFER(core_disable_r, core_disable);
+    `BUFFER(core_mask_active_r, core_mask_active);
 
     // Each socket's enabled cores weight its share of compute launches.
     wire [NUM_SOCKETS-1:0][`CLOG2(KMU_DEST_DIV_CLUSTER+1)-1:0] per_socket_cores;
@@ -158,7 +161,8 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .reset       (reset),
         .bus_in_if   (kmu_arb_in_if),
         .bus_out_if  (cluster_merged_kmu_if),
-        .out_cores   (1'b1)
+        .out_cores   (1'b1),
+        .mask_active (1'b0)
     );
 
     VX_kmu_bus_arb #(
@@ -171,7 +175,8 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .reset       (reset),
         .bus_in_if   (cluster_merged_kmu_if),
         .bus_out_if  (per_socket_kmu_bus_if),
-        .out_cores   (per_socket_cores)
+        .out_cores   (per_socket_cores),
+        .mask_active (core_mask_active_r)
     );
 `else
     VX_kmu_bus_arb #(
@@ -184,7 +189,8 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .reset       (reset),
         .bus_in_if   (kmu_bus_if),
         .bus_out_if  (per_socket_kmu_bus_if),
-        .out_cores   (per_socket_cores)
+        .out_cores   (per_socket_cores),
+        .mask_active (core_mask_active_r)
     );
 `endif
 
@@ -608,6 +614,7 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
 
             .kmu_bus_if     (per_socket_kmu_bus_if[socket_id +: 1]),
             .core_disable   (core_disable_r[socket_id * `VX_CFG_SOCKET_SIZE +: `VX_CFG_SOCKET_SIZE]),
+            .core_mask_active (core_mask_active_r),
 
             .gbar_bus_if    (per_socket_gbar_bus_if[socket_id]),
 

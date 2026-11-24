@@ -115,6 +115,10 @@ private:
   // Recompute out_cores_ and weighted_ from the core mask.
   void update_weights();
 
+  bool lane_ready(uint32_t core) const;
+
+  void route_flat();
+
   // Step router `node` of level `lvl` once; occupancy is each link's fill
   // at the start of the cycle.
   void route(uint32_t lvl, uint32_t node, const std::vector<std::vector<uint32_t>>& occupancy);
@@ -131,7 +135,11 @@ private:
   uint32_t cluster_dim_[3];
   bool     running_;
   uint32_t cta_id_;
-  // The launch fan-out tree (device -> clusters -> sockets -> cores), with
+  uint32_t flat_rr_ = 0;
+  uint32_t flat_sel_ = 0;
+  bool     flat_locked_ = false;
+  bool     masked_ = false;
+  // The masked launch fan-out tree (device -> clusters -> sockets -> cores), with
   // the levels that have a single output left out: they pass a CTA straight
   // through. fanout_[l] is the outputs of a level-l router, span_[l] the cores
   // below each output. Every output holds LINK_DEPTH CTAs; at the last level
@@ -154,7 +162,7 @@ private:
   // CTAs sent but not yet admitted by each core's dispatcher.
   std::vector<uint32_t> inflight_;
   // Cores masked off for launches; kept across launches like the descriptor.
-  uint32_t core_disable_[VX_DCR_KMU_CORE_DISABLE_WORDS];
+  uint32_t core_disable_[VX_DCR_KMU_CORE_DISABLE_WORDS] = {};
 
   friend class SimObject<Kmu>;
 };

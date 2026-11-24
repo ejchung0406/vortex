@@ -101,6 +101,7 @@ module Vortex import VX_gpu_pkg::*, VX_trace_pkg::*, VX_tlb_pkg::*; (
     VX_kmu_bus_if kmu_bus_in[1]();
     wire kmu_busy;
     wire [`VX_CFG_NUM_CLUSTERS * `VX_CFG_NUM_CORES-1:0] core_disable;
+    wire core_mask_active = (|core_disable);
 `ifdef VX_CFG_EXT_RASTER_ENABLE
     VX_raster_launch_if raster_launch_if();
 `endif
@@ -290,7 +291,8 @@ module Vortex import VX_gpu_pkg::*, VX_trace_pkg::*, VX_tlb_pkg::*; (
         .reset       (reset),
         .bus_in_if   (kmu_bus_in),
         .bus_out_if  (per_cluster_kmu_bus_if),
-        .out_cores   (per_cluster_cores)
+        .out_cores   (per_cluster_cores),
+        .mask_active (core_mask_active)
     );
 
 `ifdef VX_CFG_EXT_RASTER_ENABLE
@@ -472,6 +474,7 @@ module Vortex import VX_gpu_pkg::*, VX_trace_pkg::*, VX_tlb_pkg::*; (
 
             .kmu_bus_if         (per_cluster_kmu_bus_if[cluster_id +: 1]),
             .core_disable       (core_disable[cluster_id * `VX_CFG_NUM_CORES +: `VX_CFG_NUM_CORES]),
+            .core_mask_active   (core_mask_active),
 
             .gbar_bus_if        (per_cluster_gbar_bus_if[cluster_id]),
 
