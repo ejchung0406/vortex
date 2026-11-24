@@ -1,4 +1,12 @@
-#include "stream.h"
+#include <vx_spawn2.h>
+
+#pragma push_macro("__kernel")
+#undef __kernel
+#define __kernel static inline __attribute__((always_inline))
+#define kernel_main stream
+#include "kernel.cpp"
+#undef kernel_main
+#pragma pop_macro("__kernel")
 
 // A separate entry in a binary of its own (kernel_timed.vxbin), so the untimed
 // run's kernel.vxbin, and with it everything laid out after it in device
