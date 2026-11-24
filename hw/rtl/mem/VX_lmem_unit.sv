@@ -49,10 +49,10 @@
 // there, and when both kinds wait they take turns.
 //
 // The DMA port (row writes and reads) takes whole bank rows. A DMA request seen
-// in one cycle gets the banks the next: no pass is issued in a cycle a DMA
-// request is seen, and it is accepted in the cycle that follows. An atomic owns
-// its bank for three cycles (read, capture, write back), so no pass or DMA access
-// is issued in the two cycles after an atomic pass.
+// in one cycle gets the banks the next. DMA_RD_OVERLAP stages the DMA beat so
+// it can be checked against a block read pass before both reach their banks.
+// Stores and atomics still wait for DMA. An atomic owns its bank for three
+// cycles (read, capture, write back).
 //
 // The row read port (RD_ENABLE) takes whole bank rows on the banks' second
 // port. A request seen in one cycle is served the next at the earliest, as on
@@ -110,7 +110,8 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     // share a cycle when they take different banks (NUM_BLOCKS > 1)
     parameter WR_ROW        = 0,
     // the blocks' store engines take their plain loads too
-    parameter RD_ROW        = 0
+    parameter RD_ROW        = 0,
+    parameter DMA_RD_OVERLAP = 0
 ) (
     input wire clk,
     input wire reset,
@@ -124,6 +125,9 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
 
     // DMA read/write port
     VX_mem_bus_if.slave dma_bus_if,
+
+    output wire [NUM_BANKS-1:0] dma_wr_fire,
+    output wire [`UP(DMA_PADDR_LSB)-1:0] dma_wr_attr,
 
     // Row read port
     VX_mem_bus_if.slave rd_bus_if,
@@ -281,6 +285,8 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     // Block engines (RD_ROW): the store engines take their blocks' plain loads
     // too, and the read engine is not built.
     localparam RDROW = (RD_ROW != 0);
+    localparam DMA_OVERLAP = (DMA_RD_OVERLAP != 0) && (DMA_ENABLE != 0) && RDROW;
+    localparam DMA_OVERLAP_ROWS = DMA_OVERLAP ? 2 * DMA_PARTS : 1;
     `STATIC_ASSERT((RD_ROW == 0) || (WR_ROW != 0), ("the loads go through the blocks' store engines: WR_ROW=1"))
     `STATIC_ASSERT((WR_ROW == 0) || DUAL, ("the store engines share the banks between LSU blocks: NUM_BLOCKS > 1"))
 
@@ -289,6 +295,9 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
     wire [NUM_BLOCKS-1:0] s_take;
     wire [NUM_BLOCKS-1:0] s_busy;
     wire                  rd_gate;
+    wire                  dma_overlap_en;
+    wire [DMA_OVERLAP_ROWS-1:0] dma_overlap_mask;
+    wire [DMA_OVERLAP_ROWS-1:0][BANK_ADDR_WIDTH-1:0] dma_overlap_addr;
     wire [NUM_BANKS-1:0]                      st_wr;
     wire [NUM_BANKS-1:0][BANK_ADDR_WIDTH-1:0] st_addr;
     wire [NUM_BANKS-1:0][WORD_WIDTH-1:0]      st_data;
@@ -442,6 +451,9 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         `UNUSED_PIN (pass_want),
         `UNUSED_PIN (pass_rw),
         `UNUSED_PIN (pass_banks),
+        .dma_wr_mask   ('0),
+        .dma_wr_rows   ('0),
+        `UNUSED_PIN (pass_dma_hit),
         .bank_valid   (a_bank_valid),
         .bank_rw      (a_bank_rw),
         .bank_amo     (a_bank_amo),
@@ -506,6 +518,9 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             `UNUSED_PIN (pass_want),
             `UNUSED_PIN (pass_rw),
             `UNUSED_PIN (pass_banks),
+            .dma_wr_mask   ('0),
+            .dma_wr_rows   ('0),
+            `UNUSED_PIN (pass_dma_hit),
             .bank_valid   (b_bank_valid),
             .bank_rw      (b_bank_rw),
             .bank_amo     (b_bank_amo),
@@ -565,6 +580,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         reg  [NUM_BLOCKS-1:0]                                     s_grant;
 
         wire [NUM_BLOCKS-1:0] s_pass_rw;
+        wire [NUM_BLOCKS-1:0] s_dma_hit;
         wire [NUM_BLOCKS-1:0] s_bank_rw;
         wire [NUM_BLOCKS-1:0] s_perf_store;
 
@@ -603,7 +619,29 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         // one in turn passes if its banks are still free: an engine with a pass
         // to issue is the first to choose within NUM_BLOCKS cycles that issue
         // one. A read pass does not ask in a cycle the row read port has.
-        wire [NUM_BLOCKS-1:0] s_ask = s_want & (s_pass_rw | {NUM_BLOCKS{a_read_en}});
+        wire [NUM_BLOCKS-1:0] s_ready = s_want & (s_pass_rw | {NUM_BLOCKS{a_read_en}});
+        wire [NUM_BLOCKS-1:0] s_ask;
+        wire [NUM_BLOCKS-1:0][NUM_BLOCKS-1:0] s_conflict;
+        if (DMA_OVERLAP) begin : g_dma_ask
+            // A regular pass has no DMA beat to hit.
+            wire [NUM_BLOCKS-1:0] allow = {NUM_BLOCKS{a_pass_en_w}}
+                                       | ({NUM_BLOCKS{dma_overlap_en}} & ~s_pass_rw);
+            assign s_ask = s_ready & allow & ~s_dma_hit;
+
+            // Compare bank masks before the DMA row check chooses the askers.
+            for (genvar k = 0; k < NUM_BLOCKS; ++k) begin : g_block
+                assign s_conflict[k][k] = 1'b0;
+                for (genvar j = 0; j < k; ++j) begin : g_peer
+                    wire conflict = (| (s_pass_banks[k] & s_pass_banks[j]));
+                    assign s_conflict[k][j] = conflict;
+                    assign s_conflict[j][k] = conflict;
+                end
+            end
+        end else begin : g_no_dma_ask
+            assign s_ask = s_ready;
+            assign s_conflict = '0;
+            `UNUSED_VAR ({s_dma_hit, dma_overlap_en})
+        end
         reg [BLOCK_WIDTH-1:0] s_rr_r;
         reg [BLOCK_WIDTH-1:0] s_rr_n;
         reg                   s_any;
@@ -614,25 +652,36 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             s_grant = '0;
             s_rr_n  = s_rr_r;
             s_any   = 1'b0;
-            for (integer p = 0; p < NUM_BLOCKS; ++p) begin
-                idx = (BLOCK_WIDTH+1)'(s_rr_r) + (BLOCK_WIDTH+1)'(p);
-                if (idx >= (BLOCK_WIDTH+1)'(NUM_BLOCKS)) begin
-                    idx = idx - (BLOCK_WIDTH+1)'(NUM_BLOCKS);
-                end
-                if (s_ask[idx[BLOCK_WIDTH-1:0]] && ~(| (s_pass_banks[idx[BLOCK_WIDTH-1:0]] & taken))) begin
-                    s_grant[idx[BLOCK_WIDTH-1:0]] = 1'b1;
-                    taken = taken | s_pass_banks[idx[BLOCK_WIDTH-1:0]];
-                    if (~s_any) begin
-                        s_rr_n = (idx == (BLOCK_WIDTH+1)'(NUM_BLOCKS-1)) ? '0 : (idx[BLOCK_WIDTH-1:0] + BLOCK_WIDTH'(1));
+            if (DMA_OVERLAP && (NUM_BLOCKS == 2)) begin
+                s_grant[0] = s_ask[0] && ~(s_ask[1] && s_conflict[0][1] && s_rr_r[0]);
+                s_grant[1] = s_ask[1] && ~(s_ask[0] && s_conflict[1][0] && ~s_rr_r[0]);
+                s_any = (| s_ask);
+                s_rr_n = BLOCK_WIDTH'(s_ask[0] && (~s_ask[1] || ~s_rr_r[0]));
+            end else begin
+                for (integer p = 0; p < NUM_BLOCKS; ++p) begin
+                    idx = (BLOCK_WIDTH+1)'(s_rr_r) + (BLOCK_WIDTH+1)'(p);
+                    if (idx >= (BLOCK_WIDTH+1)'(NUM_BLOCKS)) begin
+                        idx = idx - (BLOCK_WIDTH+1)'(NUM_BLOCKS);
                     end
-                    s_any = 1'b1;
+                    if (s_ask[idx[BLOCK_WIDTH-1:0]] && (DMA_OVERLAP
+                        ? ~(| (s_conflict[idx[BLOCK_WIDTH-1:0]] & s_grant))
+                        : ~(| (s_pass_banks[idx[BLOCK_WIDTH-1:0]] & taken)))) begin
+                        s_grant[idx[BLOCK_WIDTH-1:0]] = 1'b1;
+                        if (!DMA_OVERLAP) begin
+                            taken = taken | s_pass_banks[idx[BLOCK_WIDTH-1:0]];
+                        end
+                        if (~s_any) begin
+                            s_rr_n = (idx == (BLOCK_WIDTH+1)'(NUM_BLOCKS-1)) ? '0 : (idx[BLOCK_WIDTH-1:0] + BLOCK_WIDTH'(1));
+                        end
+                        s_any = 1'b1;
+                    end
                 end
             end
         end
         always @(posedge clk) begin
             if (reset) begin
                 s_rr_r <= '0;
-            end else if (s_any && a_pass_en_w) begin
+            end else if (s_any && (DMA_OVERLAP || a_pass_en_w)) begin
                 s_rr_r <= s_rr_n;
             end
         end
@@ -649,7 +698,8 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
                 .ATTR_WIDTH     (ATTR_WIDTH),
                 .NUM_BLOCKS     (NUM_BLOCKS),
                 .RSP_QUEUE_SIZE (RSP_QUEUE_SIZE),
-                .WR_MERGE       (WR_MERGE)
+                .WR_MERGE       (WR_MERGE),
+                .NUM_DMA_ROWS   (DMA_OVERLAP ? DMA_OVERLAP_ROWS : 0)
             ) engine_s (
                 .clk          (clk),
                 .reset        (reset),
@@ -666,12 +716,15 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
                 .req_ready    (s_req_ready[k]),
                 .busy         (s_busy[k]),
                 .holds_write  (s_holds_write[k]),
-                .pass_en      (a_pass_en_w && s_grant[k]),
+                .pass_en      ((DMA_OVERLAP || a_pass_en_w) && s_grant[k]),
                 .read_en      (a_read_en),
                 `UNUSED_PIN (pass_amo),
                 .pass_want    (s_want[k]),
                 .pass_rw      (s_pass_rw[k]),
                 .pass_banks   (s_pass_banks[k]),
+                .dma_wr_mask  (dma_overlap_mask),
+                .dma_wr_rows  (dma_overlap_addr),
+                .pass_dma_hit (s_dma_hit[k]),
                 .bank_valid   (s_bank_valid[k]),
                 .bank_rw      (s_bank_rw[k]),
                 `UNUSED_PIN (bank_amo),
@@ -768,7 +821,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         assign e_rsp_data     = '0;
         assign e_rsp_tag      = '0;
         `UNUSED_VAR ({e_rsp_take, e_rsp_done, rb_valid, rb_addr})
-        `UNUSED_VAR ({a_pass_en_w, in_store})
+        `UNUSED_VAR ({a_pass_en_w, in_store, dma_overlap_en, dma_overlap_mask, dma_overlap_addr})
 
     end
 
@@ -844,41 +897,106 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         end
     end
 
-    wire dma_valid = DMA_ENABLE && dma_bus_if.req_valid;
-    reg  dma_slot_r;
-    always @(posedge clk) begin
-        if (reset) begin
-            dma_slot_r <= 1'b0;
-        end else begin
-            dma_slot_r <= dma_valid && ~amo_stall;
-        end
-    end
-    assign pass_en = ~dma_valid && ~amo_stall;
-
-    // DMA port handshake
-    //   rw=0 reads  : accepted when the response pipe-buffer has space.
-    //   rw=1 writes : no response issued.
-
-    wire dma_rsp_buf_ready;
-    wire dma_fire = dma_slot_r && dma_valid && (dma_bus_if.req_data.rw || dma_rsp_buf_ready);
-    wire dma_rd_fire = dma_fire && ~dma_bus_if.req_data.rw;
-
     // bank row of each row part (reads take one row)
     localparam DMA_PART_BANKS = NUM_BANKS / DMA_PARTS;
+    localparam DMA_BYTES = NUM_BANKS * WORD_SIZE;
+    localparam DMA_ATTR_WIDTH = `UP(DMA_PADDR_LSB + (DMA_PARTS - 1) * DMA_PADDR_W);
     `STATIC_ASSERT ((DMA_PARTS >= 1) && `IS_DIVISBLE(NUM_BANKS, DMA_PARTS), ("invalid parameter"))
+
+    typedef struct packed {
+        logic                       rw;
+        logic [BANK_ADDR_WIDTH-1:0] addr;
+        logic [DMA_BYTES*8-1:0]     data;
+        logic [DMA_BYTES-1:0]       byteen;
+        logic [DMA_ATTR_WIDTH-1:0]  attr;
+        logic [DMA_TAG_WIDTH-1:0]   tag;
+    } dma_req_t;
+
+    wire dma_req_t dma_in = {dma_bus_if.req_data.rw, BANK_ADDR_WIDTH'(dma_bus_if.req_data.addr),
+        dma_bus_if.req_data.data, dma_bus_if.req_data.byteen, DMA_ATTR_WIDTH'(dma_bus_if.req_data.attr),
+        DMA_TAG_WIDTH'(dma_bus_if.req_data.tag)};
+    wire dma_req_t dma_req;
+    wire dma_in_valid = DMA_ENABLE && dma_bus_if.req_valid;
+    wire dma_in_ready;
+    wire dma_pending;
+    wire dma_rsp_buf_ready;
+    wire dma_bank_ready = dma_req.rw || dma_rsp_buf_ready;
+    wire dma_fire = dma_pending && dma_bank_ready;
+    wire dma_rd_fire = dma_fire && ~dma_req.rw;
+    wire dma_valid = dma_in_valid || (DMA_OVERLAP && dma_pending);
+    wire dma_overlap_slot;
+
+    assign pass_en = ~dma_valid && ~amo_stall;
+
     wire [DMA_PARTS-1:0][BANK_ADDR_WIDTH-1:0] dma_part_addr;
-    assign dma_part_addr[0] = BANK_ADDR_WIDTH'(dma_bus_if.req_data.addr);
+    assign dma_part_addr[0] = dma_req.addr;
     for (genvar p = 1; p < DMA_PARTS; ++p) begin : g_dma_part_addr
-        assign dma_part_addr[p] = dma_bus_if.req_data.rw
-            ? BANK_ADDR_WIDTH'(dma_bus_if.req_data.attr[DMA_PADDR_LSB + (p - 1) * DMA_PADDR_W +: DMA_PADDR_W])
+        assign dma_part_addr[p] = dma_req.rw
+            ? BANK_ADDR_WIDTH'(dma_req.attr[DMA_PADDR_LSB + (p - 1) * DMA_PADDR_W +: DMA_PADDR_W])
             : dma_part_addr[0];
     end
+
+    if (DMA_OVERLAP) begin : g_dma_overlap
+        wire admit;
+        // A pass reaches the banks next cycle. Capture the incoming beat
+        // before then so the collision check names the beat that will write.
+        VX_pipe_buffer #(
+            .DATAW ($bits(dma_req_t))
+        ) dma_stage (
+            .clk       (clk),
+            .reset     (reset),
+            .valid_in  (dma_in_valid && ~amo_stall),
+            .ready_in  (admit),
+            .data_in   (dma_in),
+            .data_out  (dma_req),
+            .ready_out (dma_bank_ready),
+            .valid_out (dma_pending)
+        );
+        assign dma_in_ready = admit && ~amo_stall;
+
+        assign dma_overlap_slot = dma_valid && ~amo_stall
+                               && ~(dma_pending && ~dma_req.rw)
+                               && ~(dma_in_valid && ~dma_in.rw);
+
+        for (genvar p = 0; p < DMA_PARTS; ++p) begin : g_part
+            localparam PART_BYTES = DMA_PART_BANKS * WORD_SIZE;
+            assign dma_overlap_mask[p] = dma_pending && (| dma_req.byteen[p * PART_BYTES +: PART_BYTES]);
+            assign dma_overlap_mask[DMA_PARTS+p] = dma_in_valid && (| dma_in.byteen[p * PART_BYTES +: PART_BYTES]);
+            assign dma_overlap_addr[p] = dma_part_addr[p];
+            if (p == 0) begin : g_base
+                assign dma_overlap_addr[DMA_PARTS+p] = dma_in.addr;
+            end else begin : g_attr
+                assign dma_overlap_addr[DMA_PARTS+p] =
+                    BANK_ADDR_WIDTH'(dma_in.attr[DMA_PADDR_LSB + (p - 1) * DMA_PADDR_W +: DMA_PADDR_W]);
+            end
+        end
+
+        `RUNTIME_ASSERT(~dma_fire || ~((| a_bank_valid) || (| st_wr) || amo_stall),
+            ("%t: %s: DMA and an LSU port A access in the same cycle", $time, INSTANCE_ID))
+    end else begin : g_dma_slot
+        reg dma_slot_r;
+        always @(posedge clk) begin
+            if (reset) begin
+                dma_slot_r <= 1'b0;
+            end else begin
+                dma_slot_r <= dma_in_valid && ~amo_stall;
+            end
+        end
+        assign dma_req = dma_in;
+        assign dma_pending = dma_slot_r && dma_in_valid;
+        assign dma_in_ready = dma_slot_r && dma_bank_ready;
+        assign dma_overlap_slot = 1'b0;
+        assign dma_overlap_mask = '0;
+        assign dma_overlap_addr = '0;
+    end
+
+    assign dma_wr_attr = `UP(DMA_PADDR_LSB)'(dma_req.attr);
     wire [NUM_BANKS-1:0][WORD_WIDTH-1:0] per_bank_rdata_a;
 
     if (DMA_ENABLE) begin : g_dma_enable
         `UNUSED_VAR (dma_bus_if.req_data.attr)
 
-        assign dma_bus_if.req_ready = dma_slot_r && (dma_bus_if.req_data.rw || dma_rsp_buf_ready);
+        assign dma_bus_if.req_ready = dma_in_ready;
 
         // the tag follows the SRAM read to its output register
         VX_pipe_buffer #(
@@ -888,7 +1006,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             .reset     (reset),
             .valid_in  (dma_rd_fire),
             .ready_in  (dma_rsp_buf_ready),
-            .data_in   (dma_bus_if.req_data.tag),
+            .data_in   (dma_req.tag),
             .valid_out (dma_bus_if.rsp_valid),
             .data_out  (dma_bus_if.rsp_data.tag),
             .ready_out (dma_bus_if.rsp_ready)
@@ -923,6 +1041,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         `UNUSED_VAR (dma_bus_if.req_valid)
         `UNUSED_VAR (dma_bus_if.req_data)
         `UNUSED_VAR (dma_bus_if.rsp_ready)
+        `UNUSED_VAR ({dma_in_ready, dma_req.tag})
     end
 
     // Row read port
@@ -957,6 +1076,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         // a row read an atomic or a write in its row held up, not yet served
         reg rd_wait_r;
         assign a_pass_en = pass_en && ~rd_wait_r;
+        assign dma_overlap_en = dma_overlap_slot && ~rd_valid && ~rd_wait_r;
 
         // a write lands in the requested row this cycle
         wire [NUM_BANKS-1:0] rd_store_hit;
@@ -972,7 +1092,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             wire [DMA_PARTS-1:0] part_hit;
             for (genvar p = 0; p < DMA_PARTS; ++p) begin : g_part_hit
                 localparam PART_BYTES = DMA_PART_BANKS * WORD_SIZE;
-                assign part_hit[p] = (| dma_bus_if.req_data.byteen[p * PART_BYTES +: PART_BYTES])
+                assign part_hit[p] = (| dma_req.byteen[p * PART_BYTES +: PART_BYTES])
                                   && (dma_part_addr[p] == rd_addr);
             end
             assign rd_dma_hit = (| part_hit);
@@ -980,7 +1100,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
             assign rd_dma_hit = (dma_part_addr[0] == rd_addr);
         end
         wire rd_row_wr = (a_bank_rw && (| rd_store_hit)) || (| rd_st_hit)
-                      || (dma_fire && dma_bus_if.req_data.rw && rd_dma_hit);
+                      || (dma_fire && dma_req.rw && rd_dma_hit);
 
         wire rd_rsp_buf_ready;
         wire rd_ready = rd_slot_r && ~amo_stall && ~(| b_bank_valid) && ~a_read_at_banks && ~rd_row_wr && rd_rsp_buf_ready;
@@ -1037,6 +1157,7 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
         assign a_pass_en          = pass_en;
         assign a_read_en          = 1'b1;
         assign b_pass_en          = pass_en;
+        assign dma_overlap_en     = dma_overlap_slot;
         assign rd_fire            = 1'b0;
         assign rd_bus_if.req_ready = 1'b0;
         assign rd_bus_if.rsp_valid = 1'b0;
@@ -1054,8 +1175,16 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
 
     for (genvar i = 0; i < NUM_BANKS; ++i) begin : g_data_store
 
-        wire dma_wr_b = dma_fire && dma_bus_if.req_data.rw
-                     && (| dma_bus_if.req_data.byteen[i*WORD_SIZE +: WORD_SIZE]);
+        wire dma_wr_b = dma_fire && dma_req.rw && (| dma_req.byteen[i*WORD_SIZE +: WORD_SIZE]);
+        assign dma_wr_fire[i] = dma_wr_b;
+
+        if (DMA_OVERLAP) begin : g_dma_row_assert
+            for (genvar p = 0; p < DMA_PARTS; ++p) begin : g_part
+                `RUNTIME_ASSERT(~(dma_fire && dma_req.rw && dma_overlap_mask[p] && b_bank_valid[i]
+                    && (b_bank_addr[i] == dma_part_addr[p])),
+                    ("%t: %s bank %0d: LSU reads a row written by DMA part %0d", $time, INSTANCE_ID, i, p))
+            end
+        end
 
         wire lsu_active = a_bank_valid[i];
 
@@ -1328,11 +1457,11 @@ module VX_lmem_unit import VX_gpu_pkg::*; #(
                                : amo_wb_store ? amo_wb_addr
                                : st_wr[i]     ? st_addr[i]
                                               : a_bank_addr[i];
-        assign bank_sram_wdata = dma_fire     ? dma_bus_if.req_data.data[i*WORD_WIDTH +: WORD_WIDTH]
+        assign bank_sram_wdata = dma_fire     ? dma_req.data[i*WORD_WIDTH +: WORD_WIDTH]
                                : amo_wb_store ? amo_wb_data
                                : st_wr[i]     ? st_data[i]
                                               : req_data;
-        assign bank_sram_wren  = dma_fire     ? dma_bus_if.req_data.byteen[i*WORD_SIZE +: WORD_SIZE]
+        assign bank_sram_wren  = dma_fire     ? dma_req.byteen[i*WORD_SIZE +: WORD_SIZE]
                                : amo_wb_store ? amo_wb_byteen
                                : st_wr[i]     ? st_byteen[i]
                                               : req_byteen;

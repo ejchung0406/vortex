@@ -377,6 +377,15 @@ The direct-memory clients (the DXA writes and the tensor unit's reads) take
 whole bank rows on the first port: a DMA request seen in one cycle stops the
 passes and gets the banks the next.
 
+With DXA, `LMEM_RD_ROW` and `VX_CFG_LMEM_DMA_RD_OVERLAP` (default 0),
+the DMA request is staged before it reaches the banks. A ready plain-load
+pass can use the read port during a DMA write if all of its bank rows are
+disjoint from every byte-enabled part of the staged and incoming beats. The
+parts of a DXA beat can have different row addresses. DMA reads, a waiting
+TCU row read and atomics still prevent this overlap. DMA writes and LSU
+stores still share the write port. A DXA transaction completes when its
+final write reaches the banks.
+
 `VX_CFG_LMEM_TCU_RDPORT` (default 0) at 1 moves the tensor unit's row reads to
 the banks' second port, which several LSU blocks bring (the build refuses the
 knob with one), so the first port's DMA slot carries the DXA's writes alone

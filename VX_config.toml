@@ -512,6 +512,10 @@ VX_CFG_LMEM_WR_ROW = 0
 # NUM_LSU_BLOCKS cycles that issue one. Atomics keep the first engine and take
 # turns with the plain requests. Needs LMEM_WR_ROW=1 (the build refuses 0).
 VX_CFG_LMEM_RD_ROW = 0
+# 1: with DXA and LMEM_RD_ROW, give a plain LSU load the read port during a
+# DMA write when its bank rows are disjoint. The DMA and LSU stores still
+# share the write port, and the TCU row read retains priority.
+VX_CFG_LMEM_DMA_RD_OVERLAP = 0
 
 [tcu]
 # string enum: 'DPI'|'DSP'|'BHF'|'TFR'|'FPNEW'; TFR is the universal default. On

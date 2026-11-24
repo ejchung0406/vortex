@@ -567,6 +567,21 @@ tests:
   configs: -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_LMEM_NUM_BANKS=16 -DVX_CFG_DCACHE_NUM_BANKS=2 -DVX_CFG_NUM_DXA_CORES=4
     -DVX_CFG_DXA_GMEM_PORTS=2 -DVX_CFG_DXA_LMEM_ROW=1 -DVX_CFG_DXA_LINE_PER_CYCLE=1
 
+# Two DXA transfers start at opposite half-row offsets. LSU probes their
+# rows and a disjoint row, while stores/atomics touch a DMA row's other half
+# and a disjoint row, and TMEM copies the whole window.
+- id: model_parity-lmem-dma-rd-overlap
+  check: model_parity
+  via: blackbox
+  xlen: [64]
+  app: lmem_dma_rd
+  touches: [hw/rtl/mem, sim/simx/mem, hw/rtl/dxa, sim/simx/dxa, tests/regression/lmem_dma_rd]
+  configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_NUM_WARPS=8 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_EXT_TCU_ENABLE -DVX_CFG_EXT_DXA_ENABLE
+    -DVX_CFG_TCU_WGMMA_ENABLE -DVX_CFG_TCU_FEDP2K -DVX_CFG_TCU_TMEM_ENABLE -DVX_CFG_TCU_TMEM_B_AHEAD=2 -DVX_CFG_TCU_TMEM_A_BANKROW=1
+    -DVX_CFG_TCU_TYPE=DPI -DVX_CFG_NUM_ALU_BLOCKS=1 -DVX_CFG_NUM_LSU_BLOCKS=2 -DVX_CFG_NUM_FPU_BLOCKS=1 -DVX_CFG_EXT_A_ENABLE
+    -DVX_CFG_LMEM_NUM_BANKS=16 -DVX_CFG_LMEM_TCU_RDPORT=1 -DVX_CFG_LMEM_WR_MERGE=1 -DVX_CFG_LMEM_WR_ROW=1 -DVX_CFG_LMEM_RD_ROW=1
+    -DVX_CFG_DCACHE_NUM_BANKS=2 -DVX_CFG_NUM_DXA_CORES=4 -DVX_CFG_DXA_GMEM_PORTS=2 -DVX_CFG_DXA_LMEM_ROW=1 -DVX_CFG_LMEM_DMA_RD_OVERLAP=1
+
 # Perf-regression twin of the model_parity-copy benchmark (same run, cycles-vs-baseline).
 - id: perf_gate-copy
   check: perf_gate

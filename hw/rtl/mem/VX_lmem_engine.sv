@@ -55,6 +55,7 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
     // plain-store lanes writing different bytes of one word share its bank
     // access; the payload's low bits are then {byte enables, word}
     parameter WR_MERGE        = 0,
+    parameter NUM_DMA_ROWS    = 0,
 
     parameter WORD_WIDTH      = WORD_SIZE * 8,
     parameter BLOCK_WIDTH     = `UP(`CLOG2(NUM_BLOCKS)),
@@ -93,6 +94,9 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
     output wire                                      pass_want,
     output wire                                      pass_rw,
     output wire [NUM_BANKS-1:0]                      pass_banks,
+    input wire [`UP(NUM_DMA_ROWS)-1:0]                dma_wr_mask,
+    input wire [`UP(NUM_DMA_ROWS)-1:0][BANK_ADDR_WIDTH-1:0] dma_wr_rows,
+    output wire                                      pass_dma_hit,
 
     // bank requests, registered
     output wire [NUM_BANKS-1:0]                      bank_valid,
@@ -417,6 +421,21 @@ module VX_lmem_engine import VX_gpu_pkg::*; #(
 
     assign pass_want = s1_valid && s1_ready && (~has_rsp || (credits != '0));
     assign pass_rw   = s1_rw;
+
+    if (NUM_DMA_ROWS != 0) begin : g_dma_rows
+        wire [NUM_DMA_ROWS-1:0] row_hit;
+        for (genvar p = 0; p < NUM_DMA_ROWS; ++p) begin : g_row
+            wire [NUM_LANES-1:0] lane_hit;
+            for (genvar i = 0; i < NUM_LANES; ++i) begin : g_lane
+                assign lane_hit[i] = s1_winners[i] && (s1_addr[i][BANK_SEL_BITS +: BANK_ADDR_WIDTH] == dma_wr_rows[p]);
+            end
+            assign row_hit[p] = dma_wr_mask[p] && (| lane_hit);
+        end
+        assign pass_dma_hit = (| row_hit);
+    end else begin : g_no_dma_rows
+        assign pass_dma_hit = 1'b0;
+        `UNUSED_VAR ({dma_wr_mask, dma_wr_rows})
+    end
 
     always @(posedge clk) begin
         bank_rw_r   <= s1_rw;
