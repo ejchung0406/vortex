@@ -131,9 +131,17 @@ public:
     auto bind_l2_link = [&](uint32_t port,
                             SimChannel<MemReq>& req_src, SimChannel<MemReq>& req_dst,
                             SimChannel<MemRsp>& rsp_src, SimChannel<MemRsp>& rsp_dst) {
+      constexpr bool gated = VX_CFG_SM_INGRESS_BYTES != 0;
+      if constexpr (gated) {
+        auto* endpoint = &req_dst;
+        while (endpoint->sink()) {
+          endpoint = static_cast<SimChannel<MemReq>*>(endpoint->sink());
+        }
+        endpoint->set_registered_ready(true);
+      }
       if constexpr (VX_CFG_L2_LINK_LATENCY != 0) {
         snprintf(sname, 100, "%s-l2link-req%d", name.c_str(), port);
-        auto req_link = DelayBuffer<MemReq>::Create(sname, VX_CFG_L2_LINK_LATENCY);
+        auto req_link = DelayBuffer<MemReq>::Create(sname, VX_CFG_L2_LINK_LATENCY, gated);
         snprintf(sname, 100, "%s-l2link-rsp%d", name.c_str(), port);
         auto rsp_link = DelayBuffer<MemRsp>::Create(sname, VX_CFG_L2_LINK_LATENCY);
         req_src.bind(&req_link->In);

@@ -234,11 +234,23 @@ public:
     // the crossing is never combinational regardless of the arbiter chain
     // behind it.
   #if VX_CFG_SM_INGRESS_BYTES != 0
-    // The socket's issue limit: the read lines its ports request per cycle.
-    snprintf(sname, 100, "%s-ingress", name.c_str());
-    auto ingress = NocRateGate<MemReq>::Create(sname, VX_CFG_L1_MEM_PORTS, VX_CFG_SM_INGRESS_BYTES,
-      VX_CFG_L1_LINE_SIZE, &NocSwitch::returns_line);
+    NocRateGate<MemReq>::Ptr ingress;
+    {
+      // The existing socket register carries the domain crossing into the gate.
+      SimPlatform::DomainScope uncore_scope(0u);
+      snprintf(sname, 100, "%s-ingress", name.c_str());
+      ingress = NocRateGate<MemReq>::Create(sname, VX_CFG_L1_MEM_PORTS, VX_CFG_SM_INGRESS_BYTES,
+        VX_CFG_L1_LINE_SIZE, &NocSwitch::returns_line);
+    }
   #endif
+    auto bind_mem_req = [&](uint32_t port, SimChannel<MemReq>& req_src) {
+    #if VX_CFG_SM_INGRESS_BYTES != 0
+      req_src.bind(&ingress->In.at(port));
+      ingress->Out.at(port).bind(&simobject_->mem_req_out.at(port));
+    #else
+      req_src.bind(&simobject_->mem_req_out.at(port));
+    #endif
+    };
     auto bind_mem_port = [&](uint32_t port,
                              SimChannel<MemReq>& req_src,
                              SimChannel<MemRsp>& rsp_dst) {
@@ -251,14 +263,8 @@ public:
         SimPlatform::DomainScope uncore_scope(0u);
         brsp = MemRspSlice::Create(bname, 1);
       }
-    #if VX_CFG_SM_INGRESS_BYTES != 0
-      req_src.bind(&ingress->In.at(port));
-      breq->In.set_registered_ready(true);
-      ingress->Out.at(port).bind(&breq->In);
-    #else
       req_src.bind(&breq->In);
-    #endif
-      breq->Out.bind(&simobject_->mem_req_out.at(port));
+      bind_mem_req(port, breq->Out);
       simobject_->mem_rsp_in.at(port).bind(&brsp->In);
       brsp->Out.bind(&rsp_dst);
     };
@@ -333,16 +339,7 @@ public:
         dxa_core_->gmem_req_out.at(i).bind(&breq->In.at(1));
         brsp->Out.at(1).bind(&dxa_core_->gmem_rsp_in.at(i));
       #endif
-      #if VX_CFG_SM_INGRESS_BYTES != 0
-        snprintf(sname, 100, "%s-ingress-out%d", name.c_str(), i);
-        auto port_out = MemReqSlice::Create(sname, 1);
-        breq->Out.bind(&ingress->In.at(i));
-        port_out->In.set_registered_ready(true);
-        ingress->Out.at(i).bind(&port_out->In);
-        port_out->Out.bind(&simobject_->mem_req_out.at(i));
-      #else
-        breq->Out.bind(&simobject_->mem_req_out.at(i));
-      #endif
+        bind_mem_req(i, breq->Out);
         simobject_->mem_rsp_in.at(i).bind(&brsp->In);
         continue;
       }
