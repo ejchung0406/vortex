@@ -799,3 +799,36 @@ h200s rtlsim / SimX at the current profile (rover):
   6,212 / 3,705; shared reads 4,836 / 2,387). So finding 56 is not a barrier defect; the name was wrong. The split-load
   fix has no effect on it. Next: the same phase timing on the current head (scratch app in results/bg_phase1_602.*).
 - NoC review: not resumed (Codex quota); notes/noc-review-codex.md still 9 lines.
+
+## Update 2026-11-24 (04:45 EST)
+STATE FOR A NEW SESSION: the Phoenix job hosting the Claude session (15992728 `slowdown`) ends about 2026-11-24 22:40
+EST (3-day limit). rover has refused ssh since 2026-11-23 20:56;
+cause unknown; our processes there (Codex's h200s rtlsim runs bg_cache_repl_*, dcg_c8r, source and model trees)
+are unread and uncleaned. ICE scratch was full (285/300 GB, 995k/1M files); 33 finished trees removed
+(src_smr_*, src_barfix_*), now 274 GB / 786k files; most of the space is outside vortex-ice.
+
+Merged since 16:30: fix/dcache-ch2-simx (9d7b5d3fb, d23b1e6e0; agent dc-gap). SimX's dMMU moved every dcache response
+through a 2-entry queue one tick at a time though the RTL lane is a wire (sim/simx/mem/mmu.cpp, hw/rtl/vm/VX_mmu.sv
+RSP_OUT_BUF=0). h200s SimX before -> after (rtlsim): ldstream lean 182,466 -> 173,926 (168,615); old 32 B shape
+245,673 -> 252,912 (252,467); bwstream 405,591 -> 394,442 (~395,000); war_order 320,655 -> 320,317 (321,222);
+gemm_block 515,695 -> 518,282 (555,376, open). New case parity-dcache-ch2-ldstream-vm: rtlsim 52,418, SimX 55,434
+-> 53,609. OPEN from it: at 16 warps x 32 threads without VM rtlsim 27,514 / SimX 24,109 (-12.4%); the RTL gets 9%
+faster with VM, SimX 7% slower (suspect: the dMMU's request-side skid and out_pipe); ldstream lean still +3.1%.
+
+Not merged, local branches by Codex (notes/barrier-gap.md has everything):
+- fix/smem-phase 2f0a0cf31 (stage 1): SimX replaces like the current RTL (tree PLRU, the tree's way even with invalid
+  ways free). Closes finding 56/58: h200s stack replay 29.6% -> 0.9%, smprobe -k2 -n2 17.2% -> 1.3%.
+- fix/cache-repl 43a4b2036 (stage 2, on stage 1): RTL and SimX: lowest invalid way first, no aliased leaves with a
+  non-power-of-two way count, tree touched on fill as well as hit. Small: 3-way chase rtlsim 79,713 -> 17,371 (SimX
+  17,389); 33-way stack replay 8,200 -> 5,891 (5,872). h200s rtlsim before -> after / SimX: stack replay 16 warps
+  7,738 -> 5,304 / 5,451; 64 warps 10,533 -> 8,358 / 8,800; smprobe -k2 -n2 39,238 -> 44,499 / 45,984 (more work
+  done); -k0 -n2 45,597 -> 66,230 / 61,399; DXA copy 52,875 -> 52,528 / 53,753. Beacon: 23 -> 23 levels, L2 bank
+  21 -> 18, LUT +0.2%. FIFO has the same invalid-way blindness (reported, not changed). MISSING: h200s rtlsim
+  ldstream and gemm_block (rover down). To do: read them, look over both commits, merge, re-take all h200s
+  baselines, findings list (upstream candidate).
+DXA port diagnosis (agent dxa-port, no code change, notes/dxa-port.md): no stage limits a port to a line per two
+cycles; 28% of cycles no worker has a line to issue (one-warp CTAs take ~420 cycles between transfers, transfers end
+together), 22% of offered cycles the L2 bank stalls on its 2-slot response queue (L2_CRSQ_SIZE=8 removes it: 73.4 ->
+76.6, 66.6 -> 69.2, 71.2 -> 68.0; not applied). L2 replacement does not matter for the streaming copy (584 evictions).
+To reach the part: split a transfer over workers (C2) and shorten the issuing loop (C3).
+NoC review done (notes/noc-review-codex.md): merge after fixes; 2 F3, 6 F2, 2 F1. Rebase onto the new head needed.
