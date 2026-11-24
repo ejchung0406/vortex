@@ -136,11 +136,12 @@ class Runner:
             return None
         return int(found[-1])
 
-    def chase_latency(self, footprint, warm, cold=False):
-        single_core = ("--clusters=1", "--cores=1")
+    def chase_latency(self, footprint, warm, cold=False, preserve_topology=False):
+        # The chase launches one thread. Grouped shapes must keep complete groups.
+        topology = () if preserve_topology else ("--clusters=1", "--cores=1")
         base = f"-b{footprint} -w{warm}" + (" -c" if cold else "")
-        c1 = self.cycles("chase", f"{base} -i{CHASE_ITERS}", single_core)
-        c2 = self.cycles("chase", f"{base} -i{2 * CHASE_ITERS}", single_core)
+        c1 = self.cycles("chase", f"{base} -i{CHASE_ITERS}", topology)
+        c2 = self.cycles("chase", f"{base} -i{2 * CHASE_ITERS}", topology)
         if c1 is None or c2 is None:
             return None
         return (c2 - c1) / CHASE_ITERS
@@ -184,7 +185,7 @@ def latency_metrics(runner, cfg, reference):
         if spec is None:
             print(f"  {key}: the profile has no L2")
             continue
-        out[key] = runner.chase_latency(*spec)
+        out[key] = runner.chase_latency(*spec, preserve_topology=bool(cfg.get("VX_CFG_NOC_GROUP_SIZE")))
     return out
 
 

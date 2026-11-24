@@ -116,6 +116,7 @@ public:
         false,                         // set_hash
         VX_CFG_L2_CRSQ_SIZE,           // crsq_size
         VX_CFG_L2_FWD_HOLD != 0,       // fwd_hold
+        VX_CFG_L2_SLICE_BIND ? VX_CFG_L2_SLICE_GRANULE : 0, // slice_granule
       });
     }
 

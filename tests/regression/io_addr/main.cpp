@@ -24,6 +24,7 @@ const char* kernel_file = "kernel.vxbin";
 uint32_t count = 0;
 
 static uint64_t io_base_addr = VX_MEM_IO_BASE_ADDR;
+static uint32_t io_stride = sizeof(uint32_t);
 uint64_t usr_test_addr;
 
 vx_device_h device = nullptr;
@@ -38,12 +39,12 @@ kernel_arg_t kernel_arg = {};
 
 static void show_usage() {
    std::cout << "Vortex Test." << std::endl;
-   std::cout << "Usage: [-k: kernel] [-n words] [-h: help]" << std::endl;
+   std::cout << "Usage: [-k: kernel] [-n words] [-s IO stride in bytes] [-h: help]" << std::endl;
 }
 
 static void parse_args(int argc, char **argv) {
   int c;
-  while ((c = getopt(argc, argv, "n:k:h")) != -1) {
+  while ((c = getopt(argc, argv, "n:k:s:h")) != -1) {
     switch (c) {
     case 'n':
       count = atoi(optarg);
@@ -51,6 +52,17 @@ static void parse_args(int argc, char **argv) {
     case 'k':
       kernel_file = optarg;
       break;
+    case 's': {
+      char* end;
+      uint64_t stride = std::strtoull(optarg, &end, 0);
+      uint64_t max_stride = (VX_MEM_IO_END_ADDR - io_base_addr - sizeof(uint32_t)) / (NUM_ADDRS - 1);
+      if (*end != '\0' || stride == 0 || stride > max_stride || stride % sizeof(uint32_t) != 0) {
+        std::cerr << "Invalid IO stride" << std::endl;
+        exit(1);
+      }
+      io_stride = stride;
+      break;
+    }
     case 'h':
       show_usage();
       exit(0);
@@ -85,7 +97,7 @@ void gen_src_addrs(std::vector<uint64_t>& src_addrs, uint32_t size) {
       ++u;
     }
     uint32_t j = i % NUM_ADDRS;
-    uint64_t a = ((j == k) ? usr_test_addr : io_base_addr) + j * sizeof(uint32_t);
+    uint64_t a = (j == k) ? usr_test_addr + j * sizeof(uint32_t) : io_base_addr + j * io_stride;
     std::cout << std::dec << i << "," << k << ": value=0x" << std::hex << a << std::endl;
     src_addrs[i] = a;
   }
@@ -125,6 +137,7 @@ int main(int argc, char *argv[]) {
   uint32_t num_points = count * total_threads;
 
   uint32_t addr_buf_size = NUM_ADDRS * sizeof(int32_t);
+  uint32_t io_buf_size = (NUM_ADDRS - 1) * io_stride + sizeof(uint32_t);
   uint32_t src_buf_size = num_points * sizeof(uint64_t);
   uint32_t dst_buf_size = num_points * sizeof(int32_t);
 
@@ -139,7 +152,7 @@ int main(int argc, char *argv[]) {
   std::cout << "allocate device memory" << std::endl;
   RT_CHECK(vx_buffer_create(device, addr_buf_size, VX_MEM_READ, &usr_test_buffer));
   RT_CHECK(vx_buffer_address(usr_test_buffer, &usr_test_addr));
-  RT_CHECK(vx_buffer_reserve(device, io_base_addr, addr_buf_size, VX_MEM_READ_WRITE, &io_test_buffer));
+  RT_CHECK(vx_buffer_reserve(device, io_base_addr, io_buf_size, VX_MEM_READ_WRITE, &io_test_buffer));
   RT_CHECK(vx_buffer_create(device, src_buf_size, VX_MEM_READ, &src_buffer));
   RT_CHECK(vx_buffer_address(src_buffer, &kernel_arg.src_addr));
   RT_CHECK(vx_buffer_create(device, dst_buf_size, VX_MEM_WRITE, &dst_buffer));
@@ -152,18 +165,20 @@ int main(int argc, char *argv[]) {
   std::cout << "allocate host buffers" << std::endl;
   std::vector<uint64_t> h_src;
   std::vector<uint32_t> h_addr(NUM_ADDRS);
+  std::vector<uint32_t> h_io(io_buf_size / sizeof(uint32_t));
   std::vector<int32_t> h_dst(num_points);
 
   // generate source data
   gen_src_addrs(h_src, num_points);
   for (uint32_t i = 0; i < NUM_ADDRS; ++i) {
     h_addr[i] = i * i;
+    h_io[i * (io_stride / sizeof(uint32_t))] = h_addr[i];
   }
 
   // upload user address data
   std::cout << "upload source buffer" << std::endl;
   RT_CHECK(vx_enqueue_write(queue, usr_test_buffer, 0, h_addr.data(), addr_buf_size, 0, nullptr, nullptr));
-  RT_CHECK(vx_enqueue_write(queue, io_test_buffer, 0, h_addr.data(), addr_buf_size, 0, nullptr, nullptr));
+  RT_CHECK(vx_enqueue_write(queue, io_test_buffer, 0, h_io.data(), io_buf_size, 0, nullptr, nullptr));
 
   // upload source buffer
   std::cout << "upload address buffer" << std::endl;

@@ -124,6 +124,23 @@ static void check(bool cond, const char* what, double got) {
 int main() {
   auto a100 = a100_config();
 
+  auto bound = a100;
+  bound.slice_bind = true;
+  bound.interleave = 1024;
+  DramSim bound_dram(bound);
+  g_responses = 0;
+  bool round_trip = true;
+  for (uint32_t i = 0; i < bound.num_channels; ++i) {
+    uint64_t addr = 0x12400 + i * bound.slice_granule + bound.block_size;
+    auto loc = bound.locate(addr);
+    round_trip &= bound.bound_physical(loc.channel, loc.addr) == addr;
+    bound_dram.send_request(loc.channel, loc.addr, false, on_response, nullptr);
+  }
+  for (uint32_t tick = 0; tick < 4096 && g_responses < bound.num_channels; ++tick) {
+    bound_dram.tick();
+  }
+  check(round_trip && g_responses == bound.num_channels, "bound channels round trip and complete", g_responses);
+
   // Unloaded latency: open-row hits, then row conflicts (precharge + activate).
   double open = unloaded_latency(a100, [](int i) { return uint64_t(i % 8) * 128; });
   double conflict = unloaded_latency(a100, hbm_conflict);

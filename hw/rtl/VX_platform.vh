@@ -18,6 +18,15 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
+// Keep a hard error when Verilator is invoked with -Wno-fatal.
+`ifdef VERILATOR
+`define ELABORATION_ERROR(msg) \
+    $fatal(1, msg); \
+    VX_invalid_elaboration_configuration invalid_configuration();
+`else
+`define ELABORATION_ERROR(msg) $fatal(1, msg);
+`endif
+
 `ifdef SIMULATION
 
 `define STATIC_ASSERT(cond, msg) \

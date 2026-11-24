@@ -16,12 +16,14 @@
 #include "debug.h"
 #include "types.h"
 #include "addr_hash.h"
+#include <addr_map.h>
 #if VX_CFG_EXT_A_ENABLED
 #include "amo_unit.h"
 #endif
 #include <algorithm>
 #include <cstring>
 #include <list>
+#include <optional>
 #include <queue>
 #include <unordered_map>
 #include <util.h>
@@ -86,6 +88,8 @@ struct params_t {
 
   bool bank_hash;
   bool set_hash;
+  std::optional<L2SliceMap> slice_map;
+  uint32_t local_tag_start;
 
   params_t(const Cache::Config &config) : bank_hash(config.bank_hash), set_hash(config.set_hash) {
     int32_t offset_bits = config.L - config.W;
@@ -126,7 +130,13 @@ struct params_t {
     // Tag select
     this->tag_select_addr_start = (1 + this->set_select_addr_end);
     this->tag_select_addr_end = (config.addr_width - 1);
-    assert(!bank_hash || (config.B != 0 && config.B <= 8));
+    this->local_tag_start = config.L + index_bits;
+    if (config.slice_granule != 0) {
+      __assert(!config.bypass && !set_hash && config.mem_ports <= 64 && (1u << config.B) == config.mem_ports,
+               "slice binding needs a cache with one memory port per bank and an unmodified local set index");
+      this->slice_map.emplace(1u << config.B, config.slice_granule, 1u << config.L, sets);
+    }
+    assert(slice_map || !bank_hash || (config.B != 0 && config.B <= 8));
     assert(!set_hash || index_bits <= 16);
   }
 
@@ -151,6 +161,9 @@ struct params_t {
   }
 
   uint32_t addr_bank_id(uint64_t addr) const {
+    if (slice_map) {
+      return slice_map->locate(addr).channel;
+    }
     if (bank_select_addr_end < bank_select_addr_start) {
       return 0;
     }
@@ -174,6 +187,9 @@ struct params_t {
   }
 
   uint32_t addr_set_id(uint64_t addr) const {
+    if (slice_map) {
+      return slice_map->locate(addr).set;
+    }
     if (set_select_addr_end >= set_select_addr_start)
       return (uint32_t)bit_getw(addr, set_select_addr_start, set_select_addr_end) ^ set_xor(addr_tag(addr));
     else
@@ -181,6 +197,9 @@ struct params_t {
   }
 
   uint64_t addr_tag(uint64_t addr) const {
+    if (slice_map) {
+      return slice_map->locate(addr).addr >> local_tag_start;
+    }
     if (tag_select_addr_end >= tag_select_addr_start)
       return bit_getw(addr, tag_select_addr_start, tag_select_addr_end);
     else
@@ -195,6 +214,10 @@ struct params_t {
   }
 
   uint64_t mem_addr(uint32_t bank_id, uint32_t set_id, uint64_t tag) const {
+    if (slice_map) {
+      uint64_t local = (tag << local_tag_start) | (uint64_t(set_id) << bank_select_addr_start);
+      return slice_map->physical(bank_id, local);
+    }
     uint64_t addr(0);
     if (bank_select_addr_end >= bank_select_addr_start)
       addr = bit_setw(addr, bank_select_addr_start, bank_select_addr_end, bank_id);
@@ -2605,6 +2628,7 @@ public:
   std::vector<SimChannel<MemReq>> ReqIn;  // core ports
   std::vector<SimChannel<MemReq>> ReqOut; // banks
   std::vector<SimChannel<MemReq>> IoOut;  // non-cacheable requests, per port
+  std::vector<SimChannel<MemReq>> BoundIoOut; // non-cacheable requests, per channel
 
   CachePortArb(const SimContext& ctx, const char* name, const params_t& params,
                uint32_t num_inputs, uint32_t num_banks, uint32_t merge_group,
@@ -2612,7 +2636,8 @@ public:
     : SimObject<CachePortArb>(ctx, name)
     , ReqIn(num_inputs, this)
     , ReqOut(num_banks, this)
-    , IoOut(num_inputs, this)
+    , IoOut(params.slice_map ? 0 : num_inputs, this)
+    , BoundIoOut(params.slice_map ? num_banks : 0, this)
     , params_(params)
     , lg2_inputs_(log2ceil(num_inputs))
     // the request crossbar registers its output when it has more than two inputs
@@ -2621,6 +2646,8 @@ public:
     , merge_group_(merge_group)
     , merge_line_(merge_line)
     , skid_(skid)
+    , nc_req_arbs_(BoundIoOut.size(), {ArbiterType::RoundRobin, num_inputs})
+    , nc_req_requests_(BoundIoOut.size(), BitVector<>(num_inputs))
   {
     __assert(merge_group_ <= 1 || (merge_group_ <= 64 && ispow2(merge_group_) && (num_inputs % merge_group_) == 0),
              "a read-merge group must be a power of two of at most 64 dividing the ports");
@@ -2725,6 +2752,9 @@ protected:
   void on_reset() {
     for (auto &rr : rr_) {
       std::fill(rr.begin(), rr.end(), 0);
+    }
+    for (auto& arb : nc_req_arbs_) {
+      arb.commit(ReqIn.size() - 1); // RTL grants input 0 first.
     }
     collisions_ = 0;
     for (auto& offer : offers_) {
@@ -2857,13 +2887,14 @@ protected:
       }
     }
     // requesting ports per bank and first-level slice; non-cacheable requests
-    // leave on their own port
+    // use their channel arbiter when bound
     uint32_t slices = this->arb_slices(0);
     uint32_t slice_ports = (nl != 0) ? kMaxFanout : n;
     auto& want = want_;
     auto& wants = wants_;
     want.assign(nb * slices, 0);
     wants.assign(nb, 0);
+    bool bound_io_seen = false;
     for (uint32_t i = 0; i < n; ++i) {
       if (heads[i] == nullptr || followers.at(i)) {
         continue;
@@ -2874,7 +2905,11 @@ protected:
         continue;
       }
       if (req.flags.io) {
-        if (IoOut.at(i).try_send(req, 0)) {
+        if (params_.slice_map) {
+          uint32_t channel = params_.addr_bank_id(req.addr);
+          nc_req_requests_.at(channel).set(i);
+          bound_io_seen = true;
+        } else if (IoOut.at(i).try_send(req, 0)) {
           in.pop();
           ++io_pending_;
         }
@@ -2886,6 +2921,10 @@ protected:
         ++wants.at(b);
       }
     }
+    if (bound_io_seen) {
+      this->grantBoundIO();
+    }
+
     // each bank's arbiter, or each slice of its tree, grants one port per cycle
     for (uint32_t b = 0; b < nb; ++b) {
       if (wants.at(b) == 0) {
@@ -2918,6 +2957,30 @@ protected:
       if (granted) {
         collisions_ += wants.at(b) - 1;
       }
+    }
+  }
+
+  void grantBoundIO() {
+    // A blocked channel leaves its request at the original head, holding later packets from that port.
+    for (uint32_t channel = 0; channel < BoundIoOut.size(); ++channel) {
+      auto& requests = nc_req_requests_.at(channel);
+      if (!requests.any())
+        continue;
+      auto& arb = nc_req_arbs_.at(channel);
+      uint32_t port = arb.select(requests);
+      requests.reset();
+      auto& out = BoundIoOut.at(channel);
+      if (out.full())
+        continue;
+      auto& in = ReqIn.at(port);
+      auto req = in.peek();
+      uint64_t tag = (uint64_t(req.tag) << lg2_inputs_) | port;
+      __assert((tag >> 32) == 0, "uncached request tag overflow");
+      req.tag = uint32_t(tag);
+      out.send(req, 1);
+      DT(3, this->name() << " bypass-dram-req" << channel << ": " << req);
+      in.pop();
+      arb.commit(port);
     }
   }
 
@@ -3145,6 +3208,8 @@ private:
   std::vector<uint8_t>  owes_head_;
   uint32_t idle_ticks_ = 0;
   uint64_t io_pending_ = 0; // see io_pending()
+  std::vector<Arbiter> nc_req_arbs_;
+  std::vector<BitVector<>> nc_req_requests_;
   struct offer_t {
     SimChannel<MemReq>* bank_in = nullptr;
     bool     valid       = false;
@@ -3378,6 +3443,15 @@ public:
     char sname[100];
 
     uint32_t num_banks = (1 << config.B);
+    if (params_.slice_map) {
+      nc_rsp_arbs_.resize(config.num_inputs, {ArbiterType::RoundRobin, config.mem_ports});
+      nc_rsp_requests_.resize(config.num_inputs, BitVector<>(config.mem_ports));
+      nc_rsp_stage_.reserve(config.num_inputs);
+      for (uint32_t i = 0; i < config.num_inputs; ++i) {
+        nc_rsp_stage_.emplace_back(simobject, 2);
+        nc_rsp_stage_.back().set_registered_ready(true);
+      }
+    }
 
     if (config_.bypass) {
       snprintf(sname, 100, "%s-bypass_arb", simobject->name().c_str());
@@ -3396,7 +3470,18 @@ public:
     // create non-cacheable arbiter
     for (uint32_t i = 0; i < config_.mem_ports; ++i) {
       snprintf(sname, 100, "%s-nc_arb%d", simobject->name().c_str(), i);
-      nc_mem_arbs_.at(i) = MemArbiter::Create(sname, ArbiterType::Priority, 2, 1);
+      // NC is input 1 here, which wins the first tie in SimX round-robin.
+      nc_mem_arbs_.at(i) = params_.slice_map
+          ? MemArbiter::Create(sname, ArbiterType::RoundRobin, 2, 1, 1, 0)
+          : MemArbiter::Create(sname, ArbiterType::Priority, 2, 1);
+      if (params_.slice_map) {
+        // The NC arbiter's input queue holds the channel crossbar's two-entry output stage.
+        auto* stage = &nc_mem_arbs_.at(i)->ReqIn.at(1);
+        while (stage->sink()) {
+          stage = static_cast<SimChannel<MemReq>*>(stage->sink());
+        }
+        stage->set_registered_ready(true);
+      }
     }
 
     // Bank memory arbiter delays. Each level of the memory-side request
@@ -3404,7 +3489,7 @@ public:
     // buffers the levels the arbiter's own register does not cover in
     // mem_req_net_.
     uint32_t mem_arb_delay = ((num_banks != config_.mem_ports) && (num_banks > 2 || config_.mem_ports > 2)) ? 1 : 0;
-    uint32_t mem_net_delay = omega_stages(num_banks, config_.mem_ports) - 1;
+    uint32_t mem_net_delay = params_.slice_map ? 0 : omega_stages(num_banks, config_.mem_ports) - 1;
     uint32_t mem_net_extra = (mem_net_delay > mem_arb_delay) ? (mem_net_delay - mem_arb_delay) : 0;
     uint32_t mem_arb_rsp_delay = (num_banks != config_.mem_ports) ? (mem_arb_delay + mem_net_extra) : 0;
     __assert(num_banks >= config_.mem_ports, "a cache needs a bank per memory port");
@@ -3412,7 +3497,8 @@ public:
     // A memory response reaches its bank through the port's response queue,
     // when there is one, and a response network registered at every level.
     // The taps carry what the bank arbiter's response delay does not.
-    uint32_t mem_rsp_regs = omega_stages(config_.mem_ports, num_banks) + (config_.mem_rsp_queue ? 1 : 0);
+    uint32_t mem_rsp_regs = (params_.slice_map ? 0 : omega_stages(config_.mem_ports, num_banks))
+                          + (config_.mem_rsp_queue ? 1 : 0);
     uint32_t mem_rsp_credit = mem_arb_rsp_delay + (config_.mem_rsp_slice ? 1 : 0);
     __assert(mem_rsp_regs >= mem_rsp_credit, "memory response path shorter than its arbiter");
     uint32_t tap_delay = mem_rsp_regs - mem_rsp_credit;
@@ -3464,6 +3550,9 @@ public:
     for (uint32_t i = 0; i < config_.num_inputs; ++i) {
       simobject->core_req_in.at(i).bind(&port_arb_->ReqIn.at(i));
     }
+    for (uint32_t i = 0; i < port_arb_->BoundIoOut.size(); ++i) {
+      port_arb_->BoundIoOut.at(i).bind(&nc_mem_arbs_.at(i)->ReqIn.at(1));
+    }
 
     // Create bank's core crossbar; it carries the bank responses back to the
     // core ports. A registered core-response port is a network registered at
@@ -3494,14 +3583,24 @@ public:
                                               xbar_delay, xbar_delay, crsq_slots);
       }
     }
-    if (config_.nc_enable) {
+    if (params_.slice_map) {
+      __assert(core_rsp_delay_ != 0, "slice binding requires a registered core response network");
+      // Inside the wrapper, each cached response stage is a one-entry pipe register.
+      cached_rsp_pipe_.resize(core_rsp_delay_, std::vector<SimChannel<MemRsp>>(
+          config_.num_inputs, SimChannel<MemRsp>(simobject, 1)));
+      bound_core_rsp_.resize(config_.num_inputs, SimChannel<MemRsp>(simobject, 2));
+      for (auto& stage : bound_core_rsp_) {
+        stage.set_registered_ready(true);
+      }
+      last_rsp_nc_.resize(config_.num_inputs);
+    } else if (config_.nc_enable) {
       ++core_rsp_delay_;
     }
     if (port_arb_->merge_bits() != 0) {
       rsp_mcast_ = CacheRspMcast::Create(sname, num_banks, config_.num_inputs, port_arb_->merge_bits(), merge_line,
-                                         core_rsp_delay_, crsq_slots);
+                                         params_.slice_map ? 1 : core_rsp_delay_, crsq_slots);
       for (uint32_t i = 0; i < config_.num_inputs; ++i) {
-        rsp_mcast_->RspOut.at(i).bind(&simobject->core_rsp_out.at(i));
+        rsp_mcast_->RspOut.at(i).bind(&this->cached_response_target(i));
       }
     }
 
@@ -3524,6 +3623,11 @@ public:
   void reset() {
     if (config_.bypass)
       return;
+    // The RTL arbiters start with input 0.
+    for (auto& arb : nc_rsp_arbs_) {
+      arb.commit(config_.mem_ports - 1);
+    }
+    std::fill(last_rsp_nc_.begin(), last_rsp_nc_.end(), false);
     // The line initialization runs after a device reset only. A launch reset
     // keeps the lines, which the runtime's flush ahead of each launch keeps
     // coherent, so it does not walk them again.
@@ -3542,16 +3646,24 @@ public:
       return;
     }
 
-    // handle cache bypasss responses
+    if (params_.slice_map) {
+      this->processBoundCoreResponses();
+    }
+
+    uint64_t nc_rsp_waiting = 0;
     for (uint32_t i = 0, n = config_.mem_ports; i < n; ++i) {
       // Forward non-cacheable arbiter's output (1) to core response ports
       auto &bypass = nc_mem_arbs_.at(i)->RspOut.at(1);
       if (!bypass.empty()) {
-        auto &mem_rsp = bypass.peek();
-        if (this->processBypassResponse(mem_rsp)) {
+        if (params_.slice_map) {
+          nc_rsp_waiting |= 1ull << i;
+        } else if (this->processBypassResponse(bypass.peek())) {
           bypass.pop();
         }
       }
+    }
+    if (nc_rsp_waiting != 0) {
+      this->processBoundBypassResponses(nc_rsp_waiting);
     }
 
     this->flush_step();
@@ -3570,18 +3682,20 @@ public:
       if (bank_rsp.empty())
         continue;
       auto &core_rsp = bank_rsp.peek();
-      if (simobject_->core_rsp_out.at(req_id).try_send(core_rsp, core_rsp_delay_)) {
+      if (this->sendCachedResponse(req_id, core_rsp)) {
         DT(3, simobject_->name() << " core-rsp: " << core_rsp);
         bank_rsp.pop();
       }
     }
 
     // non-cacheable core requests split off by the port arbiter
-    for (uint32_t req_id = 0, n = port_arb_->io_pending() ? config_.num_inputs : 0; req_id < n; ++req_id) {
-      auto &io_req = port_arb_->IoOut.at(req_id);
-      if (!io_req.empty() && this->processBypassRequest(io_req.peek(), req_id)) {
-        io_req.pop();
-        port_arb_->io_taken();
+    if (port_arb_->io_pending()) {
+      for (uint32_t req_id = 0; req_id < config_.num_inputs; ++req_id) {
+        auto& io_req = port_arb_->IoOut.at(req_id);
+        if (!io_req.empty() && this->processBypassRequest(io_req.peek(), req_id, req_id % config_.mem_ports)) {
+          io_req.pop();
+          port_arb_->io_taken();
+        }
       }
     }
   }
@@ -3667,13 +3781,18 @@ public:
         mem_req_empty &= (net.size() == 0);
       }
       // an IO token also waits for the non-cacheable path, which carries the
-      // IO writes it orders
+      // IO writes it orders, including the channel crossbar's output stage
       if ((fwd_op_ & VX_FENCE_IO) && mem_req_empty) {
-        for (uint32_t i = 0, n = config_.num_inputs; i < n; ++i) {
-          mem_req_empty &= (port_arb_->IoOut.at(i).size() == 0);
+        for (auto& out : port_arb_->IoOut) {
+          mem_req_empty &= (out.size() == 0);
         }
         for (auto &arb : nc_mem_arbs_) {
           mem_req_empty &= (arb->ReqIn.at(0).size() == 0) && (arb->ReqIn.at(1).size() == 0);
+        }
+        if (params_.slice_map) {
+          for (auto& out : simobject_->mem_req_out) {
+            mem_req_empty &= (out.size() == 0);
+          }
         }
       }
       fwd_go_ |= mem_req_empty;
@@ -3684,7 +3803,7 @@ public:
         // the token for port i is a read of the port's first line, sent down
         // bank i's lane (bank i maps to port i) behind its write-backs
         MemReq token;
-        token.addr = uint64_t(i) << config_.L;
+        token.addr = params_.slice_map ? params_.slice_map->physical(i, 0) : uint64_t(i) << config_.L;
         token.flags.flush = 1;
         token.flags.fence_op = fwd_op_;
         token.tag = 0;
@@ -3714,7 +3833,7 @@ public:
       uint32_t i = std::distance(rsp_pending_.begin(), next);
       auto &token = port_arb_->ReqIn.at(i).peek();
       MemRsp rsp{token.tag, token.hart_id, token.uuid};
-      if (simobject_->core_rsp_out.at(i).try_send(rsp, core_rsp_delay_)) {
+      if (this->sendCachedResponse(i, rsp)) {
         DT(3, simobject_->name() << " flush-rsp: " << rsp);
         if (std::find(next + 1, rsp_pending_.end(), true) == rsp_pending_.end()) {
           flush_state_ = FlushState::Idle;
@@ -3812,27 +3931,93 @@ public:
 
 private:
 
-  bool processBypassResponse(const MemRsp &mem_rsp) {
-    // core response backpressure check
-    uint32_t req_id = mem_rsp.tag & ((1 << params_.log2_num_inputs) - 1);
-    if (simobject_->core_rsp_out.at(req_id).full())
-      return false; // stall
+  SimChannel<MemRsp>& cached_response_target(uint32_t req_id) {
+    return params_.slice_map ? cached_rsp_pipe_.front().at(req_id) : simobject_->core_rsp_out.at(req_id);
+  }
+
+  bool sendCachedResponse(uint32_t req_id, const MemRsp& rsp) {
+    return this->cached_response_target(req_id).try_send(rsp, params_.slice_map ? 1 : core_rsp_delay_);
+  }
+
+  void processBoundCoreResponses() {
+    for (uint32_t i = 0; i < config_.num_inputs; ++i) {
+      auto& out = bound_core_rsp_.at(i);
+      if (!out.empty() && simobject_->core_rsp_out.at(i).try_send(out.peek(), 0)) {
+        out.pop();
+      }
+
+      auto& cached = cached_rsp_pipe_.back().at(i);
+      auto& nc = nc_rsp_stage_.at(i);
+      bool take_nc = !nc.empty() && (cached.empty() || !last_rsp_nc_.at(i));
+      auto& in = take_nc ? nc : cached;
+      if (!in.empty() && !out.full()) {
+        out.send(take_nc ? this->decodeBypassResponse(in.peek()) : in.peek(), 1);
+        in.pop();
+        last_rsp_nc_.at(i) = take_nc;
+      }
+      // The cached path's ready propagates through a pipe stage as it advances.
+      for (auto stage = cached_rsp_pipe_.size() - 1; stage != 0; --stage) {
+        auto& prev = cached_rsp_pipe_.at(stage - 1).at(i);
+        auto& next = cached_rsp_pipe_.at(stage).at(i);
+        if (!prev.empty() && next.try_send(prev.peek(), 1)) {
+          prev.pop();
+        }
+      }
+    }
+  }
+
+  uint32_t bypass_requester(const MemRsp& rsp) const {
+    return rsp.tag & ((1ull << params_.log2_num_inputs) - 1);
+  }
+
+  void processBoundBypassResponses(uint64_t waiting) {
+    while (waiting != 0) {
+      uint32_t lane = __builtin_ctzll(waiting);
+      waiting &= waiting - 1;
+      auto req_id = this->bypass_requester(nc_mem_arbs_.at(lane)->RspOut.at(1).peek());
+      nc_rsp_requests_.at(req_id).set(lane);
+    }
+    for (uint32_t req_id = 0; req_id < config_.num_inputs; ++req_id) {
+      auto& requests = nc_rsp_requests_.at(req_id);
+      if (!requests.any())
+        continue;
+      auto& arb = nc_rsp_arbs_.at(req_id);
+      uint32_t lane = arb.select(requests);
+      requests.reset();
+      auto& bypass = nc_mem_arbs_.at(lane)->RspOut.at(1);
+      if (nc_rsp_stage_.at(req_id).try_send(bypass.peek(), 1)) {
+        bypass.pop();
+        arb.commit(lane);
+      }
+    }
+  }
+
+  MemRsp decodeBypassResponse(const MemRsp& mem_rsp) const {
     uint64_t tag = mem_rsp.tag >> params_.log2_num_inputs;
     MemRsp core_rsp{tag, mem_rsp.hart_id, mem_rsp.uuid};
     core_rsp.data = mem_rsp.data;  // forward TLM payload through bypass
-    simobject_->core_rsp_out.at(req_id).send(core_rsp, 0);
+    return core_rsp;
+  }
+
+  bool processBypassResponse(const MemRsp &mem_rsp) {
+    uint32_t req_id = this->bypass_requester(mem_rsp);
+    auto& out = simobject_->core_rsp_out.at(req_id);
+    if (out.full())
+      return false; // stall
+    auto core_rsp = this->decodeBypassResponse(mem_rsp);
+    out.send(core_rsp, 0);
     DT(3, simobject_->name() << " bypass-core-rsp: " << core_rsp);
     return true;
   }
 
-  bool processBypassRequest(const MemReq &core_req, uint32_t req_id) {
+  bool processBypassRequest(const MemReq &core_req, uint32_t req_id, uint32_t mem) {
     // Push core request to non-cacheable arbiter's input (1)
-    uint32_t mem = req_id % config_.mem_ports;
-    if (nc_mem_arbs_.at(mem)->ReqIn.at(1).full())
+    auto& stage = nc_mem_arbs_.at(mem)->ReqIn.at(1);
+    if (stage.full())
       return false; // stall
     MemReq mem_req(core_req);
     mem_req.tag = (core_req.tag << params_.log2_num_inputs) + req_id;
-    nc_mem_arbs_.at(mem)->ReqIn.at(1).send(mem_req, 0);
+    stage.send(mem_req, 0);
     DT(3, simobject_->name() << " bypass-dram-req: " << mem_req);
     return true;
   }
@@ -3843,6 +4028,12 @@ private:
   std::vector<CacheBank::Ptr> banks_;
   MemArbiter::Ptr bank_arb_;
   std::vector<MemArbiter::Ptr> nc_mem_arbs_;
+  std::vector<Arbiter> nc_rsp_arbs_;
+  std::vector<BitVector<>> nc_rsp_requests_;
+  std::vector<SimChannel<MemRsp>> nc_rsp_stage_;
+  std::vector<std::vector<SimChannel<MemRsp>>> cached_rsp_pipe_;
+  std::vector<SimChannel<MemRsp>> bound_core_rsp_;
+  std::vector<bool> last_rsp_nc_;
   CachePortArb::Ptr port_arb_;
   MemCrossBar::Ptr bank_core_xbar_;
   CacheRspMcast::Ptr rsp_mcast_;

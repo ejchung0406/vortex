@@ -201,6 +201,8 @@ module rtlsim_shim import VX_gpu_pkg::*; #(
         .NUM_PORTS_IN   (VX_MEM_PORTS),
         .NUM_BANKS_OUT  (MEM_NUM_BANKS),
         .INTERLEAVE     (`VX_CFG_PLATFORM_MEMORY_INTERLEAVE),
+        .SLICE_BIND     (L2_SLICE_BIND),
+        .SLICE_GRANULE  (L2_SLICE_GRANULE),
         .REQ_OUT_BUF    ((VX_MEM_PORTS > 1) ? 2 : 0),
         .RSP_OUT_BUF    ((VX_MEM_PORTS > 1 || MEM_NUM_BANKS > 1) ? 2 : 0)
     ) mem_bank_adapter (

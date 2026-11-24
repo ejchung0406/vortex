@@ -14,6 +14,7 @@
 #include <VX_types.h>
 #include "memory.h"
 #include <vector>
+#include <deque>
 #include <queue>
 #include <sstream>
 #include <unordered_map>
@@ -40,6 +41,11 @@ private:
 	Memory*   simobject_;
 	Config    config_;
 	MemCrossBar::Ptr mem_xbar_;
+	struct CompletedRead {
+		MemRsp response;
+		uint64_t ready_cycle;
+	};
+	std::vector<std::deque<CompletedRead>> completed_reads_;
 	DramSim   dram_sim_;
 	RAM*      ram_;
 	Memory::PreSendHook pre_send_hook_;
@@ -58,6 +64,15 @@ public:
 		, dram_sim_(config.dram)
 		, ram_(nullptr)
 	{
+		if (config.dram.slice_bind) {
+			completed_reads_.resize(config.num_ports);
+			__assert(config.num_ports == config.dram.num_channels && config.num_ports <= 64,
+			         "slice binding needs one port per DRAM channel and at most 64 channels");
+			for (auto& lane : simobject_->mem_req_in) {
+				lane.set_registered_ready(true);
+			}
+			return;
+		}
 		char sname[100];
 		snprintf(sname, 100, "%s-xbar", simobject->name().c_str());
 		mem_xbar_ = MemCrossBar::Create(sname, ArbiterType::RoundRobin, config.num_ports, config.dram.num_channels,
@@ -73,23 +88,49 @@ public:
 	~Impl() {}
 
 	const PerfStats& perf_stats() const {
-		perf_stats_.bank_stalls = mem_xbar_->collisions();
+		perf_stats_.bank_stalls = mem_xbar_ ? mem_xbar_->collisions() : 0;
 		return perf_stats_;
 	}
 
 	void reset() {
 		dram_sim_.reset();
+		for (auto& reads : completed_reads_) {
+			reads.clear();
+		}
 	}
 
 	void tick() {
+		uint32_t num_banks = config_.dram.num_channels;
+		const bool finite_binding = config_.dram.slice_bind && config_.dram.queue_size != 0;
+		uint64_t ready_channels = 0;
+		if (finite_binding) {
+			// The device samples ready before the DRAM tick can free an entry.
+			for (uint32_t i = 0; i < num_banks; ++i) {
+				ready_channels |= uint64_t(dram_sim_.can_accept(i)) << i;
+			}
+		}
 		dram_sim_.tick();
 
-		uint32_t num_banks = config_.dram.num_channels;
+		uint64_t now = SimPlatform::instance().cycles();
+		for (uint32_t channel = 0; channel < completed_reads_.size(); ++channel) {
+			auto& reads = completed_reads_.at(channel);
+			if (!reads.empty() && reads.front().ready_cycle <= now
+			 && simobject_->mem_rsp_out.at(channel).try_send(reads.front().response, 1)) {
+				DT(3, simobject_->name() << " mem-rsp" << channel << ": " << reads.front().response);
+				reads.pop_front();
+			}
+		}
+
 		for (uint32_t i = 0; i < num_banks; ++i) {
-			if (mem_xbar_->ReqOut.at(i).empty() || !dram_sim_.can_accept(i))
+			auto& req_in = mem_xbar_ ? mem_xbar_->ReqOut.at(i) : simobject_->mem_req_in.at(i);
+			if (req_in.empty())
+				continue;
+			if (!(finite_binding ? ((ready_channels >> i) & 1) : dram_sim_.can_accept(i)))
 				continue;
 
-			auto& mem_req = mem_xbar_->ReqOut.at(i).peek();
+			auto& mem_req = req_in.peek();
+			auto loc = config_.dram.locate(mem_req.addr);
+			__assert(!config_.dram.slice_bind || loc.channel == i, "request arrived at the wrong bound DRAM channel");
 
 			std::shared_ptr<mem_block_t> rsp_data;
 			if (ram_) {
@@ -126,10 +167,9 @@ public:
 
 			// enqueue the request to the memory system
 			auto req_args = new DramCallbackArgs{this, mem_req, i, rsp_data};
-			uint64_t bank_addr = config_.dram.locate(mem_req.addr).addr;
 			dram_sim_.send_request(
 				i,
-				bank_addr,
+				loc.addr,
 				mem_req.is_write(),
 				[](void* arg)->bool {
 					auto rsp_args = reinterpret_cast<const DramCallbackArgs*>(arg);
@@ -137,9 +177,19 @@ public:
 						delete rsp_args;
 						return true;
 					} else {
-								MemRsp mem_rsp{rsp_args->request.tag, rsp_args->request.hart_id, rsp_args->request.uuid};
+						MemRsp mem_rsp{rsp_args->request.tag, rsp_args->request.hart_id, rsp_args->request.uuid};
 						mem_rsp.data = rsp_args->rsp_data;
-						if (rsp_args->memsim->mem_xbar_->RspIn.at(rsp_args->bank_id).try_send(mem_rsp, RSP_BOUNDARY_DELAY)) {
+						auto& memory = *rsp_args->memsim;
+						uint32_t channel = rsp_args->bank_id;
+						if (memory.config_.dram.slice_bind) {
+							// The native harness retires DRAM completions before waiting on the device.
+							uint64_t ready = SimPlatform::instance().cycles() + RSP_BOUNDARY_DELAY - 1;
+							memory.completed_reads_.at(channel).push_back({std::move(mem_rsp), ready});
+							delete rsp_args;
+							return true;
+						}
+						auto& rsp_out = memory.mem_xbar_->RspIn.at(channel);
+						if (rsp_out.try_send(mem_rsp, RSP_BOUNDARY_DELAY)) {
 							DT(3, rsp_args->memsim->simobject_->name() << " mem-rsp" << rsp_args->bank_id << ": " << mem_rsp);
 							delete rsp_args;
 							return true;
@@ -151,7 +201,7 @@ public:
 			);
 
 			DT(3, simobject_->name() << " mem-req" << i << ": " << mem_req);
-			mem_xbar_->ReqOut.at(i).pop();
+			req_in.pop();
 		}
 	}
 

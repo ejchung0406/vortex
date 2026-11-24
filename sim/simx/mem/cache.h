@@ -58,6 +58,7 @@ public:
 		bool    set_hash = false;      // hashed set index
 		uint16_t crsq_size = 0;        // extra slots in a bank's core-response queue, over the registered skid's two
 		bool    fwd_hold = false;      // a forwardable chain head waits on a full response queue instead of replaying
+		uint32_t slice_granule = 0;     // nonzero when each bank owns one memory channel
 	};
 
 	struct PerfStats {

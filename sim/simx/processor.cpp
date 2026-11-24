@@ -47,6 +47,27 @@ ProcessorImpl::ProcessorImpl()
 
 	assert(VX_CFG_PLATFORM_MEMORY_DATA_SIZE == VX_CFG_MEM_BLOCK_SIZE);
 
+  static_assert(!VX_CFG_L2_SLICE_BIND || (VX_CFG_NUM_CLUSTERS == 1 && VX_CFG_L2_ENABLED && !VX_CFG_L3_ENABLED),
+                "slice binding requires a single cluster with L2 as the LLC");
+  static_assert(!VX_CFG_L2_SLICE_BIND || (ispow2(VX_CFG_PLATFORM_MEMORY_NUM_BANKS)
+                                        && VX_CFG_PLATFORM_MEMORY_NUM_BANKS <= 64
+                                        && VX_CFG_L2_NUM_BANKS == VX_CFG_PLATFORM_MEMORY_NUM_BANKS
+                                        && VX_CFG_L2_MEM_PORTS == VX_CFG_PLATFORM_MEMORY_NUM_BANKS
+                                        && VX_CFG_L3_MEM_PORTS == VX_CFG_PLATFORM_MEMORY_NUM_BANKS),
+                "slice binding requires equal power-of-two counts of L2 banks, memory ports, and DRAM channels");
+  static_assert(!VX_CFG_L2_SLICE_BIND || (ispow2(VX_CFG_L2_SLICE_GRANULE)
+                                        && VX_CFG_L2_SLICE_GRANULE >= VX_CFG_L2_LINE_SIZE
+                                        && VX_CFG_L2_SLICE_GRANULE >= VX_CFG_PLATFORM_MEMORY_DATA_SIZE
+                                        && ispow2(VX_CFG_PLATFORM_MEMORY_DATA_SIZE)
+                                        && VX_CFG_PLATFORM_MEMORY_DATA_SIZE == VX_CFG_MEM_BLOCK_SIZE
+                                        && VX_CFG_L2_SECTOR_SIZE == VX_CFG_MEM_BLOCK_SIZE
+                                        && VX_CFG_L3_SECTOR_SIZE == VX_CFG_L2_SECTOR_SIZE),
+                "slice binding requires a granule of at least one line and matching memory transfer sizes");
+  static_assert(!VX_CFG_L2_SLICE_BIND || (log2ceil(VX_CFG_L2_SLICE_GRANULE)
+                                        + log2ceil(VX_CFG_PLATFORM_MEMORY_NUM_BANKS)
+                                        + (VX_CFG_PLATFORM_MEMORY_NUM_BANKS > 1) <= VX_CFG_MEM_ADDR_WIDTH),
+                "slice binding granule and channel bits must fit the physical address");
+
   // create kernel management unit (SimObject)
   constexpr uint32_t total_cores = VX_CFG_NUM_CLUSTERS * NUM_SOCKETS * VX_CFG_SOCKET_SIZE;
   kmu_ = Kmu::Create("kmu", VX_CFG_NUM_CLUSTERS, NUM_SOCKETS, VX_CFG_SOCKET_SIZE);
