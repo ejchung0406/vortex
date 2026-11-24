@@ -58,9 +58,12 @@ public:
 
 protected:
   void on_reset() {
+    if (SimPlatform::instance().launch_resetting()) {
+      return;
+    }
     credit_ = cap_;
     rr_ = 0;
-    last_cycle_ = SimPlatform::instance().cycles();
+    last_cycle_ = 0;
   }
 
   void on_tick() {
@@ -181,6 +184,9 @@ public:
 
 protected:
   void on_reset() {
+    if (SimPlatform::instance().launch_resetting()) {
+      return;
+    }
     req_xbar_.reset();
     rsp_xbar_.reset();
     std::fill(in_flight_.begin(), in_flight_.end(), 0);

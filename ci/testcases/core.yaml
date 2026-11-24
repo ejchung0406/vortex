@@ -270,6 +270,15 @@ tests:
   args: -n256 -u4 -b4
   configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=8 -DVX_CFG_NOC_UPLINK_GATE_REQ=1
   shape: {cores: 4, l2cache: true}
+# The arbitration and credit state persists through repeated launches.
+- id: parity-bwstream-noc-relaunch
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: bwstream
+  args: -n128 -u4 -g5 -R3
+  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=32
+  shape: {cores: 4, l2cache: true}
 # Two groups of four cores with four memory ports each: 16 ports per switch,
 # which each lane arbitrates in two registered slices, and a gate with room.
 - id: parity-bwstream-noc-slices
