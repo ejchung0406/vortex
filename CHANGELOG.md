@@ -36,6 +36,23 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
   requests. Both in the RTL and in SimX; the default keeps the timing as it was. New test `lmem_rw_order` (loads and stores
   of the same words in program order, an atomic between); `smem_rate -k22 -f<percent>` bounds one kind's time by the other's.
   [hw/rtl/mem/VX_lmem_unit.sv](hw/rtl/mem/VX_lmem_unit.sv), [sim/simx/mem/local_mem.cpp](sim/simx/mem/local_mem.cpp).
+- **SM groups between the sockets and the L2 (`VX_CFG_NOC_GROUP_SIZE`, default 0).** A large GPU puts its SMs in groups (GPCs),
+  with shared uplinks to the L2 side. With N > 0 the sockets form groups of N; a socket port crosses `VX_CFG_NOC_SM_LATENCY`
+  cycles to its group's switch, and the switch reaches the L2 on `VX_CFG_NOC_UPLINK_PORTS` lanes of `VX_CFG_NOC_UPLINK_LATENCY`
+  cycles, a request on the lane its line address selects. A port's flush token waits until the port has no request between the
+  switch and the L2, and the port's later requests wait for the token. `VX_CFG_NOC_UPLINK_BYTES` limits the bytes of read lines a
+  group passes per cycle, counted on the responses (so the excess waits in the L2's response queues, shared by all groups) or,
+  with `VX_CFG_NOC_UPLINK_GATE_REQ`, on the requests. [VX_noc_switch.sv](hw/rtl/mem/VX_noc_switch.sv),
+  [VX_rate_gate.sv](hw/rtl/libs/VX_rate_gate.sv), [VX_cluster.sv](hw/rtl/VX_cluster.sv), [sim/simx/mem/noc.h](sim/simx/mem/noc.h);
+  [cache_subsystem.md](docs/designs/cache_subsystem.md).
+- **A socket's issue limit (`VX_CFG_SM_INGRESS_BYTES`, default 0).** The bytes of read lines a socket requests per cycle over all
+  its memory ports, the caches' misses and the DXA's reads together. It holds requests and never responses.
+  [VX_mem_bus_gate.sv](hw/rtl/mem/VX_mem_bus_gate.sv), [VX_socket.sv](hw/rtl/VX_socket.sv).
+- **Launch core mask (`VX_DCR_KMU_CORE_DISABLE0..7`).** One bit per core keeps a launch off that core. Each level of the launch
+  fan-out registers its part of the mask and, where its outputs hold different numbers of enabled cores, weights its round-robin
+  by them, so every enabled core takes an equal share. [VX_kmu_bus_arb.sv](hw/rtl/core/VX_kmu_bus_arb.sv),
+  [sim/simx/kmu/kmu.cpp](sim/simx/kmu/kmu.cpp); `bwstream` and `bwstream_dxa` take `-M` (cores), `-T` (per-core rates and CTA
+  counts). `bwstream` also takes `-R` (launches).
 - **Fetch ahead of a lone warp (`VX_CFG_FETCH_INFLIGHT`, default 1).** A warp is stalled from its fetch pick until decode, so a
   warp alone on a core issues one instruction per fetch round trip. With N > 1 (a power of two; EXT_C off) a warp that is the only
   runnable warp of its frontend slice keeps fetching sequentially, up to N fetches between pick and decode. Decode drops what was

@@ -419,6 +419,11 @@ VX_CFG_DCACHE_SET_HASH = 1
 VX_CFG_DCACHE_READ_MERGE = 1
 
 VX_CFG_L1_MEM_PORTS = "expr: min($VX_CFG_DCACHE_NUM_BANKS, $VX_CFG_PLATFORM_MEMORY_NUM_BANKS) if ($VX_CFG_ICACHE_ENABLE or $VX_CFG_DCACHE_ENABLE) else min($VX_CFG_DCACHE_NUM_REQS, $VX_CFG_PLATFORM_MEMORY_NUM_BANKS)"
+# Bytes of read lines a socket may request per cycle over all its memory
+# ports, the caches' misses and the DXA's reads together; 0 is no limit.
+# Requests wait at the socket, a cycle more with the limit on; writes pass
+# free and responses are never held.
+VX_CFG_SM_INGRESS_BYTES = 0
 
 [l2cache]
 VX_CFG_L2_SIZE = 1048576
@@ -435,6 +440,26 @@ VX_CFG_L2_LATENCY = "expr: 4 + max(0, clog2($VX_CFG_L2_SIZE) - clog2(1048576))"
 # throughput, so an L2 hit's round trip grows by twice it. It stands for a
 # large GPU's SM-to-L2 network, which L2_LATENCY (the bank pipeline) is not.
 VX_CFG_L2_LINK_LATENCY = 0
+# SM groups (a GPC of a large GPU) between the sockets and the L2. 0 keeps
+# every socket port's private link to the L2. With NOC_GROUP_SIZE sockets per
+# group (it divides the socket count), each socket port crosses NOC_SM_LATENCY
+# cycles to its group's switch, and the switch reaches the L2 over
+# NOC_UPLINK_PORTS lanes (a power of two) of NOC_UPLINK_LATENCY cycles, each a
+# line per cycle each way. A request takes the lane its line address selects.
+# The switch adds a cycle each way, plus one per registered slice level
+# for more than 12 inputs. The latency defaults split the L2 link
+# around one cycle each way.
+VX_CFG_NOC_GROUP_SIZE = 0
+VX_CFG_NOC_UPLINK_PORTS = "expr: pow(2, clog2(max(1, $VX_CFG_NOC_GROUP_SIZE * $VX_CFG_L1_MEM_PORTS)))"
+VX_CFG_NOC_SM_LATENCY = "expr: $VX_CFG_L2_LINK_LATENCY // 2"
+VX_CFG_NOC_UPLINK_LATENCY = "expr: max(0, $VX_CFG_L2_LINK_LATENCY - $VX_CFG_NOC_SM_LATENCY - 1)"
+# Bytes of read lines a group's uplink passes per cycle over all its lanes, a
+# cycle more in the counted direction; 0 is no limit. Posted writes are free.
+VX_CFG_NOC_UPLINK_BYTES = 0
+# 0: the limit counts the responses returning to the group, so what a group
+# requests beyond it waits in the L2's response queues, where other groups'
+# responses queue too. 1: it counts requests, held in the group.
+VX_CFG_NOC_UPLINK_GATE_REQ = 0
 VX_CFG_L2_MRSQ_SIZE = 4
 VX_CFG_L2_MREQ_SIZE = 0
 VX_CFG_L2_CRSQ_SIZE = 0
@@ -443,7 +468,8 @@ VX_CFG_L2_CRSQ_SIZE = 0
 # of being replayed. 0 keeps the model's replay.
 VX_CFG_L2_FWD_HOLD = 0
 
-VX_CFG_L2_NUM_BANKS = "expr: pow(2, clog2(min($VX_CFG_L2_NUM_REQS, 16)))"
+# Size the banks from the flat client count, independent of SM group lanes.
+VX_CFG_L2_NUM_BANKS = "expr: pow(2, clog2(min($VX_CFG_L2_BANK_REQS, 16)))"
 # On at every bank count: unlike the dcache, a 2-bank L2 measured neutral
 # (sgemm-mc-nt4 -0.6%, fp16-mc-nt4 +0.1%), and it gains from 4 banks up.
 VX_CFG_L2_BANK_HASH = 1
@@ -746,6 +772,7 @@ VX_CFG_PLATFORM_MEMORY_TYPE = ["HBM2", "HBM3", "HBM3E", "GDDR6"]
 [[param]]
 VX_CFG_DCACHE_NUM_REQS = "int"
 VX_CFG_L2_NUM_REQS = "int"
+VX_CFG_L2_BANK_REQS = "int"
 VX_CFG_L3_NUM_REQS = "int"
 
 [[builtin]]

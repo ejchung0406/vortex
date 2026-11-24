@@ -131,3 +131,11 @@ tests:
   - rtlsim
   dir: tests/riscv/isa
   target: run-{driver}-64f
+
+- id: isa-64im-standalone-kmu-fanout
+  via: make-run
+  drivers: [simx]
+  xlen: [64]
+  configs+: -DVX_CFG_NUM_CORES=4 -DVX_CFG_SOCKET_SIZE=2
+  dir: tests/riscv/isa
+  target: run-{driver}-64im

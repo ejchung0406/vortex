@@ -55,6 +55,9 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
 
     // KMU bus
     VX_kmu_bus_if.slave     kmu_bus_if[1],
+    // This socket's cores masked off for launches
+    input wire [`VX_CFG_SOCKET_SIZE-1:0] core_disable,
+    input wire core_mask_active,
 
     // Global barrier
     VX_gbar_bus_if.master   gbar_bus_if,
@@ -73,6 +76,13 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
 `endif
 `endif
 
+    // Registered on arrival, as the cluster registers it: the mask is static
+    // for a launch, set by a DCR write many cycles before it.
+    wire [`VX_CFG_SOCKET_SIZE-1:0] core_disable_r;
+    wire core_mask_active_r;
+    `BUFFER(core_disable_r, core_disable);
+    `BUFFER(core_mask_active_r, core_mask_active);
+
     VX_kmu_bus_if per_core_kmu_bus_if[`VX_CFG_SOCKET_SIZE]();
 
     VX_kmu_bus_arb #(
@@ -81,10 +91,12 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .DEST_DIV   (KMU_DEST_DIV_SOCKET),
         .OUT_BUF    ((`VX_CFG_SOCKET_SIZE > 1) ? 3 : 0)
     ) kmu_arb (
-        .clk        (clk),
-        .reset      (reset),
-        .bus_in_if  (kmu_bus_if),
-        .bus_out_if (per_core_kmu_bus_if)
+        .clk         (clk),
+        .reset       (reset),
+        .bus_in_if   (kmu_bus_if),
+        .bus_out_if  (per_core_kmu_bus_if),
+        .out_cores   (~core_disable_r),
+        .mask_active (core_mask_active_r)
     );
 
     VX_gbar_bus_if per_core_gbar_bus_if[`VX_CFG_SOCKET_SIZE]();
@@ -946,6 +958,11 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
     // peers; priority order keeps icache first and DXA bulk traffic last so
     // it cannot starve core fetch/load traffic. Ports 1.. carry the extra
     // dcache banks straight through.
+    VX_mem_bus_if #(
+        .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+        .TAG_WIDTH (SOCKET_MEM_ARB_TAG_WIDTH)
+    ) mem_port_bus_if[L1_MEM_PORTS]();
+
     for (genvar i = 0; i < L1_MEM_PORTS; ++i) begin : g_mem_bus_if
         if (i == 0) begin : g_i0
             VX_mem_bus_if #(
@@ -1013,7 +1030,7 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
                 .empty    (port_arb_empty[0])
             );
 
-            `ASSIGN_VX_MEM_BUS_IF (mem_bus_if[0], socket_arb_out_if[0]);
+            `ASSIGN_VX_MEM_BUS_IF (mem_port_bus_if[0], socket_arb_out_if[0]);
         end else if (`VX_CFG_EXT_DXA_ENABLED && (i < `VX_CFG_DXA_GMEM_PORTS)) begin : g_i_dxa
             // the dcache's port i ahead of the DXA's port i
             localparam PORT_ARB_TAG_WIDTH = SOCKET_MEM_TAG_WIDTH + 1;
@@ -1043,8 +1060,8 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
                 .TAG_WIDTH  (SOCKET_MEM_TAG_WIDTH),
                 .TAG_SEL_IDX(0),
                 .ARBITER    ("P"), // dcache first
-                // unregistered, as the port's path was without the DXA
-                .REQ_OUT_BUF(0),
+                // The network can stall this shared port for several cycles.
+                .REQ_OUT_BUF((`VX_CFG_SM_INGRESS_BYTES != 0 || `VX_CFG_NOC_GROUP_SIZE != 0) ? 3 : 0),
                 .RSP_OUT_BUF(0)
             ) mem_arb (
                 .clk        (clk),
@@ -1068,7 +1085,7 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
                 .empty    (port_arb_empty[i])
             );
 
-            `ASSIGN_VX_MEM_BUS_IF_EX (mem_bus_if[i], port_arb_out_if[0], SOCKET_MEM_ARB_TAG_WIDTH, PORT_ARB_TAG_WIDTH, UUID_WIDTH);
+            `ASSIGN_VX_MEM_BUS_IF_EX (mem_port_bus_if[i], port_arb_out_if[0], SOCKET_MEM_ARB_TAG_WIDTH, PORT_ARB_TAG_WIDTH, UUID_WIDTH);
         end else begin : g_i
             VX_mem_bus_if #(
                 .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
@@ -1076,9 +1093,32 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
             ) l1_mem_arb_bus_if();
 
             `ASSIGN_VX_MEM_BUS_IF_EX (l1_mem_arb_bus_if, dcache_mem_bus_if[i], SOCKET_MEM_ARB_TAG_WIDTH, DCACHE_MEM_TAG_WIDTH, UUID_WIDTH);
-            `ASSIGN_VX_MEM_BUS_IF (mem_bus_if[i], l1_mem_arb_bus_if);
+            `ASSIGN_VX_MEM_BUS_IF (mem_port_bus_if[i], l1_mem_arb_bus_if);
             assign port_arb_empty[i] = 1'b1;
         end
+    end
+
+    // The socket's issue limit: the read lines its ports request per cycle.
+    wire ingress_empty;
+    if (`VX_CFG_SM_INGRESS_BYTES != 0) begin : g_ingress
+        VX_mem_bus_gate #(
+            .NUM_PORTS (L1_MEM_PORTS),
+            .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+            .TAG_WIDTH (SOCKET_MEM_ARB_TAG_WIDTH),
+            .RATE      (`VX_CFG_SM_INGRESS_BYTES),
+            .COUNT_REQ (1)
+        ) ingress_gate (
+            .clk        (clk),
+            .reset      (reset),
+            .bus_in_if  (mem_port_bus_if),
+            .bus_out_if (mem_bus_if),
+            .empty      (ingress_empty)
+        );
+    end else begin : g_no_ingress
+        for (genvar i = 0; i < L1_MEM_PORTS; ++i) begin : g_ports
+            `ASSIGN_VX_MEM_BUS_IF (mem_bus_if[i], mem_port_bus_if[i]);
+        end
+        assign ingress_empty = 1'b1;
     end
 
     ///////////////////////////////////////////////////////////////////////////
@@ -1238,7 +1278,7 @@ module VX_socket import VX_gpu_pkg::*, VX_tlb_pkg::*;
     assign rtcache_req_empty = 1'b1;
 `endif
     wire mem_req_empty = icache_req_empty && dcache_req_empty && tcache_req_empty
-                      && rtcache_req_empty && mem_arb_empty;
+                      && rtcache_req_empty && mem_arb_empty && ingress_empty;
     wire issued_busy = BUSY_REG ? (dcr_bus_if.req_valid | (| per_core_kmu_fire)) : 1'b0;
     wire skid_busy   = BUSY_REG ? (| per_core_kmu_valid) : 1'b0;
     wire busy_r;

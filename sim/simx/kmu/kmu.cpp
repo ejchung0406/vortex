@@ -12,14 +12,16 @@
 // limitations under the License.
 
 #include "kmu.h"
+#include <algorithm>
 #include <cassert>
 
 using namespace vortex;
 
-Kmu::Kmu(const SimContext& ctx, const char* name, uint32_t num_cores)
+Kmu::Kmu(const SimContext& ctx, const char* name, uint32_t num_clusters,
+         uint32_t sockets_per_cluster, uint32_t cores_per_socket)
   : SimObject<Kmu>(ctx, name)
-  , bus_out(num_cores, this)
-  , credit_in(num_cores, this)
+  , bus_out(num_clusters * sockets_per_cluster * cores_per_socket, this)
+  , credit_in(num_clusters * sockets_per_cluster * cores_per_socket, this)
   , PC_(0)
   , entry_(0)
   , param_(0)
@@ -28,12 +30,33 @@ Kmu::Kmu(const SimContext& ctx, const char* name, uint32_t num_cores)
   , block_size_(0)
   , running_(false)
   , cta_id_(0)
-  , rr_ptr_(0)
   , ctx_id_(0)
-  , cluster_locked_(false)
-  , cluster_core_(0)
-  , inflight_(num_cores, 0)
+  , inflight_(num_clusters * sockets_per_cluster * cores_per_socket, 0)
 {
+  for (uint32_t n : {num_clusters, sockets_per_cluster, cores_per_socket}) {
+    if (n > 1) {
+      fanout_.push_back(n);
+    }
+  }
+  if (fanout_.empty()) {
+    fanout_.push_back(1);
+  }
+  uint32_t nodes = 1;
+  span_.resize(fanout_.size());
+  routers_.resize(fanout_.size());
+  links_.resize(fanout_.size());
+  for (uint32_t l = 0; l < fanout_.size(); ++l) {
+    routers_[l].assign(nodes, router_t{0, false, 0, std::vector<uint32_t>(fanout_[l], 0)});
+    if (l != 0) {
+      links_[l].resize(nodes);
+    }
+    nodes *= fanout_[l];
+  }
+  for (uint32_t l = 0, below = nodes; l < fanout_.size(); ++l) {
+    below /= fanout_[l];
+    span_[l] = below;
+  }
+  this->update_weights();
   block_dim_[0]    = block_dim_[1]    = block_dim_[2]    = 1;
   grid_dim_[0]     = grid_dim_[1]     = grid_dim_[2]     = 1;
   cluster_dim_[0]  = cluster_dim_[1]  = cluster_dim_[2]  = 1;
@@ -53,9 +76,25 @@ void Kmu::on_reset() {
   // zero-initialized at construction.
   running_         = false;
   cta_id_          = 0;
-  rr_ptr_          = 0;
-  cluster_locked_  = false;
-  cluster_core_    = 0;
+  flat_rr_         = 0;
+  flat_sel_        = 0;
+  flat_locked_     = false;
+  // Consecutive masked launches retain the tree's arbitration state.
+  const bool device_reset = !SimPlatform::instance().launch_resetting();
+  for (auto& level : routers_) {
+    for (auto& router : level) {
+      router.locked = false;
+      if (device_reset) {
+        router.rr = 0;
+        std::fill(router.credit.begin(), router.credit.end(), 0);
+      }
+    }
+  }
+  for (auto& level : links_) {
+    for (auto& link : level) {
+      link.clear();
+    }
+  }
   group_origin_[0] = group_origin_[1] = group_origin_[2] = 0;
   intra_offset_[0] = intra_offset_[1] = intra_offset_[2] = 0;
   inflight_.assign(inflight_.size(), 0);
@@ -84,7 +123,19 @@ void Kmu::dcr_write(uint32_t addr, uint32_t value) {
   case VX_DCR_KMU_CLUSTER_DIM_X: cluster_dim_[0] = value; break;
   case VX_DCR_KMU_CLUSTER_DIM_Y: cluster_dim_[1] = value; break;
   case VX_DCR_KMU_CLUSTER_DIM_Z: cluster_dim_[2] = value; break;
-  default: break;
+  default:
+    if (addr >= VX_DCR_KMU_CORE_DISABLE0
+     && addr < VX_DCR_KMU_CORE_DISABLE0 + VX_DCR_KMU_CORE_DISABLE_WORDS) {
+      const uint32_t word = addr - VX_DCR_KMU_CORE_DISABLE0;
+      const uint32_t first_core = 32 * word;
+      if (first_core < inflight_.size()) {
+        const uint32_t bits = std::min<uint32_t>(32, inflight_.size() - first_core);
+        const uint32_t mask = ~uint32_t(0) >> (32 - bits);
+        core_disable_[word] = value & mask;
+        this->update_weights();
+      }
+    }
+    break;
   }
 }
 
@@ -97,12 +148,113 @@ void Kmu::start() {
            && (cluster_dim_[1] > 0)
            && (cluster_dim_[2] > 0);
   ctx_id_ += 1;
-  cluster_locked_ = false;
+  flat_locked_ = false;
   if (running_) {
     cta_id_          = 0;
     group_origin_[0] = group_origin_[1] = group_origin_[2] = 0;
     intra_offset_[0] = intra_offset_[1] = intra_offset_[2] = 0;
     this->tick_wake();
+  }
+}
+
+// The RTL registers the counts at each router, a cycle or more after the DCR
+// write; a mask write precedes the launch it applies to by far more, so taking
+// them at the write is not observable.
+void Kmu::update_weights() {
+  bool masked = false;
+  for (uint32_t word : core_disable_) {
+    masked |= (word != 0);
+  }
+  // The flat scheduler has no corresponding tree state to carry into the
+  // first masked launch. The RTL starts a new arbitration window there too.
+  const bool activating = masked && !masked_;
+  masked_ = masked;
+
+  out_cores_.resize(fanout_.size());
+  weighted_.resize(fanout_.size());
+  for (uint32_t l = 0; l < fanout_.size(); ++l) {
+    const uint32_t n = fanout_[l];
+    std::vector<uint32_t> prev = out_cores_[l];
+    prev.resize(routers_[l].size() * n, 0);
+    out_cores_[l].assign(routers_[l].size() * n, 0);
+    weighted_[l].assign(routers_[l].size(), false);
+    for (uint32_t child = 0; child < out_cores_[l].size(); ++child) {
+      for (uint32_t c = child * span_[l]; c < (child + 1) * span_[l]; ++c) {
+        const bool disabled = (c / 32 < VX_DCR_KMU_CORE_DISABLE_WORDS)
+                           && ((core_disable_[c / 32] >> (c % 32)) & 1);
+        out_cores_[l][child] += !disabled;
+      }
+    }
+    for (uint32_t node = 0; node < routers_[l].size(); ++node) {
+      const uint32_t* cores = &out_cores_[l][node * n];
+      // Credits loaded for other counts would start the next launch part-way
+      // into a window of the old mask.
+      auto& router = routers_[l][node];
+      if (activating) {
+        router.rr = 0;
+      }
+      if (activating || !std::equal(cores, cores + n, prev.begin() + node * n)) {
+        std::fill(router.credit.begin(), router.credit.end(), 0);
+      }
+      for (uint32_t i = 0; i < n; ++i) {
+        for (uint32_t j = i + 1; j < n; ++j) {
+          if (cores[i] != 0 && cores[j] != 0 && cores[i] != cores[j]) {
+            weighted_[l][node] = true;
+          }
+        }
+      }
+    }
+  }
+}
+
+bool Kmu::busy() const {
+  if (running_) {
+    return true;
+  }
+  for (auto& level : links_) {
+    for (auto& link : level) {
+      if (!link.empty()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool Kmu::lane_ready(uint32_t core) const {
+  return !bus_out.at(core).full() && inflight_[core] < LAUNCH_CREDITS;
+}
+
+void Kmu::route_flat() {
+  const uint32_t num_cores = bus_out.size();
+  uint32_t target = num_cores;
+  if (flat_locked_) {
+    if (this->lane_ready(flat_sel_)) {
+      target = flat_sel_;
+    }
+  } else {
+    for (uint32_t k = 0; k < num_cores; ++k) {
+      const uint32_t core = (flat_rr_ + k) % num_cores;
+      if (this->lane_ready(core)) {
+        target = core;
+        break;
+      }
+    }
+  }
+  if (target == num_cores) {
+    return;
+  }
+
+  beat_t beat{};
+  if (!this->next_cta(&beat)) {
+    return;
+  }
+  bus_out.at(target).send(beat.req, 0);
+  ++inflight_[target];
+  flat_locked_ = !beat.eop;
+  flat_sel_ = target;
+  if (beat.eop) {
+    flat_rr_ = (target + 1) % num_cores;
   }
 }
 
@@ -117,62 +269,125 @@ void Kmu::on_tick() {
       --inflight_[c];
     }
   }
-  if (!running_) {
+  if (!this->busy()) {
     this->tick_sleep();
     return;
   }
-  // Steering: a locked cluster's remaining members stay with the owning core;
-  // otherwise the next cluster goes to the nearest ready lane from the
-  // round-robin pointer, so a core that drains its work sooner takes the next
-  // cluster instead of the launch waiting on a busy neighbour. One CTA per
-  // cycle — the launch bus carries a single beat. A lane is ready when its
-  // transport has room and the core holds fewer than LAUNCH_CREDITS CTAs it
-  // has not yet admitted.
-  auto lane_ready = [&](uint32_t c) {
-    return !bus_out.at(c).full() && inflight_[c] < LAUNCH_CREDITS;
-  };
-  uint32_t target = num_cores;
-  if (cluster_locked_) {
-    if (lane_ready(cluster_core_)) {
-      target = cluster_core_;
-    }
-  } else {
-    for (uint32_t k = 0; k < num_cores; ++k) {
-      uint32_t c = (rr_ptr_ + k) % num_cores;
-      if (lane_ready(c)) {
-        target = c;
-        break;
-      }
+  if (!masked_) {
+    this->route_flat();
+    return;
+  }
+  // Each router moves at most one CTA a cycle. The links are registered: a
+  // router sees the room a link had at the start of the cycle, and a CTA
+  // pushed into a link this cycle leaves it next cycle, so the levels step
+  // from the cores up.
+  std::vector<std::vector<uint32_t>> occupancy(links_.size());
+  for (uint32_t l = 1; l < links_.size(); ++l) {
+    for (auto& link : links_[l]) {
+      occupancy[l].push_back(link.size());
     }
   }
-  if (target == num_cores)
-    return; // no ready lane this cycle
-  kmu_req_t req{};
-  if (!this->next_cta(&req, target))
-    return;
-  // the lane slice ticks after the KMU and registers the CTA into the core
-  bus_out.at(target).send(req, 0);
-  ++inflight_[target];
-  if (!cluster_locked_) {
-    // Message complete: advance past the granted core.
-    rr_ptr_ = (target + 1) % num_cores;
+  for (uint32_t l = fanout_.size(); l-- > 0;) {
+    for (uint32_t node = 0; node < routers_[l].size(); ++node) {
+      this->route(l, node, occupancy);
+    }
   }
 }
 
-bool Kmu::next_cta(kmu_req_t* req, uint32_t core_id) {
+void Kmu::route(uint32_t lvl, uint32_t node, const std::vector<std::vector<uint32_t>>& occupancy) {
+  const bool last = (lvl + 1 == fanout_.size());
+  if (lvl == 0 ? !running_ : links_[lvl][node].empty()) {
+    return;
+  }
+  // An output takes a new message while some core below it is unmasked; a
+  // last-level output (a lane) is ready when its transport has room and its
+  // core holds fewer than LAUNCH_CREDITS CTAs it has not yet admitted, a link
+  // when it had room at the start of the cycle.
+  const uint32_t n = fanout_[lvl];
+  const uint32_t* cores = &out_cores_[lvl][node * n];
+  const bool weighted = weighted_[lvl][node];
+  auto ready = [&](uint32_t child) {
+    if (last) {
+      return this->lane_ready(child);
+    }
+    return occupancy[lvl + 1][child] < LINK_DEPTH;
+  };
+  // A message's later members follow its first; a new message goes to the
+  // nearest ready, enabled output from the round-robin pointer, so a core that
+  // drains its work sooner takes the next cluster instead of the launch
+  // waiting on a busy neighbour. Weighted, it goes to the nearest such output
+  // with credit, and when none has credit left every output reloads its
+  // enabled cores' worth (VX_kmu_bus_arb).
+  auto& r = routers_[lvl][node];
+  auto scan = [&](bool need_credit) {
+    for (uint32_t k = 0; k < n; ++k) {
+      uint32_t o = (r.rr + k) % n;
+      if (cores[o] != 0 && ready(node * n + o) && (!need_credit || r.credit[o] != 0)) {
+        return o;
+      }
+    }
+    return n;
+  };
+  uint32_t sel = n;
+  bool reload = false;
+  if (r.locked) {
+    if (ready(node * n + r.lock_sel)) {
+      sel = r.lock_sel;
+    }
+  } else {
+    if (weighted) {
+      sel = scan(true);
+    }
+    if (sel == n) {
+      sel = scan(false);
+      reload = true;
+    }
+  }
+  if (sel == n) {
+    return;
+  }
+  beat_t beat;
+  if (lvl == 0) {
+    if (!this->next_cta(&beat)) {
+      return;
+    }
+  } else {
+    beat = links_[lvl][node].front();
+    links_[lvl][node].pop_front();
+  }
+  uint32_t child = node * n + sel;
+  if (last) {
+    // the lane slice ticks after the KMU and registers the CTA into the core
+    bus_out.at(child).send(beat.req, 0);
+    ++inflight_[child];
+  } else {
+    links_[lvl + 1][child].push_back(beat);
+  }
+  if (weighted && !r.locked) {
+    // A message takes one credit at its first member.
+    if (reload) {
+      r.credit.assign(cores, cores + n);
+    }
+    --r.credit[sel];
+  }
+  r.locked   = !beat.eop;
+  r.lock_sel = sel;
+  if (beat.eop) {
+    r.rr = (sel + 1) % n;
+  }
+}
+
+bool Kmu::next_cta(beat_t* beat) {
   if (!running_) return false;
+  kmu_req_t* req = &beat->req;
 
   // A cluster's CTAs must all land on one core: they address each other's local
-  // memory by rank and rendezvous on a per-core barrier slot. So once a core
-  // takes the first member, the rest of the cluster belongs to it.
-  assert(!cluster_locked_ || (cluster_core_ == core_id));
-
-  // Is the CTA being handed out now the last of its cluster?
-  bool last_of_cluster = ((intra_offset_[0] + 1) == cluster_dim_[0])
-                      && ((intra_offset_[1] + 1) == cluster_dim_[1])
-                      && ((intra_offset_[2] + 1) == cluster_dim_[2]);
-  cluster_locked_ = !last_of_cluster;
-  cluster_core_   = core_id;
+  // memory by rank and rendezvous on a per-core barrier slot. So a cluster is
+  // one message, and every router holds its first member's output until the
+  // last member passes.
+  beat->eop = ((intra_offset_[0] + 1) == cluster_dim_[0])
+           && ((intra_offset_[1] + 1) == cluster_dim_[1])
+           && ((intra_offset_[2] + 1) == cluster_dim_[2]);
 
   // Effective block_idx = group_origin + intra_offset.
   uint32_t block_idx[3] = {

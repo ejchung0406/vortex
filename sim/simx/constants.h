@@ -117,7 +117,18 @@ inline constexpr uint32_t CMMU_NUM_REQS    = VX_CFG_EXT_RASTER_ENABLED + VX_CFG_
 
 // Demand clients of the cluster L2 (sockets and gfx caches), excluding the
 // walker's PTE-fetch slot.
-inline constexpr uint32_t VX_CFG_L2_DEMAND_REQS  = NUM_SOCKETS * VX_CFG_L1_MEM_PORTS;
+// With SM groups the L2 sees each group's uplink lanes instead of every
+// socket port.
+inline constexpr uint32_t NOC_GROUP_PORTS = VX_CFG_NOC_GROUP_SIZE * VX_CFG_L1_MEM_PORTS;
+inline constexpr uint32_t NOC_NUM_GROUPS  = (VX_CFG_NOC_GROUP_SIZE != 0) ? (NUM_SOCKETS / VX_CFG_NOC_GROUP_SIZE) : 0;
+inline constexpr uint32_t VX_CFG_L2_DEMAND_REQS  = (VX_CFG_NOC_GROUP_SIZE != 0)
+    ? NOC_NUM_GROUPS * VX_CFG_NOC_UPLINK_PORTS
+    : NUM_SOCKETS * VX_CFG_L1_MEM_PORTS;
+static_assert((VX_CFG_NOC_GROUP_SIZE == 0) || (NUM_SOCKETS % VX_CFG_NOC_GROUP_SIZE) == 0,
+              "NOC_GROUP_SIZE must divide the socket count");
+#if (VX_CFG_NOC_GROUP_SIZE != 0) && (defined(VX_CFG_EXT_OM_ENABLE) || defined(VX_CFG_EXT_RASTER_ENABLE))
+#error "SM groups do not carry the cluster-resident graphics caches"
+#endif
 #ifdef VX_CFG_VM_ENABLE
 // With one cluster, an L2 and no L3, the cluster L2 is the LLC and carries
 // the device walker's PTE fetches on one extra client slot; in every other
@@ -126,12 +137,14 @@ inline constexpr uint32_t PTW_ON_L2              = ((VX_CFG_NUM_CLUSTERS == 1)
                                                  && (VX_CFG_L2_ENABLED != 0)
                                                  && (VX_CFG_L3_ENABLED == 0)) ? 1 : 0;
 inline constexpr uint32_t VX_CFG_L2_NUM_REQS     = VX_CFG_L2_DEMAND_REQS + PTW_ON_L2;
+inline constexpr uint32_t VX_CFG_L2_BANK_REQS    = NUM_SOCKETS * VX_CFG_L1_MEM_PORTS + PTW_ON_L2;
 inline constexpr uint32_t VX_CFG_L2_PTW_IDX      = VX_CFG_L2_DEMAND_REQS;
 inline constexpr uint32_t VX_CFG_L3_NUM_REQS     = VX_CFG_NUM_CLUSTERS * VX_CFG_L2_MEM_PORTS
                                                  + ((PTW_ON_L2 == 0) ? 1u : 0u);
 inline constexpr uint32_t VX_CFG_L3_PTW_IDX      = VX_CFG_NUM_CLUSTERS * VX_CFG_L2_MEM_PORTS;
 #else
 inline constexpr uint32_t VX_CFG_L2_NUM_REQS     = VX_CFG_L2_DEMAND_REQS;
+inline constexpr uint32_t VX_CFG_L2_BANK_REQS    = NUM_SOCKETS * VX_CFG_L1_MEM_PORTS;
 inline constexpr uint32_t VX_CFG_L3_NUM_REQS     = VX_CFG_NUM_CLUSTERS * VX_CFG_L2_MEM_PORTS;
 #endif
 

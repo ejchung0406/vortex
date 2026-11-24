@@ -231,6 +231,81 @@ tests:
     -DVX_CFG_DCACHE_DISABLE -DVX_CFG_L2_NUM_BANKS=1 -DVX_CFG_L2_NUM_WAYS=3
     -DVX_CFG_L2_SIZE=768 -DVX_CFG_L2_REPL_POLICY=2 -DVX_CFG_PLATFORM_MEMORY_LATENCY=100
   shape: {l2cache: true}
+# L2-hit latency through an SM group's switch in place of the private link: the
+# two halves of the link, the switch's cycle each way.
+- id: parity-chase-noc
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: chase
+  args: -b262144 -w1 -i512
+  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=1 -DVX_CFG_NOC_UPLINK_PORTS=2
+  shape: {l2cache: true}
+# The device PTW remains an L2 client outside the grouped socket ports.
+- id: parity-chase-noc-ptw
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: chase
+  args: -b262144 -w1 -i512
+  configs: -DVX_CFG_VM_ENABLE -DVX_CFG_DCACHE_NUM_BANKS=1 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2
+  shape: {cores: 4, l2cache: true}
+# Two groups of two cores streaming loads over two lanes each, with the
+# groups' return gate far below what they ask for (a line per 8 cycles): the
+# backlog fills the lanes' delay buffers and the L2's response queues.
+- id: parity-bwstream-noc-gate
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: bwstream
+  args: -n256 -u4 -b4
+  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=8
+  shape: {cores: 4, l2cache: true}
+# The same with the gate on the requests, which holds the excess in the group.
+- id: parity-bwstream-noc-gate-req
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: bwstream
+  args: -n256 -u4 -b4
+  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=8 -DVX_CFG_NOC_UPLINK_GATE_REQ=1
+  shape: {cores: 4, l2cache: true}
+# The arbitration and credit state persists through repeated launches.
+- id: parity-bwstream-noc-relaunch
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: bwstream
+  args: -n128 -u4 -g5 -R3
+  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=32
+  shape: {cores: 4, l2cache: true}
+# Two groups of four cores with four memory ports each: 16 ports per switch,
+# which each lane arbitrates in two registered slices, and a gate with room.
+- id: parity-bwstream-noc-slices
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: bwstream
+  args: -n256 -u4 -b4
+  configs: -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=4 -DVX_CFG_NOC_UPLINK_PORTS=4 -DVX_CFG_NOC_UPLINK_BYTES=160
+  shape: {cores: 8, l2cache: true}
+# Four ports per socket give 72 inputs and 128 default uplink lanes.
+- id: noc-recursive-fanin
+  via: blackbox
+  drivers: [simx]
+  xlen: [64]
+  app: demo
+  configs: -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_NOC_GROUP_SIZE=18
+  shape: {cores: 18, l2cache: true}
+# A socket's issue limit below what its four ports ask for (a line per 4 cycles).
+- id: parity-bwstream-ingress
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: bwstream
+  args: -n256 -u4 -b4
+  configs: -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_SM_INGRESS_BYTES=16
+  shape: {l2cache: true}
 # The same shape behind a 20-cycle link between each core and the dcache, each
 # way: both cores' lanes, their stores and the dcache back-pressure cross the
 # link's delay buffers, and each core's dcache flush waits for its lanes.
@@ -249,6 +324,73 @@ tests:
   app: chase
   args: -b8192 -w1 -i512
   configs: -DVX_CFG_L1_LINK_LATENCY=20
+# A launch masked to cores 1 and 3 of two two-core sockets: compute CTAs skip
+# the masked cores at the socket fan-out, and the round-robin pointer starts
+# on a masked one. -T fails the run if a CTA reports a masked core.
+- id: parity-bwstream-coremask
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: bwstream
+  args: -n1024 -M1,3 -T
+  configs: -DVX_CFG_SOCKET_SIZE=2
+  shape:
+    cores: 4
+    l2cache: true
+# The same shape with cores 0, 1 and 3: the sockets have two and one enabled
+# cores, so the cluster-level round-robin is weighted 2:1 and every enabled
+# core gets four CTAs; socket 1's pointer starts on masked core 2. -T fails
+# the run if the enabled cores' counts differ by more than one.
+- id: parity-bwstream-coremask-uneven
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: bwstream
+  args: -n1024 -M0,1,3 -T
+  configs: -DVX_CFG_SOCKET_SIZE=2
+  shape:
+    cores: 4
+    l2cache: true
+# Cores 0, 1 and 2: the weighted socket is the second, and its pointer starts
+# on an enabled core.
+- id: parity-bwstream-coremask-uneven012
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: bwstream
+  args: -n1024 -M0,1,2 -T
+  configs: -DVX_CFG_SOCKET_SIZE=2
+  shape:
+    cores: 4
+    l2cache: true
+# Three launches of ten CTAs on cores 0, 1 and 2: a launch ends part-way into
+# a credit window, and the next resumes it, as the round-robin pointers and
+# credits are device state. Summed over the launches each core gets ten; a
+# model that reset them per launch would give 9, 9, 12, which -T fails.
+- id: parity-bwstream-coremask-relaunch
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: bwstream
+  args: -n256 -g10 -R3 -M0,1,2 -T
+  configs: -DVX_CFG_SOCKET_SIZE=2
+  shape:
+    cores: 4
+    l2cache: true
+# Two clusters of two two-core sockets, cores 0, 1, 2 and 4: the device level
+# is weighted 3:1 and cluster 0's 2:1, so both weighted levels must agree for
+# each enabled core to get four CTAs.
+- id: parity-bwstream-coremask-uneven-clusters
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: bwstream
+  args: -n256 -M0,1,2,4 -T
+  configs: -DVX_CFG_SOCKET_SIZE=2
+  shape:
+    clusters: 2
+    cores: 4
+    l2cache: true
 # SGEMM on two frontend slices feeding four issue slices: per-slice fetch on a
 # two-port icache, CTAs as wide as the core, a 16-port dcache.
 - id: parity-sgemm-fw2

@@ -15,4 +15,11 @@ typedef struct {
   uint32_t block_warps; // coalesced: warps (CTAs) sharing one slice, 1 = each its own
 } kernel_arg_t;
 
+// The timed kernel's argument: thread 0 of each CTA stores {core, start, end}
+// cycles at timing_addr + 3 * blockIdx.x.
+typedef struct {
+  kernel_arg_t stream;
+  uint64_t timing_addr;
+} timed_arg_t;
+
 #endif

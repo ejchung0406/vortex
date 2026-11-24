@@ -9,6 +9,12 @@ SRCS := $(SRC_DIR)/main.cpp
 
 VX_SRCS := $(SRC_DIR)/kernel.cpp
 
+VX_EXTRA_KERNELS := kernel_timed
+
+VX_HDRS := $(SRC_DIR)/kernel.cpp $(SRC_DIR)/common.h
+
+HDRS := $(SRC_DIR)/common.h
+
 OPTS ?= -n64 -r1
 
 KERNEL_LIB := vortex2

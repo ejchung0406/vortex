@@ -37,6 +37,9 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
 
     // KMU bus
     VX_kmu_bus_if.slave         kmu_bus_if[1],
+    // This cluster's cores masked off for launches
+    input  wire [`VX_CFG_NUM_CORES-1:0] core_disable,
+    input  wire core_mask_active,
 
     // Global barrier bus to the device-level barrier unit
     VX_gbar_bus_if.master       gbar_bus_if,
@@ -105,6 +108,20 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
 
     VX_kmu_bus_if per_socket_kmu_bus_if[NUM_SOCKETS]();
 
+    // The mask crosses the chip from the KMU, so it is registered on arrival.
+    // It changes only on a DCR write, which precedes the launch it applies to
+    // by many cycles, so the cycle of lag never reaches a CTA.
+    wire [`VX_CFG_NUM_CORES-1:0] core_disable_r;
+    wire core_mask_active_r;
+    `BUFFER(core_disable_r, core_disable);
+    `BUFFER(core_mask_active_r, core_mask_active);
+
+    // Each socket's enabled cores weight its share of compute launches.
+    wire [NUM_SOCKETS-1:0][`CLOG2(KMU_DEST_DIV_CLUSTER+1)-1:0] per_socket_cores;
+    for (genvar i = 0; i < NUM_SOCKETS; ++i) begin : g_socket_cores
+        assign per_socket_cores[i] = `CLOG2(KMU_DEST_DIV_CLUSTER+1)'($countones(~core_disable_r[i * `VX_CFG_SOCKET_SIZE +: `VX_CFG_SOCKET_SIZE]));
+    end
+
 `ifdef VX_CFG_EXT_RASTER_ENABLE
     // The raster engines are a launch master alongside the device KMU: a fragment
     // wave IS a launch now, so it merges here instead of being injected at every
@@ -140,10 +157,12 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .ARBITER     ("R"),
         .OUT_BUF     (3)   // register the merged launch link
     ) kmu_merge (
-        .clk        (clk),
-        .reset      (reset),
-        .bus_in_if  (kmu_arb_in_if),
-        .bus_out_if (cluster_merged_kmu_if)
+        .clk         (clk),
+        .reset       (reset),
+        .bus_in_if   (kmu_arb_in_if),
+        .bus_out_if  (cluster_merged_kmu_if),
+        .out_cores   (1'b1),
+        .mask_active (1'b0)
     );
 
     VX_kmu_bus_arb #(
@@ -152,10 +171,12 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .DEST_DIV    (KMU_DEST_DIV_CLUSTER),
         .OUT_BUF     ((NUM_SOCKETS > 1) ? 3 : 0)
     ) kmu_dist (
-        .clk        (clk),
-        .reset      (reset),
-        .bus_in_if  (cluster_merged_kmu_if),
-        .bus_out_if (per_socket_kmu_bus_if)
+        .clk         (clk),
+        .reset       (reset),
+        .bus_in_if   (cluster_merged_kmu_if),
+        .bus_out_if  (per_socket_kmu_bus_if),
+        .out_cores   (per_socket_cores),
+        .mask_active (core_mask_active_r)
     );
 `else
     VX_kmu_bus_arb #(
@@ -164,10 +185,12 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .DEST_DIV   (KMU_DEST_DIV_CLUSTER),
         .OUT_BUF    ((NUM_SOCKETS > 1) ? 3 : 0)
     ) kmu_arb (
-        .clk        (clk),
-        .reset      (reset),
-        .bus_in_if  (kmu_bus_if),
-        .bus_out_if (per_socket_kmu_bus_if)
+        .clk         (clk),
+        .reset       (reset),
+        .bus_in_if   (kmu_bus_if),
+        .bus_out_if  (per_socket_kmu_bus_if),
+        .out_cores   (per_socket_cores),
+        .mask_active (core_mask_active_r)
     );
 `endif
 
@@ -193,14 +216,14 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
     // Socket memory output buses (socket arb output tag width)
     VX_mem_bus_if #(
         .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
-        .TAG_WIDTH (L2_TAG_WIDTH)
-    ) socket_mem_bus_if[L2_SOCKET_REQS]();
+        .TAG_WIDTH (SOCKET_MEM_ARB_TAG_WIDTH)
+    ) socket_mem_bus_if[SOCKET_MEM_PORTS]();
 
     // L2 side of the sockets' trunk, ahead of the link to the L2
     VX_mem_bus_if #(
         .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
-        .TAG_WIDTH (L2_TAG_WIDTH)
-    ) l2_link_bus_if[L2_SOCKET_REQS]();
+        .TAG_WIDTH (SOCKET_MEM_ARB_TAG_WIDTH)
+    ) l2_link_bus_if[SOCKET_MEM_PORTS]();
 
 `ifdef VX_CFG_EXT_RASTER_ENABLE
     VX_mem_bus_if #(
@@ -298,33 +321,164 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
 `else
     // Sockets connect straight to their L2 input ports (TEX/RTU/DXA traffic
     // already merged at each socket's L2-facing arb).
-    for (genvar i = 0; i < L2_SOCKET_REQS; ++i) begin : g_socket_l2
+    for (genvar i = 0; i < SOCKET_MEM_PORTS; ++i) begin : g_socket_l2
         `ASSIGN_VX_MEM_BUS_IF (l2_link_bus_if[i], socket_mem_bus_if[i]);
     end
 `endif
 
-    // The sockets' link to the L2: L2_LINK_LATENCY cycles each way.
-    wire [L2_SOCKET_REQS-1:0] l2_link_empty;
-    for (genvar i = 0; i < L2_SOCKET_REQS; ++i) begin : g_l2_link
-        if (`VX_CFG_L2_LINK_LATENCY != 0) begin : g_delay
-            VX_mem_bus_delay #(
+    wire l2_link_busy;
+
+    if (`VX_CFG_NOC_GROUP_SIZE != 0) begin : g_noc
+
+        // SM groups: a group's socket ports reach its switch over the SM link,
+        // and the switch reaches the L2 over the group's uplink lanes, through
+        // the byte gate on the side it counts.
+        `STATIC_ASSERT(`IS_DIVISBLE(NUM_SOCKETS, `VX_CFG_NOC_GROUP_SIZE), ("NOC_GROUP_SIZE must divide the socket count"))
+        `STATIC_ASSERT(L2_GFX_REQS == 0, ("SM groups do not carry the cluster-resident graphics caches"))
+
+        localparam NOC_LANES = `VX_CFG_NOC_UPLINK_PORTS;
+
+        wire [NOC_NUM_GROUPS-1:0] group_busy;
+
+        for (genvar g = 0; g < NOC_NUM_GROUPS; ++g) begin : g_groups
+
+            VX_mem_bus_if #(
                 .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
-                .TAG_WIDTH (L2_TAG_WIDTH),
-                .LATENCY   (`VX_CFG_L2_LINK_LATENCY)
-            ) link (
-                .clk        (clk),
-                .reset      (reset),
-                .bus_in_if  (l2_link_bus_if[i]),
-                .bus_out_if (per_socket_mem_bus_if[i]),
-                .empty      (l2_link_empty[i]),
-                `UNUSED_PIN (req_empty)
+                .TAG_WIDTH (SOCKET_MEM_ARB_TAG_WIDTH)
+            ) sm_bus_if[NOC_GROUP_PORTS]();
+
+            VX_mem_bus_if #(
+                .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+                .TAG_WIDTH (L2_TAG_WIDTH)
+            ) lane_bus_if[NOC_LANES]();
+
+            VX_mem_bus_if #(
+                .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+                .TAG_WIDTH (L2_TAG_WIDTH)
+            ) uplink_bus_if[NOC_LANES]();
+
+            wire [NOC_GROUP_PORTS-1:0] sm_link_empty;
+            wire [NOC_LANES-1:0]       uplink_empty;
+            wire switch_req_empty, switch_rsp_empty, gate_empty;
+
+            for (genvar p = 0; p < NOC_GROUP_PORTS; ++p) begin : g_sm_link
+                if (`VX_CFG_NOC_SM_LATENCY != 0) begin : g_delay
+                    VX_mem_bus_delay #(
+                        .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+                        .TAG_WIDTH (SOCKET_MEM_ARB_TAG_WIDTH),
+                        .LATENCY   (`VX_CFG_NOC_SM_LATENCY)
+                    ) link (
+                        .clk        (clk),
+                        .reset      (reset),
+                        .bus_in_if  (l2_link_bus_if[g * NOC_GROUP_PORTS + p]),
+                        .bus_out_if (sm_bus_if[p]),
+                        .empty      (sm_link_empty[p]),
+                        `UNUSED_PIN (req_empty)
+                    );
+                end else begin : g_wire
+                    `ASSIGN_VX_MEM_BUS_IF (sm_bus_if[p], l2_link_bus_if[g * NOC_GROUP_PORTS + p]);
+                    assign sm_link_empty[p] = 1'b1;
+                end
+            end
+
+            wire [NOC_LANES-1:0]                          deliver_valid;
+            wire [NOC_LANES-1:0][`UP(NOC_PORT_BITS)-1:0]  deliver_port;
+            wire [NOC_LANES-1:0]                          deliver_token;
+
+            VX_noc_switch #(
+                .NUM_PORTS (NOC_GROUP_PORTS),
+                .NUM_LANES (NOC_LANES),
+                .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+                .TAG_WIDTH (SOCKET_MEM_ARB_TAG_WIDTH)
+            ) noc_switch (
+                .clk           (clk),
+                .reset         (reset),
+                .port_bus_if   (sm_bus_if),
+                .lane_bus_if   (lane_bus_if),
+                .deliver_valid (deliver_valid),
+                .deliver_port  (deliver_port),
+                .deliver_token (deliver_token),
+                .req_empty     (switch_req_empty),
+                .rsp_empty     (switch_rsp_empty)
             );
-        end else begin : g_wire
-            `ASSIGN_VX_MEM_BUS_IF (per_socket_mem_bus_if[i], l2_link_bus_if[i]);
-            assign l2_link_empty[i] = 1'b1;
+
+            if (`VX_CFG_NOC_UPLINK_BYTES != 0) begin : g_gate
+                VX_mem_bus_gate #(
+                    .NUM_PORTS (NOC_LANES),
+                    .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+                    .TAG_WIDTH (L2_TAG_WIDTH),
+                    .RATE      (`VX_CFG_NOC_UPLINK_BYTES),
+                    .COUNT_REQ (`VX_CFG_NOC_UPLINK_GATE_REQ)
+                ) uplink_gate (
+                    .clk        (clk),
+                    .reset      (reset),
+                    .bus_in_if  (lane_bus_if),
+                    .bus_out_if (uplink_bus_if),
+                    .empty      (gate_empty)
+                );
+            end else begin : g_no_gate
+                for (genvar l = 0; l < NOC_LANES; ++l) begin : g_lanes
+                    `ASSIGN_VX_MEM_BUS_IF (uplink_bus_if[l], lane_bus_if[l]);
+                end
+                assign gate_empty = 1'b1;
+            end
+
+            for (genvar l = 0; l < NOC_LANES; ++l) begin : g_uplink
+                localparam LANE = g * NOC_LANES + l;
+                if (`VX_CFG_NOC_UPLINK_LATENCY != 0) begin : g_delay
+                    VX_mem_bus_delay #(
+                        .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+                        .TAG_WIDTH (L2_TAG_WIDTH),
+                        .LATENCY   (`VX_CFG_NOC_UPLINK_LATENCY)
+                    ) link (
+                        .clk        (clk),
+                        .reset      (reset),
+                        .bus_in_if  (uplink_bus_if[l]),
+                        .bus_out_if (per_socket_mem_bus_if[LANE]),
+                        .empty      (uplink_empty[l]),
+                        `UNUSED_PIN (req_empty)
+                    );
+                end else begin : g_wire
+                    `ASSIGN_VX_MEM_BUS_IF (per_socket_mem_bus_if[LANE], uplink_bus_if[l]);
+                    assign uplink_empty[l] = 1'b1;
+                end
+                assign deliver_valid[l] = per_socket_mem_bus_if[LANE].req_valid && per_socket_mem_bus_if[LANE].req_ready;
+                assign deliver_port[l]  = `UP(NOC_PORT_BITS)'(per_socket_mem_bus_if[LANE].req_data.tag);
+                assign deliver_token[l] = per_socket_mem_bus_if[LANE].req_data.attr[MEM_ATTR_FLUSH_OFFS];
+            end
+
+            assign group_busy[g] = ~((& sm_link_empty) && (& uplink_empty)
+                                  && switch_req_empty && switch_rsp_empty && gate_empty);
         end
+
+        assign l2_link_busy = (| group_busy);
+
+    end else begin : g_l2_links
+
+        // The sockets' link to the L2: L2_LINK_LATENCY cycles each way.
+        wire [L2_SOCKET_REQS-1:0] l2_link_empty;
+        for (genvar i = 0; i < L2_SOCKET_REQS; ++i) begin : g_l2_link
+            if (`VX_CFG_L2_LINK_LATENCY != 0) begin : g_delay
+                VX_mem_bus_delay #(
+                    .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
+                    .TAG_WIDTH (L2_TAG_WIDTH),
+                    .LATENCY   (`VX_CFG_L2_LINK_LATENCY)
+                ) link (
+                    .clk        (clk),
+                    .reset      (reset),
+                    .bus_in_if  (l2_link_bus_if[i]),
+                    .bus_out_if (per_socket_mem_bus_if[i]),
+                    .empty      (l2_link_empty[i]),
+                    `UNUSED_PIN (req_empty)
+                );
+            end else begin : g_wire
+                `ASSIGN_VX_MEM_BUS_IF (per_socket_mem_bus_if[i], l2_link_bus_if[i]);
+                assign l2_link_empty[i] = 1'b1;
+            end
+        end
+        assign l2_link_busy = ~(& l2_link_empty);
+
     end
-    wire l2_link_busy = ~(& l2_link_empty);
 
     for (genvar i = 0; i < L2_MEM_PORTS; ++i) begin : g_l2_mem_out
         `ASSIGN_VX_MEM_BUS_IF (mem_bus_if[i], l2_mem_bus_if[i]);
@@ -459,6 +613,8 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         `endif
 
             .kmu_bus_if     (per_socket_kmu_bus_if[socket_id +: 1]),
+            .core_disable   (core_disable_r[socket_id * `VX_CFG_SOCKET_SIZE +: `VX_CFG_SOCKET_SIZE]),
+            .core_mask_active (core_mask_active_r),
 
             .gbar_bus_if    (per_socket_gbar_bus_if[socket_id]),
 

@@ -2373,8 +2373,17 @@ package VX_gpu_pkg;
     // Sector = mem transaction granule (= line when 1 sector/line)
     localparam L2_SECTOR_SIZE       = `VX_CFG_L2_SECTOR_SIZE;
 
-    // Input request size — sockets (TEX/RTU/DXA traffic rides the socket ports)
-    localparam L2_SOCKET_REQS       = NUM_SOCKETS * L1_MEM_PORTS;
+    // The sockets' memory ports (TEX/RTU/DXA traffic rides them)
+    localparam SOCKET_MEM_PORTS     = NUM_SOCKETS * L1_MEM_PORTS;
+
+    // SM groups (VX_CFG_NOC_GROUP_SIZE != 0): each group's ports reach the L2
+    // through its switch, on the group's uplink lanes
+    localparam NOC_GROUP_PORTS      = `VX_CFG_NOC_GROUP_SIZE * L1_MEM_PORTS;
+    localparam NOC_NUM_GROUPS       = (`VX_CFG_NOC_GROUP_SIZE != 0) ? (NUM_SOCKETS / `UP(`VX_CFG_NOC_GROUP_SIZE)) : 0;
+    localparam NOC_PORT_BITS        = (`VX_CFG_NOC_GROUP_SIZE != 0) ? `CLOG2(NOC_GROUP_PORTS) : 0;
+
+    // Input request size — the sockets' ports, or their groups' lanes
+    localparam L2_SOCKET_REQS       = (`VX_CFG_NOC_GROUP_SIZE != 0) ? (NOC_NUM_GROUPS * `VX_CFG_NOC_UPLINK_PORTS) : SOCKET_MEM_PORTS;
 
     // Cluster-resident graphics caches add dedicated L2 input slots
     localparam L2_GFX_REQS          = `VX_CFG_EXT_RASTER_ENABLED + `VX_CFG_EXT_OM_ENABLED;
@@ -2398,6 +2407,7 @@ package VX_gpu_pkg;
     localparam L2_PTW_IDX           = L2_SOCKET_REQS + L2_GFX_REQS;
 
     localparam L2_NUM_REQS          = L2_SOCKET_REQS + L2_GFX_REQS + L2_PTW_REQS;
+    localparam L2_BANK_REQS         = SOCKET_MEM_PORTS + L2_GFX_REQS + L2_PTW_REQS;
 
     // The command processor's DMA enters the shared LLC on one more client
     // slot (VX_CFG_CP_ON_LLC): the cluster L2 when it is the LLC of a single
@@ -2414,8 +2424,8 @@ package VX_gpu_pkg;
     localparam L2_NUM_BANKS         = `VX_CFG_L2_NUM_BANKS;
     localparam L2_MEM_PORTS         = `VX_CFG_L2_MEM_PORTS;
 
-    // Core request tag bits (socket arb output width)
-    localparam L2_TAG_WIDTH         = SOCKET_MEM_ARB_TAG_WIDTH;
+    // Core request tag bits (socket arb output width, and the port within its group)
+    localparam L2_TAG_WIDTH         = SOCKET_MEM_ARB_TAG_WIDTH + NOC_PORT_BITS;
 
     // TLB miss/fill fabric id widths. The id starts as the L1 miss-station slot
     // and each arb level prepends its grant index so fills route back exactly.

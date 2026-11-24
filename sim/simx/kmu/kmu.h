@@ -14,6 +14,7 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
 #include <vector>
 #include "types.h"
 #include "VX_types.h"
@@ -58,7 +59,10 @@ public:
   // core that frees a slot sooner.
   static constexpr uint32_t LAUNCH_CREDITS = 2;
 
-  Kmu(const SimContext& ctx, const char* name, uint32_t num_cores);
+  // Lane c is core c % cores_per_socket of socket c / cores_per_socket, and
+  // socket s is socket s % sockets_per_cluster of cluster s / sockets_per_cluster.
+  Kmu(const SimContext& ctx, const char* name, uint32_t num_clusters,
+      uint32_t sockets_per_cluster, uint32_t cores_per_socket);
 
   void dcr_write(uint32_t addr, uint32_t value);
 
@@ -68,6 +72,9 @@ public:
 
   // True while CTAs remain to be issued.
   bool running() const { return running_; }
+
+  // True while CTAs remain to be issued or are still in the fan-out tree.
+  bool busy() const;
 
   // A grid-less launch is a delegated draw launch: the KMU walks no CTAs and
   // the processor forwards the frame kick to the raster engines.
@@ -85,10 +92,36 @@ protected:
   void on_tick();
 
 private:
-  // Fill *req with the next CTA for `core_id`; false when the grid is
-  // exhausted. The caller steers: a locked cluster's members all target the
-  // owning core.
-  bool next_cta(kmu_req_t* req, uint32_t core_id);
+  // A CTA on its way down the fan-out tree; `eop` marks a cluster's last
+  // member, which ends the message every router holds its choice for.
+  struct beat_t {
+    kmu_req_t req;
+    bool      eop;
+  };
+
+  // One router of the fan-out tree: its round-robin pointer, the output it
+  // holds while a message (a cluster of CTAs) passes, and each output's
+  // credits for the weighted round-robin.
+  struct router_t {
+    uint32_t rr;
+    bool     locked;
+    uint32_t lock_sel;
+    std::vector<uint32_t> credit;
+  };
+
+  // Fill *beat with the next CTA; false when the grid is exhausted.
+  bool next_cta(beat_t* beat);
+
+  // Recompute out_cores_ and weighted_ from the core mask.
+  void update_weights();
+
+  bool lane_ready(uint32_t core) const;
+
+  void route_flat();
+
+  // Step router `node` of level `lvl` once; occupancy is each link's fill
+  // at the start of the cycle.
+  void route(uint32_t lvl, uint32_t node, const std::vector<std::vector<uint32_t>>& occupancy);
 
   uint64_t PC_;
   uint64_t entry_;
@@ -102,20 +135,34 @@ private:
   uint32_t cluster_dim_[3];
   bool     running_;
   uint32_t cta_id_;
-  // Round-robin pointer over launch lanes; advances past the granted core
-  // when a message (cluster or standalone CTA) completes.
-  uint32_t rr_ptr_;
+  uint32_t flat_rr_ = 0;
+  uint32_t flat_sel_ = 0;
+  bool     flat_locked_ = false;
+  bool     masked_ = false;
+  // The masked launch fan-out tree (device -> clusters -> sockets -> cores), with
+  // the levels that have a single output left out: they pass a CTA straight
+  // through. fanout_[l] is the outputs of a level-l router, span_[l] the cores
+  // below each output. Every output holds LINK_DEPTH CTAs; at the last level
+  // that buffer is the lane's credits, above it a link_ queue.
+  static constexpr uint32_t LINK_DEPTH = 2;
+  std::vector<uint32_t> fanout_;
+  std::vector<uint32_t> span_;
+  std::vector<std::vector<router_t>> routers_;           // [level][node]
+  std::vector<std::vector<std::deque<beat_t>>> links_;  // [level][node] input, level >= 1
+  // Enabled cores below each output ([level][node * fanout + output]), and
+  // whether a router's enabled outputs hold different numbers of them, which
+  // weights its round-robin ([level][node]).
+  std::vector<std::vector<uint32_t>> out_cores_;
+  std::vector<std::vector<bool>>     weighted_;
   uint8_t  ctx_id_;
   // Nested counter: group_origin advances by cluster_dim per axis;
   // intra_offset walks within the cluster.
   uint32_t group_origin_[3];
   uint32_t intra_offset_[3];
-  // Cluster ownership: a cluster's members are reserved for whichever core took
-  // its first CTA, so they cannot be distributed apart.
-  bool     cluster_locked_;
-  uint32_t cluster_core_;
   // CTAs sent but not yet admitted by each core's dispatcher.
   std::vector<uint32_t> inflight_;
+  // Cores masked off for launches; kept across launches like the descriptor.
+  uint32_t core_disable_[VX_DCR_KMU_CORE_DISABLE_WORDS] = {};
 
   friend class SimObject<Kmu>;
 };
