@@ -567,18 +567,24 @@ tests:
   configs: -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_LMEM_NUM_BANKS=16 -DVX_CFG_DCACHE_NUM_BANKS=2 -DVX_CFG_NUM_DXA_CORES=4
     -DVX_CFG_DXA_GMEM_PORTS=2 -DVX_CFG_DXA_LMEM_ROW=1 -DVX_CFG_DXA_LINE_PER_CYCLE=1
 
-# Two DXA request ports under the socket's read budget.
+# Two DXA request ports under the socket's read budget on a wide core.
 - id: model_parity-bwstream-dxa-ports
   check: model_parity
   xlen: [64]
   via: blackbox
   app: bwstream_dxa
   args: -e256 -n16 -d4 -c0
-  configs: -DVX_CFG_EXT_DXA_ENABLE -DVX_CFG_NUM_THREADS=32 -DVX_CFG_NUM_WARPS=8
-    -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4
+  flags: --perf=7
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4
+    -DVX_CFG_NUM_ALU_LANES=16 -DVX_CFG_NUM_FPU_LANES=32 -DVX_CFG_NUM_LSU_LANES=8
+    -DVX_CFG_EXT_TFU_ENABLE -DVX_CFG_NUM_TFU_LANES=16 -DVX_CFG_FDIV_PE_RATIO=8
+    -DVX_CFG_FSQRT_PE_RATIO=8 -DVX_CFG_FCVT_PE_RATIO=8 -DVX_CFG_FMA64_PE_RATIO=2
+    -DVX_CFG_NUM_GPR_BANKS=8 -DVX_CFG_DISPATCH_QUEUE_SIZE=8 -DVX_CFG_FPU_QUEUE_SIZE=16
+    -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_LMEM_NUM_BANKS=16 -DVX_CFG_FETCH_INFLIGHT=4
+    -DVX_CFG_FFLAGS_ACCUM=1 -DVX_CFG_BRANCH_REG=0 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4
+    -DVX_CFG_L2_ENABLE -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_EXT_DXA_ENABLE
     -DVX_CFG_NUM_DXA_CORES=2 -DVX_CFG_DXA_GMEM_PORTS=2 -DVX_CFG_SM_INGRESS_BYTES=32
-    -DVX_CFG_L2_LINK_LATENCY=20
-  shape: {cores: 4, l2cache: true}
+  shape: {cores: 4}
 
 # Four simultaneous copying CTAs and four load CTAs share the same sockets.
 - id: model_parity-dxa-corun-ingress
