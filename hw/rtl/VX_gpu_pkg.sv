@@ -2407,6 +2407,7 @@ package VX_gpu_pkg;
     localparam L2_PTW_IDX           = L2_SOCKET_REQS + L2_GFX_REQS;
 
     localparam L2_NUM_REQS          = L2_SOCKET_REQS + L2_GFX_REQS + L2_PTW_REQS;
+    localparam L2_BANK_REQS         = SOCKET_MEM_PORTS + L2_GFX_REQS + L2_PTW_REQS;
 
     // The command processor's DMA enters the shared LLC on one more client
     // slot (VX_CFG_CP_ON_LLC): the cluster L2 when it is the LLC of a single

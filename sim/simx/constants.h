@@ -137,12 +137,14 @@ inline constexpr uint32_t PTW_ON_L2              = ((VX_CFG_NUM_CLUSTERS == 1)
                                                  && (VX_CFG_L2_ENABLED != 0)
                                                  && (VX_CFG_L3_ENABLED == 0)) ? 1 : 0;
 inline constexpr uint32_t VX_CFG_L2_NUM_REQS     = VX_CFG_L2_DEMAND_REQS + PTW_ON_L2;
+inline constexpr uint32_t VX_CFG_L2_BANK_REQS    = NUM_SOCKETS * VX_CFG_L1_MEM_PORTS + PTW_ON_L2;
 inline constexpr uint32_t VX_CFG_L2_PTW_IDX      = VX_CFG_L2_DEMAND_REQS;
 inline constexpr uint32_t VX_CFG_L3_NUM_REQS     = VX_CFG_NUM_CLUSTERS * VX_CFG_L2_MEM_PORTS
                                                  + ((PTW_ON_L2 == 0) ? 1u : 0u);
 inline constexpr uint32_t VX_CFG_L3_PTW_IDX      = VX_CFG_NUM_CLUSTERS * VX_CFG_L2_MEM_PORTS;
 #else
 inline constexpr uint32_t VX_CFG_L2_NUM_REQS     = VX_CFG_L2_DEMAND_REQS;
+inline constexpr uint32_t VX_CFG_L2_BANK_REQS    = NUM_SOCKETS * VX_CFG_L1_MEM_PORTS;
 inline constexpr uint32_t VX_CFG_L3_NUM_REQS     = VX_CFG_NUM_CLUSTERS * VX_CFG_L2_MEM_PORTS;
 #endif
 

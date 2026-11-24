@@ -468,9 +468,8 @@ VX_CFG_L2_CRSQ_SIZE = 0
 # of being replayed. 0 keeps the model's replay.
 VX_CFG_L2_FWD_HOLD = 0
 
-# With SM groups the L2's inputs are the groups' lanes; its banks keep following
-# the sockets' memory ports, so the network knobs do not change the L2's shape.
-VX_CFG_L2_NUM_BANKS = "expr: pow(2, clog2(min(int($VX_CFG_NOC_GROUP_SIZE != 0) * up($VX_CFG_NUM_CORES / $VX_CFG_SOCKET_SIZE) * $VX_CFG_L1_MEM_PORTS + int($VX_CFG_NOC_GROUP_SIZE == 0) * $VX_CFG_L2_NUM_REQS, 16)))"
+# Size the banks from the flat client count, independent of SM group lanes.
+VX_CFG_L2_NUM_BANKS = "expr: pow(2, clog2(min($VX_CFG_L2_BANK_REQS, 16)))"
 # On at every bank count: unlike the dcache, a 2-bank L2 measured neutral
 # (sgemm-mc-nt4 -0.6%, fp16-mc-nt4 +0.1%), and it gains from 4 banks up.
 VX_CFG_L2_BANK_HASH = 1
@@ -773,6 +772,7 @@ VX_CFG_PLATFORM_MEMORY_TYPE = ["HBM2", "HBM3", "HBM3E", "GDDR6"]
 [[param]]
 VX_CFG_DCACHE_NUM_REQS = "int"
 VX_CFG_L2_NUM_REQS = "int"
+VX_CFG_L2_BANK_REQS = "int"
 VX_CFG_L3_NUM_REQS = "int"
 
 [[builtin]]
