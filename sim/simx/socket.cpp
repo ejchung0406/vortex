@@ -253,6 +253,7 @@ public:
       }
     #if VX_CFG_SM_INGRESS_BYTES != 0
       req_src.bind(&ingress->In.at(port));
+      breq->In.set_registered_ready(true);
       ingress->Out.at(port).bind(&breq->In);
     #else
       req_src.bind(&breq->In);
@@ -336,6 +337,7 @@ public:
         snprintf(sname, 100, "%s-ingress-out%d", name.c_str(), i);
         auto port_out = MemReqSlice::Create(sname, 1);
         breq->Out.bind(&ingress->In.at(i));
+        port_out->In.set_registered_ready(true);
         ingress->Out.at(i).bind(&port_out->In);
         port_out->Out.bind(&simobject_->mem_req_out.at(i));
       #else

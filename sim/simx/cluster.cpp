@@ -197,9 +197,15 @@ public:
     static_assert(ispow2(VX_CFG_NOC_UPLINK_PORTS), "NOC_UPLINK_PORTS must be a power of two");
     auto bind_delay = [&](const char* kind, uint32_t idx, uint32_t latency, auto& src, auto& dst) {
       using Pkt = std::remove_reference_t<decltype(src.peek())>;
+      using Channel = std::remove_reference_t<decltype(dst)>;
+      auto* endpoint = &dst;
+      while (endpoint->sink()) {
+        endpoint = static_cast<Channel*>(endpoint->sink());
+      }
+      endpoint->set_registered_ready(true);
       if (latency != 0) {
         snprintf(sname, 100, "%s-noc-%s%d", name.c_str(), kind, idx);
-        auto link = DelayBuffer<std::remove_const_t<Pkt>>::Create(sname, latency);
+        auto link = DelayBuffer<std::remove_const_t<Pkt>>::Create(sname, latency, true);
         src.bind(&link->In);
         link->Out.bind(&dst);
       } else {
