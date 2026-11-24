@@ -235,16 +235,27 @@ tests:
 # two halves of the link, the switch's cycle each way.
 - id: parity-chase-noc
   check: model_parity
+  xlen: [64]
   via: blackbox
   app: chase
   args: -b262144 -w1 -i512
   configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=1 -DVX_CFG_NOC_UPLINK_PORTS=2
   shape: {l2cache: true}
+# The device PTW remains an L2 client outside the grouped socket ports.
+- id: parity-chase-noc-ptw
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: chase
+  args: -b262144 -w1 -i512
+  configs: -DVX_CFG_VM_ENABLE -DVX_CFG_DCACHE_NUM_BANKS=1 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2
+  shape: {cores: 4, l2cache: true}
 # Two groups of two cores streaming loads over two lanes each, with the
 # groups' return gate far below what they ask for (a line per 8 cycles): the
 # backlog fills the lanes' delay buffers and the L2's response queues.
 - id: parity-bwstream-noc-gate
   check: model_parity
+  xlen: [64]
   via: blackbox
   app: bwstream
   args: -n256 -u4 -b4
@@ -253,6 +264,7 @@ tests:
 # The same with the gate on the requests, which holds the excess in the group.
 - id: parity-bwstream-noc-gate-req
   check: model_parity
+  xlen: [64]
   via: blackbox
   app: bwstream
   args: -n256 -u4 -b4
@@ -262,6 +274,7 @@ tests:
 # which each lane arbitrates in two registered slices, and a gate with room.
 - id: parity-bwstream-noc-slices
   check: model_parity
+  xlen: [64]
   via: blackbox
   app: bwstream
   args: -n256 -u4 -b4
@@ -278,6 +291,7 @@ tests:
 # A socket's issue limit below what its four ports ask for (a line per 4 cycles).
 - id: parity-bwstream-ingress
   check: model_parity
+  xlen: [64]
   via: blackbox
   app: bwstream
   args: -n256 -u4 -b4
@@ -306,6 +320,7 @@ tests:
 # on a masked one. -T fails the run if a CTA reports a masked core.
 - id: parity-bwstream-coremask
   check: model_parity
+  xlen: [64]
   via: blackbox
   app: bwstream
   args: -n1024 -M1,3 -T
@@ -319,6 +334,7 @@ tests:
 # the run if the enabled cores' counts differ by more than one.
 - id: parity-bwstream-coremask-uneven
   check: model_parity
+  xlen: [64]
   via: blackbox
   app: bwstream
   args: -n1024 -M0,1,3 -T
@@ -330,6 +346,7 @@ tests:
 # on an enabled core.
 - id: parity-bwstream-coremask-uneven012
   check: model_parity
+  xlen: [64]
   via: blackbox
   app: bwstream
   args: -n1024 -M0,1,2 -T
@@ -343,6 +360,7 @@ tests:
 # model that reset them per launch would give 9, 9, 12, which -T fails.
 - id: parity-bwstream-coremask-relaunch
   check: model_parity
+  xlen: [64]
   via: blackbox
   app: bwstream
   args: -n256 -g10 -R3 -M0,1,2 -T
@@ -355,6 +373,7 @@ tests:
 # each enabled core to get four CTAs.
 - id: parity-bwstream-coremask-uneven-clusters
   check: model_parity
+  xlen: [64]
   via: blackbox
   app: bwstream
   args: -n256 -M0,1,2,4 -T

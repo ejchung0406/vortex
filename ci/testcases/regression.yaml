@@ -665,6 +665,7 @@ tests:
 # its fence token must still reach the L2 behind every earlier one and ahead
 # of every later one; atomics and same-word order ride one lane.
 - id: fence-noc
+  xlen: [64]
   via: blackbox
   drivers:
   - simx
@@ -675,6 +676,7 @@ tests:
     cores: 4
     l2cache: true
 - id: fence_mp-noc-1
+  xlen: [64]
   via: blackbox
   drivers:
   - simx
@@ -686,6 +688,7 @@ tests:
     cores: 4
     l2cache: true
 - id: fence_mp-noc-2
+  xlen: [64]
   via: blackbox
   drivers:
   - simx
@@ -697,6 +700,7 @@ tests:
     cores: 4
     l2cache: true
 - id: flush_coherence-noc
+  xlen: [64]
   via: blackbox
   drivers:
   - simx
@@ -708,6 +712,7 @@ tests:
     cores: 4
     l2cache: true
 - id: amo-noc
+  xlen: [64]
   via: blackbox
   drivers:
   - simx
@@ -718,6 +723,7 @@ tests:
     cores: 4
     l2cache: true
 - id: war_order-noc
+  xlen: [64]
   via: blackbox
   drivers:
   - simx
@@ -730,6 +736,7 @@ tests:
 # A group of one single-port socket: the lanes' tags carry no port bits, and
 # every delivery is that port's.
 - id: fence-noc-one-port
+  xlen: [64]
   via: blackbox
   drivers:
   - simx
@@ -741,6 +748,7 @@ tests:
 # Atomics under a request-side gate far below what the groups ask for: an
 # atomic takes a line back and is charged as a load is.
 - id: amo-noc-gate-req
+  xlen: [64]
   via: blackbox
   drivers:
   - simx
@@ -756,6 +764,7 @@ tests:
 # switch's hold the token enters the L2 ahead of them and the switch's
 # assertion stops the run.
 - id: fence-noc-stress
+  xlen: [64]
   via: blackbox
   drivers:
   - rtlsim
@@ -768,6 +777,7 @@ tests:
 # does not reach the hold: at a launch boundary the token is sent only once
 # the cluster is idle, the switch included.
 - id: flush_coherence-noc-stress
+  xlen: [64]
   via: blackbox
   drivers:
   - rtlsim
