@@ -1144,15 +1144,15 @@ form groups of this many (it must divide the socket count), and each group reach
 the L2 through a `VX_noc_switch` on **`NOC_UPLINK_PORTS`** lanes (a power of two;
 default the next one at or above the group's ports), so the L2 has
 groups × lanes socket inputs instead of sockets × `L1_MEM_PORTS`, and its tag
-carries the port within the group. The L2's bank count keeps following the sockets' memory
-ports, not the lanes, so the group knobs do not change the L2's shape. A socket port crosses **`NOC_SM_LATENCY`**
+carries the port within the group. The L2 bank count follows the flat client count, including the page walker when
+it uses L2. The lanes change the number of input ports. A socket port crosses **`NOC_SM_LATENCY`**
 cycles to the switch and a lane **`NOC_UPLINK_LATENCY`** cycles to the L2, each
 way; their defaults split `L2_LINK_LATENCY` around the switch's one cycle.
 - A request takes the lane an XOR fold of its line address selects, so requests
   of one line keep their order. The switch is a `VX_stream_xbar` in each
   direction: a round-robin arbiter per output and a registered output, a cycle,
-  and one more in a direction whose outputs arbitrate more than 12 inputs
-  (registered slices of 8).
+  plus a cycle for each recursive level of registered 8-input slices above
+  the direct arbitration limit of 12 inputs.
 - A flush token (a fence) must stay behind its port's earlier requests and ahead
   of its later ones, which separate lanes do not give. The switch counts each
   port's requests between itself and the L2: a token waits until the port has

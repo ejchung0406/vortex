@@ -238,8 +238,8 @@ message is a whole cluster (§4.5), `rr_ptr` advances once per *cluster* — so
 clusters, not CTAs, are the unit of load balancing.
 
 A launch can be kept off some cores: the KMU's `VX_DCR_KMU_CORE_DISABLE*`
-words hold one bit per core, and each fan-out level gets the number of
-enabled cores below each output (`out_cores`). An output with none takes no
+words hold the mask for core IDs 0–255. Higher IDs stay enabled. Each fan-out
+level receives the number of enabled cores below each output (`out_cores`). An output with none takes no
 compute message. When the enabled outputs hold different numbers of enabled
 cores, a plain round-robin would give each subtree an equal share, so a core
 alone in its socket would take as many CTAs as a full socket. The round-robin
@@ -253,8 +253,9 @@ each enabled core gets an equal share (a per-launch TPC mask on an H200
 spreads CTAs over the enabled SMs the same way). When the counts are equal,
 the unmasked case among them, the plain round-robin runs. Each level
 registers its counts (they change only on a mask write, which precedes the
-launch by many cycles) and clears its credits when they change; otherwise the
-credits, like `rr_ptr`, run on from one launch to the next. Fragment routing
+launch by many cycles) and clears its credits when they change. Activating
+the mask starts a new tree arbitration window. Credits and the pointer carry
+over between masked launches. SimX uses its flat dispatch for a zero mask. Fragment routing
 ignores the mask. The mask is kept across launches; with every core masked no
 compute message is ever accepted, so the launch does not finish.
 

@@ -52,7 +52,7 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
   fan-out registers its part of the mask and, where its outputs hold different numbers of enabled cores, weights its round-robin
   by them, so every enabled core takes an equal share. [VX_kmu_bus_arb.sv](hw/rtl/core/VX_kmu_bus_arb.sv),
   [sim/simx/kmu/kmu.cpp](sim/simx/kmu/kmu.cpp); `bwstream` and `bwstream_dxa` take `-M` (cores), `-T` (per-core rates and CTA
-  counts) and `-R` (launches).
+  counts). `bwstream` also takes `-R` (launches).
 - **Fetch ahead of a lone warp (`VX_CFG_FETCH_INFLIGHT`, default 1).** A warp is stalled from its fetch pick until decode, so a
   warp alone on a core issues one instruction per fetch round trip. With N > 1 (a power of two; EXT_C off) a warp that is the only
   runnable warp of its frontend slice keeps fetching sequentially, up to N fetches between pick and decode. Decode drops what was
