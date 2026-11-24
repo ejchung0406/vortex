@@ -802,7 +802,7 @@ h200s rtlsim / SimX at the current profile (rover):
 
 ## Update 2026-11-24 (04:45 EST)
 STATE FOR A NEW SESSION: the Phoenix job hosting the Claude session (15992728 `slowdown`) ends about 2026-11-24 22:40
-EST (3-day limit). rover has refused ssh since 2026-11-23 20:56;
+EST (3-day limit). rover has refused ssh since 2026-11-23 20:56 ("Connection closed by ... port 2337"; host pings);
 cause unknown; our processes there (Codex's h200s rtlsim runs bg_cache_repl_*, dcg_c8r, source and model trees)
 are unread and uncleaned. ICE scratch was full (285/300 GB, 995k/1M files); 33 finished trees removed
 (src_smr_*, src_barfix_*), now 274 GB / 786k files; most of the space is outside vortex-ice.
@@ -832,3 +832,42 @@ together), 22% of offered cycles the L2 bank stalls on its 2-slot response queue
 76.6, 66.6 -> 69.2, 71.2 -> 68.0; not applied). L2 replacement does not matter for the streaming copy (584 evictions).
 To reach the part: split a transfer over workers (C2) and shorten the issuing loop (C3).
 NoC review done (notes/noc-review-codex.md): merge after fixes; 2 F3, 6 F2, 2 F1. Rebase onto the new head needed.
+
+## Update 2026-11-24 (05:30 EST)
+rover is treated as dead; everything runs on ICE (ice/ice_submit.sh; Codex added an optional ICE_SBATCH job script).
+h200s SimX baselines at 8a56e7483 on ICE (frozen copy vortex-exp/src_h8a, results/h8a_*; identical to the values
+taken elsewhere for the same source): fetch_squash 10,017; warp_rate 113,380; tmem_roof -n512 -i8 61,878; bwstream
+-n2048 -u4 -b32 394,442; gemm_block 518,282; gemm_tmem_decode 1,151,769; war_order 320,317; ldstream lean 173,926;
+ldstream 315,256; bwstream_dxa -e4096 -n256 -d2 401,368, -d4 190,263; smem_rate -w64 -i16 -k14 139,069, -k13
+139,576, -k22 -f150 139,931.
+Codex sessions running (started by the user): (1) L2 replacement fix, rebased: fix/smem-phase 124ab781f, fix/cache-repl
+1e79f5e6b; one ICE job (7278531) for the two missing h200s rows; then stop -> I look over and merge, re-take the
+baselines above. (2) NoC fix: codex-tasks/noc-fix.txt, branch feature/noc2 in wt_noc2, notes/noc-fix.md. (3) TMA rate,
+design and measurement only: codex-tasks/tma-rate-design.txt, branch exp/tma-rate, notes/tma-rate.md (the user picks
+from its options; implementation is a second task).
+
+## Update 2026-11-24 (14:10 EST)
+rover is back (rebooted 09:30; /tmp cleared, all models gone); our jobs there now run inside a 200 GB user slice
+(notes/rover.md). Phoenix may be used with gts-hkim358 (about 0.008 per CPU-hour), build trees on Phoenix scratch.
+Merged: fix/cache-repl (124ab781f stage 1, 1e79f5e6b stage 2; merge 00186b8b3). RTL and SimX: a PLRU fill takes the
+lowest invalid way first, the tree has no aliased leaves for a non-power-of-two way count, and it is touched on fill
+as well as on hit. h200s rtlsim before -> after / SimX after: stack replay 16 warps 7,738 -> 5,304 / 5,451; 64 warps
+10,533 -> 8,358 / 8,800; gemm_block 555,376 -> 544,982 / 513,734 (5.7%, open, not the L2); bwstream_dxa -n32 -d2
+52,875 -> 52,528 / 53,753; ldstream lean 168,615 -> 170,629 / 173,098. Beacon: 23 -> 23 levels, LUT +0.2%.
+FIFO replacement has the same blindness to invalid ways (reported, not changed).
+h200s SimX baselines at 00186b8b3 (rover hd_*; before the merge in brackets): fetch_squash 10,017 (10,017);
+warp_rate 113,380 (113,380); tmem_roof 61,878 (61,878); gemm_block 513,734 (518,282); gemm_tmem_decode 1,151,803
+(1,151,769); war_order 320,317 (320,317); ldstream lean 173,098 (173,926); ldstream 314,406 (315,256); bwstream_dxa
+-d2 400,310 (401,368), -d4 190,417 (190,263); smem_rate -k14 139,069, -k13 139,576, -k22 139,931 (same);
+lmem_access 7,713,082.
+Codex results (all three finished):
+- NoC: feature/noc2 e1ce1e145 (38 commits on 8a56e7483), 9 of 10 review findings fixed with tests; knobs off
+  identical at 22 SMs on eight kernels; knobs on, 14 of 17 pairs within 2%, the three above 3% come from the
+  two-DXA-port configuration with all NoC knobs off (7.4%). Open: Beacon. Next: codex-tasks/noc-rebase2.txt (onto
+  00186b8b3 as feature/noc3), then merge.
+- TMA design (notes/tma-rate.md): no tested combination meets both targets (96 B/clock with several transfers,
+  0.835 lines per clock alone). Largest effect: ordinary loads of another row while the DXA writes shared memory
+  (the model stops every load pass during a DMA beat; the part barely slows loads). Fixed splits of a transfer over
+  2 / 4 workers raise the single transfer to 0.73 / 1.21 lines per clock but cost concurrency. User decision: do
+  the read overlap now (codex-tasks/tma-read-overlap.txt, branch feature/lmem-dma-rd); line-granular scheduling
+  later, after seeing it in RTL.

@@ -254,3 +254,17 @@ Housekeeping afterwards: the three model trees take 12 GB under
 `/tmp/echung67/vortex-rover/build/`; delete them when no more points of those
 configurations are wanted (`ssh rover 'rm -rf /tmp/echung67/vortex-rover/build/<MODEL>'`,
 only when rover_status.sh shows nothing running in it).
+
+## 2026-11-24: outage and new limits
+rover refused ssh from 2026-11-23 20:56 (closed right after "Server accepts key") until someone rebooted it at
+2026-11-24 09:30. Cause not confirmed (no access to the previous boot's kernel log); several h200s rtlsim runs, an
+rtlsim build and a full-GPU Beacon run were active. /tmp was cleared: every build tree and model is gone; ~/vortex-rover
+(src, results, scripts) survived. From now on: one rtlsim build at a time for all users of the scripts (the script no
+longer takes BUILD_SLOTS for rtlsim), 150 GB must be free before a build starts, and no lint or Beacon of a full GPU
+on rover.
+Memory cap (2026-11-24): `~/.config/systemd/user/vortex.slice` on rover (MemoryHigh 185G, MemoryMax 200G, no swap,
+TasksMax 4000). `rover_point.sh` re-executes itself inside it (`systemd-run --user --scope --slice=vortex.slice`), so
+every point started by rover_start.sh is under the cap: when our work outgrows it the kernel kills inside the slice
+and the server stays up. Anything run by hand must be wrapped: `~/vortex-rover/vxrun <command>`. Processes started
+directly over ssh are NOT in the slice (they live in the login session's scope, which a user cannot limit); a cap
+on the whole account or systemd-oomd / earlyoom needs root.

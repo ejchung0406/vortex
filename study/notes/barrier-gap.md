@@ -282,3 +282,47 @@ Counter reruns reproduce those same cycles. For 16 warps, RTL L2 dirty writeback
 ## 2026-11-23 20:56 EST — Rover connection stalled
 
 Rover SSH stops responding before the server banner. The last fetched h200s matrix has five completed rows and all SimX results. The old and new RTL GEMM and the Stage 2 RTL `ldstream` had started before the connection stalled. Their exit status and the wider GPU Beacon run are unconfirmed until Rover is reachable. The targeted 33-way L2 Beacon comparison and the small parity receipts are already local.
+
+## 2026-11-24 03:47 EST — Rover still inaccessible
+
+Rover now returns its SSH banner and completes key exchange, then closes the connection before authentication completes. The local table still has five confirmed h200s rows. The Stage 2 RTL `ldstream` and both RTL GEMM results remain unverified. No second h200s model build was started.
+
+## 2026-11-24 04:27 EST — ICE-only completion
+
+The pending rover GEMM, ldstream and full-GPU Beacon runs and their build trees are treated as lost. Both local branches are rebased on `8a56e7483`, which includes the SimX dMMU return-path change `9d7b5d3fb`. The patch IDs are preserved. The rebased branch heads are `124ab781f` (`fix/smem-phase`) and `1e79f5e6b` (`fix/cache-repl`).
+
+ICE job 7278531 requests 24 CPUs, 100 GiB and 6 hours through `ice_submit.sh`. One h200s out-of-tree build runs both remaining workloads and measures original, Stage 1 and Stage 2 SimX using the same host and kernel binaries. The three SimX variants differ only in `cache.cpp`, so the job can build them incrementally. The only RTL build is Stage 2. The archived h200s vmdx GEMM reference is 555,376 cycles, and the archived ldstream RTL reference is 168,615. The other five h200s rows retain their earlier measurements. The job removes its own source copy and node-local build when it exits.
+
+At 04:56 EST, the 24-CPU job had been pending for more than 30 minutes with no estimated start. The largest eligible node had 16 free CPUs with at least 100 GiB unallocated. Job 7278531 was updated in place to 16 CPUs, retaining 100 GiB and the six-hour limit.
+
+At 05:14 EST, no ICE node had 16 free CPUs and 100 GiB unallocated. The still-pending combined job was replaced with two jobs so SimX could use a smaller allocation. Job 7280308 measures both kernels with the three SimX variants (4 CPUs, 24 GiB, 30 minutes). Job 7280302 retains the 16-CPU, 100-GiB, six-hour request and builds the one Stage 2 RTL model for both kernels. Each job has its own source copy and cleanup trap.
+
+## 2026-11-24 05:32 EST — Rebased SimX results
+
+ICE job 7280308 completed successfully in 224 seconds and removed its source copy. On `8a56e7483` / Stage 1 / Stage 2, GEMM took 518,282 / 515,718 / 513,734 cycles, with 814,144 retired instructions in all three runs. Lean ldstream took 173,926 / 171,240 / 173,098 cycles, with 250,196 retired instructions in all three. The base cycles match the existing dMMU-fix results. The active RTL job 7280302 compiled the same host and kernel binaries as the SimX job, as verified by SHA-256. Both kernel hashes also match the prior rover measurements. RTL model compilation began at 05:32:14 EST.
+
+## 2026-11-24 08:20 EST — ICE RTL model built
+
+Job 7280302 linked the single Stage 2 h200s RTL model at 08:20:35 EST, after 2h48m21s of model compilation. The final large GCC translation unit drove the build time. GEMM and lean ldstream started in parallel in the same build directory. The resolved model flags match the original h200s model key.
+
+## 2026-11-24 08:49 EST — Lean ldstream complete
+
+Stage 2 RTL passed with 250,196 instructions in 170,629 cycles. This is 2,014 cycles (+1.19%) above the archived RTL reference of 168,615. Stage 2 SimX took 173,098 cycles with the same instruction count, a 1.45% absolute gap. `ice_fetch.sh` has retrieved the ldstream receipt. GEMM has uploaded its input and is executing.
+
+## 2026-11-24 10:29 EST — Final h200s Stage 2 results
+
+GEMM and lean ldstream use the ICE results on the rebased branches. Base SimX is `8a56e7483`, Stage 1 is `124ab781f` on `fix/smem-phase`, and Stage 2 is `1e79f5e6b` on `fix/cache-repl`. The Stage 1 RTL column uses the archived h200s vmdx reference for GEMM (555,376) and the archived `ccd8d3974` reference for lean ldstream (168,615). The other five rows retain the saved pre-dMMU measurements. The gap is the absolute SimX cycle difference as a percentage of Stage 2 RTL cycles.
+
+| h200s workload | Stage 1 RTL | Base SimX | Stage 1 SimX | Stage 2 RTL | Stage 2 SimX | RTL cycle change | Stage 2 gap |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Stack replay, 16 warps | 7,738 | 5,451 | 7,806 | 5,304 | 5,451 | -2,434 (-31.46%) | 2.77% |
+| Stack replay, 64 warps | 10,533 | 8,800 | 10,414 | 8,358 | 8,800 | -2,175 (-20.65%) | 5.29% |
+| `smprobe -k2 -n2` | 39,238 | 45,984 | 39,741 | 44,499 | 45,984 | +5,261 (+13.41%) | 3.34% |
+| `smprobe -k0 -n2` | 45,597 | 61,399 | 42,993 | 66,230 | 61,399 | +20,633 (+45.25%) | 7.29% |
+| `gemm_block` | 555,376 | 518,282 | 515,718 | 544,982 | 513,734 | -10,394 (-1.87%) | 5.73% |
+| `bwstream_dxa` | 52,875 | 53,753 | 53,289 | 52,528 | 53,753 | -347 (-0.66%) | 2.33% |
+| `ldstream lean` | 168,615 | 173,926 | 171,240 | 170,629 | 173,098 | +2,014 (+1.19%) | 1.45% |
+
+GEMM ran with `-m16 -n1024 -k4096 -s1`, `-DMTILES=1` and `-DPROFILE_ENABLE`. Lean ldstream ran with `-t2048 -b8 -u8 -m16 -a -l`. Both RTL runs and all six SimX runs passed, with 814,144 retired GEMM instructions and 250,196 retired ldstream instructions in each respective run. The RTL and SimX jobs used matching host and kernel binaries by SHA-256. ICE 7280302 built one h200s RTL model using 16 CPUs and 100 GiB, then ran both workloads. GEMM took 2h06m08s of wall time and ldstream took 28m24s. ICE 7280308 supplied the rebased SimX measurements. Both jobs exited zero and removed their ICE source copies. Logs and receipts are in `results/bg_cache_repl_8a56_ice_1124/` and `results/bg_cache_repl_8a56_ice_1124_simx/`.
+
+In the existing Stage 2 logs, the 64-warp stack replay retires 7,118 instructions and executes 36,874 loads and 36,952 stores in both models. L2 requests (RTL / SimX) are 9,998 / 9,997, read misses are 4,123 / 4,117, and dirty writebacks are 0 / 0. Across the 15 matched CTA phase samples, the SimX interval starts an average of 405 cycles later and lasts only 16 cycles longer on average. The delay is already present at interval entry. The higher SimX fetch latency (14.75 versus 12.23 cycles) and fetch stalls (35% versus 27%) are consistent with that timing difference, but the aggregate counters cannot isolate its cause. For `smprobe -k0 -n2`, RTL retires 59,165 versus 54,965 instructions and executes 461,468 versus 424,017 loads at nearly the same IPC (0.893 / 0.895). The time-based neighbor loop completes more work on RTL, which accounts for the direction and magnitude of the total-cycle difference. Probe p50 is 1,142 / 1,269 cycles and p95 is 3,321 / 2,622, so the total does not quantify a barrier latency difference. This analysis uses the saved pre-dMMU Stage 2 logs in `results/bg_cache_repl_stage2/h200s/`.
