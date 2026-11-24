@@ -320,6 +320,35 @@ tests:
   app: ldstream
   args: -t32 -b8 -u4 -m0.125 -l
   configs: -DVX_CFG_NUM_THREADS=8 -DVX_CFG_DCACHE_WORD_SIZE=64 -DVX_CFG_DCACHE_CHANNELS=2
+# The same line stream at the h200s core's scale, behind the dcache MMU: 64
+# warps on four 8-lane LSU blocks keep the dcache's merged responses and its
+# response queues busy, and the two channels of a block reach the coalescer
+# through the MMU's response lanes, which have no stage of their own.
+- id: parity-dcache-ch2-ldstream-vm
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: ldstream
+  args: -t2048 -b8 -u8 -m4 -a -l
+  configs: >-
+    -DVX_CFG_NUM_WARPS=64 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_LSU_LANES=8
+    -DVX_CFG_NUM_ALU_LANES=16 -DVX_CFG_FETCH_WIDTH=4
+    -DVX_CFG_DCACHE_WORD_SIZE=64 -DVX_CFG_DCACHE_CHANNELS=2 -DVX_CFG_DCACHE_NUM_BANKS=4
+    -DVX_CFG_DCACHE_SIZE=262144 -DVX_CFG_DCACHE_FWD_HOLD=1 -DVX_CFG_DCACHE_CRSQ_SIZE=16
+    -DVX_CFG_DCACHE_MSHR_SIZE=512 -DVX_CFG_LSU_PENDING_SIZE=512 -DVX_CFG_LSU_PENDING_LIMIT=512
+    -DVX_CFG_VM_ENABLE -DVX_CFG_DTLB_SIZE=256 -DVX_CFG_L2_TLB_MEGA_SIZE=256
+    -DVX_CFG_LANE_DISPATCH_GAPLESS=3 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1
+    -DVX_CFG_BRANCH_REG=0 -DVX_CFG_FETCH_REQ_BUF=0 -DVX_CFG_FLUSH_REQ_BUF=0 -DVX_CFG_OPC_MERGE_BUF=0
+    -DVX_CFG_NUM_GPR_BANKS=8 -DVX_CFG_DISPATCH_QUEUE_SIZE=8 -DVX_CFG_FPU_QUEUE_SIZE=16
+    -DVX_CFG_BAR_DRAIN_SCOPE=1
+    -DVX_CFG_L2_ENABLE -DVX_CFG_L2_LINK_LATENCY=94 -DVX_CFG_L2_LINE_SIZE=128 -DVX_CFG_L2_NUM_BANKS=16
+    -DVX_CFG_L2_MSHR_SIZE=256 -DVX_CFG_L2_SIZE=2097152 -DVX_CFG_L2_REPL_POLICY=2
+    -DVX_CFG_PLATFORM_MEMORY_TYPE=HBM3E -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=16
+    -DVX_CFG_PLATFORM_MEMORY_DATA_RATE=6250 -DVX_CFG_PLATFORM_MEMORY_PEAK_BW=800000
+    -DVX_CFG_PLATFORM_MEMORY_BANK_GROUPS=8 -DVX_CFG_PLATFORM_MEMORY_SCHED_WINDOW=256
+    -DVX_CFG_PLATFORM_MEMORY_INTERLEAVE_SIZE=1024 -DVX_CFG_PLATFORM_CLOCK_RATE=1980
+  env:
+    VORTEX_VM_MEGAPAGE_HEAP: 1
 # Warp-wide local memory: broadcast reads, bank-conflict replays, sub-word and
 # same-word stores, with one LSU block and with two, where the read engine
 # works the banks' second port.
