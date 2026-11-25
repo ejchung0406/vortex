@@ -802,7 +802,7 @@ h200s rtlsim / SimX at the current profile (rover):
 
 ## Update 2026-11-24 (04:45 EST)
 STATE FOR A NEW SESSION: the Phoenix job hosting the Claude session (15992728 `slowdown`) ends about 2026-11-24 22:40
-EST (3-day limit). rover has refused ssh since 2026-11-23 20:56 ("Connection closed by ..."; host pings);
+EST (3-day limit). rover has refused ssh since 2026-11-23 20:56 ("Connection closed by ... port <port>"; host pings);
 cause unknown; our processes there (Codex's h200s rtlsim runs bg_cache_repl_*, dcg_c8r, source and model trees)
 are unread and uncleaned. ICE scratch was full (285/300 GB, 995k/1M files); 33 finished trees removed
 (src_smr_*, src_barfix_*), now 274 GB / 786k files; most of the space is outside vortex-ice.
@@ -924,3 +924,23 @@ The profile text of h200s still quotes 3,786 FLOPs per clock for the tensor roof
 clock is 4,096 (finding M2). To be reworded.
 Standing: rover runs only through rover_start.sh (200 GB slice); Phoenix with gts-hkim358 is allowed; Codex sessions
 are started by the user with prompt files in vortex-exp/codex-tasks/.
+
+## Update 2026-11-25 (04:20 EST)
+User decisions: (1) turn LMEM_DMA_RD_OVERLAP and DXA_LINE_PER_CYCLE on in h200s (553ec0818 = cherry-pick of ae692191d;
+h200g2 inherits); (2) leave the multi-SM bandwidth ceiling (85-88% of 1,544 GB/s, 6% roll-off to 32 SMs) as a known
+limit. The setup phase is closed with this; the research direction is the user's.
+Merged: fix/lmem-dma-rd-parity (7966e9661; merge 7c0813e3d): a shared DXA memory port holds a response until its
+worker can capture it (SimX). It changes DXA timing in SimX with or without the knobs.
+h200s one-SM SimX baselines (rover). "off" = 7c0813e3d (knobs off, points h7_*), "on" = 553ec0818 (profile, hn_*):
+fetch_squash 10,017 / 10,017; warp_rate 113,380 / 113,380; tmem_roof -n512 -i8 61,878 / 61,878; bwstream -n2048 -u4
+-b32 394,065 / 394,065; war_order 320,317 / 320,317; ldstream lean 173,098 / 173,098; ldstream 314,406 / 314,406;
+smem_rate -w64 -i16 -k14 139,069, -k13 139,576, -k22 -f150 139,931 (same both); lmem_access 7,713,082 / 7,713,082;
+gemm_block 521,456 / 443,681; gemm_tmem_decode 1,152,917 / 1,150,323; bwstream_dxa -e4096 -n256 -d2 436,070 / 337,648,
+-d4 194,587 / 157,887, -n32 -d2 55,624 / 45,248.
+Before the SimX fix (c4362ef63, knobs off): gemm_block 513,734, bwstream_dxa -d2 400,310, -d4 190,417, -n32 54,072:
+the fix alone makes SimX's DXA 2-9% slower, toward the RTL.
+rtlsim at h200s with the knobs on (Codex, unchanged RTL): bwstream_dxa -n32 -d2 48,702 (SimX 45,248, 7.6%),
+gemm_block 472,826 (443,681, 6.6%), smem_rate -k22 140,238 (139,931).
+Agents running (Opus): wrapup-docs (findings 66+, notes/h200-model-status.md, profile texts, study mirror),
+wrapup-clean (merged branches, old source copies; notes/cleanup-2026-11-25.md), parity-dxa (the two remaining
+gaps; branch fix/dxa-gemm-parity, notes/dxa-gemm-parity.md). None of them pushes.
