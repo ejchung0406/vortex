@@ -108,6 +108,13 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
         .ADDR_WIDTH  (LMEM_DMA_ADDR_WIDTH)
     ) lmem_dma_if();
 
+    wire [`VX_CFG_LMEM_NUM_BANKS-1:0] dxa_bank_wr_fire;
+    wire [DXA_LMEM_DONE_W-1:0] dxa_bank_wr_attr;
+
+`ifndef VX_CFG_EXT_DXA_ENABLE
+    `UNUSED_VAR ({dxa_bank_wr_fire, dxa_bank_wr_attr})
+`endif
+
     localparam LMEM_DMA_IN_TAG_W = LMEM_DMA_IN_TAG_MAX;
 
     if (LMEM_DMA_INPUTS > 0) begin : g_lmem_dma
@@ -165,14 +172,6 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
         `ASSIGN_VX_MEM_BUS_IF (lmem_dma_if, dma_arb_out_if[0]);
 
     `ifdef VX_CFG_EXT_DXA_ENABLE
-        wire [`VX_CFG_LMEM_NUM_BANKS-1:0] dxa_bank_wr_fire;
-        for (genvar i = 0; i < `VX_CFG_LMEM_NUM_BANKS; ++i) begin : g_dxa_bank_wr_fire
-            assign dxa_bank_wr_fire[i] = lmem_dma_if.req_valid
-                                      && lmem_dma_if.req_ready
-                                      && lmem_dma_if.req_data.rw
-                                      && (|lmem_dma_if.req_data.byteen[i*LSU_WORD_SIZE +: LSU_WORD_SIZE]);
-        end
-
         VX_dxa_completion #(
             .INSTANCE_ID (`SFORMATF(("%s-lmem-dma-compl_det", INSTANCE_ID))),
             .NUM_BANKS   (`VX_CFG_LMEM_NUM_BANKS),
@@ -181,7 +180,7 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
             .clk           (clk),
             .reset         (reset),
             .bank_wr_fire  (dxa_bank_wr_fire),
-            .bank_wr_attr  (DXA_LMEM_DONE_W'(lmem_dma_if.req_data.attr)),
+            .bank_wr_attr  (dxa_bank_wr_attr),
             .txbar_bus_if  (dxa_txbar_bus_if)
         );
 
@@ -227,7 +226,8 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
         .AMO_ENABLE    (`VX_CFG_EXT_A_ENABLED),
         .WR_MERGE      (`VX_CFG_LMEM_WR_MERGE),
         .WR_ROW        (`VX_CFG_LMEM_WR_ROW),
-        .RD_ROW        (`VX_CFG_LMEM_RD_ROW)
+        .RD_ROW        (`VX_CFG_LMEM_RD_ROW),
+        .DMA_RD_OVERLAP (`VX_CFG_EXT_DXA_ENABLED && (`VX_CFG_LMEM_DMA_RD_OVERLAP != 0))
     ) lmem_unit (
         .clk           (clk),
         .reset         (reset),
@@ -237,6 +237,8 @@ module VX_mem_unit import VX_gpu_pkg::*; #(
         .lsu_mem_if    (lmem_if),
         .dma_bus_if    (lmem_dma_if),
         .rd_bus_if     (lmem_rd_if),
+        .dma_wr_fire   (dxa_bank_wr_fire),
+        .dma_wr_attr   (dxa_bank_wr_attr),
         .store_empty   (lmem_store_empty)
     );
 

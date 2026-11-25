@@ -211,11 +211,13 @@ protected:
   void on_tick();
 
 private:
+  void on_dxa_done(const uint32_t& bar_id);
   void on_gbar_resume(const GbarResume& msg);
 #ifdef VX_CFG_EXT_RASTER_ENABLE
   void on_fwd_arm(const FwdArm& msg);
 #endif
 
+  SimEventLink<uint32_t> dxa_done_in_;
   uint32_t core_id_;
   Socket*  socket_;
 

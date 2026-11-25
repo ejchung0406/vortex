@@ -15,9 +15,11 @@
 #include "mem_block_pool.h"
 #include <mem.h>
 #include <bitmanip.h>
+#include <array>
 #include <vector>
 #include <deque>
 #include <cstring>
+#include <optional>
 #if VX_CFG_EXT_A_ENABLED
 #include "amo_ops.h"
 #include "amo_unit.h"
@@ -114,6 +116,17 @@ protected:
     bool        passed_read = false;
   };
 
+  struct DmaBeat {
+    uint32_t client = 0;
+    std::array<std::optional<MemReq>, DMA_PORTS> parts;
+  };
+
+  struct DmaHazards {
+    std::array<uint64_t, 2 * DMA_PORTS> rows;
+    uint32_t count = 0;
+    bool read = false;
+  };
+
   LocalMem* simobject_;
   Config    config_;
   RAM       ram_;
@@ -156,6 +169,7 @@ protected:
   Selection b_sel_;
   bool      write_waiting_r_;
   bool      dma_slot_;
+  std::optional<DmaBeat> dma_beat_;
   uint32_t  dma_last_grant_;
   bool      rd_slot_;
   // the read engine was held back for a row read in the last cycle
@@ -356,6 +370,110 @@ protected:
     return false;
   }
 
+  void dma_access(uint32_t client, uint32_t part, const MemReq& req) {
+    uint64_t line_addr = to_local_addr(req.addr) & ~uint64_t(VX_CFG_MEM_BLOCK_SIZE - 1);
+    if (req.is_write()) {
+      if (req.byteen != 0) {
+        for (uint32_t b = 0; req.data && b < VX_CFG_MEM_BLOCK_SIZE; ++b) {
+          if (req.byteen & (1ull << b)) {
+            uint8_t value = (*req.data)[b];
+            ram_.write(&value, line_addr + b, 1);
+          }
+        }
+#if VX_CFG_EXT_A_ENABLED
+        amo_unit_.invalidate(to_local_addr(req.addr), req.hart_id);
+#endif
+        if (config_.rd_port) {
+          wr_rows_.push_back(this->row_of(req.addr));
+        }
+#if VX_CFG_EXT_DXA_ENABLED
+        if (DMA_RD_OVERLAP && req.flags.dxa_notify_done) {
+          // The completion FIFO and WCTL each register the release.
+          simobject_->DxaDone.send(req.flags.dxa_notify_bar_id, 2);
+        }
+#endif
+      }
+    } else {
+      MemRsp rsp{req.tag, req.hart_id, req.uuid};
+      auto rsp_data = make_mem_block();
+      ram_.read(rsp_data->data(), line_addr, VX_CFG_MEM_BLOCK_SIZE);
+      rsp.data = rsp_data;
+      simobject_->DmaOutputs.at(client * DMA_PORTS + part).send(rsp, 0);
+    }
+    DT(4, simobject_->name() << "-dma" << client << " req : " << req);
+  }
+
+  void dma_hazards(const DmaBeat& beat, DmaHazards& hazards) const {
+    for (const auto& part : beat.parts) {
+      if (!part) {
+        continue;
+      }
+      if (!part->is_write()) {
+        hazards.read = true;
+      } else if (part->byteen != 0) {
+        const auto block = part->addr & ~uint64_t(VX_CFG_MEM_BLOCK_SIZE - 1);
+        const auto addr = block + __builtin_ctzll(part->byteen);
+        hazards.rows.at(hazards.count++) = bank_word(addr) >> config_.B;
+      }
+    }
+  }
+
+  bool commit_dma_beat(const DmaBeat& beat) {
+    for (uint32_t p = 0; p < DMA_PORTS; ++p) {
+      const auto& req = beat.parts.at(p);
+      if (req && !req->is_write() && simobject_->DmaOutputs.at(beat.client * DMA_PORTS + p).full()) {
+        return false;
+      }
+    }
+    for (uint32_t p = 0; p < DMA_PORTS; ++p) {
+      if (const auto& req = beat.parts.at(p)) {
+        this->dma_access(beat.client, p, *req);
+      }
+    }
+    return true;
+  }
+
+  void stage_dma_beat() {
+    for (uint32_t i = 0; i < config_.dma_clients; ++i) {
+      uint32_t client = (dma_last_grant_ + 1 + i) % config_.dma_clients;
+      for (uint32_t p = 0; p < DMA_PORTS; ++p) {
+        auto& in = simobject_->DmaInputs.at(client * DMA_PORTS + p);
+        if (!in.empty()) {
+          if (!dma_beat_) {
+            dma_beat_.emplace();
+            dma_beat_->client = client;
+          }
+          dma_beat_->parts.at(p) = in.peek();
+          in.pop();
+        }
+      }
+      if (dma_beat_) {
+        dma_last_grant_ = client;
+        return;
+      }
+    }
+  }
+
+  bool disjoint_dma_read(const Engine& engine, const DmaHazards& hazards) const {
+    const auto& req = engine.s1.req;
+    if (!is_plain_read(req)) {
+      return false;
+    }
+    const auto lanes = this->select_pass(req, engine.pending);
+    for (uint32_t i = 0; i < config_.num_lanes; ++i) {
+      if (!lanes.test(i)) {
+        continue;
+      }
+      const auto row = bank_word(req.addrs.at(i)) >> config_.B;
+      for (uint32_t r = 0; r < hazards.count; ++r) {
+        if (row == hazards.rows.at(r)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
   // Serve one DMA client's row access. Clients are served round-robin,
   // starting after the last one served.
   void dma_fire() {
@@ -384,34 +502,7 @@ protected:
         if (in.empty()) {
           continue;
         }
-        auto& req = in.peek();
-        uint64_t line_addr = to_local_addr(req.addr) & ~uint64_t(VX_CFG_MEM_BLOCK_SIZE - 1);
-        if (req.is_write()) {
-          // a row part a write leaves empty arrives with no byte enabled
-          if (req.byteen != 0) {
-            for (uint32_t b = 0; req.data && b < VX_CFG_MEM_BLOCK_SIZE; ++b) {
-              if (req.byteen & (1ull << b)) {
-                uint8_t value = (*req.data)[b];
-                ram_.write(&value, line_addr + b, 1);
-              }
-            }
-#if VX_CFG_EXT_A_ENABLED
-            amo_unit_.invalidate(to_local_addr(req.addr), req.hart_id);
-#endif
-            if (config_.rd_port) {
-              wr_rows_.push_back(this->row_of(req.addr));
-            }
-          }
-        } else {
-          MemRsp rsp{req.tag, req.hart_id, req.uuid};
-          auto rsp_data = make_mem_block();
-          ram_.read(rsp_data->data(), line_addr, VX_CFG_MEM_BLOCK_SIZE);
-          rsp.data = rsp_data;
-          // The request arrived over a registered channel; the read data
-          // returns the cycle after it was issued.
-          simobject_->DmaOutputs.at(c * DMA_PORTS + p).send(rsp, 0);
-        }
-        DT(4, simobject_->name() << "-dma" << c << " req : " << req);
+        this->dma_access(c, p, in.peek());
         in.pop();
       }
       dma_last_grant_ = c;
@@ -688,6 +779,7 @@ public:
     b_sel_ = Selection();
     write_waiting_r_ = false;
     dma_slot_ = false;
+    dma_beat_.reset();
     dma_last_grant_ = config_.dma_clients ? (config_.dma_clients - 1) : 0;
     rd_slot_ = false;
     b_held_ = false;
@@ -771,8 +863,8 @@ public:
       }
     }
 
-    // S1: a DMA access, or the engines' passes. A DMA request seen in one
-    // cycle takes the banks the next; no pass is issued while one is seen.
+    // S1: a DMA request seen in one cycle takes the banks the next.
+    // A disjoint read pass may use the read port with a DMA write.
     // An engine whose last pass left lanes pending spends this cycle finding
     // the next winners.
     std::vector<bool> s1_ready(num_engines);
@@ -812,51 +904,72 @@ public:
       rd_wait_ = rd_valid;
     } else {
       bool dma_valid = this->dma_pending();
-      if (dma_slot_) {
-        this->dma_fire();
+      bool dma_blocks_pass = dma_valid;
+      DmaHazards hazards;
+      if constexpr (DMA_RD_OVERLAP) {
+        // A pass is selected a cycle before it reaches the banks. The
+        // staged beat and its replacement bound the rows it can bypass.
+        dma_blocks_pass |= dma_beat_.has_value();
+        if (dma_beat_) {
+          this->dma_hazards(*dma_beat_, hazards);
+          if (this->commit_dma_beat(*dma_beat_)) {
+            dma_beat_.reset();
+          }
+        }
+        if (!dma_beat_ && dma_valid) {
+          this->stage_dma_beat();
+          this->dma_hazards(*dma_beat_, hazards);
+        }
+      } else {
+        if (dma_slot_) {
+          this->dma_fire();
+        }
+        dma_slot_ = dma_valid;
       }
-      dma_slot_ = dma_valid;
       bool row_written = rd_valid && this->rd_row_written();
       bool rd_fired = rd_slot_ && rd_valid && !banks_read && !row_written && this->rd_fire();
       rd_wait_ = rd_valid && !rd_fired && (rd_wait_ || row_written);
       rd_slot_ = rd_valid;
-      if (!dma_valid) {
+      if (!dma_blocks_pass) {
         for (uint32_t k = 0; k < num_engines; ++k) {
           if (can_pass.at(k) && !(k == 0 && (a_hold || (b_hold && a_reads))) && !(k == 1 && b_hold)) {
             s1_ready.at(k) = this->issue_pass(engines_.at(k), rsp_count.at(k));
           }
         }
-        if (!a_hold) {
-          uint32_t taken = 0;
-          bool first = true;
-          uint32_t rr = s_rr_;
-          for (uint32_t p = 0; p < num_stores; ++p) {
-            uint32_t k = (rr + p) % num_stores;
-            if (!s_can_pass.at(k)) {
-              continue;
-            }
-            auto& e = store_engines_.at(k);
-            if (!e.s1.req.is_write() && (b_hold || rsp_count.at(num_engines + k) >= RSP_QUEUE_SIZE)) {
-              // a read pass does not ask in the row read port's cycle, nor
-              // without a response slot
-              continue;
-            }
-            uint32_t banks = 0;
-            for (uint32_t i = 0; i < config_.num_lanes; ++i) {
-              if (e.pending.test(i)) {
-                banks |= 1u << this->bank_of(e.s1.req.addrs.at(i));
-              }
-            }
-            if (banks & taken) {
-              continue;
-            }
-            taken |= banks;
-            if (first) {
-              s_rr_ = (k + 1) % num_stores;
-              first = false;
-            }
-            s_s1_ready.at(k) = this->issue_pass(e, rsp_count.at(num_engines + k));
+      }
+      if (!a_hold && (!dma_blocks_pass || (DMA_RD_OVERLAP && !rd_valid && !hazards.read))) {
+        uint32_t taken = 0;
+        bool first = true;
+        uint32_t rr = s_rr_;
+        for (uint32_t p = 0; p < num_stores; ++p) {
+          uint32_t k = (rr + p) % num_stores;
+          if (!s_can_pass.at(k)) {
+            continue;
           }
+          auto& e = store_engines_.at(k);
+          if (!e.s1.req.is_write() && (b_hold || rsp_count.at(num_engines + k) >= RSP_QUEUE_SIZE)) {
+            // a read pass does not ask in the row read port's cycle, nor
+            // without a response slot
+            continue;
+          }
+          if (dma_blocks_pass && !this->disjoint_dma_read(e, hazards)) {
+            continue;
+          }
+          uint32_t banks = 0;
+          for (uint32_t i = 0; i < config_.num_lanes; ++i) {
+            if (e.pending.test(i)) {
+              banks |= 1u << this->bank_of(e.s1.req.addrs.at(i));
+            }
+          }
+          if (banks & taken) {
+            continue;
+          }
+          taken |= banks;
+          if (first) {
+            s_rr_ = (k + 1) % num_stores;
+            first = false;
+          }
+          s_s1_ready.at(k) = this->issue_pass(e, rsp_count.at(num_engines + k));
         }
       }
     }
@@ -893,7 +1006,7 @@ public:
       this->arbitrate(s0_ready, a_write, a_busy, b_busy, s_ready, s_busy);
     }
 
-    bool idle = (stall_cycles_ == 0) && !dma_slot_ && !a_sel_.valid && !b_sel_.valid
+    bool idle = (stall_cycles_ == 0) && !dma_slot_ && !dma_beat_ && !a_sel_.valid && !b_sel_.valid
              && !rd_slot_ && !b_held_ && !rd_wait_ && store_rows_.empty();
     for (auto& e : engines_) {
       idle = idle && e.s0.empty() && !e.s1_valid && e.rsp_queue.empty();
@@ -948,6 +1061,7 @@ LocalMem::LocalMem(const SimContext& ctx, const char* name, const Config& config
   , RspOut(config.num_blocks, this)
   , DmaInputs(config.dma_clients * DMA_PORTS, this)
   , DmaOutputs(config.dma_clients * DMA_PORTS, this)
+  , DxaDone(this)
   , RdInputs(config.rd_port ? DMA_PORTS : 0, this)
   , RdOutputs(config.rd_port ? DMA_PORTS : 0, this)
   , impl_(new Impl(this, config))

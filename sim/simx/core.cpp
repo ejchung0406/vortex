@@ -1943,11 +1943,16 @@ Core::Core(const SimContext& ctx,
   , fwd_arm_in(this)
   , fwd_done_out(this)
 #endif
+  , dxa_done_in_(this)
   , core_id_(core_id)
   , socket_(socket)
   , impl_(new Impl(ctx, this))
 {
   gbar_resume_in.bind(this, &Core::on_gbar_resume);
+  if constexpr (LocalMem::DMA_RD_OVERLAP) {
+    dxa_done_in_.bind(this, &Core::on_dxa_done);
+    this->local_mem()->DxaDone.bind(&dxa_done_in_);
+  }
 #ifdef VX_CFG_EXT_RASTER_ENABLE
   fwd_arm_in.bind(this, &Core::on_fwd_arm);
 #endif
@@ -2011,6 +2016,10 @@ void Core::global_barrier_resume(uint32_t bar_id) {
 
 void Core::on_gbar_resume(const GbarResume& msg) {
   this->global_barrier_resume(msg.bar_id);
+}
+
+void Core::on_dxa_done(const uint32_t& bar_id) {
+  this->barrier_event_release(bar_decode_id(bar_id, VX_CFG_NUM_BARRIERS));
 }
 
 #ifdef VX_CFG_EXT_RASTER_ENABLE

@@ -31,6 +31,8 @@ public:
   static constexpr uint32_t DMA_ROW_SIZE = VX_CFG_LMEM_NUM_BANKS * (VX_CFG_XLEN / 8);
   static constexpr uint32_t DMA_PORTS =
       (DMA_ROW_SIZE > VX_CFG_MEM_BLOCK_SIZE) ? (DMA_ROW_SIZE / VX_CFG_MEM_BLOCK_SIZE) : 1;
+  static constexpr bool DMA_RD_OVERLAP = VX_CFG_EXT_DXA_ENABLED
+                                      && VX_CFG_LMEM_DMA_RD_OVERLAP && VX_CFG_LMEM_RD_ROW;
 
   struct Config {
     uint32_t capacity;
@@ -61,6 +63,7 @@ public:
   // DMA port: client c uses channels [c * DMA_PORTS, (c + 1) * DMA_PORTS).
   std::vector<SimChannel<MemReq>> DmaInputs;
   std::vector<SimChannel<MemRsp>> DmaOutputs;
+  SimEventLink<uint32_t> DxaDone;
 
   // Row read port (Config::rd_port): one row on DMA_PORTS channels.
   std::vector<SimChannel<MemReq>> RdInputs;
