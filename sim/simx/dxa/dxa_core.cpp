@@ -40,6 +40,10 @@ static_assert(kDxaMemPorts >= 1 && kDxaMemPorts <= VX_CFG_NUM_DXA_CORES
            && kDxaMemPorts <= VX_CFG_L1_MEM_PORTS,
               "DXA_GMEM_PORTS: at most one per worker and per socket memory port");
 
+constexpr uint32_t gmem_workers(uint32_t port) {
+  return (VX_CFG_NUM_DXA_CORES - port + kDxaMemPorts - 1) / kDxaMemPorts;
+}
+
 // LMEM "word" granularity for splitting DXA writes. The LocalMem bank
 // model applies byteen relative to a VX_CFG_MEM_BLOCK_SIZE-aligned address,
 // so each LineWork's destination must lie within one VX_CFG_MEM_BLOCK_SIZE-aligned
@@ -268,20 +272,27 @@ public:
     // setup → req-arb) so each stage's tick reads what its upstream produced
     // earlier this cycle, mimicking forward stage flow.
 
-    // 1) smem_wr drain, then 2) hand it one line per worker, then 3) issue
-    // the next GMEM read. A line leaving pend for the fill buffer frees pend
-    // for a capture in the same cycle. The port's arbiter already routes
-    // responses back to the worker's RspOut (its input index) and restores
-    // the user's tag (the per-worker slot id).
+    // A line leaving pend for the fill buffer frees pend for a capture in
+    // the same cycle. Each GMEM port presents a single head to its worker.
     if (kLmemRow) {
       tick_lmem_row();
     }
-    for (uint32_t worker_id = 0; worker_id < workers_.size(); ++worker_id) {
-      auto& w = workers_[worker_id];
+    std::array<GmemResponse, VX_CFG_NUM_DXA_CORES> responses{};
+    for (uint32_t port = 0; port < kDxaMemPorts; ++port) {
+      auto& in = simobject_->gmem_rsp_in.at(port);
+      if (in.empty()) {
+        continue;
+      }
+      uint32_t route_bits = log2ceil(gmem_workers(port));
+      auto tag = in.peek().tag;
+      uint32_t worker = port + kDxaMemPorts * (tag & ((1u << route_bits) - 1));
+      responses.at(worker) = {&in, uint32_t(tag >> route_bits)};
+    }
+    for (auto& w : workers_) {
       if (!kLmemRow && w.state == WState::RUNNING) {
         tick_worker_smem_wr(w);
       }
-      capture_line(w, this->gmem_rsp(worker_id));
+      capture_line(w, responses.at(w.worker_id));
       if (w.state == WState::RUNNING) {
         tick_worker_gmem_req(w);
       }
@@ -608,15 +619,20 @@ private:
     }
   }
 
+  struct GmemResponse {
+    SimChannel<MemRsp>* port = nullptr;
+    uint32_t slot = 0;
+  };
+
   // ── smem_wr capture: one line per cycle into its line registers ───────
   // A GMEM response has priority over a pending OOB line. smem_wr holds one
   // line being written, one captured behind it, and the transfer's last line
   // while others are outstanding. A response it cannot take stays on the
   // memory response path and holds the responses queued behind it.
-  void capture_line(Worker& w, SimChannel<MemRsp>& ch) {
-    // No response and no slot in flight (an OOB line holds an allocated
-    // slot): nothing to take.
-    if (ch.empty() && w.num_issued == 0) {
+  void capture_line(Worker& w, const GmemResponse& response) {
+    auto* port = response.port;
+    // An OOB line holds an allocated slot.
+    if (port == nullptr && w.num_issued == 0) {
       return;
     }
     // Captured lines other than the one draining, by kind.
@@ -639,10 +655,10 @@ private:
     uint32_t oob_slot = w.oob_pending.first();
 
     uint32_t slot = oob_slot;
-    if (!ch.empty()) {
-      slot = uint32_t(ch.peek().tag) & (VX_CFG_DXA_MAX_INFLIGHT - 1);
+    if (port != nullptr) {
+      slot = response.slot & (VX_CFG_DXA_MAX_INFLIGHT - 1);
       if (!w.allocated.test(slot)) {
-        ch.pop();
+        port->pop();
         return;
       }
     }
@@ -655,9 +671,9 @@ private:
     if (defer ? defer_busy : pend_busy) {
       return;
     }
-    if (!ch.empty()) {
-      s.rsp_data = ch.peek().data;
-      ch.pop();
+    if (port != nullptr) {
+      s.rsp_data = port->peek().data;
+      port->pop();
     }
     w.oob_pending.clear(slot);
     w.rsp_arrived.set(slot);
@@ -714,16 +730,16 @@ private:
       return;
     }
 
-    // Issue real GMEM read. Tag = per-worker slot id (the port's arbiter
-    // prepends its own input-index bits for response routing — we only see
-    // slot bits coming back).
+    // The port's request arbiter adds the worker index to the slot tag
+    // so the port can route the returning line to the same worker.
     MemReq mreq;
     mreq.addr  = lw.gmem_cl_addr;
     mreq.tag   = slot;
     mreq.hart_id   = w.req.core->id();
     mreq.uuid  = w.req.uuid;
 
-    auto& ch = simobject_->gmem_arbs_.at(w.worker_id % kDxaMemPorts)->ReqIn.at(w.worker_id / kDxaMemPorts);
+    auto& arb = simobject_->gmem_arbs_.at(w.worker_id % kDxaMemPorts);
+    auto& ch = arb->Inputs.at(w.worker_id / kDxaMemPorts);
     if (!ch.try_send(mreq)) return; // arb backpressure
 
     w.allocated.set(slot);
@@ -1135,9 +1151,6 @@ private:
   // ── Members ──────────────────────────────────────────────────────────
   DxaCore*    simobject_;
 
-  SimChannel<MemRsp>& gmem_rsp(uint32_t worker_id) {
-    return simobject_->gmem_arbs_.at(worker_id % kDxaMemPorts)->RspOut.at(worker_id / kDxaMemPorts);
-  }
   std::array<Descriptor, VX_DCR_DXA_DESC_COUNT> descriptors_;
   std::deque<DxaReq>     queue_;
   std::vector<Worker>    workers_;
@@ -1167,24 +1180,28 @@ DxaCore::DxaCore(const SimContext& ctx, const char* name, Socket* socket)
   // its inflight slot; the arbiter adds its input index for the response.
   char sname[100];
   for (uint32_t i = 0; i < kDxaMemPorts; ++i) {
-    uint32_t num_workers = (VX_CFG_NUM_DXA_CORES - i + kDxaMemPorts - 1) / kDxaMemPorts;
+    uint32_t num_workers = gmem_workers(i);
     if (kDxaMemPorts == 1) {
       snprintf(sname, 100, "%s-gmem-arb", name);
     } else {
       snprintf(sname, 100, "%s-gmem-arb%d", name, i);
     }
-    auto arb = MemArbiter::Create(sname, ArbiterType::RoundRobin, num_workers, 1);
+    auto arb = GmemReqArbiter::Create(sname, ArbiterType::RoundRobin, num_workers, 1);
+    auto* output = &gmem_req_out.at(i);
   #ifdef SIMX_SOCKET_UNIT_MMU
     // The unit MMU's lookup starts from a registered request: the DXA owns it.
     snprintf(sname, 100, "%s-gmem-out%d", name, i);
     auto out_reg = MemReqSlice::Create(sname, 1);
-    arb->ReqOut.at(0).bind(&out_reg->In);
-    out_reg->Out.bind(&gmem_req_out.at(i));
+    out_reg->Out.bind(output);
+    output = &out_reg->In;
     gmem_out_regs_.push_back(out_reg);
-  #else
-    arb->ReqOut.at(0).bind(&gmem_req_out.at(i));
   #endif
-    gmem_rsp_in.at(i).bind(&arb->RspIn.at(0));
+    uint32_t route_bits = log2ceil(num_workers);
+    arb->Outputs.at(0).bind(output, [route_bits](const GmemReqArbiter::RspType& routed) {
+      MemReq req(routed.data);
+      req.tag = (req.tag << route_bits) | routed.input;
+      return req;
+    });
     gmem_arbs_.push_back(arb);
   }
 
