@@ -1587,6 +1587,20 @@ public:
     return static_cast<const LsuUnit*>(func_units_.at((int)FUType::LSU).get())->sent();
   }
 
+  // The LSU drained, and under VM no request in the core's data or
+  // instruction MMU: the RTL's barrier gate takes the socket MMUs' empty.
+  bool lsu_core_drained() const {
+    if (!this->lsu_drained()) {
+      return false;
+    }
+  #ifdef VX_CFG_VM_ENABLE
+    if (!dcache_mmu_->drained() || !icache_mmu_->drained()) {
+      return false;
+    }
+  #endif
+    return true;
+  }
+
   // No request is in flight past the LSU blocks' request queues: the local
   // memory switches, the data-cache coalescers or lane adapters, the path on
   // to the dcache and the local memory hold none. The hardware reads these
@@ -1984,6 +1998,10 @@ bool Core::has_pending_instrs(uint32_t wid) const {
 
 bool Core::lsu_drained() const {
   return impl_->lsu_drained();
+}
+
+bool Core::lsu_core_drained() const {
+  return impl_->lsu_core_drained();
 }
 
 bool Core::lsu_sent() const {

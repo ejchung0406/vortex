@@ -89,7 +89,7 @@ bool SfuUnit::bar_lsu_drained(const instr_trace_t* trace) const {
 			return !core_->has_pending_instrs(trace->wid) && core_->lsu_sent() && core_->lsu_stores_landed();
 		}
 	}
-	return core_->lsu_drained();
+	return core_->lsu_core_drained();
 }
 
 // Cycles from processing to the output: the result buffer and the PE

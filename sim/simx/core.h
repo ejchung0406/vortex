@@ -108,6 +108,7 @@ public:
 
   bool has_pending_instrs(uint32_t wid) const;
   bool lsu_drained() const;
+  bool lsu_core_drained() const;
   bool lsu_sent() const;
   bool lsu_stores_landed() const;
 

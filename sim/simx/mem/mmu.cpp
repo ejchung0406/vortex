@@ -123,6 +123,15 @@ bool Mmu::empty() const {
   return reports_.empty();
 }
 
+bool Mmu::drained() const {
+  for (uint32_t p = 0; p < num_ports_; ++p) {
+    if (ReqIn.at(p).size() != 0 || ReqOut.at(p).size() != 0) {
+      return false;
+    }
+  }
+  return this->empty();
+}
+
 bool Mmu::needs_translation(const MemReq& req) const {
   // The runtime installs identity PTEs at boot for every PA-addressed
   // region (kernel image, page table, stacks), so a plain access
