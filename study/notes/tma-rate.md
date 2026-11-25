@@ -249,3 +249,27 @@ The reduced model retains HBM3E timing, 64 warps, 32 threads, 16 DXA workers and
 | 256 | 328,510 → 309,392 | 89.37 → 94.90 | 348,093 → 324,521 | 84.35 → 90.47 | 7.26% |
 
 Retired instructions match across all four runs for each size, at 9,345 and 70,497. In the 32-tile RTL pair, average DXA global-memory latency falls from 2,306.2 to 2,106.1 clocks and no-slot stalls from 204,979 to 169,259. This isolated LPC comparison supports enabling both knobs in h200s. [n32 LPC off](../results/lmd00186_v3_hbm_lite_lpc0_rtl_dxa32/run.log) · [n32 LPC on](../results/lmd00186_v3_hbm_lite_lpc1_rtl_dxa32/run.log) · [n256 LPC off](../results/lmd00186_v3_hbm_lite_lpc0_rtl_b/run.log) · [n256 LPC on](../results/lmd00186_v3_hbm_lite_lpc1_rtl_b/run.log)
+
+## 2026-11-24 20:24 EST · Stage 2a final result
+
+`feature/lmem-dma-rd` ends at `ae692191d` (`ae692191de1dcf19e6ea207416e723c66f8cb74e`). `36f0e32ab` implements the default-off knob in RTL and SimX and adds the RV64 parity test. The last commit enables overlap and LPC in `profiles/h200s.json` only. All 312 resolved definitions for the tested one-SM profile match the frozen source's explicit overrides.
+
+Both models admit ordinary LSU load passes on the existing read port during DXA writes when every selected bank row is disjoint from the byte-enabled halves of the staged and incoming beats. The two halves can carry separate row addresses. A conflicting load waits. TCU reads keep read-port priority, LSU stores and atomics still share write arbitration with DXA, and the last DMA beat completes after its SRAM write. The unit traces verify the concurrent read, deferred same-row loads, data visibility and TCU priority. With the knob off, the 14 requested h200s SimX workloads and two additional stream shapes match `00186b8b3` to the cycle. Eight small configurations match on both models. With overlap on, the four small parity cases retire identical instruction counts and stay within 0.263% of RTL cycles. [Unit traces](../results/lmem_dma_rd_unit) · [Job manifest](../slurm/lmem-dma-rd/phoenix_jobs.tsv)
+
+Phoenix `16097444` completed in 4:53:26 under `gts-hkim358`, with 16 CPUs and 160 GB. All three runs passed using the same `librtlsim.so` on Phoenix scratch. The file's inode, size and modification time were unchanged across the suite. Its build tree is `/storage/scratch1/7/echung67/tma-overlap-00186/h200s_rtlsim_16097444`. The full build and runs used 78.25 allocated CPU-hours. Including the other Phoenix probes gives 98.20 CPU-hours, about 0.79 at the quoted rate. [Build and artifact metadata](../results/lmd00186_large_v3_lpc1/meta.txt) · [Slurm log](../slurm/lmem-dma-rd/phoenix_16097444.out)
+
+| One-SM h200s workload | Retired on each model | SimX baseline cycles | SimX overlap + LPC cycles | rtlsim overlap + LPC cycles | RTL cycles vs selected SimX |
+|---|---:|---:|---:|---:|---:|
+| `bwstream_dxa -e4096 -n32 -d2 -c0` | 9,394 | 54,072 | 42,938 | 48,702 | +13.42% |
+| `smem_rate -k22 -w64 -i16 -f150` | 147,672 | 139,931 | 139,931 | 140,238 | +0.22% |
+| `gemm_block -m16 -n1024 -k4096 -s1` (`MTILES=1 PROFILE_ENABLE`) | 814,144 | 513,734 | 439,399 | 472,826 | +7.61% |
+
+| Rate or mix | SimX baseline | SimX overlap only | SimX overlap + LPC | rtlsim overlap + LPC |
+|---|---:|---:|---:|---:|
+| 32-tile DXA, B/clock | 67.87 | 77.66 | 85.47 | 75.36 |
+| GEMM weights, B/clock | 16.33 | 18.97 | 19.09 | 17.74 |
+| k22 store/load warp clocks per iteration | 8,321.75 / 8,318.56 | 8,321.75 / 8,318.56 | 8,321.75 / 8,318.56 | 8,320.50 / 8,320.56 |
+
+The full RTL runs use the selected overlap-plus-LPC configuration. The before/after h200s comparison is from SimX, and the same-model RTL LPC comparison is from the reduced HBM3E pair. The +13.42% DXA and +7.61% GEMM cycle differences remain in the full model. Both DXA models report 224 transfers and 57,344 lines written. RTL reports zero no-slot stalls and lower mean global-memory latency than SimX (1,703.8 vs 2,059.1 cycles), so that latency counter alone cannot explain the full gap. The two-core Beacon maximum is 26 levels in both builds. The local DMA admission path grows from 11 to 14 levels, with +0.112% LUTs and +0.377% FFs. [DXA](../results/lmd00186_large_v3_lpc1_dxa32/run.log) · [Shared-memory mix](../results/lmd00186_large_v3_lpc1_k22/run.log) · [GEMM](../results/lmd00186_large_v3_lpc1_gemm/run.log) · [Beacon report](../results/lmd00186_beacon_v3_exact/off_on_diff.txt)
+
+A/B/C reach 84.40 / 90.03 / 88.24 B/clock with both features in h200s SimX, below the 96.3 B/clock gate. Stage 1 measured a 0.377 lines/clock isolated-copy slope with LPC at baseline worker allocation, below the 0.835 target. The remaining bottleneck candidates are feeding both existing line paths from one ready transfer and reusing issue capacity when other transfers wait for their final replies. The fixed worker splits improved the isolated slope and reduced live context capacity, which hurt the 8 KiB stream. The stage 1 counters support measuring line issue, worker credits and tail occupancy while retaining 16 live contexts. [LPC counters](../results/tma8a56_lpc_a/run.log) · [Two-worker 128 KiB counters](../results/tma8a56_stackrw_s128/run.log) · [8 KiB fixed-split counters](../results/tma8a56_stackrw_c/run.log)

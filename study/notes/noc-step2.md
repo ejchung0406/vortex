@@ -96,3 +96,92 @@ The 48-channel remap is deferred while the power-of-two bandwidth calibration an
 All 26 `SLICE_BIND=0` checks at `dff377467` matched exact base `313246121` for retired instructions and cycles. The ICE matrix covers the eight requested `h200s` applications on each of 1 and 22 SMs, and five cache cases each on SimX and native RTL. All four candidate jobs exited 0 (`7295460`, `7295462`, `7295467`, `7295469`). The strict comparison checks source revisions, argv, environment, exit status, and counters. Its table is archived at `results/noc_step2_dff377467/identity-disabled.tsv`.
 
 Final local handoff is `feature/noc-step2` in `vortex-exp/wt_noc_step2`. Its clean HEAD is `dff377467e092540aa4224d3cde8d297622a12ba`, directly following `1b82fc17589e8cf0bb24fa232e90c424d073c704` on top of `313246121`. The last commit contains only `profiles/h200g2.json`.
+
+## 2026-11-24 — `h200g2` lean load and TMA bandwidth resweep
+
+SimX runs use the unchanged `dff377467` implementation and the same 32-SM, two-group, 32-channel `h200g2` profile throughout. The 16 normal spread points and four packed points preserve the 648 B/clock cap per group. Spread masks choose cores `0,16,1,17,…`. Packed masks activate `0…N-1`. Only 8- and 16-SM points use both placements. A separate packed control at each of those counts sets `VX_CFG_NOC_UPLINK_BYTES=0` to measure the group return gate's contribution. The per-SM 113 B/clock ingress gate and the memory configuration stay the same in the controls.
+
+`ldstream -t2048 -b8 -u8 -m16 -a -l -gN` gives `N` CTAs and 16 MiB of disjoint cold reads per CTA. A 2,048-thread CTA occupies all 64 × 32 warp slots of an SM. `ldstream` has no core-mask argument, so the scratch measurement wrapper writes the existing KMU core-disable DCR before enqueueing the original launch. It also reads per-core retired instructions to verify one CTA on each masked-in SM and zero retired instructions on every other SM. The app reports its own timed-loop rate separately from the device-level counters.
+
+`bwstream_dxa -e4096 -n256 -d2 -c0` uses its built-in `-M` for subset masks and the default grid of seven CTAs per active SM. Each CTA transfers 4 MiB, so every SM moves 28 MiB. The ordinary benchmark kernel is measured. Retired instructions are checked on every SM, and DXA completed transfers must equal 256 per CTA. The first TMA check passed with no Ramulator file because the legacy descriptor writes kept the simulated device alive through a retained queue. A scratch-only interposer submits the same descriptor DCR writes synchronously on the app's queue. The 1-SM comparison before and after this change had identical instructions, cycles, and DRAM counts. The device closes and finalizes the Ramulator log with the interposer.
+
+Both sweep tables use the prior `bwstream` accounting. DRAM read bandwidth is `reads × 64 B × 1.98 GHz / max(core cycles)`. Queue occupancy is the mean of the 32 Ramulator controller averages in bursts, and read row conflict rate is `conflicts / (hits + misses + conflicts)` over all classified reads. These Ramulator averages cover the device lifetime, including startup and counter queries. The table values come from Phoenix under `gts-hkim358`. The experiment changes no repository source.
+
+### Lean load — `ldstream`
+
+| SMs | Instructions | Cycles | DRAM reads | GB/s |
+|---:|---:|---:|---:|---:|
+| 1 | 250,196 | 169,613 | 263,955 | 197.204 |
+| 4 | 1,000,784 | 177,439 | 1,063,967 | 759.844 |
+| 6 | 1,501,176 | 181,934 | 1,595,945 | 1,111.602 |
+| 8 | 2,001,568 | 207,095 | 2,127,921 | 1,302.060 |
+| 10 | 2,501,960 | 256,264 | 2,660,422 | 1,315.552 |
+| 12 | 3,002,352 | 309,658 | 3,191,936 | 1,306.222 |
+| 16 | 4,003,136 | 414,708 | 4,256,019 | 1,300.488 |
+| 20 | 5,003,920 | 522,088 | 5,320,143 | 1,291.293 |
+| 22 | 5,504,312 | 584,474 | 5,853,565 | 1,269.113 |
+| 24 | 6,004,704 | 644,252 | 6,384,631 | 1,255.814 |
+| 28 | 7,005,488 | 755,165 | 7,448,609 | 1,249.909 |
+| 32 | 8,006,272 | 873,574 | 8,512,782 | 1,234.858 |
+
+### TMA — `bwstream_dxa`
+
+| SMs | Instructions | Cycles | DRAM reads | GB/s |
+|---:|---:|---:|---:|---:|
+| 1 | 70,546 | 360,963 | 458,765 | 161.054 |
+| 8 | 564,368 | 397,463 | 3,670,052 | 1,170.094 |
+| 16 | 1,128,736 | 684,083 | 7,340,098 | 1,359.685 |
+| 32 | 2,257,472 | 1,460,847 | 14,680,396 | 1,273.439 |
+
+### Placement and return-gate control
+
+| Kernel | SMs | Packed GB/s | Spread GB/s | Spread gain | Packed with gate off GB/s | Packed gain with gate off |
+|:---|---:|---:|---:|---:|---:|---:|
+| Lean load | 8 | 1,087.257 | 1,302.060 | +19.8% | 1,268.735 | +16.7% |
+| Lean load | 16 | 1,109.223 | 1,300.488 | +17.2% | 1,223.690 | +10.3% |
+| TMA | 8 | 1,141.729 | 1,170.094 | +2.5% | 1,107.045 | -3.0% |
+| TMA | 16 | 1,211.640 | 1,359.685 | +12.2% | 1,293.963 | +6.8% |
+
+### Queue and shared-L2 counters by active SM count
+
+| Kernel | SMs | Mean queue (bursts/channel) | Mean read queue (bursts/channel) | Read row conflicts | Ramulator cycles per read burst | L2 MSHR stalls per 1,000 reads |
+|:---|---:|---:|---:|---:|---:|---:|
+| Lean load | 1 | 7.14 | 6.99 | 2.78% | 193.4 | 0.0 |
+| Lean load | 4 | 52.68 | 32.14 | 4.33% | 141.5 | 0.1 |
+| Lean load | 6 | 125.39 | 65.04 | 6.23% | 248.9 | 0.1 |
+| Lean load | 8 | 246.20 | 153.49 | 8.69% | 502.5 | 31.2 |
+| Lean load | 10 | 246.32 | 151.29 | 10.94% | 480.8 | 41.1 |
+| Lean load | 12 | 264.43 | 177.31 | 15.31% | 573.0 | 60.2 |
+| Lean load | 16 | 248.88 | 174.83 | 18.12% | 561.8 | 89.0 |
+| Lean load | 20 | 264.03 | 173.84 | 20.99% | 607.0 | 86.3 |
+| Lean load | 22 | 243.37 | 147.67 | 21.52% | 468.6 | 78.0 |
+| Lean load | 24 | 249.50 | 153.36 | 23.14% | 554.4 | 82.1 |
+| Lean load | 28 | 239.53 | 147.32 | 25.12% | 536.3 | 81.9 |
+| Lean load | 32 | 223.93 | 142.25 | 26.56% | 561.1 | 76.4 |
+| TMA | 1 | 5.24 | 5.22 | 2.90% | 106.1 | 0.0 |
+| TMA | 8 | 103.82 | 102.55 | 4.84% | 285.7 | 3.1 |
+| TMA | 16 | 283.53 | 230.96 | 7.37% | 554.8 | 139.3 |
+| TMA | 32 | 222.81 | 197.73 | 9.94% | 507.0 | 139.6 |
+
+The Ramulator latency column divides the controllers' summed latency by the accepted read burst count. The accepted count was exactly twice the device's 64-byte read count in every run. The host's XLEN64 SimX MPM DCR high-half reads return zero for these counters, so large accumulated values can wrap in the host readout. This affects the raw 250.6-cycle device latency reported for 32-SM TMA. The tables use Ramulator's independent measurements for latency and preserve the raw readout in the archive. L2 MSHR stalls and bank-arbitration collisions are events summed across banks. Dividing by accepted L2 reads gives events per 1,000 reads.
+
+### Comparison with the design target
+
+| Kernel | 1-SM GB/s | Observed peak GB/s (SMs) | First sampled SM count at 98% of observed peak | 32-SM GB/s | Ideal floor at observed peak | Ideal floor at 1,544 GB/s |
+|:---|---:|---:|---:|---:|---:|---:|
+| Lean load | 197.204 | 1,315.552 (10) | 8 of 32 (25%) | 1,234.858 | 6.67 SMs (20.8%) | 7.83 SMs (24.5%) |
+| TMA | 161.054 | 1,359.685 (16) | 16 of 32 (50%) | 1,273.439 | 8.44 SMs (26.4%) | 9.59 SMs (30.0%) |
+
+The ideal floor divides the bandwidth goal by the measured one-SM rate with linear scaling. The design's 23% uses about 210 GB/s per SM and the 1,544 GB/s roof. Using that same roof, the measured one-SM rates raise the floor by 1.5 percentage points for lean load and 7.0 points for TMA. The measured peaks are 85.2% and 88.1% of that roof. Neither sweep reaches 98% of the design roof (1,513.120 GB/s). Relative to the design estimate of about 11 SMs, lean load crosses 98% of its own lower peak with three fewer SMs at the first qualifying sample. TMA first crosses at the 16-SM sample, five above the estimate, with no measured point between eight and 16.
+
+At one SM the lean kernel reads 99.6 B/clock, about twice the 49.4 B/clock of the earlier `bwstream -n2048 -u4 -b32` sweep. The same lean workload on `h200s` retired the same 250,196 instructions and took 173,098 device cycles for 194.441 GB/s. On `h200g2` it took 169,613 device cycles for 197.204 GB/s. The timed loop alone moved 16 MiB in 163,676 cycles on `h200g2`, or 203.0 GB/s. Every lean run retired 250,196 instructions on each selected SM. The measured aggregate is still 94% of linear single-SM scaling at six SMs, then flattens. The earlier 20-SM result depended on the kernel. The lean run crosses 98% of a lower peak and at 32 SMs is 6.1% below its own peak.
+
+With lean load spread at eight SMs, the average Ramulator read queue has grown to 153.49 bursts per channel from 6.99 at one SM, and mean device DRAM read latency is 447.6 cycles, up from 255.6. The read queue stays in the 142–177 range over the remaining points. At 32 SMs the read row conflict rate is 26.56%, up from 10.94% at the 10-SM peak and 2.78% at one SM. L2 MSHR stalls rise from 41.1 per 1,000 accepted reads at the peak to 76.4 at 32 SMs, and L2 bank-arbitration collisions rise from 1,116 to 1,189 per 1,000 reads. More SMs increase pressure on the same L2 slices and HBM channels, and the bandwidth declines while the 32 channels remain balanced within 3.3% by read count.
+
+The 648 B/clock return gate allows about 1,283 GB/s of charged responses per group at 1.98 GHz. Removing it recovers 84.5% of the lean-load placement gap at eight SMs and 59.8% at 16 SMs. For TMA it recovers 55.6% at 16 SMs. The remaining timing difference between ungated packed and spread also includes the single group's switch and its 32 return lanes versus two switches and 64 lanes. The control removes the gate's one-cycle grant stage as well as its credit limit. At eight SMs TMA slows when the gate is removed. Its mean Ramulator read queue rises from 101.53 to 120.63 bursts, its DRAM read latency from 369.3 to 417.0 cycles, and its L2 MSHR stalls from 6,873 to 48,084. This point shows no bandwidth benefit from bypassing the gate.
+
+At 16 SMs the measured spread/packed ratios are 1.172 for lean loads and 1.122 for TMA. Design §4.2 predicts about 1.21 once the mixed-page memory roof and a single group gate are reached. The spread lean peak carries about 332 B/clock of DRAM-read traffic per group if split evenly. This is a proxy using the balanced SM work and the device read count. The gate also sees cached and control traffic and can throttle short bursts. The counters have no direct per-group credit-stall count. Together with the packed control and shared-path counters, the spread rates support shared L2 and DRAM pressure as the main limit at higher counts.
+
+TMA's one-SM rate is 81.3 B/clock, and the DXA no-slot stall counter is zero throughout. The 1-SM result shows less offered bandwidth than lean load. These measurements do not isolate its per-SM limit further. At eight SMs, TMA reaches 90.8% of linear scaling from one SM. At its 16-SM peak, evenly splitting the device DRAM bytes gives about 343 B/clock per group. The read queue grows from 5.22 bursts at one SM to 230.96 at 16 and is still 197.73 at 32. Read row conflicts rise from 2.90% to 7.37% and 9.94%. L2 MSHR stalls grow from 3.1 per 1,000 reads at eight SMs to 139.3 at 16 and 139.6 at 32, and average DXA issue-to-completion time rises from 2,369.8 core cycles per tile at eight SMs to 4,762.5 and 10,728.7 cycles. TMA bandwidth falls 6.3% from 16 to 32 even as Ramulator's mean queue and mean burst latency both ease. The much longer DXA completion time and persistent L2 stalls show pressure in the shared path beyond the DRAM controller's mean latency. The counters establish the separate contributions of placement and shared-path contention, with no precise split between L2 and DRAM service.
+
+All 24 accepted runs passed functionally and completed the per-SM placement and work checks. The complete metrics, raw controller and app logs, launch manifests, and Phoenix accounting are in `results/noc_step2_resweep_dff377467/`.

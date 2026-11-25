@@ -899,3 +899,28 @@ going on Phoenix; needs a rebase onto 1543ad364 before merging.
 Figures for the user (private artifacts, sources in the session scratchpad): NoC topology, FEDP grid, SM datapath.
 Found while drawing the SM: h200s is a TMEM build (the multiply runs on the TMEM MMA engine, the accumulator lives in
 TMEM), the dMMU sits before the dcache, LMEM is 228 KiB in a 256 KiB window, port 0 also serves the texture cache.
+
+## Update 2026-11-24 (20:50 EST) — state for the next session (the hosting job ends about 22:40)
+Pushed head: see `git log` of feature/dxa-borrowing on the fork (this note is in the commit after c4362ef63).
+Merged today, in order: fix/cache-repl (00186b8b3), feature/noc3 (313246121; NoC steps 0, 1, 4), feature/noc-step2
+(1543ad364; L2_SLICE_BIND and profile h200g2), the knob commit of feature/lmem-dma-rd (c4362ef63; LMEM_DMA_RD_OVERLAP,
+default off). One-SM h200s SimX at c4362ef63, knobs as in the profile: fetch_squash 10,017, gemm_block 513,734,
+ldstream lean 173,098, war_order 320,317, smem_rate -k22 139,931, bwstream_dxa -d2 400,310 (all unchanged). With
+-DVX_CFG_LMEM_DMA_RD_OVERLAP=1 -DVX_CFG_DXA_LINE_PER_CYCLE=1: gemm_block 439,399, bwstream_dxa -d2 326,102, -d4 149,087.
+NOT merged: ae692191d (h200s turns overlap + LPC on). At h200s size rtlsim / SimX with both on: bwstream_dxa -n32 -d2
+48,702 / 42,938 (+13.4%), gemm_block 472,826 / 439,399 (+7.6%), smem_rate -k22 140,238 / 139,931; small shapes agree
+within 0.3%. Before the knobs the same pairs were 2.3% and 5.7%. Cause unknown; proposed next Codex task: find it
+(text given to the user; branch fix/lmem-dma-rd-parity).
+h200g2 sweep with memory-bound kernels (Codex, notes/noc-step2.md): ldstream lean 1 SM 197 GB/s, peak 1,316 at 10 SMs,
+98% of its peak at 8 of 32 SMs (25%; design 23%, part 17%), 1,235 at 32; bwstream_dxa 161 at 1 SM, peak 1,360 at 16.
+Peaks are 85-88% of the 1,544 target; the limit is the L2 MSHR and the memory model's queues (read queue 7 -> 153
+bursts per channel at 8 SMs, row conflicts 2.8% -> 26.6% at 32), not the network. Packed against spread at 8 SMs:
+1,087 / 1,302. Open: why the peak stops at 85%; the 48-channel remap; deeper local L2 paths after the binding.
+Figures (private artifacts; sources and generators in the session scratchpad, which does not survive the session):
+NoC topology, SM datapath, FEDP grid. Facts found while drawing: h200s is a TMEM build (tc.mma on the TMEM MMA
+engine, accumulator in TMEM; warp WMMA uses 8 of the 16 FP16 products), the dMMU sits before the dcache, a cache bank
+i sends its misses to memory port i, TCU latency 5 in the synthesis flows (4 in simulation).
+The profile text of h200s still quotes 3,786 FLOPs per clock for the tensor roof; the measured value per actual SM
+clock is 4,096 (finding M2). To be reworded.
+Standing: rover runs only through rover_start.sh (200 GB slice); Phoenix with gts-hkim358 is allowed; Codex sessions
+are started by the user with prompt files in vortex-exp/codex-tasks/.
