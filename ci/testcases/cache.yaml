@@ -394,6 +394,67 @@ tests:
   shape:
     cores: 4
     l2cache: true
+# Fixed slice channels with both sectors of one line in flight.
+- id: slice_bind-sector
+  xlen: [64]
+  check: model_parity
+  via: blackbox
+  app: sector_merge
+  configs: -DVX_CFG_SOCKET_SIZE=1 -DVX_CFG_L2_SLICE_BIND=1
+  shape: {cores: 4, l2cache: true}
+# A one-entry DRAM queue stalls concurrent streams on the bound channels.
+- id: slice_bind-queue
+  xlen: [64]
+  check: model_parity
+  via: blackbox
+  app: bwstream
+  args: -n64 -u4 -b32 -g32
+  configs: -DVX_CFG_SOCKET_SIZE=1 -DVX_CFG_L2_SLICE_BIND=1 -DVX_CFG_PLATFORM_MEMORY_QUEUE_SIZE=1
+  shape: {cores: 4, l2cache: true}
+# Check lazy sector data and the number of avoided fills.
+- id: slice_bind-lazy
+  xlen: [64]
+  check: model_parity
+  via: blackbox
+  app: lazy_fetch
+  args: -f -n1
+  flags: --perf=7
+  configs: -DVX_CFG_EXT_A_ENABLE -DVX_CFG_SOCKET_SIZE=1 -DVX_CFG_L2_SLICE_BIND=1
+  shape: {cores: 2, l2cache: true}
+# LR/SC retries can retire a different number of instructions.
+- id: slice_bind-lazy-amo
+  xlen: [64]
+  via: blackbox
+  drivers: [simx, rtlsim]
+  app: lazy_fetch
+  args: -n1
+  configs: -DVX_CFG_EXT_A_ENABLE -DVX_CFG_SOCKET_SIZE=1 -DVX_CFG_L2_SLICE_BIND=1
+  shape: {cores: 2, l2cache: true}
+- id: slice_bind-fence
+  xlen: [64]
+  via: blackbox
+  drivers: [simx, rtlsim]
+  app: fence_mp
+  args: -n64 -m1
+  configs: -DVX_CFG_EXT_A_ENABLE -DVX_CFG_SOCKET_SIZE=1 -DVX_CFG_L2_SLICE_BIND=1
+  shape: {cores: 2, l2cache: true}
+- id: slice_bind-io
+  xlen: [64]
+  via: blackbox
+  drivers: [simx, rtlsim]
+  app: io_addr
+  args: -s256
+  configs: -DVX_CFG_EXT_A_ENABLE -DVX_CFG_SOCKET_SIZE=1 -DVX_CFG_L2_SLICE_BIND=1
+  shape: {cores: 2, l2cache: true}
+# Host copies and a cold translation use separate L2 client inputs.
+- id: slice_bind-vm
+  xlen: [64]
+  check: model_parity
+  via: blackbox
+  app: chase
+  args: -b65536 -i256 -w0 -c
+  configs: -DVX_CFG_VM_ENABLE -DVX_CFG_SOCKET_SIZE=1 -DVX_CFG_L2_SLICE_BIND=1
+  shape: {cores: 2, l2cache: true}
 # A set holds as many lines as it has ways: one thread reads every sector of a
 # set's worth of same-set lines twice, then of one line more. On the sectored
 # L2 a sector refill must not advance the FIFO victim. The bank hash would

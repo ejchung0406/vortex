@@ -12,6 +12,7 @@
 // limitations under the License.
 
 #include "dram_sim.h"
+#include "addr_map.h"
 #include "dram_bank_model.h"
 #include "util.h"
 #include <dram_timing.h>
@@ -423,10 +424,16 @@ DramSim::Config DramSim::platform_config() {
   config.bank_groups  = VX_CFG_PLATFORM_MEMORY_BANK_GROUPS;
   config.sched_window = VX_CFG_PLATFORM_MEMORY_SCHED_WINDOW;
   config.interleave   = VX_CFG_PLATFORM_MEMORY_INTERLEAVE_SIZE;
+  config.slice_bind   = VX_CFG_L2_SLICE_BIND;
+  config.slice_granule = VX_CFG_L2_SLICE_GRANULE;
   return config;
 }
 
 DramSim::Config::Location DramSim::Config::locate(uint64_t addr) const {
+  if (slice_bind) {
+    auto location = L2SliceMap(num_channels, slice_granule, block_size).locate(addr);
+    return {location.channel, location.addr};
+  }
   const uint32_t lg_block = log2ceil(block_size);
   if (!this->mixed()) {
     uint64_t block = addr >> lg_block;
@@ -450,6 +457,11 @@ DramSim::Config::Location DramSim::Config::locate(uint64_t addr) const {
   }
   uint64_t offset = addr & (uint64_t(interleave) - 1) & ~(uint64_t(block_size) - 1);
   return {uint32_t(cb & (num_channels - 1)), (((up << bank_bits) | bank) << lg_unit) | offset};
+}
+
+uint64_t DramSim::Config::bound_physical(uint32_t channel, uint64_t addr) const {
+  assert(slice_bind);
+  return L2SliceMap(num_channels, slice_granule, block_size).physical(channel, addr);
 }
 
 static DramSim::Impl* make_backend(const DramSim::Config& config) {

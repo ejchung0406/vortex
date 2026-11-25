@@ -260,6 +260,23 @@ The memory side transacts in sectors, so the memory address carries
 `CS_LINE_SECTOR_ADDR_WIDTH`). With one sector per line these collapse back to the
 line-granular widths, which is why the unsectored L1 path costs nothing.
 
+With `VX_CFG_L2_SLICE_BIND=1`, L2 uses one slice and one port for each DRAM
+channel. For more than one slice, the map starts at physical bit
+`log2(granule)`, skips the next bit, then takes the remaining selector bits.
+It XOR-folds the higher address into that selector. The channel-local byte
+address removes the selected bits, and its
+line number supplies the set and tag. The inverse recovers the removed bits
+from the channel and retained address. The granule contains whole L2 lines.
+
+The cached memory-side path wires slice `i` to port `i` in both directions.
+Uncached requests select their destination by physical address and retain the
+requester in the return tag. Vortex carries physical addresses to the native
+RTL simulation shim, which supplies channel-local addresses to DRAM timing.
+The harness reconstructs physical addresses for the shared backing RAM.
+SimX uses the same split. The binding requires a single-cluster L2 LLC,
+matching memory ports and transfer widths, and a power-of-two channel count.
+AXI and FPGA adapters use independent memory mapping.
+
 ### 3.2 Dcache banking for memory-level parallelism
 
 Dcache banks come from the coalescer **word size**, not the line: a warp's
@@ -1219,7 +1236,10 @@ is fixed in `VX_gpu_pkg.sv` and at its instantiation (`NUM_BANKS=1`, `NUM_REQS=1
 |---|---|---|
 | `VX_CFG_DCACHE_WORD_SIZE` | `min(L1_LINE_SIZE, min(MEM_BLOCK_SIZE, (XLEN/8) × pow(2, (clog2(NUM_LSU_LANES)+1)/2)))` | Coalescer output granule. Sets `NUM_REQS` and therefore the bank count. Smaller words → more banks (more MLP, more crossbar area); larger words → wider single-bank access. The `pow(2, (clog2(lanes)+1)/2)` term is a power-of-two rounding of a square root — there is no `sqrt` helper in the generator. |
 | `VX_CFG_DCACHE_NUM_BANKS` | `pow(2, clog2(min(DCACHE_NUM_REQS, 16)))` | Bank count. |
-| `VX_CFG_L2_NUM_BANKS` / `VX_CFG_L3_NUM_BANKS` | `pow(2, clog2(min(<L>_NUM_REQS, 16)))` | Identical form; `NUM_REQS` counts upstream sockets/clusters. |
+| `VX_CFG_L2_NUM_BANKS` | Rounded-up flat client count, capped at 16 | Equals the DRAM channel count by default with slice binding enabled. |
+| `VX_CFG_L3_NUM_BANKS` | Rounded-up request count, capped at 16 | Counts upstream request lanes. |
+| `VX_CFG_L2_SLICE_BIND` | `0` | Fixed L2 slice-to-channel binding for SimX and native rtlsim. The default uses independent bank and DRAM address maps. |
+| `VX_CFG_L2_SLICE_GRANULE` | `256` B | Slice selection unit when binding is enabled. A power of two at least as large as an L2 line. |
 | `VX_CFG_L1_MEM_PORTS` | `min(DCACHE_NUM_BANKS, PLATFORM_MEMORY_NUM_BANKS)` when either L1 is enabled | Concurrent transactions presented downstream. |
 | `VX_CFG_L2_MEM_PORTS` / `VX_CFG_L3_MEM_PORTS` | `min(<L>_NUM_BANKS, PLATFORM_MEMORY_NUM_BANKS)` when enabled | Same. |
 | `VX_CFG_NUM_ICACHES` / `VX_CFG_NUM_DCACHES` | `up(SOCKET_SIZE / 4)` if enabled, else `0` | L1 instances per socket. `up()` clamps to 1, so `SOCKET_SIZE < 4` still yields one cache — the `0` branch is reserved for the disable case. |

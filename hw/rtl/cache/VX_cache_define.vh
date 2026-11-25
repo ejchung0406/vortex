@@ -80,7 +80,9 @@
 
 // x is a bank's line address, b the bank id; with BANK_HASH the raw bank bits
 // are b XOR the raw line's hash
-`define CS_BANK_TO_FULL_ADDR(x, b) {`CS_LINE_SET_HASH(x), (`VX_CFG_XLEN-$bits(x))'(((b) ^ (BANK_HASH ? int'(cache_bank_hash(32'(`CS_LINE_SET_HASH(x)), `CS_BANK_SEL_BITS)) : 0)) << (`VX_CFG_XLEN-$bits(x)-`CS_BANK_SEL_BITS))}
+`define CS_BANK_TO_FULL_ADDR(x, b) \
+    (SLICE_BIND ? `VX_CFG_XLEN'(l2_slice_physical_addr(64'(x) << `CLOG2(LINE_SIZE), 64'(b), `CLOG2(SLICE_GRANULE), `CS_BANK_SEL_BITS)) \
+       : {`CS_LINE_SET_HASH(x), (`VX_CFG_XLEN-$bits(x))'(((b) ^ (BANK_HASH ? int'(cache_bank_hash(32'(`CS_LINE_SET_HASH(x)), `CS_BANK_SEL_BITS)) : 0)) << (`VX_CFG_XLEN-$bits(x)-`CS_BANK_SEL_BITS))})
 `define CS_MEM_TO_FULL_ADDR(x)     {x, (`VX_CFG_XLEN-$bits(x))'(0)}
 
 ///////////////////////////////////////////////////////////////////////////////

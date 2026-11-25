@@ -61,6 +61,8 @@ module VX_cache import VX_gpu_pkg::*; #(
 
     parameter BANK_HASH             = 0,      // hashed bank select (cache_bank_hash)
     parameter SET_HASH              = 0,      // hashed set index (cache_set_hash)
+    parameter bit SLICE_BIND            = 0,
+    parameter SLICE_GRANULE         = 1,
 
     parameter READ_MERGE            = 0,      // merge same-word reads within groups of this many adjacent ports (0: off)
     parameter READ_MERGE_LINE       = 0,      // merge any reads of the same line instead, each port keeping its own tag and word
@@ -87,6 +89,13 @@ module VX_cache import VX_gpu_pkg::*; #(
     // any number of ways, but a power-of-two number of sets that fills the size
     `STATIC_ASSERT(`IS_POW2(`CS_LINES_PER_BANK) && (CACHE_SIZE == (`CS_LINES_PER_BANK * LINE_SIZE * NUM_WAYS * NUM_BANKS)),
         ("invalid parameter: size %0d is not a power-of-two number of sets of %0d ways of %0d-byte lines in %0d banks", CACHE_SIZE, NUM_WAYS, LINE_SIZE, NUM_BANKS))
+    localparam SLICE_GRANULE_BITS   = `CLOG2(SLICE_GRANULE);
+    if (SLICE_BIND && !((NUM_BANKS == MEM_PORTS) && (NUM_BANKS <= 64)
+        && `IS_POW2(NUM_BANKS) && !SET_HASH && `IS_POW2(LINE_SIZE)
+        && `IS_POW2(SLICE_GRANULE) && (SLICE_GRANULE >= LINE_SIZE)
+        && ((NUM_BANKS == 1) || ((SLICE_GRANULE_BITS + `CLOG2(NUM_BANKS) + 1) <= `VX_CFG_MEM_ADDR_WIDTH)))) begin : g_invalid_slice_binding
+        `ELABORATION_ERROR("invalid L2 slice binding geometry")
+    end
     localparam REQ_SEL_WIDTH   = `UP(`CS_REQ_SEL_BITS);
     localparam WORD_SEL_WIDTH  = `UP(`CS_WORD_SEL_BITS);
     localparam MSHR_ADDR_WIDTH = `LOG2UP(MSHR_SIZE);
@@ -261,28 +270,35 @@ module VX_cache import VX_gpu_pkg::*; #(
     wire [NUM_BANKS-1:0] per_bank_mem_rsp_valid;
     wire [NUM_BANKS-1:0][MEM_RSP_DATAW-MEM_ARB_SEL_BITS-1:0] per_bank_mem_rsp_pdata;
     wire [NUM_BANKS-1:0] per_bank_mem_rsp_ready;
-    VX_stream_omega #(
-        .NUM_INPUTS  (MEM_PORTS),
-        .NUM_OUTPUTS (NUM_BANKS),
-        .DATAW       (MEM_RSP_DATAW-MEM_ARB_SEL_BITS),
-        .ARBITER     ("R"),
-        // Registered at the input handshake, so the wide fill payload does not
-        // load on the bank's late ready.
-        .OUT_BUF     (2)
-    ) mem_rsp_xbar (
-        .clk       (clk),
-        .reset     (reset),
-        .valid_in  (mem_rsp_xbar_valid),
-        .data_in   (mem_rsp_queue_data_s),
-        .sel_in    (mem_rsp_queue_sel),
-        .ready_in  (mem_rsp_xbar_ready),
-        .valid_out (per_bank_mem_rsp_valid),
-        .data_out  (per_bank_mem_rsp_pdata),
-        `UNUSED_PIN (sel_out),
-        .ready_out (per_bank_mem_rsp_ready),
-        `UNUSED_PIN (collisions),
-        `UNUSED_PIN (empty)
-    );
+    if (SLICE_BIND) begin : g_slice_bind_rsp
+        assign per_bank_mem_rsp_valid = mem_rsp_xbar_valid;
+        assign per_bank_mem_rsp_pdata = mem_rsp_queue_data_s;
+        assign mem_rsp_xbar_ready = per_bank_mem_rsp_ready;
+        `UNUSED_VAR (mem_rsp_queue_sel)
+    end else begin : g_mem_rsp_xbar
+        VX_stream_omega #(
+            .NUM_INPUTS  (MEM_PORTS),
+            .NUM_OUTPUTS (NUM_BANKS),
+            .DATAW       (MEM_RSP_DATAW-MEM_ARB_SEL_BITS),
+            .ARBITER     ("R"),
+            // Registered at the input handshake, so the wide fill payload does not
+            // load on the bank's late ready.
+            .OUT_BUF     (2)
+        ) mem_rsp_xbar (
+            .clk       (clk),
+            .reset     (reset),
+            .valid_in  (mem_rsp_xbar_valid),
+            .data_in   (mem_rsp_queue_data_s),
+            .sel_in    (mem_rsp_queue_sel),
+            .ready_in  (mem_rsp_xbar_ready),
+            .valid_out (per_bank_mem_rsp_valid),
+            .data_out  (per_bank_mem_rsp_pdata),
+            `UNUSED_PIN (sel_out),
+            .ready_out (per_bank_mem_rsp_ready),
+            `UNUSED_PIN (collisions),
+            `UNUSED_PIN (empty)
+        );
+    end
     wire [NUM_BANKS-1:0][`CS_SECTOR_WIDTH-1:0] per_bank_mem_rsp_data;
     wire [NUM_BANKS-1:0][BANK_MEM_TAG_WIDTH-1:0] per_bank_mem_rsp_tag;
     for (genvar i = 0; i < NUM_BANKS; ++i) begin : g_per_bank_mem_rsp_data
@@ -345,19 +361,24 @@ module VX_cache import VX_gpu_pkg::*; #(
             assign core_req_wsel[i] = '0;
         end
     end
-    for (genvar i = 0; i < NUM_REQS; ++i) begin : g_core_req_line_addr
-        assign core_req_line_addr[i] = core_req_addr[i][(BANK_SEL_BITS + WORD_SEL_BITS) +: LINE_ADDR_WIDTH];
-    end
-    for (genvar i = 0; i < NUM_REQS; ++i) begin : g_core_req_bid
-        if (NUM_BANKS > 1) begin : g_multibanks
-            wire [BANK_SEL_BITS-1:0] raw_bid = core_req_addr[i][WORD_SEL_BITS +: BANK_SEL_BITS];
-            if (BANK_HASH != 0) begin : g_hash
-                assign core_req_bid[i] = raw_bid ^ BANK_SEL_BITS'(cache_bank_hash(32'(core_req_line_addr[i]), BANK_SEL_BITS));
-            end else begin : g_raw
-                assign core_req_bid[i] = raw_bid;
+    for (genvar i = 0; i < NUM_REQS; ++i) begin : g_core_req_addr_map
+        if (SLICE_BIND) begin : g_bound
+            wire [63:0] byte_addr = 64'(core_req_addr[i]) << `CLOG2(WORD_SIZE);
+            wire [63:0] local_addr = l2_slice_local_addr(byte_addr, SLICE_GRANULE_BITS, BANK_SEL_BITS);
+            assign core_req_line_addr[i] = LINE_ADDR_WIDTH'(local_addr >> `CLOG2(LINE_SIZE));
+            assign core_req_bid[i] = BANK_SEL_WIDTH'(l2_slice_channel(byte_addr, SLICE_GRANULE_BITS, BANK_SEL_BITS));
+        end else begin : g_legacy
+            assign core_req_line_addr[i] = core_req_addr[i][(BANK_SEL_BITS + WORD_SEL_BITS) +: LINE_ADDR_WIDTH];
+            if (NUM_BANKS > 1) begin : g_multibanks
+                wire [BANK_SEL_BITS-1:0] raw_bid = core_req_addr[i][WORD_SEL_BITS +: BANK_SEL_BITS];
+                if (BANK_HASH != 0) begin : g_hash
+                    assign core_req_bid[i] = raw_bid ^ BANK_SEL_BITS'(cache_bank_hash(32'(core_req_line_addr[i]), BANK_SEL_BITS));
+                end else begin : g_raw
+                    assign core_req_bid[i] = raw_bid;
+                end
+            end else begin : g_singlebank
+                assign core_req_bid[i] = '0;
             end
-        end else begin : g_singlebank
-            assign core_req_bid[i] = '0;
         end
     end
     // Read merging: plain reads of the same word with the same tag (or, under
@@ -579,6 +600,8 @@ module VX_cache import VX_gpu_pkg::*; #(
             .BANK_ID      (bank_id),
             .BANK_HASH    (BANK_HASH),
             .SET_HASH     (SET_HASH),
+            .SLICE_BIND   (SLICE_BIND),
+            .SLICE_GRANULE(SLICE_GRANULE),
             .INSTANCE_ID  (`SFORMATF(("%s-bank%0d", INSTANCE_ID, bank_id))),
             .CACHE_SIZE   (CACHE_SIZE),
             .LINE_SIZE    (LINE_SIZE),
@@ -788,7 +811,7 @@ module VX_cache import VX_gpu_pkg::*; #(
             assign raw_addr = raw_line;
         end
         wire [`UP(BANK_SEL_BITS)-1:0] raw_bid;
-        if (NUM_BANKS > 1 && BANK_HASH != 0) begin : g_hash
+        if (NUM_BANKS > 1 && BANK_HASH != 0 && !SLICE_BIND) begin : g_hash
             assign raw_bid = BANK_SEL_BITS'(i) ^ BANK_SEL_BITS'(cache_bank_hash(32'(raw_line), BANK_SEL_BITS));
         end else begin : g_raw
             assign raw_bid = `UP(BANK_SEL_BITS)'(i);
@@ -849,7 +872,7 @@ module VX_cache import VX_gpu_pkg::*; #(
 `endif
     for (genvar i = 0; i < NUM_BANKS; ++i) begin : g_mem_req_xbar_in
         if (i < MEM_PORTS) begin : g_flush_req
-            // line 0 hashes to 0, so the raw bank bits are the lane's bank id
+            // Local line 0 hashes to 0, so its channel bits equal the lane's bank id.
             wire [MEM_REQ_DATAW-1:0] mem_flush_pdata = {
                 `UP(BANK_SEL_BITS)'(i),
                 `CS_LINE_SECTOR_ADDR_WIDTH'(0),
@@ -873,26 +896,35 @@ module VX_cache import VX_gpu_pkg::*; #(
     // the crossbar, so the tokens wait until it has drained.
     wire mem_req_xbar_empty;
     assign mem_req_empty = (FLUSH_FORWARD != 0) ? mem_req_xbar_empty : 1'b1;
-    VX_stream_omega #(
-        .NUM_INPUTS  (NUM_BANKS),
-        .NUM_OUTPUTS (MEM_PORTS),
-        .DATAW       (MEM_REQ_DATAW),
-        .ARBITER     ("R"),
-        .OUT_BUF     (MEM_OUT_BUF)
-    ) mem_req_xbar (
-        .clk       (clk),
-        .reset     (reset),
-        .valid_in  (mem_req_xbar_valid),
-        .data_in   (mem_req_xbar_pdata),
-        .sel_in    (per_bank_mem_req_bid),
-        .ready_in  (mem_req_xbar_ready),
-        .valid_out (mem_req_tmp_valid),
-        .data_out  (mem_req_pdata),
-        .sel_out   (mem_req_tmp_idx),
-        .ready_out (mem_req_tmp_ready),
-        `UNUSED_PIN (collisions),
-        .empty     (mem_req_xbar_empty)
-    );
+    if (SLICE_BIND) begin : g_slice_bind_req
+        assign mem_req_tmp_valid = mem_req_xbar_valid;
+        assign mem_req_pdata = mem_req_xbar_pdata;
+        assign mem_req_xbar_ready = mem_req_tmp_ready;
+        assign mem_req_tmp_idx = '0;
+        assign mem_req_xbar_empty = 1'b1;
+        `UNUSED_VAR (per_bank_mem_req_bid)
+    end else begin : g_mem_req_xbar
+        VX_stream_omega #(
+            .NUM_INPUTS  (NUM_BANKS),
+            .NUM_OUTPUTS (MEM_PORTS),
+            .DATAW       (MEM_REQ_DATAW),
+            .ARBITER     ("R"),
+            .OUT_BUF     (MEM_OUT_BUF)
+        ) mem_req_xbar (
+            .clk       (clk),
+            .reset     (reset),
+            .valid_in  (mem_req_xbar_valid),
+            .data_in   (mem_req_xbar_pdata),
+            .sel_in    (per_bank_mem_req_bid),
+            .ready_in  (mem_req_xbar_ready),
+            .valid_out (mem_req_tmp_valid),
+            .data_out  (mem_req_pdata),
+            .sel_out   (mem_req_tmp_idx),
+            .ready_out (mem_req_tmp_ready),
+            `UNUSED_PIN (collisions),
+            .empty     (mem_req_xbar_empty)
+        );
+    end
     for (genvar i = 0; i < MEM_PORTS; ++i) begin : g_mem_bus_tmp_if
         wire [`UP(BANK_SEL_BITS)-1:0]   mem_req_raw_bid_w;
         wire                            mem_req_rw_w;
@@ -931,8 +963,15 @@ module VX_cache import VX_gpu_pkg::*; #(
                 `UNUSED_VAR (mem_req_tmp_idx)
                 assign mem_bus_tmp_if[i].req_data.tag  = MEM_TAG_WIDTH'(mem_req_tag_w);
             end
-            assign mem_bus_tmp_if[i].req_data.addr = (`CS_MEM_SECTOR_ADDR_WIDTH'({mem_req_line_w, mem_req_raw_bid_w}) << `CS_SECTOR_SEL_BITS)
-                                                   | `CS_MEM_SECTOR_ADDR_WIDTH'(mem_req_sec_w);
+            if (SLICE_BIND) begin : g_bound
+                wire [63:0] local_addr = 64'(mem_req_addr_w) << `CLOG2(SECTOR_SIZE);
+                wire [63:0] byte_addr = l2_slice_physical_addr(local_addr, 64'(mem_req_raw_bid_w), SLICE_GRANULE_BITS, BANK_SEL_BITS);
+                assign mem_bus_tmp_if[i].req_data.addr = `CS_MEM_SECTOR_ADDR_WIDTH'(byte_addr >> `CLOG2(SECTOR_SIZE));
+                `UNUSED_VAR ({mem_req_line_w, mem_req_sec_w})
+            end else begin : g_legacy
+                assign mem_bus_tmp_if[i].req_data.addr = (`CS_MEM_SECTOR_ADDR_WIDTH'({mem_req_line_w, mem_req_raw_bid_w}) << `CS_SECTOR_SEL_BITS)
+                                                       | `CS_MEM_SECTOR_ADDR_WIDTH'(mem_req_sec_w);
+            end
         end else begin : g_singlebank
             `UNUSED_VAR (mem_req_tmp_idx)
             `UNUSED_VAR (mem_req_raw_bid_w)

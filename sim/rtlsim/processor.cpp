@@ -117,7 +117,11 @@ using namespace vortex;
 
 #ifndef AXI_BUS
 static uint64_t g_mem_done_seq = 0;
+# if !VX_CFG_L2_SLICE_BIND
 static uint32_t g_mem_bank_addr_width = (VX_CFG_PLATFORM_MEMORY_ADDR_WIDTH - log2ceil(VX_CFG_PLATFORM_MEMORY_NUM_BANKS));
+# endif
+#else
+static_assert(!VX_CFG_L2_SLICE_BIND, "L2 slice binding requires native rtlsim");
 #endif
 
 static uint64_t timestamp = 0;
@@ -441,22 +445,23 @@ private:
     dram_sim_.tick();
 
     for (int b = 0; b < VX_CFG_PLATFORM_MEMORY_NUM_BANKS; ++b) {
+    #if VX_CFG_L2_SLICE_BIND
+      // The L2 output already has a registered request buffer.
+      if (!dram_queue_[b].empty()) {
+        assert(dram_sim_.can_accept(b));
+        this->submit_dram_request(b, b, dram_queue_[b].front()->bank_addr);
+      }
+      device_->mem_req_ready[b] = dram_sim_.can_accept(b);
+    #else
       if (dram_queue_[b].empty())
         continue;
       // The DRAM channel the model serves the block from: the port's own with
       // the plain interleave, the mixed one otherwise (DramSim::Config).
       auto loc = dram_config_.locate(dram_queue_[b].front()->addr);
       if (dram_sim_.can_accept(loc.channel)) {
-        auto mem_req = dram_queue_[b].front();
-        dram_sim_.send_request(loc.channel, loc.addr, mem_req->write, [](void* arg)->bool {
-          // mark completed request as ready
-          auto orig_req = reinterpret_cast<mem_req_t*>(arg);
-          orig_req->ready = true;
-          orig_req->done_seq = g_mem_done_seq++;
-          return true;
-        }, mem_req);
-        dram_queue_[b].pop();
+        this->submit_dram_request(b, loc.channel, loc.addr);
       }
+    #endif
     }
 
   #ifndef NDEBUG
@@ -695,10 +700,27 @@ private:
     }
   }
 
+  void submit_dram_request(uint32_t port, uint32_t channel, uint64_t addr) {
+    auto mem_req = dram_queue_[port].front();
+    dram_sim_.send_request(channel, addr, mem_req->write, [](void* arg)->bool {
+      auto orig_req = reinterpret_cast<mem_req_t*>(arg);
+      orig_req->ready = true;
+      orig_req->done_seq = g_mem_done_seq++;
+      return true;
+    }, mem_req);
+    dram_queue_[port].pop();
+  }
+
   void mem_bus_eval(bool clk) {
     if (!clk) {
       for (int b = 0; b < VX_CFG_PLATFORM_MEMORY_NUM_BANKS; ++b) {
         mem_rd_rsp_ready_[b] = device_->mem_rsp_ready[b];
+      #if VX_CFG_L2_SLICE_BIND
+        // The ready signal must correspond to the request sampled at this edge.
+        if (device_->mem_req_valid[b] && device_->mem_req_ready[b]) {
+          this->take_mem_request(b);
+        }
+      #endif
       }
       return;
     }
@@ -733,59 +755,48 @@ private:
         delete mem_rsp;
       }
 
-      // process memory requests
+    #if !VX_CFG_L2_SLICE_BIND
       if (device_->mem_req_valid[b] && device_->mem_req_ready[b]) {
-      #if VX_CFG_PLATFORM_MEMORY_INTERLEAVE == 1
-        uint64_t byte_addr = (uint64_t(device_->mem_req_addr[b]) * VX_CFG_PLATFORM_MEMORY_NUM_BANKS + b) * VX_CFG_PLATFORM_MEMORY_DATA_SIZE;
-      #else
-        uint64_t byte_addr = (uint64_t(device_->mem_req_addr[b]) + (b << g_mem_bank_addr_width)) * VX_CFG_PLATFORM_MEMORY_DATA_SIZE;
-      #endif
-        // check read/write
-        if (device_->mem_req_rw[b]) {
-          auto byteen = device_->mem_req_byteen[b];
-          auto data = VDataCast<uint8_t*, VX_CFG_PLATFORM_MEMORY_DATA_SIZE>::get(device_->mem_req_data[b]);
-          // Console output (VX_MEM_IO_COUT range) is now ordinary device
-          // memory — Option C: the host runtime drains it. No tap here.
-          {
-            // process memory writes
-            for (int i = 0; i < VX_CFG_PLATFORM_MEMORY_DATA_SIZE; i++) {
-              if ((byteen >> i) & 0x1) {
-                (*ram_)[byte_addr + i] = data[i];
-              }
-            }
-
-            auto mem_req = new mem_req_t();
-            mem_req->tag   = device_->mem_req_tag[b];
-            mem_req->addr  = byte_addr;
-            mem_req->bank_addr = uint64_t(device_->mem_req_addr[b]) * VX_CFG_PLATFORM_MEMORY_DATA_SIZE;
-            mem_req->write = true;
-            mem_req->ready = false;
-
-            // enqueue dram request
-            dram_queue_[b].push(mem_req);
-
-            // add to pending list
-            pending_mem_reqs_[b].emplace_back(mem_req);
-          }
-        } else {
-          // process memory reads
-          auto mem_req = new mem_req_t();
-          mem_req->tag   = device_->mem_req_tag[b];
-          mem_req->addr  = byte_addr;
-          mem_req->bank_addr = uint64_t(device_->mem_req_addr[b]) * VX_CFG_PLATFORM_MEMORY_DATA_SIZE;
-          mem_req->write = false;
-          mem_req->ready = false;
-          ram_->read(mem_req->data.data(), byte_addr, VX_CFG_PLATFORM_MEMORY_DATA_SIZE);
-
-          // enqueue dram request
-          dram_queue_[b].push(mem_req);
-
-          // add to pending list
-          pending_mem_reqs_[b].emplace_back(mem_req);
-        }
+        this->take_mem_request(b);
       }
+    #endif
     }
   }
+
+  void take_mem_request(int port) {
+    uint64_t beat_addr = device_->mem_req_addr[port];
+    uint64_t lane_addr = beat_addr * VX_CFG_PLATFORM_MEMORY_DATA_SIZE;
+  #if VX_CFG_L2_SLICE_BIND
+    uint64_t byte_addr = dram_config_.bound_physical(port, lane_addr);
+  #elif VX_CFG_PLATFORM_MEMORY_INTERLEAVE == 1
+    uint64_t byte_addr = (beat_addr * VX_CFG_PLATFORM_MEMORY_NUM_BANKS + port) * VX_CFG_PLATFORM_MEMORY_DATA_SIZE;
+  #else
+    uint64_t byte_addr = (beat_addr + (port << g_mem_bank_addr_width)) * VX_CFG_PLATFORM_MEMORY_DATA_SIZE;
+  #endif
+    auto mem_req = new mem_req_t();
+    mem_req->tag = device_->mem_req_tag[port];
+    mem_req->addr = byte_addr;
+    mem_req->bank_addr = lane_addr;
+    mem_req->write = device_->mem_req_rw[port];
+    mem_req->ready = false;
+
+    if (mem_req->write) {
+      // Console writes also reach backing memory so the host can drain them.
+      auto byteen = device_->mem_req_byteen[port];
+      auto data = VDataCast<uint8_t*, VX_CFG_PLATFORM_MEMORY_DATA_SIZE>::get(device_->mem_req_data[port]);
+      for (int i = 0; i < VX_CFG_PLATFORM_MEMORY_DATA_SIZE; ++i) {
+        if ((byteen >> i) & 1) {
+          (*ram_)[byte_addr + i] = data[i];
+        }
+      }
+    } else {
+      ram_->read(mem_req->data.data(), byte_addr, VX_CFG_PLATFORM_MEMORY_DATA_SIZE);
+    }
+
+    dram_queue_[port].push(mem_req);
+    pending_mem_reqs_[port].emplace_back(mem_req);
+  }
+
 #endif
 
   void dcr_bus_reset() {

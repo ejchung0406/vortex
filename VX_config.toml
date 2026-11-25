@@ -468,8 +468,12 @@ VX_CFG_L2_CRSQ_SIZE = 0
 # of being replayed. 0 keeps the model's replay.
 VX_CFG_L2_FWD_HOLD = 0
 
-# Size the banks from the flat client count, independent of SM group lanes.
-VX_CFG_L2_NUM_BANKS = "expr: pow(2, clog2(min($VX_CFG_L2_BANK_REQS, 16)))"
+# Fixed slice-to-channel wiring with one L2 slice per memory channel.
+VX_CFG_L2_SLICE_BIND = 0
+VX_CFG_L2_SLICE_GRANULE = 256
+# The numeric knob is defined at both 0 and 1, so the header must test its value.
+l2_unbound_banks = "expr: pow(2, clog2(min($VX_CFG_L2_BANK_REQS, 16)))"
+VX_CFG_L2_NUM_BANKS = "expr: $l2_unbound_banks + bool($VX_CFG_L2_SLICE_BIND) * ($VX_CFG_PLATFORM_MEMORY_NUM_BANKS - $l2_unbound_banks)"
 # On at every bank count: unlike the dcache, a 2-bank L2 measured neutral
 # (sgemm-mc-nt4 -0.6%, fp16-mc-nt4 +0.1%), and it gains from 4 banks up.
 VX_CFG_L2_BANK_HASH = 1

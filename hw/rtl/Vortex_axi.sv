@@ -109,6 +109,9 @@ module Vortex_axi import VX_gpu_pkg::*; #(
 
     wire vx_busy;
 
+    if (L2_SLICE_BIND) begin : g_unsupported_slice_binding
+        `ELABORATION_ERROR("L2 slice binding is unsupported by the AXI memory adapter")
+    end
     `SCOPE_IO_SWITCH (1);
 
     Vortex vortex (

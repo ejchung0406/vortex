@@ -298,6 +298,64 @@ package VX_gpu_pkg;
         return f;
     endfunction
 
+    // The channel field folds only bits retained in the local address.
+    function automatic logic [63:0] l2_slice_fold(input logic [63:0] high, input integer channel_bits);
+        logic [63:0] taps, folded;
+        folded = '0;
+        if (channel_bits != 0) begin
+            for (integer i = 0; i < 64; ++i) begin
+                taps[i] = ((i % channel_bits) == 0);
+            end
+            for (integer i = 0; i < 64; ++i) begin
+                if (i < channel_bits) begin
+                    folded[i] = ^(high & (taps << i));
+                end
+            end
+        end
+        return folded;
+    endfunction
+
+    // Keep the bit just above the first channel selector in the local address.
+    function automatic logic [63:0] l2_slice_swap_bits(input logic [63:0] addr, input integer granule_bits);
+        logic [63:0] differs;
+        differs = ((addr >> granule_bits) ^ (addr >> (granule_bits + 1))) & 64'd1;
+        return addr ^ ((differs | (differs << 1)) << granule_bits);
+    endfunction
+
+    function automatic logic [63:0] l2_slice_channel(input logic [63:0] addr, input integer granule_bits, input integer channel_bits);
+        logic [63:0] swapped;
+        if (channel_bits == 0)
+            return '0;
+        swapped = l2_slice_swap_bits(addr, granule_bits);
+        return ((swapped >> (granule_bits + 1)) & ((64'd1 << channel_bits) - 1))
+             ^ l2_slice_fold(addr >> (granule_bits + channel_bits + 1), channel_bits);
+    endfunction
+
+    function automatic logic [63:0] l2_slice_local_addr(input logic [63:0] addr, input integer granule_bits, input integer channel_bits);
+        logic [63:0] swapped;
+        if (channel_bits == 0)
+            return addr;
+        swapped = l2_slice_swap_bits(addr, granule_bits);
+        return ((addr >> (granule_bits + channel_bits + 1)) << (granule_bits + 1))
+             | (swapped & ((64'd1 << (granule_bits + 1)) - 1));
+    endfunction
+
+    function automatic logic [63:0] l2_slice_physical_addr(
+        input logic [63:0] local_addr,
+        input logic [63:0] channel,
+        input integer granule_bits,
+        input integer channel_bits
+    );
+        logic [63:0] high, swapped;
+        if (channel_bits == 0)
+            return local_addr;
+        high = local_addr >> (granule_bits + 1);
+        swapped = (high << (granule_bits + channel_bits + 1))
+                | ((channel ^ l2_slice_fold(high, channel_bits)) << (granule_bits + 1))
+                | (local_addr & ((64'd1 << (granule_bits + 1)) - 1));
+        return l2_slice_swap_bits(swapped, granule_bits);
+    endfunction
+
     // Cache set-index hash: XORed into the raw set bits, an XOR fold of the
     // line's tag, so a power-of-two stride that keeps the raw set fixed walks
     // the sets instead. The tag is stored unchanged, so XORing the same fold
@@ -2423,6 +2481,8 @@ package VX_gpu_pkg;
 
     localparam L2_NUM_BANKS         = `VX_CFG_L2_NUM_BANKS;
     localparam L2_MEM_PORTS         = `VX_CFG_L2_MEM_PORTS;
+    localparam L2_SLICE_BIND        = (`VX_CFG_L2_SLICE_BIND != 0);
+    localparam L2_SLICE_GRANULE      = `VX_CFG_L2_SLICE_GRANULE;
 
     // Core request tag bits (socket arb output width, and the port within its group)
     localparam L2_TAG_WIDTH         = SOCKET_MEM_ARB_TAG_WIDTH + NOC_PORT_BITS;
@@ -2454,7 +2514,9 @@ package VX_gpu_pkg;
 
     // Memory request tag bits
 `ifdef VX_CFG_L2_ENABLE
-    localparam L2_MEM_TAG_WIDTH     = `CACHE_NC_MEM_TAG_WIDTH(`VX_CFG_L2_MSHR_SIZE, L2_NUM_BANKS, L2_CACHE_REQS, L2_MEM_PORTS, L2_SECTOR_SIZE, L2_WORD_SIZE, L2_TAG_WIDTH, UUID_WIDTH);
+    localparam L2_CACHE_MEM_TAG_WIDTH = `CACHE_MEM_TAG_WIDTH(`VX_CFG_L2_MSHR_SIZE, L2_NUM_BANKS, L2_MEM_PORTS, UUID_WIDTH);
+    localparam L2_BYPASS_TAG_WIDTH  = `CACHE_BYPASS_TAG_WIDTH(L2_CACHE_REQS, (L2_SLICE_BIND ? 1 : L2_MEM_PORTS), L2_SECTOR_SIZE, L2_WORD_SIZE, L2_TAG_WIDTH);
+    localparam L2_MEM_TAG_WIDTH     = `MAX(L2_CACHE_MEM_TAG_WIDTH, L2_BYPASS_TAG_WIDTH) + 1;
 `else
     localparam L2_MEM_TAG_WIDTH     = `CACHE_BYPASS_TAG_WIDTH(L2_CACHE_REQS, L2_MEM_PORTS, L2_SECTOR_SIZE, L2_WORD_SIZE, L2_TAG_WIDTH);
 `endif

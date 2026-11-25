@@ -110,6 +110,9 @@ module VX_afu_wrap import VX_gpu_pkg::*; #(
 
     // The platform top declares one AXI master per GPU memory port; a count
     // that disagrees with the GPU would leave ports idle or requests unrouted.
+    if (L2_SLICE_BIND) begin : g_unsupported_slice_binding
+        `ELABORATION_ERROR("L2 slice binding is unsupported by the XRT memory adapter")
+    end
     `STATIC_ASSERT(C_M_AXI_MEM_NUM_BANKS == `AFU_MEM_PORTS_OF(VX_MEM_PORTS),
         ("AXI memory port count %0d does not match the GPU's %0d", C_M_AXI_MEM_NUM_BANKS, `AFU_MEM_PORTS_OF(VX_MEM_PORTS)))
 

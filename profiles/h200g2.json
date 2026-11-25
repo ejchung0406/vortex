@@ -1,0 +1,45 @@
+{
+  "name": "h200g2",
+  "extends": "h200s",
+  "description": "32-SM H200 study shape with two 16-SM groups, 32 fixed slice-channel pairs, and two stacks of HBM3E. The two groups share one L2. The shape models neither partitions nor their interconnect.",
+  "chip": {
+    "VX_CFG_NUM_CORES": 32,
+    "VX_CFG_L2_SLICE_BIND": 1,
+    "VX_CFG_L2_SLICE_GRANULE": 256,
+    "VX_CFG_L2_NUM_BANKS": 32,
+    "VX_CFG_L2_SIZE": 20971520,
+    "VX_CFG_L2_NUM_WAYS": 20,
+    "VX_CFG_L2_MSHR_SIZE": 256,
+    "VX_CFG_NOC_GROUP_SIZE": 16,
+    "VX_CFG_NOC_UPLINK_PORTS": 32,
+    "VX_CFG_NOC_UPLINK_BYTES": 648,
+    "VX_CFG_NOC_UPLINK_GATE_REQ": 0,
+    "VX_CFG_NOC_SM_LATENCY": 40,
+    "VX_CFG_NOC_UPLINK_LATENCY": 59,
+    "VX_CFG_SM_INGRESS_BYTES": 113
+  },
+  "platform": {
+    "VX_CFG_PLATFORM_MEMORY_NUM_BANKS": 32,
+    "VX_CFG_PLATFORM_MEMORY_PEAK_BW": 1600000,
+    "VX_CFG_PLATFORM_MEMORY_LATENCY": 174
+  },
+  "reference": {
+    "fp32_lanes": 4096,
+    "dram_bandwidth_gbs": 1600,
+    "l2_hit_cycles": 290,
+    "dram_cycles": 546
+  },
+  "sources": {
+    "NUM_CORES, NOC_GROUP_SIZE": "Scaled choice: two groups of 16 SMs. Measured GPCs on the part have 16–18 SMs.",
+    "L2_SLICE_BIND, L2_NUM_BANKS, PLATFORM_MEMORY_NUM_BANKS": "Scaled choice: one slice per channel across two 16-channel stacks. No partition address hash is modeled here.",
+    "L2_SLICE_GRANULE": "Inferred 256 B and slice bits 8, 10 and 11 from address experiments (low confidence). Extending that select to bits 12 and 13 and folding the higher address are modeling choices for 32 slices.",
+    "L2_SIZE, L2_NUM_WAYS": "Measured slice size of 640 KiB; modeled with 20 ways, 256 sets and 128-byte lines. The 32-slice model gives 640 KiB per SM versus about 465 KiB on the part.",
+    "L2_MSHR_SIZE": "Modeling choice: 256 outstanding fills per slice from Little's law at loaded latency.",
+    "NOC_UPLINK_PORTS, NOC_UPLINK_GATE_REQ": "Modeling choices: 32 lanes to reduce head-of-line blocking and a gate on the read-return path.",
+    "NOC_UPLINK_BYTES, SM_INGRESS_BYTES": "Inferred from measured bandwidth: 1.28 TB/s per GPC and 110–116 B per clock per SM.",
+    "NOC_SM_LATENCY, NOC_UPLINK_LATENCY": "Modeling choices from the measured near L2 latency of 290 cycles. These values split the link into 40 and 59 cycles.",
+    "PLATFORM_MEMORY_PEAK_BW": "Inferred nominal 1.6 TB/s from two stacks, 16 64-bit channels per stack and 6250 MT/s per pin as inherited from h200s. The achieved reference at 96.5% of nominal is 48 GB/s per modeled SM versus about 35 GB/s on the part.",
+    "PLATFORM_MEMORY_LATENCY": "Inferred 174-cycle fixed DRAM contribution from the measured DRAM and L2 hit latency gap.",
+    "reference": "Derived configuration references: 32 modeled SMs times 128 lanes, and the two-stack nominal bandwidth. Measured near targets: 290 cycles for L2 hits and 546 cycles for DRAM. The modeled ratios differ from the full 132-SM part."
+  }
+}

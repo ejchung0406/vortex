@@ -45,6 +45,8 @@ public:
     // so every (channel, bank) is used once per channels x banks units and
     // streams a fixed distance apart do not fall on the same ones.
     uint32_t interleave = 0;
+    bool     slice_bind = false;
+    uint32_t slice_granule = 256;
 
     bool mixed() const { return interleave > block_size; }
     uint32_t visit_bytes() const { return this->mixed() ? interleave : 128; }
@@ -55,6 +57,7 @@ public:
       uint64_t addr;
     };
     Location locate(uint64_t addr) const;
+    uint64_t bound_physical(uint32_t channel, uint64_t addr) const;
   };
 
   // The memory configured in VX_config.toml.

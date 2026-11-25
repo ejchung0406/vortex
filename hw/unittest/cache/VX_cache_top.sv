@@ -82,6 +82,8 @@ module VX_cache_top import VX_gpu_pkg::*; #(
     parameter BANK_HASH             = (NUM_BANKS >= 4),
     // Hashed set index
     parameter SET_HASH              = `VX_CFG_DCACHE_SET_HASH,
+    parameter bit SLICE_BIND            = 0,
+    parameter SLICE_GRANULE         = L2_SLICE_GRANULE,
 
     parameter MEM_TAG_WIDTH         = `CACHE_MEM_TAG_WIDTH(MSHR_SIZE, NUM_BANKS, MEM_PORTS, UUID_WIDTH)
  ) (
@@ -197,7 +199,9 @@ module VX_cache_top import VX_gpu_pkg::*; #(
         .AMO_ENABLE     (AMO_ENABLE),
         .IS_LLC         (IS_LLC),
         .BANK_HASH      (BANK_HASH),
-        .SET_HASH       (SET_HASH),
+        .SET_HASH       (SLICE_BIND ? 0 : SET_HASH),
+        .SLICE_BIND     (SLICE_BIND),
+        .SLICE_GRANULE  (SLICE_GRANULE),
         .CORE_OUT_BUF   (CORE_OUT_BUF),
         .MEM_OUT_BUF    (MEM_OUT_BUF)
     ) cache (

@@ -23,6 +23,8 @@ module VX_mem_bank_adapter #(
     parameter NUM_PORTS_IN   = 1,
     parameter NUM_BANKS_OUT  = 1,
     parameter INTERLEAVE     = 0,
+    parameter bit SLICE_BIND     = 0,
+    parameter SLICE_GRANULE  = 1,
     parameter TAG_BUFFER_SIZE= 32,
     parameter ARBITER        = "R",
     parameter REQ_OUT_BUF    = 1,
@@ -69,23 +71,42 @@ module VX_mem_bank_adapter #(
     localparam NUM_PORTS_IN_BITS = `CLOG2(NUM_PORTS_IN);
     localparam NUM_PORTS_IN_WIDTH = `UP(NUM_PORTS_IN_BITS);
     localparam TAG_BUFFER_ADDRW = `CLOG2(TAG_BUFFER_SIZE);
-    localparam NEEDED_TAG_WIDTH = TAG_WIDTH_IN + NUM_PORTS_IN_BITS;
+    localparam TAG_ROUTE_BITS = SLICE_BIND ? 0 : NUM_PORTS_IN_BITS;
+    localparam NEEDED_TAG_WIDTH = TAG_WIDTH_IN + TAG_ROUTE_BITS;
     localparam READ_TAG_WIDTH = (NEEDED_TAG_WIDTH > TAG_WIDTH_OUT) ? TAG_BUFFER_ADDRW : TAG_WIDTH_IN;
     // Writes are posted and get no response, so their tag goes no wider than a read's.
     localparam XBAR_TAG_WIDTH = READ_TAG_WIDTH;
-    localparam DST_TAG_WIDTH  = XBAR_TAG_WIDTH + NUM_PORTS_IN_BITS;
+    localparam DST_TAG_WIDTH  = XBAR_TAG_WIDTH + TAG_ROUTE_BITS;
     localparam REQ_XBAR_DATAW = 1 + BANK_ADDR_WIDTH + DATA_SIZE + DATA_WIDTH + XBAR_TAG_WIDTH;
     localparam RSP_XBAR_DATAW = DATA_WIDTH + READ_TAG_WIDTH;
 
     `STATIC_ASSERT ((DST_ADDR_WDITH >= ADDR_WIDTH_IN), ("invalid address width: current=%0d, expected=%0d", DST_ADDR_WDITH, ADDR_WIDTH_IN))
     `STATIC_ASSERT ((TAG_WIDTH_OUT >= DST_TAG_WIDTH), ("invalid output tag width: current=%0d, expected=%0d", TAG_WIDTH_OUT, DST_TAG_WIDTH))
 
+    if (SLICE_BIND && !((NUM_PORTS_IN == NUM_BANKS_OUT)
+        && `IS_POW2(NUM_BANKS_OUT) && (NUM_BANKS_OUT <= 64)
+        && `IS_POW2(DATA_SIZE) && `IS_POW2(SLICE_GRANULE) && (SLICE_GRANULE >= DATA_SIZE))) begin : g_invalid_slice_binding
+        `ELABORATION_ERROR("L2 slice binding requires one port per channel and a granule at least as large as a memory beat")
+    end
+
     // Bank selection
 
     wire [NUM_PORTS_IN-1:0][BANK_SEL_WIDTH-1:0] req_bank_sel;
     wire [NUM_PORTS_IN-1:0][BANK_ADDR_WIDTH-1:0] req_bank_addr;
 
-    if (NUM_BANKS_OUT > 1) begin : g_bank_sel
+    if (SLICE_BIND) begin : g_bound
+        localparam GRANULE_BITS = `CLOG2(SLICE_GRANULE);
+        localparam BEAT_BITS = `CLOG2(DATA_SIZE);
+        for (genvar i = 0; i < NUM_PORTS_IN; ++i) begin : g_i
+            wire [63:0] byte_addr = 64'(mem_req_addr_in[i]) << BEAT_BITS;
+            wire [63:0] local_addr = VX_gpu_pkg::l2_slice_local_addr(byte_addr, GRANULE_BITS, BANK_SEL_BITS);
+            assign req_bank_sel[i] = BANK_SEL_WIDTH'(i);
+            assign req_bank_addr[i] = BANK_ADDR_WIDTH'(local_addr >> BEAT_BITS);
+            `RUNTIME_ASSERT(!mem_req_valid_in[i] ||
+                (VX_gpu_pkg::l2_slice_channel(byte_addr, GRANULE_BITS, BANK_SEL_BITS) == 64'(i)),
+                ("%t: memory request on the wrong bound channel %0d", $time, i))
+        end
+    end else if (NUM_BANKS_OUT > 1) begin : g_bank_sel
         for (genvar i = 0; i < NUM_PORTS_IN; ++i) begin : g_i
             wire [DST_ADDR_WDITH-1:0] mem_req_addr_dst = DST_ADDR_WDITH'(mem_req_addr_in[i]);
             if (INTERLEAVE) begin : g_interleave
@@ -157,25 +178,33 @@ module VX_mem_bank_adapter #(
         assign mem_req_ready_in[i] = req_xbar_ready_in[i] && tag_ready;
     end
 
-    VX_stream_xbar #(
-        .NUM_INPUTS (NUM_PORTS_IN),
-        .NUM_OUTPUTS(NUM_BANKS_OUT),
-        .DATAW      (REQ_XBAR_DATAW),
-        .ARBITER    (ARBITER),
-        .OUT_BUF    (REQ_OUT_BUF)
-    ) req_xbar (
-        .clk       (clk),
-        .reset     (reset),
-        .sel_in    (req_bank_sel),
-        .valid_in  (req_xbar_valid_in),
-        .data_in   (req_xbar_data_in),
-        .ready_in  (req_xbar_ready_in),
-        .valid_out (req_xbar_valid_out),
-        .data_out  (req_xbar_data_out),
-        .ready_out (req_xbar_ready_out),
-        .sel_out   (req_xbar_sel_out),
-        `UNUSED_PIN (collisions)
-    );
+    if (SLICE_BIND) begin : g_bound_req
+        assign req_xbar_valid_out = req_xbar_valid_in;
+        assign req_xbar_data_out = req_xbar_data_in;
+        assign req_xbar_ready_in = req_xbar_ready_out;
+        assign req_xbar_sel_out = '0;
+        `UNUSED_VAR (req_bank_sel)
+    end else begin : g_legacy_req
+        VX_stream_xbar #(
+            .NUM_INPUTS (NUM_PORTS_IN),
+            .NUM_OUTPUTS(NUM_BANKS_OUT),
+            .DATAW      (REQ_XBAR_DATAW),
+            .ARBITER    (ARBITER),
+            .OUT_BUF    (REQ_OUT_BUF)
+        ) req_xbar (
+            .clk       (clk),
+            .reset     (reset),
+            .sel_in    (req_bank_sel),
+            .valid_in  (req_xbar_valid_in),
+            .data_in   (req_xbar_data_in),
+            .ready_in  (req_xbar_ready_in),
+            .valid_out (req_xbar_valid_out),
+            .data_out  (req_xbar_data_out),
+            .ready_out (req_xbar_ready_out),
+            .sel_out   (req_xbar_sel_out),
+            `UNUSED_PIN (collisions)
+        );
+    end
 
     for (genvar i = 0; i < NUM_BANKS_OUT; ++i) begin : g_req_xbar_data_out
 
@@ -199,7 +228,7 @@ module VX_mem_bank_adapter #(
         assign mem_req_byteen_out[i] = xbar_byteen_out;
         assign mem_req_data_out[i]   = xbar_data_out;
 
-        if (NUM_PORTS_IN > 1) begin : g_input_sel
+        if (TAG_ROUTE_BITS != 0) begin : g_input_sel
             assign mem_req_tag_out[i] = TAG_WIDTH_OUT'({xbar_tag_out, req_xbar_sel_out[i]});
         end else begin : g_no_input_sel
             `UNUSED_VAR (req_xbar_sel_out[i])
@@ -218,9 +247,9 @@ module VX_mem_bank_adapter #(
 
     for (genvar i = 0; i < NUM_BANKS_OUT; ++i) begin : g_rsp_xbar_data_in
         assign rsp_xbar_valid_in[i] = mem_rsp_valid_out[i];
-        assign rsp_xbar_data_in[i] = {mem_rsp_data_out[i], mem_rsp_tag_out[i][NUM_PORTS_IN_BITS +: READ_TAG_WIDTH]};
-        if (NUM_PORTS_IN > 1) begin : g_input_sel
-            assign rsp_xbar_sel_in[i] = mem_rsp_tag_out[i][0 +: NUM_PORTS_IN_BITS];
+        assign rsp_xbar_data_in[i] = {mem_rsp_data_out[i], mem_rsp_tag_out[i][TAG_ROUTE_BITS +: READ_TAG_WIDTH]};
+        if (TAG_ROUTE_BITS != 0) begin : g_input_sel
+            assign rsp_xbar_sel_in[i] = mem_rsp_tag_out[i][0 +: TAG_ROUTE_BITS];
         end else begin : g_no_input_sel
             assign rsp_xbar_sel_in[i] = 0;
         end
@@ -231,25 +260,32 @@ module VX_mem_bank_adapter #(
     wire [NUM_PORTS_IN-1:0][DATA_WIDTH+READ_TAG_WIDTH-1:0] rsp_xbar_data_out;
     wire [NUM_PORTS_IN-1:0] rsp_xbar_ready_out;
 
-    VX_stream_xbar #(
-        .NUM_INPUTS (NUM_BANKS_OUT),
-        .NUM_OUTPUTS(NUM_PORTS_IN),
-        .DATAW      (RSP_XBAR_DATAW),
-        .ARBITER    (ARBITER),
-        .OUT_BUF    (RSP_OUT_BUF)
-    ) rsp_xbar (
-        .clk       (clk),
-        .reset     (reset),
-        .valid_in  (rsp_xbar_valid_in),
-        .data_in   (rsp_xbar_data_in),
-        .ready_in  (rsp_xbar_ready_in),
-        .sel_in    (rsp_xbar_sel_in),
-        .data_out  (rsp_xbar_data_out),
-        .valid_out (rsp_xbar_valid_out),
-        .ready_out (rsp_xbar_ready_out),
-        `UNUSED_PIN (collisions),
-        `UNUSED_PIN (sel_out)
-    );
+    if (SLICE_BIND) begin : g_bound_rsp
+        assign rsp_xbar_valid_out = rsp_xbar_valid_in;
+        assign rsp_xbar_data_out = rsp_xbar_data_in;
+        assign rsp_xbar_ready_in = rsp_xbar_ready_out;
+        `UNUSED_VAR (rsp_xbar_sel_in)
+    end else begin : g_legacy_rsp
+        VX_stream_xbar #(
+            .NUM_INPUTS (NUM_BANKS_OUT),
+            .NUM_OUTPUTS(NUM_PORTS_IN),
+            .DATAW      (RSP_XBAR_DATAW),
+            .ARBITER    (ARBITER),
+            .OUT_BUF    (RSP_OUT_BUF)
+        ) rsp_xbar (
+            .clk       (clk),
+            .reset     (reset),
+            .valid_in  (rsp_xbar_valid_in),
+            .data_in   (rsp_xbar_data_in),
+            .ready_in  (rsp_xbar_ready_in),
+            .sel_in    (rsp_xbar_sel_in),
+            .data_out  (rsp_xbar_data_out),
+            .valid_out (rsp_xbar_valid_out),
+            .ready_out (rsp_xbar_ready_out),
+            `UNUSED_PIN (collisions),
+            `UNUSED_PIN (sel_out)
+        );
+    end
 
     for (genvar i = 0; i < NUM_PORTS_IN; ++i) begin : g_rsp_xbar_data_out
         assign mem_rsp_valid_in[i] = rsp_xbar_valid_out[i];

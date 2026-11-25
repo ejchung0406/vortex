@@ -78,6 +78,9 @@ module vortex_afu import ccip_if_pkg::*; import local_mem_cfg_pkg::*; import VX_
     wire [127:0] afu_id = `AFU_ACCEL_UUID;
 
     localparam CLUSTER_SIZE = `VX_CFG_NUM_CORES / `VX_CFG_SOCKET_SIZE;
+    if (L2_SLICE_BIND) begin : g_unsupported_slice_binding
+        `ELABORATION_ERROR("L2 slice binding is unsupported by the OPAE memory adapter")
+    end
     `STATIC_ASSERT((CLUSTER_SIZE * `VX_CFG_SOCKET_SIZE) == `VX_CFG_NUM_CORES, ("NUM_CORES must be a multiple of SOCKET_SIZE"));
 
     // Vortex memory ports ////////////////////////////////////////////////////

@@ -66,6 +66,8 @@ module VX_cache_wrap import VX_gpu_pkg::*; #(
     parameter FLUSH_FORWARD         = 1,      // A flush also flushes the next level.
     parameter BANK_HASH             = 0,      // Hashed bank select (cache_bank_hash).
     parameter SET_HASH              = 0,      // Hashed set index (cache_set_hash).
+    parameter bit SLICE_BIND            = 0,
+    parameter SLICE_GRANULE         = 1,
     parameter READ_MERGE            = 0,      // Merge same-word reads within groups of this many adjacent ports (0: off).
     parameter READ_MERGE_LINE       = 0,      // Merge any reads of the same line instead, each port keeping its own tag and word.
 
@@ -86,7 +88,7 @@ module VX_cache_wrap import VX_gpu_pkg::*; #(
 );
     `STATIC_ASSERT(NUM_BANKS == (1 << `CLOG2(NUM_BANKS)), ("invalid parameter"))
     localparam CACHE_MEM_TAG_WIDTH = `CACHE_MEM_TAG_WIDTH(MSHR_SIZE, NUM_BANKS, MEM_PORTS, UUID_WIDTH);
-    localparam BYPASS_TAG_WIDTH = `CACHE_BYPASS_TAG_WIDTH(NUM_REQS, MEM_PORTS, SECTOR_SIZE, WORD_SIZE, TAG_WIDTH);
+    localparam BYPASS_TAG_WIDTH = `CACHE_BYPASS_TAG_WIDTH(NUM_REQS, (SLICE_BIND ? 1 : MEM_PORTS), SECTOR_SIZE, WORD_SIZE, TAG_WIDTH);
     localparam NC_TAG_WIDTH = `MAX(CACHE_MEM_TAG_WIDTH, BYPASS_TAG_WIDTH) + 1;
     localparam MEM_TAG_WIDTH = PASSTHRU ? BYPASS_TAG_WIDTH : (NC_ENABLE ? NC_TAG_WIDTH : CACHE_MEM_TAG_WIDTH);
     localparam BYPASS_ENABLE = (NC_ENABLE || PASSTHRU);
@@ -108,6 +110,8 @@ module VX_cache_wrap import VX_gpu_pkg::*; #(
             .MEM_PORTS         (MEM_PORTS),
             .TAG_SEL_IDX       (TAG_SEL_IDX),
             .CACHE_ENABLE      (!PASSTHRU),
+            .SLICE_BIND        (SLICE_BIND),
+            .SLICE_GRANULE     (SLICE_GRANULE),
             .WORD_SIZE         (WORD_SIZE),
             .LINE_SIZE         (SECTOR_SIZE),
             .CORE_ADDR_WIDTH   (`CS_WORD_ADDR_WIDTH),
@@ -172,6 +176,8 @@ module VX_cache_wrap import VX_gpu_pkg::*; #(
             .NEXT_IS_POC  (NEXT_IS_POC),
             .FLUSH_FORWARD (FLUSH_FORWARD),
             .BANK_HASH    (BANK_HASH),
+            .SLICE_BIND   (SLICE_BIND),
+            .SLICE_GRANULE(SLICE_GRANULE),
             .SET_HASH     (SET_HASH),
             .READ_MERGE   (READ_MERGE),
             .READ_MERGE_LINE (READ_MERGE_LINE),

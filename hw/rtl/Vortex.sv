@@ -66,6 +66,16 @@ module Vortex import VX_gpu_pkg::*, VX_trace_pkg::*, VX_tlb_pkg::*; (
 );
     `STATIC_ASSERT((`VX_CFG_NUM_CORES % `VX_CFG_SOCKET_SIZE) == 0, ("NUM_CORES must be a multiple of SOCKET_SIZE"));
 
+    if (L2_SLICE_BIND && !(L2_SHARED_LLC
+        && `IS_POW2(L2_NUM_BANKS) && (L2_NUM_BANKS <= 64)
+        && (L2_NUM_BANKS == L2_MEM_PORTS)
+        && (L2_MEM_PORTS == `VX_CFG_PLATFORM_MEMORY_NUM_BANKS)
+        && (L2_MEM_PORTS == L3_CACHE_REQS) && (L3_CACHE_REQS == L3_MEM_PORTS)
+        && (L2_SECTOR_SIZE == L3_SECTOR_SIZE)
+        && (L2_SECTOR_SIZE == `VX_CFG_PLATFORM_MEMORY_DATA_SIZE))) begin : g_invalid_slice_binding
+        `ELABORATION_ERROR("L2 slice binding requires a single L2 LLC and matching memory channels and beats")
+    end
+
     // A write-back LLC must be the only instance: replicated ones never make
     // their dirty lines visible to each other.
     `STATIC_ASSERT(!(DCACHE_IS_LLC && `VX_CFG_DCACHE_WRITEBACK) || ((`VX_CFG_NUM_CORES == 1) && (`VX_CFG_NUM_CLUSTERS == 1)),

@@ -275,6 +275,8 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
         .IS_LLC         (L2_IS_LLC),
         .SHARED_LLC     (L2_SHARED_LLC),
         .BANK_HASH      (`VX_CFG_L2_BANK_HASH),
+        .SLICE_BIND     (L2_SLICE_BIND),
+        .SLICE_GRANULE  (L2_SLICE_GRANULE),
         .AMO_ENABLE     (`VX_CFG_EXT_A_ENABLED)
     ) l2cache (
         .clk            (clk),
