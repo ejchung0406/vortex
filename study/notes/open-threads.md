@@ -944,3 +944,24 @@ gemm_block 472,826 (443,681, 6.6%), smem_rate -k22 140,238 (139,931).
 Agents running (Opus): wrapup-docs (findings 66+, notes/h200-model-status.md, profile texts, study mirror),
 wrapup-clean (merged branches, old source copies; notes/cleanup-2026-11-25.md), parity-dxa (the two remaining
 gaps; branch fix/dxa-gemm-parity, notes/dxa-gemm-parity.md). None of them pushes.
+
+## Update 2026-11-25 (17:30 EST)
+Merged fix/dxa-gemm-parity (e19c1f0e2; merge 32033924b, local): SimX's barrier arrive waits for the core MMUs as the
+RTL's lsu_core_drained does. h200s SimX moved: gemm_block 443,681 -> 451,686, bwstream_dxa -n256 -d2 337,648 ->
+334,714, -d4 157,887 -> 161,250, -n32 45,248 -> 45,272, decode 1,150,323 -> 1,154,406 (re-taken on rover as hp_*: all 16 as the agent reported; the other 11 unchanged).
+rtlsim/SimX now: copy 48,702 / 45,272 (7.0%), gemm_block 472,826 / 451,686 (4.5%). Notes: dxa-gemm-parity.md.
+OPEN, user to decide: the copy gap is an RTL L2 starvation (VX_cache_bank.sv:392: the lazy queue is served only when
+no memory response waits; under DXA fills a response waits 999/1000 cycles; a code-line refetch waits 14-26K cycles).
+Options given: A age threshold, B round robin, C lazy first, D leave and document.
+OPEN: gemm_block's rest (post-MMA barrier, decode-to-SFU 418 vs 291 cycles; needs an issue-stage RTL trace at 64
+warps); SimX 5-7% slower than RTL on reduced copies in the L2 forward/fill path once the starvation is removed;
+SimX lacks the RTL's DXA descriptor-fetch stage (not added: it moves gemm away).
+OPEN, unverified: the agent saw builds keep a stale libvortex.so (no VM pinned slab -> buffers 256 MB lower) when
+the stub is built without CONFIGS and the app step with CONFIGS follows within seconds; it blames one-second
+mtimes. I could NOT reproduce the staleness in a local test of the stub Makefile (equal mtimes still rebuilt), so
+the mechanism is not established. Its own workaround (rm libvortex.so and stub_config.stamp before the app make)
+works. The shared point scripts have the same order but were not shown to be affected; profile-carried VM (h200s,
+h200g2) puts the slab in the first build already. To do when no session is running through the scripts: add the
+same rm to run_point.sbatch, ice/run_point_ice.sbatch, rover/rover_point.sh and check one XCONF-only VM point.
+Also today: Phoenix scratch has a 1,000,000-file quota (filled twice); the NoC Codex session holds rover's rtlsim
+build lock by hand for long stretches.
