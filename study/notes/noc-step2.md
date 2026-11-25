@@ -185,3 +185,172 @@ At 16 SMs the measured spread/packed ratios are 1.172 for lean loads and 1.122 f
 TMA's one-SM rate is 81.3 B/clock, and the DXA no-slot stall counter is zero throughout. The 1-SM result shows less offered bandwidth than lean load. These measurements do not isolate its per-SM limit further. At eight SMs, TMA reaches 90.8% of linear scaling from one SM. At its 16-SM peak, evenly splitting the device DRAM bytes gives about 343 B/clock per group. The read queue grows from 5.22 bursts at one SM to 230.96 at 16 and is still 197.73 at 32. Read row conflicts rise from 2.90% to 7.37% and 9.94%. L2 MSHR stalls grow from 3.1 per 1,000 reads at eight SMs to 139.3 at 16 and 139.6 at 32, and average DXA issue-to-completion time rises from 2,369.8 core cycles per tile at eight SMs to 4,762.5 and 10,728.7 cycles. TMA bandwidth falls 6.3% from 16 to 32 even as Ramulator's mean queue and mean burst latency both ease. The much longer DXA completion time and persistent L2 stalls show pressure in the shared path beyond the DRAM controller's mean latency. The counters establish the separate contributions of placement and shared-path contention, with no precise split between L2 and DRAM service.
 
 All 24 accepted runs passed functionally and completed the per-SM placement and work checks. The complete metrics, raw controller and app logs, launch manifests, and Phoenix accounting are in `results/noc_step2_resweep_dff377467/`.
+
+## h200g2 bandwidth ceiling and full-SM roll-off
+
+This follow-up uses `feature/noc-step2b` from integrated commit `cece299d3`, which includes `c4362ef63`. Runs use XLEN64 SimX on Phoenix, 32 modeled SMs in two groups, and 32 fixed slice–channel pairs. The study roof is 1,544 GB/s, or 96.5% of the two-stack peak of 1,600 GB/s. The part and the study use different numbers of SMs, groups, and HBM channels.
+
+The lean control is `ldstream -t2048 -b8 -u8 -m16 -a -l -gN`. The active-core mask places one 2,048-thread CTA and 16 MiB of useful reads per selected SM. Spread placement selects cores 0, 16, 1, 17, and so on. The TMA control is `bwstream_dxa -e4096 -n256 -d2 -c0`, with seven CTAs and 28 MiB per selected SM. Reported bandwidth counts 64-byte DRAM reads over device cycles at 1.98 GHz. Ramulator reports 32-byte bursts. All measurements use the same placement and work checks as the preceding section.
+
+### H200 reference
+
+The spread, fused TMA runs on H200 reached 4,557.0 GB/s at 32 participating SMs, 4,604.8 at 48, 4,631.8 at 64, and 4,631.0 at 132. The 32-SM point is 98.4% of the 64-SM rate. The distributed load runs give 4,427.9 GB/s at 32 SMs, 4,554.8 at 64, and 4,552.8 at 132. The near-identical 64- and 132-SM rates establish that the measured part sustains its plateau. The physical experiments use 24 GiB total and two CTAs per SM for load. This comparison tests the trend and the fraction of the respective roofs. [Study and placement context](noc-and-design-space.md), [raw H200 network sweep](../results_gpu/h200_tpc_network.txt#L557).
+
+### Which capacity is being varied
+
+| Resource | Baseline | Independent controls | Unit |
+|:---|:---|:---|:---|
+| Shared L2 MSHR | 256 | 512, 1,024 | entries per slice |
+| Ramulator front-end admission limit | 0 (unlimited) | 64, 128, 256 | outstanding 64-byte device requests per channel |
+| Ramulator scheduler | 256 | 128, 512, 1,024 | 32-byte bursts per channel in each of the read and write buffers |
+| SimX L2 cached memory-request handoff | 2 | 256, 512 | slots per bound channel |
+| SimX L2 memory-response handoff (MRSQ path) | 2 | 4, 16 | slots per bound channel at the cached/bypass split |
+| SimX L2 core-response queue (CRSQ) | 2 | 8, 16 | slots per requester at the cache output stage |
+| Group return limiter | 648 B/core clock | disabled | bytes per group |
+| SM ingress limiter | 113 B/core clock | disabled | bytes per SM |
+
+The RTL L2 has a bank-local memory-request FIFO with a derived depth of 256 at this profile. Its per-port MRSQ is configured for four entries. The SimX bound path uses a two-entry cached input at its noncacheable arbiter for requests and a two-entry input at the same arbiter for responses. The SimX MRSQ knob controls whether there is a response stage, while the memory-request depth macro has no SimX consumer. The independent probes set the capacity at those two handoffs in scratch builds and retain their timing, arbitration, downstream queues, and feedback. These measurements exercise the depths that actually change in SimX. The probe keeps the SimX pipeline stages. CRSQ uses its existing capacity knob. The Ramulator read-queue counter includes issued reads awaiting a response.
+
+At 1,544 GB/s each 64-bit channel needs to retire about 48.25 GB/s, or 0.381 device requests per core clock. A 500–600 core-cycle fill round trip needs roughly 190–228 active 64-byte fills per slice at that rate. That estimate makes the existing 256-entry MSHR plausible for the nominal target and leaves the actual fill residence time and burstiness to the counters. An MSHR sizing assumption does not determine the controller's scheduler window. The front-end count and the window count include different transaction sizes and intervals of their lifetime.
+
+### Address footprint and dynamic row conflicts
+
+The bound L2 and DRAM channel select the same five-bit index. The raw selector takes PA bits 8, 10, 11, 12, and 13 and XORs the higher physical address in five-bit groups. The compact channel address keeps PA bit 9 as local bit 8 and keeps the bits above 13. The DRAM mapping then maps each 64-byte device request to two 32-byte bursts. With a 1 KiB bank visit and 64 bank slots in a channel, the raw bank is local bits 10–15 and the row is the local address above bit 15. The bank selector XORs those six bank bits with the row folded in six-bit groups. A bank slot includes pseudo-channel, bank group, and bank. The slice granule is an independent 256 B.
+
+The lean source buffer starts at physical `0x10230000` through the identity-mapped megapage heap. That becomes local `0x811800`. Each successive CTA advances the source by 16 MiB, or 512 KiB in each of the 32 channels. The footprint touches 512 distinct bank/row pairs per channel for every CTA. It uses all 64 banks, with 7 rows in six banks, 8 in 52, and 9 in six. No pair belongs to two CTAs. The source starts 6 KiB into the sequence of visits at a row index, which causes the 7/8/9 distribution. The model's burst-to-channel, bank, and row address calculations and the inverse trace decoding are archived with the runs.
+
+The per-CTA loop moves 128 KiB per unroll group, corresponding to four consecutive 1 KiB visits per channel. In program order, the first such group of eight CTAs covers 32 distinct banks. At 16 CTAs the same 32 banks each get two groups of row visits, and at 32 CTAs they each get four visits to different rows. Analytic counts for subsequent same-progress unroll groups across a 64 KiB local interval give the same multiplicities. The other 32 banks are still used over each CTA's full region. A control rotates CTA `i` by `i × 8` loop steps modulo 1,024, keeping its exact footprint and bytes. This distributes the first four visits across 58 banks at 16 CTAs and 64 banks at 32. Scheduled requests can differ from program order, which is why the controls also record full-run row counters and the issuing controller's previous open row.
+
+### DRAM-only throughput control
+
+A single-channel read-only driver uses the same compiled HBM timing and Ramulator scheduler, with 256 outstanding 64-byte requests allowed by the driver. It bypasses the GPU and its queues. Repeated hits to open rows across both pseudo-channels sustain 50.000 GB/s per channel. With 32 disjoint 512 KiB streams, choosing a new stream after each 1 KiB row visit gives 45.726 GB/s. Choosing a new stream after each 64-byte request gives 48.757 GB/s. These streams cover the same addresses and differ in arrival order. Multiplying by 32 gives 1,463.2 and 1,560.2 GB/s for independent copies of that channel experiment. The model can sustain the 1,544 GB/s target on a favorable request stream, and there is a measurable loss from less favorable arrivals with the GPU and writes excluded.
+
+### Screening channel-local address permutations
+
+The same DRAM-only driver screened 36 bit permutations with the original MSHR, queue window, row size, and timings. Each trial rotates the six raw bank bits before XOR and rotates the six-bit folded row independently. The screen uses grouped and striped arrival orders, 8, 16 and 32 streams, and two starts within the channel (zero and `0x811800`). The baseline averages 47.798 GB/s per channel over those 12 cases with a 44.041 minimum. Raw-left-4 and fold-left-2 averages 49.986 GB/s with a 49.925 minimum. Raw-left-5 and fold-left-3 averages 49.993 GB/s with a 49.923 minimum. Each mapping is a permutation within a row. It changes the order in which nearby addresses visit the existing pseudo-channels and bank groups without changing the shared L2 slice number, HBM capacity, queue depths, or timing.
+
+The screen chooses the two candidates for independent GPU measurements. These bit assignments are study choices. The H200 throughput measurements do not reveal its bank wiring.
+
+### Row conflicts in the scheduled stream
+
+| Active SMs | Mean read queue (bursts/channel) | Mean write queue (bursts/channel) | Read row conflicts, all channels | Sampled source conflicts | Previous row belonged to a different CTA |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 6.99 | 0.15 | 2.78% | 904 | 0 |
+| 8 | 153.49 | 92.71 | 8.69% | 11,396 | 10,804 (94.8%) |
+| 16 | 174.83 | 74.05 | 18.12% | — | — |
+| 32 | 142.25 | 81.68 | 26.55% | 33,647 | 31,192 (92.7%) |
+
+The dynamic probe classifies every source-buffer conflict in the sample using the preceding ACT in the same channel and bank. It takes up to 65,536 source-read classifications per channel from channels 0 and 17. At one SM, 876 of the 904 conflicts followed activity from the same CTA. At eight and 32 SMs, every sampled conflict with a prior row in the source buffer was a change between CTAs in the same bank. The other samples followed activity outside the source buffer. Device cycles, traffic, and retired instructions are identical with tracing enabled at 1, 8 and 32 SMs.
+
+The read distribution among channels varies by 3.09% at eight SMs and 3.16% at 32, measured as the difference between maximum and minimum channel counts divided by the mean. The repeating within-channel address pattern gives simultaneous CTAs competing rows in the same banks even though their full regions fill all banks evenly. The model's schedule turns that overlap into more row switches. Across channels 0 and 17, a row activation serves about 6.9 read bursts at eight SMs and 3.4 at 32. Spreading the first four visits with the phase-8 control raises the 32-SM rate from 1,234.858 to 1,246.309 GB/s and changes the full-run conflict rate from 26.55% to 26.48%. First-wave alignment explains little of the sustained roll-off.
+
+### One-at-a-time capacity and rate controls
+
+All rates are GB/s. The last column is the maximum of the three sampled SM counts.
+
+| Control | 8 SM | 16 SM | 32 SM | Peak in these points |
+|:---|---:|---:|---:|---:|
+| Baseline | 1,302.060 | 1,300.488 | 1,234.858 | 1,302.060 |
+| L2 MSHR 512 | 1,312.626 | 1,323.363 | 1,290.301 | 1,323.363 |
+| L2 MSHR 1,024 | 1,312.626 | 1,341.034 | 1,301.850 | 1,341.034 |
+| Front-end admission 64 | 778.239 | 791.581 | 779.312 | 791.581 |
+| Front-end admission 128 | 1,134.976 | 1,152.197 | 1,148.578 | 1,152.197 |
+| Front-end admission 256 | 1,302.475 | 1,300.364 | 1,236.529 | 1,302.475 |
+| Ramulator window 128 | 1,286.404 | 1,264.932 | 1,189.886 | 1,286.404 |
+| Ramulator window 512 | 1,288.799 | 1,309.244 | 1,226.070 | 1,309.244 |
+| Ramulator window 1,024 | 1,315.601 | 1,305.489 | 1,230.244 | 1,315.601 |
+| SimX L2 memory-request handoff 256 | 1,293.186 | 1,306.044 | 1,229.782 | 1,306.044 |
+| SimX L2 memory-request handoff 512 | 1,293.186 | 1,306.044 | 1,229.782 | 1,306.044 |
+| SimX L2 memory-response handoff 4 | 1,302.060 | 1,300.488 | 1,234.858 | 1,302.060 |
+| SimX L2 memory-response handoff 16 | 1,302.060 | 1,300.488 | 1,234.858 | 1,302.060 |
+| L2 CRSQ 8 | 1,296.301 | 1,303.316 | 1,225.938 | 1,303.316 |
+| L2 CRSQ 16 | 1,296.301 | 1,303.316 | 1,225.938 | 1,303.316 |
+| Group return limiter disabled | 1,302.646 | 1,297.027 | 1,237.084 | 1,302.646 |
+| SM ingress limiter disabled | 1,295.582 | 1,300.249 | 1,228.627 | 1,300.249 |
+
+The strongest capacity change is the 1,024-entry L2 MSHR. At 32 SMs, 512 entries recover 55.443 GB/s and 1,024 recover 66.992 GB/s. The 1,024-entry peak is 1,341.034 GB/s at 16 SMs, 86.9% of the target. At 32 SMs, MSHR stalls fall from 652,490 to 367,599 and 222,947, and the mean read queue rises from 142.25 to 199.40 and 212.66 bursts per channel. Meanwhile the mean latency of an accepted burst increases from 561 to 659 and 727 DRAM clocks. More outstanding requests mask some delay at the cost of longer controller residence time. Even at 1,024 entries, row conflicts are 25.35% at 32 SMs and the rate falls 2.9% from the 16-SM rate. The experiment gives no MSHR count that reaches 1,544 GB/s. Neither 512 nor 1,024 entries per slice has a measured H200 sizing basis. Across the 32 study slices those values would double or quadruple the baseline's 8,192 tracked misses.
+
+Limiting front-end admission to 64 or 128 requests lowers the whole plateau. The 128-entry limit largely removes the slope from 16 to 32 SMs by reducing the 16-SM rate to 1,152.197 GB/s. The scheduler window sweep shows that the controller needs the existing 256-burst scale. Enlarging the window to 1,024 changes the 32-SM rate by −4.614 GB/s and raises mean controller read latency to 1,010 DRAM clocks. The existing 256-entry window sustains 1,560 GB/s in the DRAM-only arrival-order control. This evidence gives no sizing basis for a larger window.
+
+The two L2 response paths and the cached memory-request capacity show at most small bandwidth changes. The 32-SM spread run gains 2.226 GB/s with the group return gate bypassed and loses 6.231 GB/s with the SM ingress limiter bypassed. Those controls change request timing as well as the limit. The observed full-SM loss is much larger than either effect. Across the capacity controls, no independently relaxed resource reaches 1,544 GB/s.
+
+### Replaying the actual controller input
+
+A separate probe records the first 65,536 accepted 32-byte bursts on channel 0 at eight and 32 SMs. The inverse map reconstructs 32,768 aligned 64-byte requests, including the write direction, with every pair checked. The replay preserves their order and uses an eager standalone memory driver with up to 256 device requests outstanding and the original 256-burst scheduler window. It reports read bandwidth over the middle 60% of completed reads in this sample. The setup phase and write mix can differ from the full kernel. This control isolates what the observed request sequence can produce at one channel independently of L2 and the SM issue rate.
+
+| Controller or mapping | 8-SM order, reads and writes | 32-SM order, reads and writes | 8-SM order, reads only | 32-SM order, reads only |
+|:---|---:|---:|---:|---:|
+| Baseline | 46.692 | 37.926 | 49.514 | 47.643 |
+| Ready column before ready row prerequisite | 47.295 | 39.500 | 50.001 | 49.518 |
+| Parallel ready row and column commands | 47.288 | 39.407 | 50.006 | 49.657 |
+| Raw bank left 4, folded row left 2 | 45.021 | 37.954 | 47.746 | 47.727 |
+| Raw bank left 5, folded row left 3 | 46.078 | 38.530 | 48.653 | 47.799 |
+
+Rates are GB/s per channel. Values within 0.01 GB/s of 50.000 reflect the finite count and clock boundaries of the replay. Removing writes leaves the order of the reads identical and raises the baseline 32-SM replay by 9.718 GB/s. All remaining reads are in the source buffer. The 32-SM trace contains 4,116 writes against 1,044 at eight SMs. Decoding them to physical addresses places 4,096 and 1,024, respectively, in the 512 MiB interleaved thread-stack window. The compiled lean kernel has a 304-byte stack frame and issues stores to it. This startup traffic makes up 12.6% of the 32-SM sample and about 1.7% of the complete device run. The replay shows that the burst of stack writes aggravates the startup loss. The replay quantifies the stack effect for this prefix. The full TMA run at 32 SMs has only 8,412 writes for 14,680,396 reads and still rolls off 6.3% from its peak.
+
+With writes present, the 32-SM baseline replay has a 24.56% read row-conflict rate and reaches 37.926 GB/s per channel. The two screened bank permutations leave it around 38 GB/s. The earlier grouped and striped synthetic screens had much better locality and did not predict the result from real arrivals. In the read-only replay, a one-command scheduler with column priority and a controller with up to one row command and one column command each clock both pass 48.25 GB/s on the 32-SM sequence. HBM3 has separate row and column command interfaces, shared by the pseudo-channels. The parallel probe uses each candidate command's existing timing checks and does not change capacity. It measures the sensitivity to command serialization without inferring the H200 controller's policy. [JEDEC JESD238A, sections 2 and 3.1.2](https://studylib.net/doc/28550091/jesd238a-hbm3), [Synopsys HBM3 design summary](https://www.synopsys.com/blogs/chip-design/hbm3-next-generation-memory-standard.html).
+
+Offline grouping by bank and row within each successive 256-line window of the same read-only sequence only raises the 32-SM baseline to 47.819 GB/s. The best read-only replay rates show bandwidth headroom with the original capacities. Each candidate loses that headroom when the replay includes the observed writes.
+
+An independent replay varied the controller's write-buffer depth and its drain thresholds with the read window fixed at 256. The 32-SM replay peaked at 38.249 GB/s using the existing 256-entry write buffer with 95%/5% thresholds, up from 37.926 with the usual 80%/20%. The largest tested write buffer, 512 entries, peaked at 39.448 GB/s. Threshold tuning and larger write storage recover at most a small portion of the capacity lost on the observed read/write sequence.
+
+### Cross-checks with the complete SimX path
+
+The column-first scheduler raises lean load at 32 SMs from 1,234.858 to 1,258.209 GB/s, while its own 16-SM peak is 1,341.001 GB/s. Its 6.2% peak-to-32-SM loss is similar to the baseline's 6.1%. It also takes the 16-SM TMA point down to 1,282.015 GB/s and the 32-SM point to 1,268.998 GB/s. The full workload results bound the benefit that the read-only replay predicted.
+
+Raw-left-4/fold-left-2 raises 32-SM TMA from 1,273.439 to 1,411.192 GB/s, 91.4% of the target. At that point the L2 MSHR stall count falls from 2.05 million to 1.34 million and Ramulator read latency falls from 507 to 451 DRAM clocks. The same mapping takes 16-SM TMA from 1,359.685 to 1,150.717 GB/s. Its MSHR stalls grow from 1.02 million to 1.78 million and read latency grows from 555 to 686 DRAM clocks. At 32 SMs lean load gains only 0.548 GB/s, with a 26.57% conflict rate. The effect depends on the kernel and the number of concurrent streams. The two complete sweeps below include this trial and the smaller folded-row rotation.
+
+Raw-left-5/fold-left-3 delivers 1,312.686 and 1,324.967 GB/s for 16- and 32-SM TMA. Its 32-SM lean point falls to 1,205.273 GB/s. The 64-step CTA stagger improves 32-SM lean load to 1,254.938 GB/s at 26.44% conflicts. Shorter bank visits of 128, 256 and 512 B each lower 32-SM lean bandwidth. The remaining mapping and controller controls are listed in [the full control table](../results/noc_step2b_cece299d3/complete-tables.md).
+
+### Calibration decision
+
+The H200 measurements sustain the plateau as more SMs participate. The modeled lean and TMA baselines lose 6.1% and 6.3% between their peaks and 32 SMs. The model evidence shows more switches between CTA rows within a bank, sensitivity to the resulting ordered DRAM input, and additional loss from finite L2 miss tracking. The work is balanced across channels. The independent rate and L2 handoff controls have little influence at 32 SMs. The stack-write burst amplifies the early lean loss, while the TMA results establish that the shared-path discrepancy also occurs with negligible writes.
+
+The highest complete-device lean control is 1,341.034 GB/s with four times the MSHR depth. The highest TMA trial is 1,411.192 GB/s with raw-left-4/fold-left-2, with a 15.4% regression at 16 SMs. The favorable DRAM-only sequences pass the roof with existing capacity. The tested complete-device configurations leave the 1,544 GB/s goal unmet. The available H200 data constrain throughput and the scaling trend. They give no measured MSHR size, command scheduling policy, or bank-bit assignment.
+
+The profile keeps the existing 256-entry MSHR and 256-burst Ramulator window. The former is a Little's-law sizing choice. The latter is a controller-model choice supported by the sensitivity and DRAM-only results. The two bit permutations were selected using synthetic measurements and rejected as profile calibration after cross-kernel validation. The scratch controller and queue probes are archived for reproduction. The branch has zero tracked code or profile differences from `cece299d3`, and the 32 slice–channel bindings stayed fixed throughout this study.
+
+All 16 baseline points reproduced the preceding sweep exactly in cycles, retired instructions, device requests, and the collected performance and controller counter arrays. All 130 full-device cases passed the functional and placement checks. [Baseline equality check](../results/noc_step2b_cece299d3/baseline-equivalence.tsv), [case counters](../results/noc_step2b_cece299d3/sensitivity-counters.tsv), [Phoenix accounting](../results/noc_step2b_cece299d3/accounting.txt).
+
+### Before-and-after trial sweeps
+
+The baseline is the integrated `h200g2` profile. Both trial columns use the original capacities, timings, 32 channels and active-core masks. They report observed results after changing only the channel-local bank assignment. The calibration decision retains the baseline.
+
+#### Lean load sweep
+
+| SMs | Baseline cycles | Fold-right-1 trial cycles | Raw-left-4/fold-left-2 trial cycles | Baseline GB/s | Fold-right-1 trial GB/s | Raw-left-4/fold-left-2 trial GB/s |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 169,613 | 167,176 | 170,647 | 197.204 | 200.102 | 196.021 |
+| 4 | 177,439 | 176,946 | 178,096 | 759.844 | 761.963 | 757.043 |
+| 6 | 181,934 | 182,316 | 184,940 | 1,111.602 | 1,109.268 | 1,093.533 |
+| 8 | 207,095 | 208,451 | 210,154 | 1,302.060 | 1,293.593 | 1,283.113 |
+| 10 | 256,264 | 256,978 | 260,631 | 1,315.552 | 1,311.852 | 1,293.537 |
+| 12 | 309,658 | 310,139 | 314,999 | 1,306.222 | 1,304.187 | 1,284.056 |
+| 16 | 414,708 | 415,043 | 416,420 | 1,300.488 | 1,299.448 | 1,295.140 |
+| 20 | 522,088 | 520,504 | 544,252 | 1,291.293 | 1,295.244 | 1,238.718 |
+| 22 | 584,474 | 576,403 | 589,513 | 1,269.113 | 1,286.903 | 1,258.250 |
+| 24 | 644,252 | 643,231 | 650,063 | 1,255.814 | 1,257.963 | 1,244.561 |
+| 28 | 755,165 | 772,165 | 762,779 | 1,249.909 | 1,222.438 | 1,237.413 |
+| 32 | 873,574 | 874,697 | 873,220 | 1,234.858 | 1,233.296 | 1,235.406 |
+
+| Configuration | 1 SM GB/s | Peak GB/s | Peak SMs | First at 98% of peak | 32-SM change from peak | Peak as share of 1,544 |
+|:---|---:|---:|---:|---:|---:|---:|
+| Baseline | 197.204 | 1,315.552 | 10 | 8 | -6.13% | 85.20% |
+| Fold-right-1 trial | 200.102 | 1,311.852 | 10 | 8 | -5.99% | 84.96% |
+| Raw-left-4/fold-left-2 trial | 196.021 | 1,295.140 | 16 | 8 | -4.61% | 83.88% |
+
+#### TMA sweep
+
+| SMs | Baseline cycles | Fold-right-1 trial cycles | Raw-left-4/fold-left-2 trial cycles | Baseline GB/s | Fold-right-1 trial GB/s | Raw-left-4/fold-left-2 trial GB/s |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 360,963 | 360,906 | 362,033 | 161.054 | 161.080 | 160.578 |
+| 8 | 397,463 | 396,888 | 406,159 | 1,170.094 | 1,171.789 | 1,145.042 |
+| 16 | 684,083 | 681,570 | 808,311 | 1,359.685 | 1,364.698 | 1,150.717 |
+| 32 | 1,460,847 | 1,438,356 | 1,318,245 | 1,273.439 | 1,293.350 | 1,411.192 |
+
+| Configuration | 1 SM GB/s | Peak GB/s | Peak SMs | First at 98% of peak | 32-SM change from peak | Peak as share of 1,544 |
+|:---|---:|---:|---:|---:|---:|---:|
+| Baseline | 161.054 | 1,359.685 | 16 | 16 | -6.34% | 88.06% |
+| Fold-right-1 trial | 161.080 | 1,364.698 | 16 | 16 | -5.23% | 88.39% |
+| Raw-left-4/fold-left-2 trial | 160.578 | 1,411.192 | 32 | 32 | +0.00% | 91.40% |
+

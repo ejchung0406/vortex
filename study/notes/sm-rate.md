@@ -281,3 +281,82 @@ OPEN after the merge (not to do now):
   Engine change: pass_want now includes the response credit (stores unaffected); new output pass_rw.
   New tests: lmem_rw_order (in the regression list), smem_rate -f <pct> fairness bound for -k22.
   WIP commit on feature/lmem-rd; src_smr_r1; jobs rs (SimX off/both/rd), rr (rtlsim rd) -> smr_rs_*, smr_rr_*.
+- 11-23 lmem-rd first results (WIP head; src_smr_r4 = lint-clean for off/both/rd; a0 = a470ffa5c).
+  Small shape 16x32 + EXT_A, SimX vs rtlsim, 21 points per config: rd worst 0.76% (lmem_rw_order -w16 3580 vs 3553),
+  both worst 1.79% (rw16) / 1.52% (wm16); raw_order +4.25% and war_order +2.88% in every config (not the knobs).
+  All directed tests pass on both models with rd (lmem_rw_order, lmem_wr_merge, lmem_lrsc_store); lmem_access+EXT_A at
+  16x32 fails on rtlsim as on pristine (open item 5), passes on SimX.
+  h200s SimX (profile now has MERGE+ROW): new tree with RD_ROW=0 == a470ffa5c on fsq/wr/roof/bw/war/lrd/gblk/dec/wm64/
+  lacc. With -D...MERGE=0 -D...ROW=0 == pristine dd94ad142 values on fsq/wr/roof/bw/war/lrd(488,417).
+  RD_ROW=1 (instr per clock at 8/16/32/64 warps; one warp cycles per instr), before -> after:
+    lds_nouse4 0.447/0.485/0.493/0.496 -> 0.630/0.729/0.781/0.788 (one warp 5.79 both)
+    lds_own4   0.351/0.450/0.489/0.493 -> 0.351/0.646/0.747/0.776
+    sts_own4   0.620/0.728/0.779/0.788 unchanged; 8-byte kinds unchanged (~0.44-0.50: two rows per warp op)
+    mix -k22 64 warps store/load: 10,471 / 26,848 -> 10,476 / 10,472; 16 warps 2,864 / 6,838 -> 2,823 / 2,832
+    gemm_block 576,342 -> 540,149; decode 1,320,528 -> 1,319,378; lmem_wr_merge -w64 14,549 -> 12,266;
+    lmem_access 7,173,082 -> 7,638,335 (+6.5%: atomics alternate with plain requests and wait for a drain).
+  The 0.79 ceiling of 4-byte loads and stores is the same number: not the memory (earlier: GAPLESS=3 gives 0.97).
+  rover (h200s rtlsim, RD_ROW=1): src vsmr4 (= src_smr_r4), MODEL m_smr_r4_rd, points smr_rd_k14w64, _k22w64 (-f150), _k13w64, _k14w1, _rw64, _wm64. ICE: r4 (rtlsim knobs off small shape), cir4 (planner, ~23 cases).
+  Knobs-off identity: rtlsim small shape (smr_r4_off_*) == 7227ce092/bd7aa26ba values (war 334,086; sts_own4 w16 51,756;
+  wm16 9,617; sts_own w16 19,226; lds_own w16 11,363; mix 52,340; lrsc16 1,307); SimX h200s with both store knobs
+  forced 0 (smr_hz_*) == pristine on all ten (incl. gemm_block 576,342, decode 1,320,528, lmem_access 7,464,815).
+  h200s SimX, RD_ROW=1 + LANE_DISPATCH_GAPLESS=3 (smr_hg_*): lds_nouse4 0.679/0.963/0.977 at 8/32/64 warps, one warp
+  4.88 cycles per load (part 5.05); sts_own4 0.666/0.952/0.980, one warp 4.80 (part 4.06); mix 64 warps 8,432 / 8,429
+  (0.971 in all). So the 0.79 ceiling is the LSU dispatch gap, as for stores.
+  rover: first two h200s rtlsim builds killed (Verilator signal 9 at >124G) while two other agents' Verilator runs held 91G+64G; my waiting points stopped and all six restarted with MINFREE_GB=170, THREADS=16. If it dies again with memory free, the RD_ROW RTL is too heavy for Verilator at h200s -> investigate.
+- 11-23 planner on src_smr_r4 (smr_cir4): 25 of 26 passed: the 8 store-knob cases (gaps 0.01-0.35%, as before), 3
+  row-read-port parity (0.63 / 0.63 / 0.10% with rd-row) + 2 race cases x 2 drivers, and the new rd-row cases: order
+  0.51%, lrsc-store 0.35%, merge 0.08%, lds4 0.02%, lds 0.01%, sts4 0.02%, mix (-f150) 0.02%, access (EXT_A) 0.03%.
+  Failed: parity-lmem-rd-row-order-noamo: SimX aborted, the kernel emitted amoadd without the A extension (test bug:
+  __riscv_atomic is always defined). Fixed: the host passes the device's A flag. Series now c4537f4d2, 50b830511
+  (src_smr_r5; RTL/SimX identical to r4). Rerun: z5 (default config), cir5 (the two order cases).
+- 11-23 planner complete: 26/26 (cir4 25 + cir5 the two order cases 0.26% / 0.40%); lmem_rw_order passes at the
+  default config (1,424 cycles; -w4 1,456). Head c4537f4d2 + 50b830511 (src_smr_r5).
+  ROVER PROBLEM: h200s rtlsim build with RD_ROW=1 killed three times (Verilator signal 9); the third alone reached
+  211 GB (mem.log) vs 77-78 GB for earlier h200s models. My remaining rover points stopped. Unknown whether RD_ROW or
+  the profile's WR_ROW/WR_MERGE (88077548c) causes it. ICE jobs vmz / vmw / vmd (240G each): h200s rtlsim build with
+  store knobs forced 0 / profile as-is / + RD_ROW -> read MaxRSS (sacct) per state. Small shape: no difference.
+  64 warps x 32 threads without TCU/DXA (smr_vn_*): rtlsim build peak 10.9 / 10.4 / 10.9 GB for knobs off / store knobs / +RD_ROW -> the blow-up needs the h200s features. vm jobs resubmitted at 185G (240G never scheduled).
+  h200s rtlsim build memory on ICE (sacct/sstat MaxRSS): knobs off 85 GB (completed, 58 min); profile as-is 73 GB
+  and +RD_ROW 63 GB (both past verilation, stable). So the RTL does NOT blow up Verilator; rover's mem.log is
+  whole-machine memory and my three builds there were killed while other agents' Verilator runs filled the server.
+  h200s rtlsim points now on ICE: job hr (185G), smr_hr_* (k14 w64/w16/w1, k22 w64 -f150, k13 w64, rw64, wm64).
+  h200s rtlsim builds on ICE all completed, rc=0: knobs off 85 GB / 58 min; profile as-is 73 GB / 84 min; +RD_ROW 63 GB / 98 min (24 cpus). One-warp lds_nouse4 -i2: 9,271 cycles in knobs-off and profile as-is (identical).
+- h200s-size rtlsim with RD_ROW=1 (ICE job hr, src_smr_r5) vs SimX: lds_nouse4 w64 89,716 vs 89,567 (+0.17%), w16
+  28,200 vs 28,164, w1 28,831 vs 28,807; sts_own4 w64 89,735 vs 89,452 (+0.32%); mix w64 90,439 vs 90,755 (-0.35%),
+  store/load 10,469 / 10,467 per iter, -f150 passes; lmem_wr_merge -w64 12,440 vs 12,266 (+1.4%).
+  PROBLEM: lmem_rw_order -w64 rtlsim 14,370 vs SimX 16,407 (SimX +14%). Small shape was 0.76%. Localizing at
+  64 warps x 32 threads on both models: rd+A, rd, rd+A+BAR_DRAIN_SCOPE=1, store-knobs+A+scope, rd+scope
+  (jobs wr1..5 rtlsim, wsa SimX -> smr_wr_*, smr_ws_*).
+  Localizing lmem_rw_order -w64 (64 warps x 32 threads, no profile, LMEM_LOG_SIZE=17), SimX / rtlsim: rd+A 13,249 /
+  13,376; rd+A+BAR_DRAIN_SCOPE=1 13,063 / 13,207; rd 10,127 / 10,158; rd+scope 9,940 / 9,991; store knobs+A+scope
+  15,541 / 15,650. All within 1.1%: neither the knob, atomics, the drain scope nor 64 warps alone makes the gap.
+  h200s SimX with store knobs only (no RD_ROW): 18,579. rtlsim of that (job hw) running: tells whether the h200s gap
+  exists without RD_ROW.
+- lmem_rw_order -w64 at h200s, store knobs only (no RD_ROW): rtlsim 16,434 (smr_hw_rw64) vs SimX 18,579
+  (smr_hws_rw64): SimX +13.1%. With RD_ROW: 14,370 vs 16,407: SimX +14.2%. So the gap is NOT from RD_ROW: it is
+  there without it, same size; RD_ROW takes ~2,100 cycles off in both models. Not reproduced at 64 warps x 32
+  threads without the profile, in any of: rd, rd+A, rd+A+scope, store knobs+A+scope, + the profile's core settings
+  (12,511 / 12,683). Left in the profile: TCU/DXA/RDPORT, L2 and platform memory, VM. Suspect: the 20,480 result
+  stores to global memory at the end (dcache/L2 path), not the local memory. OPEN, not this branch.
+- 11-23 late: lead merged lmem-rd (2e5c1c09a, knob off, pushed); head now a51498db0. Last items: h200s SimX table on a51498db0 for as-is / +RD_ROW / +RD_ROW+GAPLESS=3 (jobs nb, nd, ng from src_smr_h1) and the lmem_access trace (nm from src_smr_h1m = SimX with atomics never yielding to plain requests). lmem_rw_order gap = lead's finding 56 (barrier gap), predates RD_ROW.
+- FINAL (11-23), h200s SimX on a51498db0 (src_smr_h1; smr_nb_* as-is, smr_nd_* +RD_ROW=1, smr_ng_* +RD_ROW=1
+  +LANE_DISPATCH_GAPLESS=3), cycles as-is / RD / RD+gapless:
+    fetch_squash 10,018 / 10,018 / 10,018; warp_rate 113,382 x3; tmem_roof 62,072 / 62,072 / 62,065;
+    bwstream 403,996 / 403,996 / 405,591; war_order 321,423 / 321,423 / 320,655; lmem_rdport 487,900 / 487,909 /
+    487,909; gemm_block 549,551 / 517,670 / 519,881; gemm_tmem_decode 1,151,794 / 1,151,192 / 1,151,424;
+    lmem_access 7,917,484 / 8,186,799 / 7,912,986 (instrs 1,431,152 / 1,475,282 / 1,442,832).
+  Instr per clock at 8/16/32/64 warps (one warp cycles): lds_nouse4 0.447/0.485/0.493/0.495 (5.79) ->
+    0.630/0.729/0.781/0.788 (5.79) -> 0.679/0.892/0.963/0.978 (4.88); sts_own4 0.620/0.728/0.779/0.788 (5.71) ->
+    same -> 0.666/0.877/0.952/0.979 (4.80); lds_own4 64 warps 0.493 -> 0.778 -> 0.913; 8-byte kinds 0.49 in all.
+    mix -k22 64 warps store/load: 10,483 / 26,849 -> 10,462 / 10,465 -> 8,438 / 8,437.
+  lmem_access with RD_ROW: +3.4% cycles but +3.1% INSTRUCTIONS (cycles per instruction 5.53 -> 5.55): the test's
+  LR/SC contention loop retries more, because atomics now alternate with the plain requests waiting beside them, so
+  a warp's LR and SC sit further apart. SimX variant where atomics never yield (src_smr_h1m): 4,423,361 cycles,
+  1,176,142 instrs, but plain requests then have no bound behind a stream of atomics. Intended cost of the turn rule,
+  not a rate defect; not seen with gapless dispatch. A softer rule (several atomics per turn) is an open option.
+  lmem_rw_order h200s gap (SimX +13-14% with and without RD_ROW) = lead's finding 56 (barrier gap), predates RD_ROW.
+OPEN (carried): H200 "Job 2" split: part gives stores 0.25 and loads 0.5 per clock PER BLOCK under 1.0 per SM, and
+  loads the larger share when mixed (0.6:0.4 interleaved); the rotating grant's split in those mixes not yet compared.
+  A DXA beat stops all LSU passes: harsher on loads than the part (TMA writes barely touch loads there). One warp:
+  model 5.79 load / 5.71 store vs part 4.98 / 4.30. Logic depth unmeasured. XLEN 32. Finding 56.

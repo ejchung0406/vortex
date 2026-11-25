@@ -802,7 +802,7 @@ h200s rtlsim / SimX at the current profile (rover):
 
 ## Update 2026-11-24 (04:45 EST)
 STATE FOR A NEW SESSION: the Phoenix job hosting the Claude session (15992728 `slowdown`) ends about 2026-11-24 22:40
-EST (3-day limit). rover has refused ssh since 2026-11-23 20:56 ("Connection closed by ... port 2337"; host pings);
+EST (3-day limit). rover has refused ssh since 2026-11-23 20:56 ("Connection closed by ..."; host pings);
 cause unknown; our processes there (Codex's h200s rtlsim runs bg_cache_repl_*, dcg_c8r, source and model trees)
 are unread and uncleaned. ICE scratch was full (285/300 GB, 995k/1M files); 33 finished trees removed
 (src_smr_*, src_barfix_*), now 274 GB / 786k files; most of the space is outside vortex-ice.

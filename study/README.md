@@ -8,6 +8,7 @@ on GitHub.
 |---|---|
 | `notes/upstream-pr-candidates.md` | Every finding (bugs, calibration, tests) with evidence and status |
 | `notes/upstream-pr-candidates.ko.md` | The same in Korean, brought up to the current state |
+| `notes/h200-model-status.md`, `notes/h200-model-status.ko.md` | One page for someone about to run experiments: profiles, how to run a point, model against the part and SimX against rtlsim by kernel class, what not to trust, open items (English and Korean) |
 | `notes/upstream-issue-drafts.md` | Issue texts for the three SimX/runtime bugs |
 | `notes/open-threads.md` | In-flight state, newest section last |
 | `notes/corun-workloads.md` | The co-run scenario (Qwen3.5-9B decode beside Z-Image-Turbo) and its real-H200 measurements |

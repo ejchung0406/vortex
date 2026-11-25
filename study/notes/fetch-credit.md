@@ -246,3 +246,155 @@ ICE jobs 7249598 and 7249599 passed all seven cases on a470ffa5c and the same so
 | smprobe | 78,268 | 78,268 | 57,841 | +0.00% |
 
 The base values reproduce all six supplied references. Earlier gemm_block and gemm_tmem_decode jobs used the same arguments while leaving XCONF empty. With -DMTILES=1 -DPROFILE_ENABLE, gemm_block retires 814,144 instructions versus 812,352 in the earlier job. With -DKSTEPS=2 -DPIPE=6 -DXFER=8192, gemm_tmem_decode retires 211,722 versus 271,171 in the earlier job. Logs are under results/fcb/fch2_*. Next: collect the paired regression bundles and remaining RTL results.
+
+## Codex progress | 2026-11-23 02:03 EST | Step 4 XLEN 64 suites
+
+ICE bundles 7249196 (base SimX), 7249198 (base RTL), 7249199 (WIP SimX), 7249200 (WIP RTL) compare dd94ad142 and 871067f3f. All 15 existing fetch-ahead parity cases meet their thresholds. All five fetch_squash functional cases passed. All 20 cycle counts are identical before and after within each model, and all four runs per row agree on instruction counts.
+
+| Case | RTL before / after | SimX before / after | Instructions | Gap | Tolerance |
+|---|---:|---:|---:|---:|---:|
+| parity-bar-vis-lanes | 43,747 / 43,747 | 43,857 / 43,857 | 16,328 | 0.251% | 1.0% |
+| parity-warp-rate-ahead-int | 88,726 / 88,726 | 88,720 / 88,720 | 133,820 | 0.007% | 5.0% |
+| parity-warp-rate-ahead-fma | 116,156 / 116,156 | 116,150 / 116,150 | 67,260 | 0.005% | 5.0% |
+| parity-warp-rate-ahead-branch | 95,960 / 95,960 | 95,954 / 95,954 | 67,260 | 0.006% | 5.0% |
+| parity-warp-rate-ahead-lds | 153,676 / 153,676 | 153,703 / 153,703 | 33,219 | 0.018% | 5.0% |
+| parity-warp-rate-ahead-shared | 116,579 / 116,579 | 116,575 / 116,575 | 67,952 | 0.003% | 5.0% |
+| parity-warp-rate-branch-noreg-ahead | 117,324 / 117,324 | 117,318 / 117,318 | 133,820 | 0.005% | 5.0% |
+| parity-warp-rate-fetch-nobuf-ahead | 91,278 / 91,278 | 91,320 / 91,320 | 67,260 | 0.046% | 5.0% |
+| parity-warp-rate-flush-nobuf-ahead | 150,108 / 150,108 | 150,105 / 150,105 | 16,824 | 0.002% | 5.0% |
+| parity-warp-rate-alu-lanes-gapless-slice | 13,357 / 13,357 | 13,344 / 13,344 | 4,341 | 0.097% | 0.5% |
+| parity-warp-rate-alu-lanes | 15,244 / 15,244 | 15,241 / 15,241 | 17,340 | 0.020% | 0.2% |
+| parity-warp-rate-lsu-lanes-store | 22,451 / 22,451 | 22,445 / 22,445 | 4,341 | 0.027% | 1.0% |
+| parity-warp-rate-lsu-lanes-load | 22,506 / 22,506 | 22,500 / 22,500 | 4,353 | 0.027% | 1.0% |
+| parity-warp-rate-lsu-lanes-store-gapless | 18,547 / 18,547 | 18,541 / 18,541 | 4,341 | 0.032% | 0.5% |
+| parity-warp-rate-lsu-lanes-load-gapless | 18,591 / 18,591 | 18,585 / 18,585 | 4,353 | 0.032% | 0.5% |
+| fetch-squash | 6,453 / 6,453 | 6,440 / 6,440 | 964 | 0.201% | functional |
+| fetch-squash-ahead | 5,098 / 5,098 | 5,095 / 5,095 | 1,928 | 0.059% | functional |
+| fetch-squash-ahead-shared | 7,069 / 7,069 | 7,079 / 7,079 | 3,856 | 0.141% | functional |
+| fetch-squash-ahead-lone | 5,098 / 5,098 | 5,095 / 5,095 | 1,928 | 0.059% | functional |
+| fetch-squash-ahead-vm | 5,367 / 5,367 | 5,352 / 5,352 | 489 | 0.279% | functional |
+
+Raw logs are under results/fcb/cases_*.txt. Planner lint passed for 1,080 expanded cases and its three pytest tests passed. Next: collect the sweep and dual-XLEN functional confirmation.
+
+## Codex progress | 2026-11-23 02:05 EST | Step 4 warp_rate sweep
+
+The four ICE XLEN 64 bundles finished the 52-row sweep. Every row is cycle-identical before and after within each model. All four runs per row agree on instruction counts and output hashes. The maximum cross-model gap is 0.142% at k1_w4 (int_ind4). 0 rows exceed 5%, with the same gap on both revisions.
+
+| Kind and active warps | Kernel | RTL cycles (both) | SimX cycles (both) | Instructions | Gap |
+|---|---|---:|---:|---:|---:|
+| k0_w1 | int_dep | 10,725 | 10,722 | 1,224 | 0.028% |
+| k0_w2 | int_dep | 10,686 | 10,683 | 2,440 | 0.028% |
+| k0_w4 | int_dep | 10,700 | 10,694 | 4,872 | 0.056% |
+| k0_w8 | int_dep | 12,419 | 12,415 | 9,736 | 0.032% |
+| k1_w1 | int_ind4 | 4,298 | 4,295 | 1,220 | 0.070% |
+| k1_w2 | int_ind4 | 4,197 | 4,194 | 2,432 | 0.071% |
+| k1_w4 | int_ind4 | 4,211 | 4,205 | 4,856 | 0.142% |
+| k1_w8 | int_ind4 | 12,376 | 12,372 | 9,704 | 0.032% |
+| k2_w1 | int_ind8 | 4,358 | 4,355 | 1,221 | 0.069% |
+| k2_w2 | int_ind8 | 4,224 | 4,221 | 2,434 | 0.071% |
+| k2_w4 | int_ind8 | 4,236 | 4,230 | 4,860 | 0.142% |
+| k2_w8 | int_ind8 | 12,360 | 12,356 | 9,712 | 0.032% |
+| k3_w1 | fma_dep | 21,862 | 21,859 | 1,219 | 0.014% |
+| k3_w2 | fma_dep | 21,832 | 21,829 | 2,430 | 0.014% |
+| k3_w4 | fma_dep | 21,846 | 21,840 | 4,852 | 0.027% |
+| k3_w8 | fma_dep | 22,502 | 22,498 | 9,696 | 0.018% |
+| k4_w1 | fma_ind4 | 8,644 | 8,641 | 1,221 | 0.035% |
+| k4_w2 | fma_ind4 | 8,604 | 8,601 | 2,434 | 0.035% |
+| k4_w4 | fma_ind4 | 8,618 | 8,612 | 4,860 | 0.070% |
+| k4_w8 | fma_ind4 | 16,381 | 16,377 | 9,712 | 0.024% |
+| k5_w1 | fma_ind8 | 8,653 | 8,650 | 1,221 | 0.035% |
+| k5_w2 | fma_ind8 | 8,622 | 8,619 | 2,434 | 0.035% |
+| k5_w4 | fma_ind8 | 8,636 | 8,630 | 4,860 | 0.069% |
+| k5_w8 | fma_ind8 | 16,227 | 16,223 | 9,712 | 0.025% |
+| k6_w1 | br_every1 | 20,312 | 20,309 | 1,219 | 0.015% |
+| k6_w2 | br_every1 | 20,091 | 20,088 | 2,430 | 0.015% |
+| k6_w4 | br_every1 | 20,106 | 20,100 | 4,852 | 0.030% |
+| k6_w8 | br_every1 | 20,782 | 20,778 | 9,696 | 0.019% |
+| k7_w1 | br_every4 | 7,552 | 7,549 | 1,221 | 0.040% |
+| k7_w2 | br_every4 | 7,427 | 7,424 | 2,434 | 0.040% |
+| k7_w4 | br_every4 | 7,439 | 7,433 | 4,860 | 0.081% |
+| k7_w8 | br_every4 | 8,724 | 8,720 | 9,712 | 0.046% |
+| k8_w1 | br_every16 | 5,372 | 5,369 | 1,221 | 0.056% |
+| k8_w2 | br_every16 | 5,244 | 5,241 | 2,434 | 0.057% |
+| k8_w4 | br_every16 | 5,256 | 5,250 | 4,860 | 0.114% |
+| k8_w8 | br_every16 | 11,130 | 11,126 | 9,712 | 0.036% |
+| k9_w1 | lds_own | 10,127 | 10,124 | 2,259 | 0.030% |
+| k9_w2 | lds_own | 10,115 | 10,112 | 4,510 | 0.030% |
+| k9_w4 | lds_own | 10,128 | 10,122 | 9,012 | 0.059% |
+| k9_w8 | lds_own | 22,918 | 22,914 | 18,016 | 0.017% |
+| k10_w1 | lds_chase | 23,064 | 23,061 | 1,222 | 0.013% |
+| k10_w2 | lds_chase | 23,027 | 23,024 | 2,436 | 0.013% |
+| k10_w4 | lds_chase | 23,054 | 23,048 | 4,864 | 0.026% |
+| k10_w8 | lds_chase | 23,684 | 23,680 | 9,720 | 0.017% |
+| k11_w1 | sts_own | 4,436 | 4,433 | 1,221 | 0.068% |
+| k11_w2 | sts_own | 4,303 | 4,300 | 2,434 | 0.070% |
+| k11_w4 | sts_own | 5,547 | 5,541 | 4,860 | 0.108% |
+| k11_w8 | sts_own | 12,422 | 12,418 | 9,712 | 0.032% |
+| k12_w1 | lds_nouse | 4,541 | 4,538 | 1,233 | 0.066% |
+| k12_w2 | lds_nouse | 4,498 | 4,495 | 2,458 | 0.067% |
+| k12_w4 | lds_nouse | 4,537 | 4,531 | 4,908 | 0.132% |
+| k12_w8 | lds_nouse | 12,522 | 12,518 | 9,808 | 0.032% |
+
+Raw logs are under results/fcb/sweep_*.txt. The rebase target advanced to fd151ee95 with study files only since a470ffa5c. The tested hardware, simulator and CI inputs are unchanged by those two base commits. Next: collect reduced-warp RTL, full-size n=2048, RV32 fetch_squash and Beacon.
+
+## Codex progress | 2026-11-23 02:10 EST | Step 5 commits and rebase
+
+Checkpointed the reviewed implementation, CI case and changelog while the detached follow-up jobs run. Rebased feature/fetch-credit onto current feature/dxa-borrowing fd151ee95 (only study material changed from the a470ffa5c test source).
+
+| Scope | Rebased commit |
+|---|---|
+| RTL, SimX and fetch-depth documentation | 4e95ed5c4b2e193e43c66c14b5d1d01fc05e5d9c |
+| XLEN 64 model_parity case | 4829b9222da2fc71c2764820b2ecd69251eb04ea |
+| CHANGELOG | 180e49dcbe4185a708821adadb242b2f9dc12e9d |
+
+Every commit ends with the requested Codex co-author trailer. The implementation files match the ICE fixed source checksums and the CI case hunk matches the exact pytest patch. Post-rebase diff check, 1,091-case lint and three planner tests passed. The worktree is clean. No merge or push was performed. A stale empty worktree index lock left at 01:32 was moved aside before committing, after confirming no Git process held it.
+
+ICE jobs 7249774 and 7249775 are rerunning the XLEN 64 cases and sweep on the reviewed version with the strengthened assertions. Rover Beacon comparison 1109898 queues behind the shared build lock and will compare the measured non-default fetch-depth-4 reference against the fix. Next: collect the remaining RTL and final assertion evidence.
+
+## Codex progress | 2026-11-23 02:10 EST | Step 6 open items
+
+Open for separate work: the depth-one h200s bwstream SimX residual (+2.02% at n=512, +2.48% at n=2048) and SimX’s IBUF_SIZE + 1 representation with an uncharged staging head. The smaller pre-fix depth-four penalty on SimX is also untraced. These are documented here without expanding the fix. Historical smprobe cross-model timing remains a separate variable-work comparison, and no vendor place-and-route was run.
+
+## Codex progress | 2026-11-23 02:22 EST | RV32 fetch_squash and Beacon
+
+The real CI runner passed all ten RV32 fetch_squash driver/case combinations on both the baseline (ICE 7249728) and the reviewed fix (7249729). The lone-warp-per-slice case adds 19 cycles in RTL and SimX, keeps the three-cycle cross-model gap and retires identical instructions. The other four rows are cycle-identical before and after within each driver.
+
+| Case | RTL before / after | SimX before / after | Instructions |
+|---|---:|---:|---:|
+| fetch-squash | 5,990 / 5,990 | 5,977 / 5,977 | 948 |
+| fetch-squash-ahead | 4,694 / 4,694 | 4,691 / 4,691 | 1,896 |
+| fetch-squash-ahead-shared | 6,331 / 6,331 | 6,340 / 6,340 | 3,792 |
+| fetch-squash-ahead-lone | 4,675 / 4,694 | 4,672 / 4,691 | 1,896 |
+| fetch-squash-ahead-vm | 4,964 / 4,964 | 4,947 / 4,947 | 480 |
+
+The two-core top_vortex Beacon comparison on rover 1170648 passed at XLEN 64 with fetch depth 4. Maximum logic depth stayed at 26, the mean of the 50 deepest paths at 23.3, FF at 299,164, BRAM at 100 and DSP at 66. LUT count fell from 376,684 to 376,676. No register got deeper or harness tie changed. Tool versions are CIRCT 892a65a01, foldsim d8350bc0f and pyslang 11.0.0. The earlier comparison launch needed the pinned Python dependency. The catalog gate also reported NO-BASELINE for the non-default configuration. Its direct reference comparison passed and no baseline was edited. Logs and JSON are under results/fc_credit_beacon. Next: collect the final RTL suite and long bwstream jobs.
+
+## Codex progress | 2026-11-23 11:43 EST | Final verification and report
+
+All requested runs were collected. The three-commit series is headed by `180e49dcbe4185a708821adadb242b2f9dc12e9d`, rebased on `fd151ee95ce404baa4a45ace92c9f4d9b131cdc3`. Its implementation is `4e95ed5c4`, CI case `4829b9222`, and changelog `180e49dcb`. During the detached runs, the local target branch independently gained merge `5f855c2ae`, with `180e49dcb` as its second parent and an identical tree across all six changed files. The separate feature branch and registered worktree were removed. Codex made no merge or push and did not alter the target branch.
+
+### Full-size h200s RTL and SimX
+
+One core, 64 warps × 32 threads, `bwstream -u4 -b32`. Cycle pairs are RTL / SimX. The baseline columns use the coordinator’s earlier study. The fix uses the rover WIP tree with the same behavior as the final patch, whose later refinements strengthen simulation assertions and clarify comments.
+
+| n | Instructions | Depth 1 reference | Depth 4 before | Depth 4 after | Fixed RTL vs depth 1 | Fixed SimX vs RTL |
+|---:|---:|---:|---:|---:|---:|---:|
+| 512 | 120,832 | 102,205 / 104,270 | 140,758 / 126,128 | 102,481 / 104,279 | +0.27% | +1.75% |
+| 2,048 | 464,896 | 395,381 / 405,204 | 548,386 / 419,474 | 395,176 / 406,539 | -0.05% | +2.88% |
+
+The n=512 and n=2048 RTL measurements reduced depth-four cycles by 27.19% and 27.94%, with 0% ibuffer stalls in both. Rover sessions 750686 and 1079264 finished successfully in 1,703 s and 6,059 s. WIP smprobe also passed at 50,477 RTL cycles, matching the historical RTL reference. Its WIP SimX run took 94,455 cycles with more retired instructions because the neighbours run until a timing-dependent stop flag. On the a470ffa5c source pair, SimX smprobe was identical before and after at 78,268 cycles.
+
+### Reduced-warp h200s and CI
+
+ICE `bwstream -n512 -u4` with one core and block size equal to the hardware warp count. Cycle pairs are RTL / SimX. The source pair is dd94ad142 / 871067f3f.
+
+| Hardware warps | Instructions | Depth 1 before | Depth 4 before | Depth 4 after |
+|---:|---:|---:|---:|---:|
+| 16 | 30,208 | 97,511 / 98,538 | 111,244 / 102,040 | 97,180 / 96,437 |
+| 32 | 60,416 | 104,952 / 99,348 | 122,812 / 124,701 | 98,521 / 97,846 |
+
+All six reduced-warp RTL points passed (7248929, 7249027, 7248937, 7248959, 7249029, 7249031). The control, test and sweep runs on the reviewed source (7249774, 7249775) reproduced every WIP result on both models byte for byte in the 20-case and 52-row summaries, with strengthened assertions enabled. The default depth-one sgemm control stayed at 792,858 RTL and 792,837 SimX cycles. The XLEN 64 parity table and the seven h200s SimX measurements, including the two corrected GEMM define sets, are recorded in the Step 4 sections above.
+
+New XLEN 64 parity case: `parity-bwstream-fetch-credit`, 32 warps × 4 threads, fetch depth 4 and platform memory latency 300. The two models retired 31,520 instructions on both revisions. RTL / SimX cycles were 40,957 / 41,362 before (0.989%, fail) and 32,427 / 32,520 after (0.287%, pass), against the 0.5% bound. Exact pytest logs are `results/fcb/fc_ci_{base,fixed}.log` (7249679, 7249680). Beacon’s depth-four comparison passed with 26 levels before and after.
+
+The reservation covers a fetch from selection through decode and buffering. A buffer pop or dropped response returns it. The reviewed WIP refinements check RTL credit at the pick before the counter can wrap, make the SimX count assertion active in release builds, and clarify the fetch-depth knob. The two full-size RTL points ran on the older rover WIP profile. Full-size RTL with the later profile changes and vendor place-and-route were outside the verified set. The depth-one residual and SimX staging-entry accounting remain open as recorded above.
