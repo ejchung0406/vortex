@@ -72,6 +72,10 @@ public:
   // is not visible to the platform without it.
   bool empty() const;
 
+  // empty(), and no request in a lane on its way in or out: the RTL's `empty`,
+  // which counts a lane's incoming and output stages.
+  bool drained() const;
+
   // Perf counter accessors.
   uint64_t tlb_reads()    const { return tlb_.reads(); }
   uint64_t tlb_hits()     const { return tlb_.hits(); }
