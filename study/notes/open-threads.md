@@ -882,3 +882,20 @@ knobs on. One-SM SimX at the merged head equals the values before the merge: fet
 No multi-SM profile (h200g2 / h200g4 of noc-model-design.md) is in profiles/ yet.
 Next for Codex (NoC session): codex-tasks/noc-step2-slice-bind.txt (branch feature/noc-step2, notes/noc-step2.md).
 TMA session: feature/lmem-dma-rd (read overlap), based on 00186b8b3; needs a rebase onto 313246121 before merging.
+
+## Update 2026-11-24 (19:30 EST)
+Merged feature/noc-step2 (1b82fc175, dff377467; merge 1543ad364): VX_CFG_L2_SLICE_BIND (default off) binds an L2 slice
+to one memory channel, shared address function sim/common/addr_map.h; profile h200g2 (32 SMs, two groups) added.
+One-SM h200s SimX at the merged head equals the values before: fetch_squash 10,017, gemm_block 513,734, ldstream lean
+173,098, war_order 320,317, bwstream 394,065, bwstream_dxa -d2 400,310.
+Codex's h200g2 sweep (bwstream -n2048 -u4 -b32; notes/noc-step2.md): 1 SM 98 GB/s, 16 SMs 1,350, peak 1,459 at 20,
+1,420 at 32 (92% of the 1,544 target; 872 before the binding). 98% of the peak is first reached at 20 of 32 SMs
+(part 17%, design about 11). CAUTION: that kernel is instruction-bound (one SM 40-50 B/clk on h200s), so the SM count
+is not yet a statement about the network; Codex was asked to repeat the sweep with ldstream lean and bwstream_dxa.
+Open in step 2: the 48-channel (non-power-of-two) remap; deeper local L2 paths after removing the omega stages.
+TMA read overlap (feature/lmem-dma-rd 36f0e32ab on 00186b8b3): implemented, SimX and small rtlsim verified
+(bwstream_dxa 66-74 -> 84-90 B/clk with LPC, gemm_block 513,734 -> 439,399); the h200s-size rtlsim run was still
+going on Phoenix; needs a rebase onto 1543ad364 before merging.
+Figures for the user (private artifacts, sources in the session scratchpad): NoC topology, FEDP grid, SM datapath.
+Found while drawing the SM: h200s is a TMEM build (the multiply runs on the TMEM MMA engine, the accumulator lives in
+TMEM), the dMMU sits before the dcache, LMEM is 228 KiB in a 256 KiB window, port 0 also serves the texture cache.

@@ -166,3 +166,86 @@ The RTL changes to evaluate in stage 2 are grouped by module below.
 Open measurements include both target rates with dynamic scheduling, reuse of tags with asymmetric reply timing, and the worst-case mixture of DMA writes, stores, atomics, ordinary reads and TCU reads. An RTL implementation needs a matching SimX cycle model, completion and ordering checks for the swizzled/zero-fill cases, mixed LSU tests, model parity, and Beacon timing and area on the affected units. The physical H200 credit pools, lane arbitration and buffering are unknown. This stage measures the probes in SimX and leaves RTL structure and its costs to phase 2.
 
 The exact flags, job IDs and measurements are in the sweep manifests and per-point logs. [ICE matrix](../slurm/tma/matrix.tsv), [feed controls](../slurm/tma/controls.tsv), [read overlap](../slurm/tma/coissue.tsv), [ICE jobs](../slurm/tma/jobs.tsv), [Phoenix jobs](../slurm/tma/jobs_phoenix.tsv), [collector](../slurm/tma/collect.py), [counter analysis](../slurm/tma/analyze_stats.py), [warp trace analysis](../slurm/tma/warp_trace.py), [experiment patch](../slurm/tma/experiments.patch), [read-overlap patch](../slurm/tma/lmem_coissue.patch), [example run](../results/tma8a56_stackrw_b/run.log).
+
+## 2026-11-24 14:45 EST · Stage 2a
+
+The `feature/lmem-dma-rd` worktree starts at `00186b8b3`. The implementation adds the default-off `VX_CFG_LMEM_DMA_RD_OVERLAP` knob. The enabled path stages a DMA beat for the cycle when an LSU pass reaches the banks. Plain load passes compare their selected rows against each enabled part of the staged and incoming beats. LSU stores and atomics keep exclusive use of the write port. A waiting TCU row read keeps priority. DXA completion follows the final SRAM write.
+
+ICE reference jobs 7290936, 7290937 and 7290939 use the pinned base. The new RV64 parity case exercises two DXA half rows, ordinary same-row and disjoint loads, LSU stores and atomics, and TCU reads. The case catalog and both SimX boundary checks pass. Runtime and timing verification are in progress.
+
+## 2026-11-24 14:56 EST · Directed SRAM timing
+
+Assertion-enabled Verilator 5.050 unit run. A single beat wrote row 11 on the lower bank half and row 19 on the upper half. At t=121 the row-7 load used the read port in the same clock and returned `0x7700`. A row-11 load targeting an unwritten bank held and then returned `0x1100`. A row-19 load held and then returned the newly written `0x3333`. A pending disjoint TCU read received the read port before the LSU while the DMA wrote. [Unit log](/storage/scratch1/7/echung67/tma-overlap-00186/lmem-lint.592WHI/lmem_overlap_tb.log)
+
+Independent R3 review identified a TCU-only configuration that would have gained the pipeline without a DXA writer. Both models now require DXA before enabling the stage. SimX accounts for the completion FIFO and WCTL register after the SRAM write. SimX still abstracts contention at the software barrier consumer, which is outside the LMEM pass arbitration measured here.
+
+The off control produced the same response values and held the disjoint LSU read until after the SRAM write. [Off and on unit fixtures](../results/lmem_dma_rd_unit)
+
+## 2026-11-24 15:00 EST · First integration results
+
+The RV64 `model_parity-lmem-dma-rd-overlap` app passed with 4,927 retired instructions on each model. SimX ran in 17,759 cycles and rtlsim ran in 17,774 cycles, a 0.084% gap. [SimX log](../results/lmd00186_v2_direct_sx_directed/run.log) · [rtlsim log](../results/lmd00186_v2_small_on_rtl_directed/run.log)
+
+The initial two-core Beacon run kept the 26-level maximum and the mean of the deepest 50 paths at 24.6 levels. Enabling overlap changed LUTs 819,310 → 820,267 and FFs 625,724 → 628,084, with unchanged BRAM and DSP counts. The DMA-to-LMEM-engine path grew from 11 to 16 levels. The next layout factors the row reductions and bank-conflict arbitration before the only full-size rtlsim run. [Initial timing and area diff](../results/lmd00186_beacon/off_on_diff.txt)
+
+## 2026-11-24 15:08 EST · Factored bank arbitration
+
+The final RTL compares each DMA part's address with the winning lanes in parallel with the pairwise LSU bank checks. The block grants and the next round-robin position were exhaustively compared with the original occupied-bank algorithm for two, three and four blocks. Knob-off and knob-on SRAM traces matched the initial implementation byte for byte. [Arbitration equivalence](../results/lmem_dma_rd_unit/arb_equivalence.log) · [SRAM traces](../results/lmem_dma_rd_unit)
+
+The two-core Beacon comparison keeps the 26-level maximum, 24.6-level mean of the deepest 50 paths and 239.8 MHz model advisory. The paths from the DXA arbiter through row admission to `s1_last` and `credits` measure 11 → 14 levels. The report flags 28 endpoints, down from 86 in the first implementation. LUTs measure 819,310 → 820,225 (+0.112%) and FFs 625,724 → 628,084 (+0.377%). BRAM, LUTRAM and DSP usage are unchanged. The row checks feed the existing pass arbitration in the same cycle. This comparison uses a custom two-core configuration. [Final timing and area diff](../results/lmd00186_beacon_v3_exact/off_on_diff.txt)
+
+The tested SimX path compiles with DXA disabled after guarding its DXA-only request fields. The CI catalog reports 1,116 valid cases and the testcase and change-impact unit suites pass all 137 tests.
+
+## 2026-11-24 15:09 EST · One-SM h200s SimX
+
+The default-off build matches `00186b8b3` on all 14 requested points and the two extra stream shapes. The enabled runs retain the same retired instruction count. All points passed. The v2 SimX matrix predates the DXA-disabled request-field guard. DXA is enabled on each h200s point, so that guard leaves these results unchanged.
+
+| Workload | Retired instructions | Base cycles | Overlap off | Overlap on | Overlap + LPC |
+|---|---:|---:|---:|---:|---:|
+| `fetch_squash` | 978 | 10,017 | 10,017 | 10,017 | — |
+| `warp_rate` | 8,511 | 113,380 | 113,380 | 113,380 | — |
+| `tmem_roof -n512 -i8` | 8,925 | 61,878 | 61,878 | 61,878 | — |
+| `bwstream -n2048 -u4 -b32` | 464,896 | 394,065 | 394,065 | 394,065 | — |
+| `gemm_block -m16 -n1024 -k4096 -s1` | 814,144 | 513,734 | 513,734 | 442,182 | 439,399 |
+| `gemm_tmem_decode -m16 -n8192 -k4096` | 211,722 | 1,151,803 | 1,151,803 | 1,152,194 | — |
+| `war_order` | 341,824 | 320,317 | 320,317 | 320,317 | — |
+| `ldstream -t2048 -b8 -u8 -m16 -a -l` | 250,196 | 173,098 | 173,098 | 173,098 | — |
+| `bwstream_dxa -e4096 -n256 -d2 -c0` | 70,546 | 400,310 | 400,310 | 359,797 | 326,102 |
+| `bwstream_dxa -e4096 -n256 -d4 -c0` | 30,240 | 190,417 | 190,417 | 175,700 | 149,087 |
+| `smem_rate -w64 -i16 -k14 -f150` | 146,568 | 139,069 | 139,069 | 139,069 | — |
+| `smem_rate -w64 -i16 -k13 -f150` | 146,440 | 139,576 | 139,576 | 139,576 | — |
+| `smem_rate -w64 -i16 -k22 -f150` | 147,672 | 139,931 | 139,931 | 139,931 | — |
+| `lmem_access` | 1,428,002 | 7,713,082 | 7,713,082 | 7,713,082 | — |
+| `bwstream_dxa -e2048 -n512 -d4 -c0` | 140,448 | 395,248 | 395,248 | 362,359 | 332,724 |
+| `bwstream_dxa -e4096 -n32 -d2 -c0` | 9,394 | 54,072 | 54,072 | 47,258 | 42,938 |
+
+The `-d2` / `-d4` 256-tile streams measure 73.34 / 66.08 B/clock before, 81.60 / 71.62 with overlap, and 90.03 / 84.40 with overlap and LPC. The third shape (`-e2048 -n512 -d4`) measures 74.28 → 81.02 → 88.24 B/clock. GEMM weight bandwidth, using 8,388,608 weight bytes over the full kernel, measures 16.33 → 18.97 → 19.09 B/clock. Decode multiply rate is 58.94 → 58.92 B/clock/SM.
+
+[Suite and compiler flags](../slurm/lmem-dma-rd/suite.sbatch) · [ICE job manifest](../slurm/lmem-dma-rd/ice_jobs.tsv) · [Phoenix job manifest](../slurm/lmem-dma-rd/phoenix_jobs.tsv)
+
+## 2026-11-24 15:28 EST · RV64 parity and the h200s selection
+
+The final implementation is `36f0e32ab`. A baseline source snapshot with only the new application files, plus the committed implementation with overlap off, produced the same result on each simulator for the directed test. The `dxa_rowmix` parity row here enables the two LSU blocks, `LMEM_RD_ROW` and distinct DMA half-row addresses so it exercises the new arbitration. The original rowmix CI configurations were also run with overlap off. `lmem_rw_order` checks LSU ordering with the knob set in a configuration without a DXA writer. The new directed case exercises stores and atomics with a live DMA writer.
+
+| Overlap-enabled case | Instructions on each model | SimX cycles | rtlsim cycles | Absolute cycle gap relative to rtlsim |
+|---|---:|---:|---:|---:|
+| `lmem_dma_rd` | 4,927 | 17,759 | 17,774 | 0.084% |
+| `dxa_rowmix` | 644,224 | 1,559,339 | 1,558,640 | 0.045% |
+| `dxa_corun` | 10,760 | 55,452 | 55,473 | 0.038% |
+| `lmem_rw_order` | 952 | 1,516 | 1,520 | 0.263% |
+
+With overlap off, the directed test matches `00186b8b3` at 4,927 instructions and 17,762 SimX / 17,775 rtlsim cycles. The two-block rowmix case matches the baseline at 644,224 instructions and 1,559,531 / 1,558,906 cycles, and the stock rowmix case matches at 644,224 instructions and 1,553,913 / 1,553,203 cycles. The stock corun and ordering workloads also match the baseline on each simulator. [Directed baseline SimX](../results/lmd00186_base_directed_sx_directed/run.log) · [Directed baseline rtlsim](../results/lmd00186_base_directed_rtl_directed/run.log) · [Final directed rtlsim](../results/lmd00186_v3_small_on_rtl_directed/run.log) · [Final rowmix rtlsim](../results/lmd00186_v3_small_on_rtl_rowmix_rd/run.log) · [Final corun rtlsim](../results/lmd00186_v3_small_on_rtl_corun/run.log) · [Final ordering rtlsim](../results/lmd00186_v3_small_on_rtl_rw_order/run.log)
+
+Eight of eight small workload configurations are cycle- and instruction-identical to the baseline on each simulator with overlap off. The sweep includes both the functional and unsplit baseline rowmix geometries and the atomic and no-atomic ordering cases. The three original rowmix SimX comparisons use v2, whose enabled-DXA timing code is identical to v3. [Job and point manifest](../slurm/lmem-dma-rd/phoenix_jobs.tsv)
+
+With overlap already on, enabling LPC raises 32-tile copy bandwidth in the reduced two-channel HBM2 RTL configuration from 37.26 to 37.74 B/clock (+1.27%), with 10,680 retired instructions in both cases and 112,559 → 111,150 cycles. SimX in that memory-limited probe measures 37.99 → 37.94 B/clock. SimX in the reduced 64-warp HBM3E configuration measures 85.84 → 90.51 B/clock on 32 tiles and 89.37 → 94.90 on 256 tiles. The HBM2 RTL result and the one-SM h200s SimX gains were available when selecting overlap plus LPC for the one full RTL build. [Small RTL LPC off](../results/lmd00186_v2_small_on_rtl_dxa_small/run.log) · [Small RTL LPC on](../results/lmd00186_v2_small_on_rtl_dxa_small_lpc/run.log) · [Full build submission](../slurm/lmem-dma-rd/large_job_scontrol.txt)
+
+## 2026-11-24 15:45 EST · LPC on reduced HBM3E RTL
+
+The reduced model retains HBM3E timing, 64 warps, 32 threads, 16 DXA workers and the 228 KiB LMEM. It uses a smaller L2 and in-flight limits and omits TCU and VM. For each model, the only change in each pair is LPC. The longer run reuses the 32-tile run's RTL artifact for each setting.
+
+| Tiles | SimX cycles, LPC off → on | SimX B/clock | rtlsim cycles, LPC off → on | rtlsim B/clock | rtlsim bandwidth gain |
+|---:|---:|---:|---:|---:|---:|
+| 32 | 42,755 → 40,548 | 85.84 → 90.51 | 46,988 → 43,659 | 78.11 → 84.06 | 7.63% |
+| 256 | 328,510 → 309,392 | 89.37 → 94.90 | 348,093 → 324,521 | 84.35 → 90.47 | 7.26% |
+
+Retired instructions match across all four runs for each size, at 9,345 and 70,497. In the 32-tile RTL pair, average DXA global-memory latency falls from 2,306.2 to 2,106.1 clocks and no-slot stalls from 204,979 to 169,259. This isolated LPC comparison supports enabling both knobs in h200s. [n32 LPC off](../results/lmd00186_v3_hbm_lite_lpc0_rtl_dxa32/run.log) · [n32 LPC on](../results/lmd00186_v3_hbm_lite_lpc1_rtl_dxa32/run.log) · [n256 LPC off](../results/lmd00186_v3_hbm_lite_lpc0_rtl_b/run.log) · [n256 LPC on](../results/lmd00186_v3_hbm_lite_lpc1_rtl_b/run.log)
