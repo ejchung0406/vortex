@@ -57,8 +57,6 @@ public:
   // from workers p, p + kDxaMemPorts, ...
   std::vector<SimChannel<MemReq>>  gmem_req_out;
   std::vector<SimChannel<MemRsp>>  gmem_rsp_in;
-  std::vector<MemArbiter::Ptr>     gmem_arbs_;
-  std::vector<MemReqSlice::Ptr>    gmem_out_regs_;
 
   // LMEM row width the RTL drains per cycle: one DXA write beat covers the
   // full banked row (DXA_LMEM_WORD_SIZE = LMEM_NUM_BANKS * XLEN/8). The
@@ -88,6 +86,11 @@ protected:
   void on_tick();
 
 private:
+  using GmemReqArbiter = TxArbiter<MemReq>;
+
+  std::vector<GmemReqArbiter::Ptr> gmem_arbs_;
+  std::vector<MemReqSlice::Ptr>    gmem_out_regs_;
+
   class Impl;
   Impl* impl_;
 
