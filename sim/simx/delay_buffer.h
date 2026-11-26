@@ -16,16 +16,14 @@
 #include <cassert>
 #include <cstdint>
 #include <deque>
-#include <optional>
 #include "types.h"
 
 namespace vortex {
 
 // Elastic buffer with a fixed latency: a packet that reaches In on cycle t
 // leaves through Out to arrive on cycle t + latency, one per cycle at full
-// throughput. The split form retains a producer's two-entry buffer in In and
-// places the link FIFO behind it. The downstream channel holds the link's
-// own two-entry output.
+// throughput. In holds the packets in flight, so its capacity is the buffer's
+// size, and a full buffer back-pressures the producer.
 template <typename Type>
 class DelayBuffer : public SimObject<DelayBuffer<Type>> {
 public:
@@ -34,21 +32,13 @@ public:
   SimChannel<Type> In;
   SimChannel<Type> Out;
 
-  DelayBuffer(const SimContext& ctx, const char* name, uint32_t latency, bool split = false)
+  DelayBuffer(const SimContext& ctx, const char* name, uint32_t latency)
     : SimObject<DelayBuffer<Type>>(ctx, name)
-    , In(this, split ? 2 : size_for(latency))
+    , In(this, size_for(latency))
     , Out(this)
     , latency_(latency) {
     __assert(latency >= 1, "a delay buffer needs a latency");
-    if (split) {
-      In.set_registered_ready(true);
-      if (latency > 1) {
-        fifo_.emplace(this, size_for(latency) - 2);
-        fifo_->set_registered_ready(true);
-      }
-    }
-    auto& arrival = fifo_ ? *fifo_ : In;
-    arrival.tx_callback([this](const Type&, uint64_t cycle) {
+    In.tx_callback([this](const Type&, uint64_t cycle) {
       arrivals_.push_back(cycle);
     });
   }
@@ -65,26 +55,20 @@ protected:
   }
 
   void on_tick() {
-    auto& source = fifo_ ? *fifo_ : In;
-    // One cycle is spent entering the FIFO, when present, and one leaving.
-    uint32_t wait = latency_ - (fifo_ ? 2 : 1);
+    // Sent with a one-cycle delay, so the head leaves a cycle early.
     uint64_t now = SimPlatform::instance().cycles();
-    if (!source.empty() && arrivals_.front() + wait <= now && Out.try_send(source.peek(), 1)) {
-      source.pop();
+    if (!In.empty() && arrivals_.front() + latency_ - 1 <= now && Out.try_send(In.peek(), 1)) {
+      In.pop();
       arrivals_.pop_front();
     }
-    if (fifo_ && !In.empty() && fifo_->try_send(In.peek(), 1)) {
-      In.pop();
-    }
     // Packets still on their way in count too: their send already woke us.
-    if (In.size() == 0 && source.size() == 0) {
+    if (In.size() == 0) {
       this->tick_sleep();
     }
   }
 
 private:
   uint32_t latency_;
-  std::optional<SimChannel<Type>> fifo_;
   std::deque<uint64_t> arrivals_;
 
   friend class SimObject<DelayBuffer<Type>>;

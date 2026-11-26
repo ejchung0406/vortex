@@ -18,7 +18,6 @@
 #include "constants.h"
 #include "delay_buffer.h"
 #include "types.h"
-#include "mem/noc.h"
 #ifdef SIMX_SOCKET_UNIT_MMU
 #include "mem/mmu.h"
 #endif
@@ -233,24 +232,6 @@ public:
     // its producing domain (requests socket-side, responses uncore-side), so
     // the crossing is never combinational regardless of the arbiter chain
     // behind it.
-  #if VX_CFG_SM_INGRESS_BYTES != 0
-    NocRateGate<MemReq>::Ptr ingress;
-    {
-      // The existing socket register carries the domain crossing into the gate.
-      SimPlatform::DomainScope uncore_scope(0u);
-      snprintf(sname, 100, "%s-ingress", name.c_str());
-      ingress = NocRateGate<MemReq>::Create(sname, VX_CFG_L1_MEM_PORTS, VX_CFG_SM_INGRESS_BYTES,
-        VX_CFG_L1_LINE_SIZE, &NocSwitch::returns_line);
-    }
-  #endif
-    auto bind_mem_req = [&](uint32_t port, SimChannel<MemReq>& req_src) {
-    #if VX_CFG_SM_INGRESS_BYTES != 0
-      req_src.bind(&ingress->In.at(port));
-      ingress->Out.at(port).bind(&simobject_->mem_req_out.at(port));
-    #else
-      req_src.bind(&simobject_->mem_req_out.at(port));
-    #endif
-    };
     auto bind_mem_port = [&](uint32_t port,
                              SimChannel<MemReq>& req_src,
                              SimChannel<MemRsp>& rsp_dst) {
@@ -264,7 +245,7 @@ public:
         brsp = MemRspSlice::Create(bname, 1);
       }
       req_src.bind(&breq->In);
-      bind_mem_req(port, breq->Out);
+      breq->Out.bind(&simobject_->mem_req_out.at(port));
       simobject_->mem_rsp_in.at(port).bind(&brsp->In);
       brsp->Out.bind(&rsp_dst);
     };
@@ -339,7 +320,7 @@ public:
         dxa_core_->gmem_req_out.at(i).bind(&breq->In.at(1));
         brsp->Out.at(1).bind(&dxa_core_->gmem_rsp_in.at(i));
       #endif
-        bind_mem_req(i, breq->Out);
+        breq->Out.bind(&simobject_->mem_req_out.at(i));
         simobject_->mem_rsp_in.at(i).bind(&brsp->In);
         continue;
       }

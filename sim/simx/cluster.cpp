@@ -132,17 +132,9 @@ public:
     auto bind_l2_link = [&](uint32_t port,
                             SimChannel<MemReq>& req_src, SimChannel<MemReq>& req_dst,
                             SimChannel<MemRsp>& rsp_src, SimChannel<MemRsp>& rsp_dst) {
-      constexpr bool gated = VX_CFG_SM_INGRESS_BYTES != 0;
-      if constexpr (gated) {
-        auto* endpoint = &req_dst;
-        while (endpoint->sink()) {
-          endpoint = static_cast<SimChannel<MemReq>*>(endpoint->sink());
-        }
-        endpoint->set_registered_ready(true);
-      }
       if constexpr (VX_CFG_L2_LINK_LATENCY != 0) {
         snprintf(sname, 100, "%s-l2link-req%d", name.c_str(), port);
-        auto req_link = DelayBuffer<MemReq>::Create(sname, VX_CFG_L2_LINK_LATENCY, gated);
+        auto req_link = DelayBuffer<MemReq>::Create(sname, VX_CFG_L2_LINK_LATENCY);
         snprintf(sname, 100, "%s-l2link-rsp%d", name.c_str(), port);
         auto rsp_link = DelayBuffer<MemRsp>::Create(sname, VX_CFG_L2_LINK_LATENCY);
         req_src.bind(&req_link->In);
@@ -199,27 +191,19 @@ public:
       l2cache_->core_rsp_out.at(i).bind(&l2arb->RspIn.at(i));
     }
 #elif VX_CFG_NOC_GROUP_SIZE != 0
-    // SM groups: a group's socket ports reach its switch over the SM link, and
-    // the switch reaches the L2 over the group's uplink lanes, through the
-    // byte gate on the side it counts.
+    // SM groups: a group's socket ports reach its switch, and the switch
+    // reaches the L2 over the group's uplink lanes.
     __unused(bind_l2_link);
     static_assert(ispow2(VX_CFG_NOC_UPLINK_PORTS), "NOC_UPLINK_PORTS must be a power of two");
-    auto bind_delay = [&](const char* kind, uint32_t idx, uint32_t latency, auto& src, auto& dst) {
-      using Pkt = std::remove_reference_t<decltype(src.peek())>;
+    // each hop's consumer input is a registered buffer
+    auto bind_hop = [](auto& src, auto& dst) {
       using Channel = std::remove_reference_t<decltype(dst)>;
       auto* endpoint = &dst;
       while (endpoint->sink()) {
         endpoint = static_cast<Channel*>(endpoint->sink());
       }
       endpoint->set_registered_ready(true);
-      if (latency != 0) {
-        snprintf(sname, 100, "%s-noc-%s%d", name.c_str(), kind, idx);
-        auto link = DelayBuffer<std::remove_const_t<Pkt>>::Create(sname, latency, true);
-        src.bind(&link->In);
-        link->Out.bind(&dst);
-      } else {
-        src.bind(&dst);
-      }
+      src.bind(&dst);
     };
     constexpr uint32_t kLanes = VX_CFG_NOC_UPLINK_PORTS;
     for (uint32_t g = 0; g < NOC_NUM_GROUPS; ++g) {
@@ -229,35 +213,15 @@ public:
         auto& socket = sockets_.at(g * VX_CFG_NOC_GROUP_SIZE + i);
         for (uint32_t j = 0; j < VX_CFG_L1_MEM_PORTS; ++j) {
           uint32_t in = i * VX_CFG_L1_MEM_PORTS + j;
-          uint32_t port = g * NOC_GROUP_PORTS + in;
-          bind_delay("sm-req", port, VX_CFG_NOC_SM_LATENCY, socket->mem_req_out.at(j), sw->ReqIn.at(in));
-          bind_delay("sm-rsp", port, VX_CFG_NOC_SM_LATENCY, sw->RspOut.at(in), socket->mem_rsp_in.at(j));
+          bind_hop(socket->mem_req_out.at(j), sw->ReqIn.at(in));
+          bind_hop(sw->RspOut.at(in), socket->mem_rsp_in.at(j));
         }
       }
-    #if (VX_CFG_NOC_UPLINK_BYTES != 0) && (VX_CFG_NOC_UPLINK_GATE_REQ != 0)
-      snprintf(sname, 100, "%s-noc-gate%d", name.c_str(), g);
-      auto req_gate = NocRateGate<MemReq>::Create(sname, kLanes, VX_CFG_NOC_UPLINK_BYTES, VX_CFG_L1_LINE_SIZE,
-        &NocSwitch::returns_line);
-    #elif VX_CFG_NOC_UPLINK_BYTES != 0
-      snprintf(sname, 100, "%s-noc-gate%d", name.c_str(), g);
-      auto rsp_gate = NocRateGate<MemRsp>::Create(sname, kLanes, VX_CFG_NOC_UPLINK_BYTES, VX_CFG_L1_LINE_SIZE,
-        [](const MemRsp&) { return true; });
-    #endif
       for (uint32_t u = 0; u < kLanes; ++u) {
         uint32_t lane = g * kLanes + u;
         sw->ReqDeliver.at(u).bind(&l2cache_->core_req_in.at(lane));
-      #if (VX_CFG_NOC_UPLINK_BYTES != 0) && (VX_CFG_NOC_UPLINK_GATE_REQ != 0)
-        sw->ReqOut.at(u).bind(&req_gate->In.at(u));
-        bind_delay("up-req", lane, VX_CFG_NOC_UPLINK_LATENCY, req_gate->Out.at(u), sw->ReqDeliver.at(u));
-        bind_delay("up-rsp", lane, VX_CFG_NOC_UPLINK_LATENCY, l2cache_->core_rsp_out.at(lane), sw->RspIn.at(u));
-      #elif VX_CFG_NOC_UPLINK_BYTES != 0
-        bind_delay("up-req", lane, VX_CFG_NOC_UPLINK_LATENCY, sw->ReqOut.at(u), sw->ReqDeliver.at(u));
-        bind_delay("up-rsp", lane, VX_CFG_NOC_UPLINK_LATENCY, l2cache_->core_rsp_out.at(lane), rsp_gate->In.at(u));
-        rsp_gate->Out.at(u).bind(&sw->RspIn.at(u));
-      #else
-        bind_delay("up-req", lane, VX_CFG_NOC_UPLINK_LATENCY, sw->ReqOut.at(u), sw->ReqDeliver.at(u));
-        bind_delay("up-rsp", lane, VX_CFG_NOC_UPLINK_LATENCY, l2cache_->core_rsp_out.at(lane), sw->RspIn.at(u));
-      #endif
+        bind_hop(sw->ReqOut.at(u), sw->ReqDeliver.at(u));
+        bind_hop(l2cache_->core_rsp_out.at(lane), sw->RspIn.at(u));
       }
     }
 #else
