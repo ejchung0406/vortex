@@ -1071,6 +1071,7 @@ protected:
       this->invalidate();
     }
     mshr_.reset();
+    prefer_lazy_ = false;
     fwd_active_ = false;
     fwd_set_    = 0;
     fwd_tag_    = 0;
@@ -1225,7 +1226,8 @@ private:
     bool fill_held = false;
     uint32_t held_set_id = 0;
     uint64_t held_addr_tag = 0;
-    if (!this->mem_rsp_in.empty() && !fwd_active_) {
+    const bool lazy_turn = prefer_lazy_ && !lazy_q_->empty();
+    if (!this->mem_rsp_in.empty() && !lazy_turn && !fwd_active_) {
       auto &mem_rsp = this->mem_rsp_in.peek();
 #if VX_CFG_EXT_A_ENABLED
       // Non-LLC AMO passthrough response: forward straight to core
@@ -1247,6 +1249,7 @@ private:
         DT(3, this->name() << " amo-passthru-rsp: " << core_rsp);
         e.valid = false;
         this->mem_rsp_in.pop();
+        prefer_lazy_ = true;
         --pending_fill_reqs_;
         return;
       }
@@ -1290,13 +1293,12 @@ private:
         }
         DT(3, this->name() << " fill-rsp: " << mem_rsp);
         this->mem_rsp_in.pop();
+        prefer_lazy_ = true;
         --pending_fill_reqs_;
         return;
       }
     } else if (!lazy_q_->empty() && !fwd_active_) {
-      // A data-less fill through the same path, below memory fills in
-      // priority: the allocation of a write-miss root, or the refetch of a
-      // sector every store has covered.
+      // A write-miss root or a fully written refetch takes a data-less fill.
       uint32_t mshr_id = lazy_q_->peek();
       const auto &root_peek = mshr_.peek(mshr_id);
       const uint32_t set_id    = root_peek.set_id;
@@ -1328,6 +1330,7 @@ private:
         }
         DT(3, this->name() << " lazy-fill: " << bank_req);
         lazy_q_->pop();
+        prefer_lazy_ = false;
         return;
       }
     }
@@ -2540,6 +2543,7 @@ private:
 
   TFifo<bank_req_t>::Ptr pipe_req_;
   TFifo<uint32_t>::Ptr   lazy_q_;   // roots awaiting a data-less fill: write misses and written refetches
+  bool prefer_lazy_;
 
   Cache::PerfStats perf_stats_;
 
@@ -3436,6 +3440,80 @@ private:
   friend class SimObject<FlushTap>;
 };
 
+static uint32_t bypass_requester(const MemRsp& rsp, uint32_t port_bits) {
+  return rsp.tag & ((1ull << port_bits) - 1);
+}
+
+static MemRsp decodeBypassResponse(const MemRsp& rsp, uint32_t port_bits) {
+  MemRsp out{rsp.tag >> port_bits, rsp.hart_id, rsp.uuid};
+  out.data = rsp.data;
+  return out;
+}
+
+class CacheCoreRspSwitch : public SimObject<CacheCoreRspSwitch> {
+public:
+  using Ptr = std::shared_ptr<CacheCoreRspSwitch>;
+  std::vector<SimChannel<MemRsp>> CachedIn, NcIn, Out;
+
+  CacheCoreRspSwitch(const SimContext& ctx, const char* name, uint32_t ports, uint32_t lanes, bool out_buf)
+    : SimObject<CacheCoreRspSwitch>(ctx, name)
+    , CachedIn(ports, SimChannel<MemRsp>(this, 1))
+    , NcIn(lanes, this)
+    , Out(ports, this)
+    , port_bits_(log2ceil(ports))
+    , out_delay_(out_buf)
+  {}
+
+protected:
+  void on_reset() {
+    last_nc_ = false;
+  }
+
+  void on_tick() {
+    auto valid = [](const auto& in) { return !in.empty(); };
+    bool cached = std::any_of(CachedIn.begin(), CachedIn.end(), valid);
+    bool nc = std::any_of(NcIn.begin(), NcIn.end(), valid);
+    if (!cached && !nc) {
+      this->tick_sleep();
+      return;
+    }
+
+    // One grant covers all ports. Any ready port advances it, even when
+    // the selected group has no response for that port.
+    if (std::none_of(Out.begin(), Out.end(), [](const auto& out) { return !out.full(); })) {
+      return;
+    }
+    last_nc_ = nc && (!cached || !last_nc_);
+    if (last_nc_) {
+      for (auto& in : NcIn) {
+        if (in.empty()) {
+          continue;
+        }
+        auto& out = Out.at(bypass_requester(in.peek(), port_bits_));
+        if (!out.full()) {
+          auto rsp = decodeBypassResponse(in.peek(), port_bits_);
+          out.send(rsp, out_delay_);
+          DT(3, this->name() << " bypass-core-rsp: " << rsp);
+          in.pop();
+        }
+      }
+    } else {
+      for (uint32_t i = 0; i < Out.size(); ++i) {
+        auto& in = CachedIn.at(i);
+        if (!in.empty() && Out.at(i).try_send(in.peek(), out_delay_)) {
+          in.pop();
+        }
+      }
+    }
+  }
+
+private:
+  uint32_t port_bits_;
+  uint32_t out_delay_;
+  bool last_nc_ = false;
+  friend class SimObject<CacheCoreRspSwitch>;
+};
+
 class Cache::Impl {
 public:
   Impl(Cache *simobject, const Config &config)
@@ -3593,32 +3671,36 @@ public:
         stage.set_registered_ready(true);
       }
       last_rsp_nc_.resize(config_.num_inputs);
-    } else if (config_.core_out_buf && port_arb_->merge_bits() == 0) {
-      // The registered network's levels hold the responses crossing it, as
-      // the RTL's omega switches do (VX_cache.sv core_rsp_xbar): a one-entry
-      // pipe register per level behind the bypass layer (VX_cache_wrap passes
-      // CORE_OUT_BUF=1 to the cache), whose arbiter then registers the
-      // response into its output buffer (VX_cache_bypass RSP_OUT_BUF=3); a
-      // two-entry buffer with a registered ready per level without the layer.
-      // The last register's slots are the port's, which it sends to a cycle
-      // on, so the levels before it are stages here.
-      const uint32_t level_slots = config_.nc_enable ? 1 : 2;
+    } else {
       if (config_.nc_enable) {
-        ++core_rsp_delay_;
-      }
-      cached_rsp_pipe_.resize(core_rsp_delay_ - 1, std::vector<SimChannel<MemRsp>>(
-          config_.num_inputs, SimChannel<MemRsp>(simobject, level_slots)));
-      for (auto& level : cached_rsp_pipe_) {
-        for (auto& stage : level) {
-          stage.set_registered_ready(level_slots == 2);
+        // Tick the switch before the multicast arbiter so the last cache
+        // register can drain and take another response in the same cycle.
+        snprintf(sname, 100, "%s-core_rsp_switch", simobject->name().c_str());
+        core_rsp_switch_ = CacheCoreRspSwitch::Create(sname, config_.num_inputs, config_.mem_ports, config_.core_out_buf);
+        for (uint32_t i = 0; i < config_.mem_ports; ++i) {
+          nc_mem_arbs_.at(i)->RspOut.at(1).bind(&core_rsp_switch_->NcIn.at(i));
+        }
+        for (uint32_t i = 0; i < config_.num_inputs; ++i) {
+          core_rsp_switch_->Out.at(i).bind(&simobject->core_rsp_out.at(i));
         }
       }
-    } else if (config_.nc_enable) {
-      ++core_rsp_delay_;
+      if (config_.core_out_buf && port_arb_->merge_bits() == 0) {
+        // The last cache register is the switch input or, without a bypass
+        // layer, the core port. The remaining levels precede it.
+        const uint32_t level_slots = config_.nc_enable ? 1 : 2;
+        cached_rsp_pipe_.resize(core_rsp_delay_ - 1, std::vector<SimChannel<MemRsp>>(
+            config_.num_inputs, SimChannel<MemRsp>(simobject, level_slots)));
+        for (auto& level : cached_rsp_pipe_) {
+          for (auto& stage : level) {
+            stage.set_registered_ready(level_slots == 2);
+          }
+        }
+      }
     }
     if (port_arb_->merge_bits() != 0) {
+      snprintf(sname, 100, "%s-core_xbar", simobject->name().c_str());
       rsp_mcast_ = CacheRspMcast::Create(sname, num_banks, config_.num_inputs, port_arb_->merge_bits(), merge_line,
-                                         params_.slice_map ? 1 : core_rsp_delay_, crsq_slots);
+                                         1, crsq_slots);
       for (uint32_t i = 0; i < config_.num_inputs; ++i) {
         rsp_mcast_->RspOut.at(i).bind(&this->cached_response_target(i));
       }
@@ -3673,7 +3755,7 @@ public:
     }
 
     uint64_t nc_rsp_waiting = 0;
-    for (uint32_t i = 0, n = config_.mem_ports; i < n; ++i) {
+    for (uint32_t i = 0, n = core_rsp_switch_ ? 0 : config_.mem_ports; i < n; ++i) {
       // Forward non-cacheable arbiter's output (1) to core response ports
       auto &bypass = nc_mem_arbs_.at(i)->RspOut.at(1);
       if (!bypass.empty()) {
@@ -3953,12 +4035,16 @@ public:
 
 private:
 
+  SimChannel<MemRsp>& cached_response_port(uint32_t req_id) {
+    return core_rsp_switch_ ? core_rsp_switch_->CachedIn.at(req_id) : simobject_->core_rsp_out.at(req_id);
+  }
+
   SimChannel<MemRsp>& cached_response_target(uint32_t req_id) {
-    return cached_rsp_pipe_.empty() ? simobject_->core_rsp_out.at(req_id) : cached_rsp_pipe_.front().at(req_id);
+    return cached_rsp_pipe_.empty() ? this->cached_response_port(req_id) : cached_rsp_pipe_.front().at(req_id);
   }
 
   bool sendCachedResponse(uint32_t req_id, const MemRsp& rsp) {
-    return this->cached_response_target(req_id).try_send(rsp, cached_rsp_pipe_.empty() ? core_rsp_delay_ : 1);
+    return this->cached_response_target(req_id).try_send(rsp, cached_rsp_pipe_.empty() && !core_rsp_switch_ ? core_rsp_delay_ : 1);
   }
 
   // A response advances one level of the registered network per cycle and
@@ -3966,7 +4052,7 @@ private:
   void processCachedResponseNetwork() {
     for (uint32_t i = 0; i < config_.num_inputs; ++i) {
       auto& last = cached_rsp_pipe_.back().at(i);
-      if (!last.empty() && simobject_->core_rsp_out.at(i).try_send(last.peek(), 1)) {
+      if (!last.empty() && this->cached_response_port(i).try_send(last.peek(), 1)) {
         last.pop();
       }
       for (auto stage = cached_rsp_pipe_.size() - 1; stage != 0; --stage) {
@@ -3991,7 +4077,7 @@ private:
       bool take_nc = !nc.empty() && (cached.empty() || !last_rsp_nc_.at(i));
       auto& in = take_nc ? nc : cached;
       if (!in.empty() && !out.full()) {
-        out.send(take_nc ? this->decodeBypassResponse(in.peek()) : in.peek(), 1);
+        out.send(take_nc ? decodeBypassResponse(in.peek(), params_.log2_num_inputs) : in.peek(), 1);
         in.pop();
         last_rsp_nc_.at(i) = take_nc;
       }
@@ -4006,15 +4092,11 @@ private:
     }
   }
 
-  uint32_t bypass_requester(const MemRsp& rsp) const {
-    return rsp.tag & ((1ull << params_.log2_num_inputs) - 1);
-  }
-
   void processBoundBypassResponses(uint64_t waiting) {
     while (waiting != 0) {
       uint32_t lane = __builtin_ctzll(waiting);
       waiting &= waiting - 1;
-      auto req_id = this->bypass_requester(nc_mem_arbs_.at(lane)->RspOut.at(1).peek());
+      auto req_id = bypass_requester(nc_mem_arbs_.at(lane)->RspOut.at(1).peek(), params_.log2_num_inputs);
       nc_rsp_requests_.at(req_id).set(lane);
     }
     for (uint32_t req_id = 0; req_id < config_.num_inputs; ++req_id) {
@@ -4032,19 +4114,12 @@ private:
     }
   }
 
-  MemRsp decodeBypassResponse(const MemRsp& mem_rsp) const {
-    uint64_t tag = mem_rsp.tag >> params_.log2_num_inputs;
-    MemRsp core_rsp{tag, mem_rsp.hart_id, mem_rsp.uuid};
-    core_rsp.data = mem_rsp.data;  // forward TLM payload through bypass
-    return core_rsp;
-  }
-
   bool processBypassResponse(const MemRsp &mem_rsp) {
-    uint32_t req_id = this->bypass_requester(mem_rsp);
+    uint32_t req_id = bypass_requester(mem_rsp, params_.log2_num_inputs);
     auto& out = simobject_->core_rsp_out.at(req_id);
     if (out.full())
       return false; // stall
-    auto core_rsp = this->decodeBypassResponse(mem_rsp);
+    auto core_rsp = decodeBypassResponse(mem_rsp, params_.log2_num_inputs);
     out.send(core_rsp, 0);
     DT(3, simobject_->name() << " bypass-core-rsp: " << core_rsp);
     return true;
@@ -4077,8 +4152,7 @@ private:
   CachePortArb::Ptr port_arb_;
   MemCrossBar::Ptr bank_core_xbar_;
   CacheRspMcast::Ptr rsp_mcast_;
-  // the core-response network's levels, then the non-cacheable bypass
-  // layer's response arbiter
+  CacheCoreRspSwitch::Ptr core_rsp_switch_;
   uint32_t core_rsp_delay_ = 0;
   enum class FlushState { Idle, Drain, Begin, Walk, Forward, Respond };
   FlushState flush_state_ = FlushState::Idle;

@@ -91,6 +91,12 @@ static_assert((VX_CFG_NUM_LSU_LANES > 1 && DCACHE_WORD_SIZE > LSU_WORD_SIZE)
               "without a coalescer, DCACHE_CHANNELS must equal NUM_LSU_LANES");
 inline constexpr uint32_t VX_CFG_DCACHE_NUM_REQS	= (VX_CFG_NUM_LSU_BLOCKS * DCACHE_CHANNELS);
 
+// A private cache with a direct link delivers merged reads from its own
+// one-entry register. The LSU port then holds only the two-entry output skid.
+inline constexpr uint32_t DCACHE_CLIENT_RSP_SLOTS =
+    (VX_CFG_DCACHE_ENABLED && VX_CFG_NUM_DCACHES == VX_CFG_SOCKET_SIZE
+     && VX_CFG_L1_LINK_LATENCY == 0 && VX_CFG_DCACHE_READ_MERGE && DCACHE_CHANNELS > 1) ? 2 : 3;
+
 inline constexpr uint32_t NUM_SOCKETS     = __UP(VX_CFG_NUM_CORES / VX_CFG_SOCKET_SIZE);
 static_assert((VX_CFG_NUM_CORES % VX_CFG_SOCKET_SIZE) == 0,
               "NUM_CORES must be a multiple of SOCKET_SIZE");

@@ -11,6 +11,18 @@ tests:
   - id: hw
     via: script
     run: "make -C hw/unittest"
+  - id: cache-lazy-fair
+    via: script
+    run: "make -C tests/unittest/cache_lazy_fair run-simx run-rtl"
+    touches: [hw/rtl/cache, hw/unittest/cache, sim/simx/mem/cache.cpp, tests/unittest/cache_simx.mk, tests/unittest/cache_lazy_fair]
+  - id: cache-nc-rsp
+    via: script
+    run: "make -C tests/unittest/cache_nc_rsp run"
+    touches: [sim/simx/mem/cache.cpp, tests/unittest/cache_simx.mk, tests/unittest/cache_nc_rsp]
+  - id: dcache-client-slots
+    via: script
+    run: "make -C tests/unittest/dcache_client_slots run"
+    touches: [sim/simx/constants.h, sim/simx/mem/mem_coalescer.h, sim/simx/mem/mem_coalescer.cpp, sim/simx/mem/lsu_mem_adapter.h, sim/simx/mem/lsu_mem_adapter.cpp, tests/unittest/dcache_client_slots]
   - id: hw-mmu-park
     via: script
     run: "make -C hw/unittest/mmu_park run"
