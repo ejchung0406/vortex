@@ -950,42 +950,126 @@ private:
   uint32_t size_;
 };
 
-class CacheBank : public SimObject<CacheBank> {
+// The input holds the source's presented payload. Only cacheable responses
+// enter the physical port queue; a zero-depth port consumes the offer directly.
+class CacheReturnPort {
 public:
-  // A memory-side request leaves the bank through a queue with a registered
-  // output stage, so it becomes visible downstream two cycles after the bank
-  // commits it, not one.
-  static constexpr uint32_t MEM_REQ_DELAY = 2;
-
-  // The socket's registered memory port stands for the request register of
-  // the non-cacheable bypass layer; a cache without that layer has no such
-  // register, so its requests reach the port one cycle sooner.
-  static uint32_t mem_req_delay(const Cache::Config &config) {
-    return (config.mem_rsp_slice && !config.nc_enable) ? (MEM_REQ_DELAY - 1) : MEM_REQ_DELAY;
+  CacheReturnPort(SimObjectBase* owner, bool memory_port, unsigned slots, bool input_registered)
+    : In(owner, memory_port && !input_registered ? 1 : 2), NcOut(owner), Peer(owner), Flush(owner, 1)
+    , memory_port_(memory_port) {
+    if (slots) {
+      queue_ = RingQueue<MemRsp>(slots);
+    }
+    In.set_registered_ready(!memory_port);
   }
 
-  // Non-LLC AMO passthrough table capacity. Also partitions the memory-side
-  // tag namespace and counts toward the response-sink credit on mem_rsp_in.
+  void reset() { queue_.clear(); }
+
+  void begin() {
+    offered_ = !In.empty();
+    refill_ = queue_.capacity() == 1 || !queue_.full();
+    if (offered_ && shared_ && (In.peek().tag & 1)) {
+      auto rsp = In.peek();
+      rsp.tag >>= 1;
+      if (Peer.try_send(rsp, 0)) {
+        In.pop();
+      }
+      offered_ = false;
+    }
+    if (offered_ && memory_port_ && ((In.peek().tag >> shared_) & 1)) {
+      if (NcOut.try_send(decoded(), 0)) {
+        In.pop();
+      }
+      offered_ = false;
+    }
+    if (!Flush.empty() && valid()) {
+      pop();
+      Flush.pop();
+    }
+  }
+
+  void end() {
+    // One entry is an elastic register; a deeper FIFO registers its full flag.
+    if (offered_ && refill_ && !queue_.full()) {
+      queue_.push(decoded());
+      In.pop();
+    }
+  }
+
+  bool valid() const { return !queue_.empty() || (!queue_.capacity() && offered_); }
+  bool busy() const { return !queue_.empty() || In.size() != 0; }
+
+  MemRsp packet() const { return queue_.empty() ? decoded() : queue_.front(); }
+
+  void pop() {
+    if (queue_.empty()) {
+      In.pop();
+      offered_ = false;
+    } else {
+      queue_.pop();
+    }
+  }
+
+  void bind_peer(SimChannel<MemRsp>& peer) {
+    Peer.bind(&peer);
+    shared_ = true;
+  }
+
+  SimChannel<MemRsp> In, NcOut, Peer;
+  SimChannel<bool> Flush;
+
+private:
+  MemRsp decoded() const {
+    auto rsp = In.peek();
+    if (memory_port_) {
+      rsp.tag >>= 1 + shared_;
+    }
+    return rsp;
+  }
+
+  RingQueue<MemRsp> queue_;
+  bool shared_ = false;
+  bool memory_port_, offered_ = false, refill_ = false;
+};
+
+class CacheBank : public SimObject<CacheBank> {
+public:
+  // Both FIFO read-port forms expose their first entry one clock after its push.
+  static constexpr unsigned MEM_REQ_DELAY = 1;
+
+  static uint32_t mreq_depth(const Cache::Config& config) {
+    uint32_t reserve = std::max<uint32_t>(2 * config.latency, config.write_back ? config.mshr_size : 0);
+    return 1u << log2ceil(reserve + config.mreq_size);
+  }
+
+  // Passthrough AMOs use the memory tag namespace above the MSHR entries.
   static constexpr uint32_t AMO_PASSTHRU_CAP = 8;
 
   SimChannel<MemReq> core_req_in;
   SimChannel<MemRsp> core_rsp_out;
 
   SimChannel<MemReq> mem_req_out;
-  // Sized to sink every response this bank can solicit (one per MSHR fill
-  // plus one per AMO passthrough probe). A memory response must never
-  // back-pressure its sender: if it can, the request and response channels
-  // deadlock through each other across cache levels — this bank's pipe head
-  // stalls on a full mem_req_out while the downstream cache's pipe head
-  // stalls on the response it cannot deliver here.
-  SimChannel<MemRsp> mem_rsp_in;
+  CacheReturnPort memory_return;
 
   CacheBank(const SimContext &ctx,
             const char *name,
             const Cache::Config &config,
             const params_t &params,
             uint32_t bank_id)
-      : SimObject<CacheBank>(ctx, name), core_req_in(this), core_rsp_out(this), mem_req_out(this), mem_rsp_in(this, config.mshr_size + AMO_PASSTHRU_CAP), config_(config), params_(params), bank_id_(bank_id), mem_req_delay_(mem_req_delay(config)), sets_(params.sets_per_bank, set_t(params.lines_per_set, params.sectors_per_line, config.repl_policy)), mshr_(config.mshr_size), pipe_req_(TFifo<bank_req_t>::Create("", config.latency, std::max<uint32_t>(2u, config.latency))), lazy_q_(TFifo<uint32_t>::Create("", 1, lazyq_size(config))), rand_ctr_(0), adm_seq_ctr_(0)
+      : SimObject<CacheBank>(ctx, name)
+      , core_req_in(this)
+      , core_rsp_out(this)
+      , mem_req_out(this)
+      , memory_return(this, bool(params.slice_map), params.slice_map ? config.mrsq_size : 0, config.mem_rsp_slice)
+      , config_(config)
+      , params_(params)
+      , bank_id_(bank_id)
+      , sets_(params.sets_per_bank, set_t(params.lines_per_set, params.sectors_per_line, config.repl_policy))
+      , mshr_(config.mshr_size)
+      , pipe_req_(TFifo<bank_req_t>::Create("", config.latency, std::max<uint32_t>(2u, config.latency)))
+      , lazy_q_(TFifo<uint32_t>::Create("", 1, lazyq_size(config)))
+      , rand_ctr_(0)
+      , adm_seq_ctr_(0)
 #if VX_CFG_EXT_A_ENABLED
       , amo_unit_(__MAX(2u, (uint32_t)VX_CFG_AMO_RS_SIZE))
 #endif
@@ -1018,20 +1102,19 @@ public:
       flushing_ = false;
       flush_set_idx_ = 0;
       flush_way_idx_ = 0;
-      flush_sector_idx_ = 0;
       return;
     }
-    // the two walks share the sector cursor
     __assert(!token_flushing_, "flush walk started during a flush-token walk");
     flushing_ = true;
+    flush_walking_ = false;
     flush_set_idx_ = 0;
     flush_way_idx_ = 0;
-    flush_sector_idx_ = 0;
     this->tick_wake();
   }
 
   bool flush_done() const {
-    return !flushing_;
+    return !flushing_ && core_req_in.size() == 0 && pipe_req_->size() == 0
+        && mshr_.empty() && pending_fill_reqs_ == 0 && mem_req_out.size() == 0;
   }
 
   // A flush token's walk: one entry per cycle, every set (every way of a
@@ -1042,8 +1125,7 @@ public:
     token_flush_skip_ = skip;
     token_flush_idx_ = 0;
     token_flush_settle_ = 0;
-    token_flush_walking_ = false;
-    flush_sector_idx_ = 0;
+    flush_walking_ = false;
     this->tick_wake();
   }
 
@@ -1060,6 +1142,7 @@ protected:
     pipe_core_lines_.clear();
     pending_read_reqs_ = 0;
     pending_write_reqs_ = 0;
+    memory_return.reset();
     pending_fill_reqs_ = 0;
     rand_ctr_ = 0;
     adm_seq_ctr_ = 0;
@@ -1091,10 +1174,9 @@ protected:
     flushing_ = false;
     flush_set_idx_ = 0;
     flush_way_idx_ = 0;
-    flush_sector_idx_ = 0;
     token_flushing_ = false;
     token_flush_idx_ = 0;
-    token_flush_walking_ = false;
+    flush_walking_ = false;
 #if VX_CFG_EXT_A_ENABLED
     amo_wb_addr_ = 0;
     amo_unit_.reset();
@@ -1108,6 +1190,12 @@ protected:
     // The core-response port takes one response per tick; the pipeline has
     // priority and the forward drain yields (crsp_sent_).
     crsp_sent_ = false;
+    memory_return.begin();
+
+    mreq_pushed_ = false;
+    // Both admission and writeback see the FIFO count before this clock's pop and push.
+    mreq_occupancy_ = mem_req_out.size() + mem_req_out.popped_this_cycle();
+    mreq_almost_full_ = mreq_occupancy_ >= mem_req_out.capacity() - config_.latency;
 
     // MSHR occupancy is a registered count: slots a forward, replay or
     // release frees this tick admit a new request only from the next one.
@@ -1125,16 +1213,15 @@ protected:
 
     // Fill-forward drain: complete the read-prefix of a fill's pending chain
     // directly (one per tick), leaving the input slot free for new requests.
-    // On response backpressure the head falls back to the replay path.
-    bool fwd_consumed = false;
-    fwd_held_ = false;
+    // A claimed head remains on the forward path until the response queue accepts it.
+    bool fwd_claimed = false;
     if (fwd_active_ && !pipe_stall) {
-        fwd_consumed = this->processForward();
+        fwd_claimed = this->processForward();
     }
 
     // Accept one new input if there's room.
     if (!pipe_req_->full() && !pipe_stall) {
-        this->processInputs(fwd_consumed);
+        this->processInputs(fwd_claimed);
     }
 
     // flush walk: emit writebacks for dirty lines.
@@ -1152,7 +1239,8 @@ protected:
     // and no replay/forward/flush work. pending_fill_reqs_ == 0 also keeps
     // the mem_latency accumulation exact. flush_begin() re-arms explicitly;
     // any packet reserved toward core_req_in/mem_rsp_in re-arms on arrival.
-    if (this->core_req_in.size() == 0 && this->mem_rsp_in.size() == 0
+    memory_return.end();
+    if (this->core_req_in.size() == 0 && !memory_return.busy()
      && pipe_req_->size() == 0 && lazy_q_->size() == 0 && !mshr_.has_ready_reqs()
      && !fwd_active_ && !flushing_ && !token_flushing_ && pending_fill_reqs_ == 0
      && !amo_wb_pending_) {
@@ -1173,7 +1261,7 @@ private:
   //   4) core_req — new core request (may miss and allocate an MSHR slot)
   //
   // At most one input fires per tick. All inputs flow through pipe_req_.
-  void processInputs(bool fwd_consumed) {
+  void processInputs(bool fwd_claimed) {
     // A refetch fill learns whether its sector is still resident at its tag
     // lookup, the tick after it enters: nothing enters behind it meanwhile,
     // and its chain then replays, or parks again if the sector was evicted.
@@ -1193,14 +1281,20 @@ private:
     // 1) replay: one chain entry leaves per tick — when the fill-forward
     // drain completed the head this tick, this slot goes to new core
     // requests instead
-    if (mshr_.has_ready_reqs() && !fwd_consumed && !fwd_held_) {
+    if (mshr_.has_ready_reqs() && !fwd_claimed) {
+      const auto* head = mshr_.peek_next_replay();
+      if (!config_.write_back && mreq_almost_full_ && head && head->bank_req.write) {
+        return;
+      }
       // A chain whose sector is partial cannot serve a load or AMO: park at
       // that head and refetch the sector; the rest of the chain waits.
       if (chain_partial_) {
-        const auto *head = mshr_.peek_next_replay();
         if (head != nullptr
          && head->set_id == chain_set_ && head->addr_tag == chain_tag_ && head->sector_id == chain_sector_
          && !head->bank_req.write) {
+          if (mreq_almost_full_) {
+            return;
+          }
           bank_req_t park_req = head->bank_req;
           park_req.mshr_id = mshr_.park_next_replay(chain_retry_);
           park_req.type    = bank_req_t::Park;
@@ -1223,12 +1317,15 @@ private:
     // request still in the pipe must reach its chain first (the hardware
     // links it at S0): the fill waits, and so does any further request to
     // that line, which keeps a stream of them from starving the fill.
+    if (config_.write_back && mreq_almost_full_) {
+      return;
+    }
     bool fill_held = false;
     uint32_t held_set_id = 0;
     uint64_t held_addr_tag = 0;
     const bool lazy_turn = prefer_lazy_ && !lazy_q_->empty();
-    if (!this->mem_rsp_in.empty() && !lazy_turn && !fwd_active_) {
-      auto &mem_rsp = this->mem_rsp_in.peek();
+    if (memory_return.valid() && !lazy_turn && !fwd_active_) {
+      auto mem_rsp = memory_return.packet();
 #if VX_CFG_EXT_A_ENABLED
       // Non-LLC AMO passthrough response: forward straight to core
       // without filling. The original tag was rewritten to
@@ -1240,7 +1337,7 @@ private:
         uint32_t pid = mem_rsp.tag - amo_passthru_tag_base();
         auto &e = amo_passthru_.at(pid);
         assert(e.valid && "AMO passthru response without entry");
-        if (this->core_rsp_out.full()) {
+        if (crsp_sent_ || this->core_rsp_out.full()) {
           return; // stall
         }
         MemRsp core_rsp{e.req_tag, e.cid, e.uuid};
@@ -1248,7 +1345,7 @@ private:
         this->core_rsp_out.send(core_rsp);
         DT(3, this->name() << " amo-passthru-rsp: " << core_rsp);
         e.valid = false;
-        this->mem_rsp_in.pop();
+        memory_return.pop();
         prefer_lazy_ = true;
         --pending_fill_reqs_;
         return;
@@ -1292,7 +1389,7 @@ private:
           fwd_data_   = mem_rsp.data;
         }
         DT(3, this->name() << " fill-rsp: " << mem_rsp);
-        this->mem_rsp_in.pop();
+        memory_return.pop();
         prefer_lazy_ = true;
         --pending_fill_reqs_;
         return;
@@ -1335,6 +1432,9 @@ private:
       }
     }
 
+    if (mreq_almost_full_) {
+      return;
+    }
 #if VX_CFG_EXT_A_ENABLED
     // An LLC atomic's result goes back into the line as a synthetic write
     // through the core-request slot, one compute cycle after its commit.
@@ -1618,40 +1718,11 @@ private:
       line_id = set.select_victim(config_.repl_policy, rand_ctr_);
       auto &victim_line = set.lines.at(line_id);
 
-      // Count the victim's dirty sectors; the egress queue must accept all
-      // their writeback beats before we mutate any state.
-      uint32_t wb_count = 0;
-      if (config_.write_back) {
-        for (const auto &s : victim_line.sectors) {
-          if (s.valid && s.dirty) {
-            ++wb_count;
-          }
-        }
+      if (config_.write_back && !this->writebackLine(victim_line, set_id, bank_req.hart_id, bank_req.uuid)) {
+        return false;
       }
-      if (wb_count > 0 && (this->mem_req_out.size() + wb_count) > this->mem_req_out.capacity()) {
-        return false; // stall
-      }
-
       if (config_.repl_policy == Cache::RANDOM) {
         ++rand_ctr_;
-      }
-
-      // Emit one writeback per dirty sector.
-      for (uint32_t s = 0; s < victim_line.sectors.size(); ++s) {
-        auto &sec = victim_line.sectors.at(s);
-        if (!(config_.write_back && sec.valid && sec.dirty)) {
-          continue;
-        }
-        MemReq wb;
-        wb.addr   = params_.mem_addr_sector(bank_id_, set_id, victim_line.tag, s);
-        wb.op     = MemOp::ST;
-        wb.hart_id = bank_req.hart_id;
-        wb.uuid   = bank_req.uuid;
-        wb.data   = sec.data;
-        wb.byteen = sec.dirty_mask;
-        this->send_mem_req(wb);
-        DT(3, this->name() << " writeback: " << wb);
-        ++perf_stats_.evictions;
       }
 
       // Repurpose the victim way for the new line: all sectors invalid.
@@ -1737,10 +1808,7 @@ private:
       return false; // the head falls back to the replay path this tick
     }
     if (this->core_rsp_out.full()) {
-      // with the hold, the head waits for the response queue, out of the
-      // arbiter's sight, and fills wait with it; without, it replays
-      fwd_held_ = config_.fwd_hold;
-      return false;
+      return true; // claimed, but the MSHR head only leaves on a response handshake
     }
     bank_req_t req;
     mshr_.dequeue(&req);
@@ -1858,11 +1926,39 @@ private:
 
   // Pipeline tail: process the head of pipe_req_ — at most one bank_req_t per tick.
 
+  bool writebackLine(line_t& line, uint32_t set_id, uint32_t hart_id, uint64_t uuid) {
+    // Dirty sectors leave lowest first. A held commit resumes at the first unsent beat.
+    for (uint32_t i = 0; i < line.sectors.size(); ++i) {
+      auto& sector = line.sectors.at(i);
+      if (!sector.valid || !sector.dirty) {
+        continue;
+      }
+      if (mreq_almost_full_ || mreq_pushed_) {
+        return false;
+      }
+      MemReq wb;
+      wb.addr = params_.mem_addr_sector(bank_id_, set_id, line.tag, i);
+      wb.op = MemOp::ST;
+      wb.hart_id = hart_id;
+      wb.uuid = uuid;
+      wb.data = sector.data;
+      wb.byteen = sector.dirty_mask;
+      this->send_mem_req(wb);
+      DT(3, this->name() << " writeback: " << wb);
+      ++perf_stats_.evictions;
+      sector.dirty = false;
+      sector.dirty_mask = 0;
+    }
+    return true;
+  }
+
   // Send a request down the bank's in-order memory queue.
   // Debug: a write-through cache holds each write at the head of bank 0's
   // queue for a fixed delay, the requests behind it included, so requests
   // through the other banks overtake it unless something orders them.
   void send_mem_req(MemReq req) {
+    assert(!mreq_pushed_);
+    mreq_pushed_ = true;
   #ifdef DBG_MEM_BANK0_WDELAY
     if (bank_id_ == 0 && !config_.write_back) {
       constexpr uint64_t DBG_WDELAY = 2048;
@@ -1870,11 +1966,11 @@ private:
       uint64_t head = std::max(now, dbg_mem_req_free_);
       uint64_t leave = head + (req.is_write() ? DBG_WDELAY : 0);
       dbg_mem_req_free_ = leave + 1;
-      this->mem_req_out.send(std::move(req), mem_req_delay_ + (leave - now));
+      this->mem_req_out.send(std::move(req), MEM_REQ_DELAY + (leave - now));
       return;
     }
   #endif
-    this->mem_req_out.send(std::move(req), mem_req_delay_);
+    this->mem_req_out.send(std::move(req), MEM_REQ_DELAY);
   }
 
   // Emit a write-through store downstream, with the optional core response.
@@ -1963,11 +2059,8 @@ private:
       const bool hit   = (hit_id != -1);
       const bool dirty = hit && set.lines.at(hit_id).sectors.at(sector_id).dirty;
 
-      // Stall checks: writeback (if dirty) AND the AMO forward both
-      // need a mem_req_out slot.
-      const uint32_t out_slots_needed = (dirty ? 1u : 0u) + 1u;
-      if (this->mem_req_out.size() + out_slots_needed > this->mem_req_out.capacity()) {
-        return; // stall
+      if (this->mem_req_out.full() || (dirty && mreq_almost_full_)) {
+        return;
       }
       // Pre-allocate a passthru-table slot before mutating state.
       uint32_t pid = AMO_PASSTHRU_CAP;
@@ -1992,6 +2085,9 @@ private:
         this->send_mem_req(wb);
         DT(3, this->name() << " amo-probe-wb: " << wb);
         ++perf_stats_.evictions;
+        sec.dirty = false;
+        sec.dirty_mask = 0;
+        return; // the probe follows its writeback through the single enqueue port
       }
       if (hit) {
         if (sector_hit(set.lines.at(hit_id).sectors.at(sector_id), true)) {
@@ -2408,34 +2504,26 @@ private:
      || !mshr_.empty()) {
       return;
     }
+    if (!flush_walking_) {
+      if (mreq_occupancy_ != 0) {
+        return;
+      }
+      flush_walking_ = true;
+    }
     while (flush_set_idx_ < params_.sets_per_bank) {
       auto &set = sets_.at(flush_set_idx_);
       while (flush_way_idx_ < set.lines.size()) {
         auto &line = set.lines.at(flush_way_idx_);
-        // Emit one writeback per dirty sector (resumable across stalls).
-        while (flush_sector_idx_ < line.sectors.size()) {
-          auto &sec = line.sectors.at(flush_sector_idx_);
-          if (sec.valid && sec.dirty) {
-            if (this->mem_req_out.full())
-              return; // stall — resume at this sector next cycle
-            MemReq mem_req;
-            mem_req.addr = params_.mem_addr_sector(bank_id_, flush_set_idx_, line.tag, flush_sector_idx_);
-            mem_req.op   = MemOp::ST;
-            mem_req.data = sec.data;
-            mem_req.byteen = sec.dirty_mask;
-            this->send_mem_req(mem_req);
-            DT(3, this->name() << " flush-wb: " << mem_req);
-            ++perf_stats_.evictions;
-            sec.dirty = false;
-            sec.dirty_mask = 0;
-          }
-          ++flush_sector_idx_;
+        if (config_.write_back && (mreq_almost_full_ || !this->writebackLine(line, flush_set_idx_, 0, 0))) {
+          return;
         }
-        flush_sector_idx_ = 0;
         ++flush_way_idx_;
       }
       ++flush_set_idx_;
       flush_way_idx_ = 0;
+    }
+    if (mreq_occupancy_ != 0 || mreq_pushed_) {
+      return;
     }
     this->invalidate();
     flushing_ = false;
@@ -2445,6 +2533,9 @@ private:
   void processTokenFlush() {
     // the bank leaves its write-backs, then signals the end, a cycle each
     if (token_flush_settle_ != 0) {
+      if (token_flush_settle_ <= TOKEN_FLUSH_SETTLE && mreq_occupancy_ != 0) {
+        return;
+      }
       if (--token_flush_settle_ == 0) {
         token_flushing_ = false;
         DT(3, this->name() << (token_flush_skip_ ? " token-quiesce-done" : " token-flush-done"));
@@ -2457,13 +2548,16 @@ private:
      || !mshr_.empty()) {
       return;
     }
+    if (!flush_walking_ && mreq_occupancy_ != 0) {
+      return;
+    }
     if (token_flush_skip_) {
       token_flush_settle_ = TOKEN_FLUSH_SETTLE;
       return;
     }
     // the walk starts the cycle after the bank is seen quiet
-    if (!token_flush_walking_) {
-      token_flush_walking_ = true;
+    if (!flush_walking_) {
+      flush_walking_ = true;
       return;
     }
     uint32_t ways = config_.write_back ? params_.lines_per_set : 1;
@@ -2472,24 +2566,9 @@ private:
     auto &set = sets_.at(set_id);
     if (config_.write_back) {
       auto &line = set.lines.at(way_id);
-      while (flush_sector_idx_ < line.sectors.size()) {
-        auto &sec = line.sectors.at(flush_sector_idx_);
-        if (sec.valid && sec.dirty) {
-          if (this->mem_req_out.full()) {
-            return;
-          }
-          MemReq mem_req;
-          mem_req.addr = params_.mem_addr_sector(bank_id_, set_id, line.tag, flush_sector_idx_);
-          mem_req.op   = MemOp::ST;
-          mem_req.data = sec.data;
-          mem_req.byteen = sec.dirty_mask;
-          this->send_mem_req(mem_req);
-          DT(3, this->name() << " flush-wb: " << mem_req);
-          ++perf_stats_.evictions;
-        }
-        ++flush_sector_idx_;
+      if (mreq_almost_full_ || !this->writebackLine(line, set_id, 0, 0)) {
+        return;
       }
-      flush_sector_idx_ = 0;
       line.reset();
     } else {
       for (auto &line : set.lines) {
@@ -2505,7 +2584,9 @@ private:
   Cache::Config config_;
   params_t params_;
   uint32_t bank_id_;
-  uint32_t mem_req_delay_;
+  uint32_t mreq_occupancy_ = 0;
+  bool mreq_almost_full_ = false;
+  bool mreq_pushed_ = false;
 
   std::vector<set_t> sets_;
   MSHR mshr_;
@@ -2560,7 +2641,6 @@ private:
   uint32_t fwd_sector_;
   std::shared_ptr<mem_block_t> fwd_data_;
   bool     crsp_sent_;  // core-response port used this tick (pipeline priority)
-  bool     fwd_held_ = false; // the forward head waits on a full response queue this tick
 
   // Partial state of the chain the last fill woke (lazy fetch).
   bool     chain_partial_;
@@ -2584,12 +2664,11 @@ private:
   bool     flushing_;
   uint32_t flush_set_idx_;
   uint32_t flush_way_idx_;
-  uint32_t flush_sector_idx_;
   bool     token_flushing_;
   bool     token_flush_skip_ = false;
   static constexpr uint32_t TOKEN_FLUSH_SETTLE = 2;
   uint32_t token_flush_settle_ = 0;
-  bool     token_flush_walking_ = false;
+  bool     flush_walking_ = false;
   uint32_t token_flush_idx_;
 
 #if VX_CFG_EXT_A_ENABLED
@@ -3380,64 +3459,118 @@ private:
   friend class SimObject<CacheRspMcast>;
 };
 
-// Sits on one memory port's cache-side response path, ahead of the response
-// network. While the port's flush token is out the cache is quiescent, so the
-// port's next response is the token's answer and stops here; every other
-// response passes on, crossing the port's registered response stages.
-class FlushTap : public SimObject<FlushTap> {
+// Each intermediate channel is the output skid of one omega switch.
+class CacheMemRspNetwork : public SimObject<CacheMemRspNetwork> {
 public:
-  using Ptr = std::shared_ptr<FlushTap>;
+  using Ptr = std::shared_ptr<CacheMemRspNetwork>;
+  std::vector<CacheReturnPort> ports;
+  std::vector<SimChannel<MemRsp>> Out;
 
-  SimChannel<MemRsp> RspIn;
-  SimChannel<MemRsp> RspOut;
-
-  FlushTap(const SimContext& ctx, const char* name, uint32_t delay)
-    : SimObject<FlushTap>(ctx, name)
-    , RspIn(this)
-    , RspOut(this)
-    , delay_(delay)
-  {}
-
-  // the port's flush token has been sent
-  void arm() {
-    armed_ = true;
-    answered_ = false;
-  }
-
-  // the token's answer has arrived; reading it disarms the tap
-  bool take_answer() {
-    bool answered = answered_;
-    answered_ = false;
-    return answered;
+  CacheMemRspNetwork(const SimContext& ctx, const char* name, const Cache::Config& config)
+    : SimObject<CacheMemRspNetwork>(ctx, name)
+    , Out(1u << config.B, this)
+    , stages_(omega_stages(config.mem_ports, Out.size()))
+    , bank_bits_(log2ceil((Out.size() + config.mem_ports - 1) / config.mem_ports))
+    , skids_((stages_ - 1) * Out.size(), this)
+    , next_(stages_ * Out.size(), 0) {
+    ports.reserve(config.mem_ports);
+    for (unsigned i = 0; i < config.mem_ports; ++i) {
+      ports.emplace_back(this, true, config.mrsq_size, config.mem_rsp_slice);
+      if (config.mem_rsp_slice && i == 0) {
+        ports.back().In.set_registered_ready(true);
+      } else if (config.mem_rsp_slice) {
+        ports.back().In.retain_boundary_source();
+      }
+    }
+    for (auto& skid : skids_) {
+      skid.set_registered_ready(true);
+    }
   }
 
 protected:
   void on_reset() {
-    armed_ = false;
-    answered_ = false;
+    std::fill(next_.begin(), next_.end(), 0);
+    for (auto& port : ports) {
+      port.reset();
+    }
   }
 
   void on_tick() {
-    if (RspIn.empty()) {
-      this->tick_sleep();
-      return;
+    bool busy = false;
+    for (auto& port : ports) {
+      port.begin();
     }
-    if (armed_) {
-      DT(3, this->name() << " flush-fwd-rsp");
-      armed_ = false;
-      answered_ = true;
-      RspIn.pop();
-    } else if (RspOut.try_send(RspIn.peek(), delay_)) {
-      RspIn.pop();
+    const unsigned banks = Out.size();
+    for (unsigned level = stages_; level-- != 0;) {
+      for (unsigned pair = 0; pair < banks; pair += 2) {
+        unsigned used = 0;
+        for (unsigned lane = pair; lane < std::min(pair + 2, banks); ++lane) {
+          auto& next = next_[level * banks + lane];
+          for (unsigned j = 0; j < std::min(2u, banks); ++j) {
+            const unsigned side = (next + j) & 1;
+            const unsigned input = pair + side;
+            const unsigned prev = (input >> 1) | ((input & 1) << (stages_ - 1));
+            if ((used & (1u << side)) || (!level && prev >= ports.size())) {
+              continue;
+            }
+            MemRsp rsp;
+            unsigned bank;
+            if (!level) {
+              auto& port = ports[prev];
+              if (!port.valid()) {
+                continue;
+              }
+              rsp = port.packet();
+              bank = (rsp.tag & ((1u << bank_bits_) - 1)) * ports.size() + prev;
+            } else {
+              auto& src = skids_[(level - 1) * banks + prev];
+              busy |= src.size() != 0;
+              if (src.empty()) {
+                continue;
+              }
+              rsp = src.peek().packet;
+              bank = src.peek().bank;
+            }
+            if (((bank >> (stages_ - level - 1)) & 1) != (lane & 1)) {
+              continue;
+            }
+            bool accepted;
+            if (level + 1 == stages_) {
+              rsp.tag >>= bank_bits_;
+              accepted = Out[lane].try_send(std::move(rsp), 1);
+            } else {
+              accepted = skids_[level * banks + lane].try_send({std::move(rsp), bank}, 1);
+              busy |= accepted;
+            }
+            if (accepted) {
+              if (level) {
+                skids_[(level - 1) * banks + prev].pop();
+              } else {
+                ports[prev].pop();
+              }
+              next = banks == 1 ? 0 : side ^ 1;
+              used |= 1u << side;
+            }
+            break;
+          }
+        }
+      }
+    }
+    for (auto& port : ports) {
+      port.end();
+      busy |= port.busy();
+    }
+    if (!busy) {
+      this->tick_sleep();
     }
   }
 
 private:
-  uint32_t delay_;
-  bool armed_ = false;
-  bool answered_ = false;
-
-  friend class SimObject<FlushTap>;
+  uint32_t stages_, bank_bits_;
+  struct RoutedRsp { MemRsp packet; unsigned bank; };
+  std::vector<SimChannel<RoutedRsp>> skids_;
+  std::vector<uint8_t> next_;
+  friend class SimObject<CacheMemRspNetwork>;
 };
 
 static uint32_t bypass_requester(const MemRsp& rsp, uint32_t port_bits) {
@@ -3514,10 +3647,151 @@ private:
   friend class SimObject<CacheCoreRspSwitch>;
 };
 
+// A bank routes to its low port bits. An unbound omega first merges banks
+// differing in a high bit, then registers each port at the remaining levels.
+class CacheMemReqNetwork : public SimObject<CacheMemReqNetwork> {
+public:
+  using Ptr = std::shared_ptr<CacheMemReqNetwork>;
+  std::vector<SimChannel<MemReq>> Out, Flush, NcIn;
+  std::vector<SimChannel<bool>> FlushResponse;
+
+  CacheMemReqNetwork(const SimContext& ctx, const char* name, const Cache::Config& config, bool bound)
+    : SimObject<CacheMemReqNetwork>(ctx, name)
+    , Out(config.mem_ports, this)
+    , Flush(config.mem_ports, SimChannel<MemReq>(this, 1))
+    , NcIn(bound ? config.mem_ports : 0, SimChannel<MemReq>(this, 2))
+    , FlushResponse(config.mem_ports, this)
+    , bank_bits_(config.B - log2ceil(config.mem_ports))
+    , last_nc_(NcIn.size()) {
+    const unsigned banks = 1u << config.B;
+    const unsigned levels = bound ? 1 : omega_stages(banks, config.mem_ports);
+    const unsigned slots = config.nc_enable ? 1 : 2;
+    __assert(banks % config.mem_ports == 0 && (!bound || banks == config.mem_ports), "invalid bank/port geometry");
+    for (auto& nc : NcIn) {
+      nc.set_registered_ready(true);
+    }
+    for (unsigned level = 0; level < levels; ++level) {
+      const unsigned width = std::max<unsigned>(config.mem_ports, banks >> level);
+      inputs_.emplace_back(width, SimChannel<MemReq>(this, level ? slots : CacheBank::mreq_depth(config)));
+      for (auto& in : inputs_.back()) {
+        in.set_registered_ready(!level || slots == 2);
+      }
+      prefer_high_.emplace_back(width > config.mem_ports ? width / 2 : 0);
+    }
+  }
+
+  SimChannel<MemReq>& input(unsigned bank) { return inputs_.front().at(bank); }
+
+protected:
+  void on_reset() {
+    flush_open_ = false;
+    std::fill(last_nc_.begin(), last_nc_.end(), 0);
+    for (auto& level : prefer_high_) {
+      std::fill(level.begin(), level.end(), 0);
+    }
+  }
+
+  void on_tick() {
+    auto token = std::find_if(Flush.begin(), Flush.end(), [](const auto& in) { return !in.empty(); });
+    bool busy = (token != Flush.end());
+    if (!busy) {
+      flush_open_ = false;
+    } else if (!flush_open_) {
+      flush_open_ = this->can_forward(token->peek().flags.fence_op & VX_FENCE_IO);
+    }
+    for (unsigned level = inputs_.size(); level-- != 0;) {
+      auto& inputs = inputs_[level];
+      auto& outputs = (level + 1 == inputs_.size()) ? Out : inputs_[level + 1];
+      for (unsigned lane = 0; lane < outputs.size(); ++lane) {
+        const bool token_ready = !level && flush_open_ && lane < Flush.size()
+                              && !Flush[lane].empty() && inputs[lane].empty();
+        auto* in = token_ready ? &Flush[lane] : &inputs[lane];
+        unsigned grant = lane;
+        bool take_nc = false;
+        busy |= inputs[lane].size() != 0;
+        if (!NcIn.empty()) {
+          auto& nc = NcIn[lane];
+          busy |= nc.size() != 0;
+          if (!nc.empty() && (in->empty() || !last_nc_[lane])) {
+            in = &nc;
+            take_nc = true;
+          }
+        } else if (inputs.size() != outputs.size()) {
+          const unsigned other = lane + outputs.size();
+          auto& high = inputs[other];
+          busy |= high.size() != 0;
+          if (!high.empty() && (in->empty() || prefer_high_[level][lane])) {
+            grant = other;
+            in = &high;
+          }
+        }
+        if (in->empty() || outputs[lane].full()) {
+          continue;
+        }
+        auto req = in->peek();
+        if (!NcIn.empty()) {
+          req.tag = (req.tag << 1) | take_nc;
+          last_nc_[lane] = take_nc;
+        } else if (!level && bank_bits_) {
+          req.tag = (req.tag << bank_bits_) | (grant / Out.size());
+        }
+        outputs[lane].send(std::move(req), 1);
+        in->pop();
+        if (token_ready && in == &Flush[lane]) {
+          FlushResponse[lane].send(true, 0);
+        }
+        if (inputs.size() != outputs.size()) {
+          prefer_high_[level][lane] = grant == lane;
+        }
+      }
+    }
+    if (!busy) {
+      this->tick_sleep();
+    }
+  }
+
+private:
+  bool can_forward(bool io) const {
+    if (!NcIn.empty()) {
+      // A bound cache has no omega. IO also orders writes in the NC crossbar and output stage.
+      if (io) {
+        for (unsigned lane = 0; lane < Out.size(); ++lane) {
+          if (NcIn[lane].size() || Out[lane].size()) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+    // The bank quiesce already drained each MREQ. Wait for writes from other
+    // banks to leave the omega before admitting the first token on any lane.
+    for (unsigned level = 1; level < inputs_.size(); ++level) {
+      for (const auto& in : inputs_[level]) {
+        if (in.size()) {
+          return false;
+        }
+      }
+    }
+    for (const auto& out : Out) {
+      if (out.size() || out.popped_this_cycle()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  unsigned bank_bits_;
+  std::vector<std::vector<SimChannel<MemReq>>> inputs_;
+  std::vector<std::vector<uint8_t>> prefer_high_;
+  std::vector<uint8_t> last_nc_;
+  bool flush_open_ = false;
+  friend class SimObject<CacheMemReqNetwork>;
+};
+
 class Cache::Impl {
 public:
   Impl(Cache *simobject, const Config &config)
-      : simobject_(simobject), config_(config), params_(config), banks_(1 << config.B), nc_mem_arbs_(config.mem_ports) {
+      : simobject_(simobject), config_(config), params_(config), banks_(1 << config.B), nc_rsp_in_(config.mem_ports, simobject) {
     char sname[100];
 
     uint32_t num_banks = (1 << config.B);
@@ -3545,79 +3819,41 @@ public:
       return;
     }
 
-    // create non-cacheable arbiter
-    for (uint32_t i = 0; i < config_.mem_ports; ++i) {
-      snprintf(sname, 100, "%s-nc_arb%d", simobject->name().c_str(), i);
-      // NC is input 1 here, which wins the first tie in SimX round-robin.
-      nc_mem_arbs_.at(i) = params_.slice_map
-          ? MemArbiter::Create(sname, ArbiterType::RoundRobin, 2, 1, 1, 0)
-          : MemArbiter::Create(sname, ArbiterType::Priority, 2, 1);
-      if (params_.slice_map) {
-        // The NC arbiter's input queue holds the channel crossbar's two-entry output stage.
-        auto* stage = &nc_mem_arbs_.at(i)->ReqIn.at(1);
-        while (stage->sink()) {
-          stage = static_cast<SimChannel<MemReq>*>(stage->sink());
-        }
-        stage->set_registered_ready(true);
+    if (!params_.slice_map) {
+      for (uint32_t i = 0; i < config_.mem_ports; ++i) {
+        snprintf(sname, 100, "%s-nc_arb%d", simobject->name().c_str(), i);
+        nc_mem_arbs_.push_back(MemArbiter::Create(sname, ArbiterType::Priority, 2, 1));
       }
     }
 
-    // Bank memory arbiter delays. Each level of the memory-side request
-    // network beyond the first is a registered stage; the request path
-    // buffers the levels the arbiter's own register does not cover in
-    // mem_req_net_.
-    uint32_t mem_arb_delay = ((num_banks != config_.mem_ports) && (num_banks > 2 || config_.mem_ports > 2)) ? 1 : 0;
-    uint32_t mem_net_delay = params_.slice_map ? 0 : omega_stages(num_banks, config_.mem_ports) - 1;
-    uint32_t mem_net_extra = (mem_net_delay > mem_arb_delay) ? (mem_net_delay - mem_arb_delay) : 0;
-    uint32_t mem_arb_rsp_delay = (num_banks != config_.mem_ports) ? (mem_arb_delay + mem_net_extra) : 0;
     __assert(num_banks >= config_.mem_ports, "a cache needs a bank per memory port");
 
-    // A memory response reaches its bank through the port's response queue,
-    // when there is one, and a response network registered at every level.
-    // The taps carry what the bank arbiter's response delay does not.
-    uint32_t mem_rsp_regs = (params_.slice_map ? 0 : omega_stages(config_.mem_ports, num_banks))
-                          + (config_.mem_rsp_queue ? 1 : 0);
-    uint32_t mem_rsp_credit = mem_arb_rsp_delay + (config_.mem_rsp_slice ? 1 : 0);
-    __assert(mem_rsp_regs >= mem_rsp_credit, "memory response path shorter than its arbiter");
-    uint32_t tap_delay = mem_rsp_regs - mem_rsp_credit;
-
-    // flush-token taps, ticking after the arbiters that feed them and before
-    // the response network they feed
-    flush_taps_.resize(config_.mem_ports);
-    for (uint32_t i = 0; i < config_.mem_ports; ++i) {
-      snprintf(sname, 100, "%s-flush_tap%d", simobject->name().c_str(), i);
-      flush_taps_.at(i) = FlushTap::Create(sname, tap_delay);
-      nc_mem_arbs_.at(i)->RspOut.at(0).bind(&flush_taps_.at(i)->RspIn);
+    // A bound port feeds its bank directly. Otherwise each radix-2
+    // switch output contributes a two-entry skid on the return path.
+    if (!params_.slice_map) {
+      snprintf(sname, 100, "%s-mem_rsp", simobject->name().c_str());
+      mem_rsp_net_ = CacheMemRspNetwork::Create(sname, config_);
     }
 
-    // Connect non-cacheable arbiter output port 0 to outgoing memory ports
+    snprintf(sname, 100, "%s-mem_req_net", simobject->name().c_str());
+    mem_req_net_ = CacheMemReqNetwork::Create(sname, config, bool(params_.slice_map));
     for (uint32_t i = 0; i < config_.mem_ports; ++i) {
-      nc_mem_arbs_.at(i)->ReqOut.at(0).bind(&simobject->mem_req_out.at(i));
-      simobject->mem_rsp_in.at(i).bind(&nc_mem_arbs_.at(i)->RspIn.at(0));
-    }
-
-    snprintf(sname, 100, "%s-mem_arb", simobject->name().c_str());
-    auto bank_mem_arb = MemArbiter::Create(sname, ArbiterType::RoundRobin, num_banks, config_.mem_ports,
-                                           mem_arb_delay + mem_net_extra, mem_arb_rsp_delay);
-
-    // Connect bank's memory arbiter to non-cacheable arbiter's input port 0
-    if (mem_net_extra != 0) {
-      mem_req_net_.reserve(config_.mem_ports);
-      for (uint32_t i = 0; i < config_.mem_ports; ++i) {
-        mem_req_net_.emplace_back(simobject, mem_arb_delay + mem_net_extra + 1);
-      }
-    }
-    for (uint32_t i = 0; i < config_.mem_ports; ++i) {
-      if (mem_net_extra != 0) {
-        bank_mem_arb->ReqOut.at(i).bind(&mem_req_net_.at(i));
+      if (params_.slice_map) {
+        mem_req_net_->Out[i].bind(&simobject->mem_req_out[i]);
       } else {
-        bank_mem_arb->ReqOut.at(i).bind(&nc_mem_arbs_.at(i)->ReqIn.at(0));
+        nc_mem_arbs_[i]->ReqOut[0].bind(&simobject->mem_req_out[i]);
+        auto* cached = &nc_mem_arbs_[i]->ReqIn[0];
+        auto* end = cached;
+        while (end->sink()) {
+          end = static_cast<SimChannel<MemReq>*>(end->sink());
+        }
+        // The cached input holds the final switch register of the unbound omega.
+        end->set_capacity(config.nc_enable ? 1 : 2);
+        end->set_registered_ready(!config.nc_enable);
+        end->track_pop_cycle();
+        mem_req_net_->Out[i].bind(cached);
       }
     }
-    for (uint32_t i = 0; i < config_.mem_ports; ++i) {
-      flush_taps_.at(i)->RspOut.bind(&bank_mem_arb->RspIn.at(i));
-    }
-    bank_arb_ = bank_mem_arb;
 
     // Create the core-port arbiter ahead of the banks it feeds
     snprintf(sname, 100, "%s-port_arb", simobject->name().c_str());
@@ -3629,7 +3865,7 @@ public:
       simobject->core_req_in.at(i).bind(&port_arb_->ReqIn.at(i));
     }
     for (uint32_t i = 0; i < port_arb_->BoundIoOut.size(); ++i) {
-      port_arb_->BoundIoOut.at(i).bind(&nc_mem_arbs_.at(i)->ReqIn.at(1));
+      port_arb_->BoundIoOut.at(i).bind(&mem_req_net_->NcIn.at(i));
     }
 
     // Create bank's core crossbar; it carries the bank responses back to the
@@ -3647,10 +3883,6 @@ public:
       __assert(config_.core_out_buf, "read merging needs a registered core-response port");
       core_rsp_delay_ = 1;
     } else {
-      // A one-bank, one-port crossbar passes the bank's responses straight to
-      // the port, which has no room for more slots.
-      __assert(crsq_slots == 2 || config_.num_inputs != 1 || num_banks != 1,
-               "a deeper core-response queue needs a bank crossbar");
       if (config_.core_out_buf) {
         bank_core_xbar_ = MemCrossBar::Create(sname, ArbiterType::RoundRobin, config_.num_inputs, num_banks, bank_sel,
                                               0, 0, crsq_slots);
@@ -3659,6 +3891,14 @@ public:
         const uint32_t xbar_delay = (config_.num_inputs > 2 || num_banks > 2) ? 1 : 0;
         bank_core_xbar_ = MemCrossBar::Create(sname, ArbiterType::RoundRobin, config_.num_inputs, num_banks, bank_sel,
                                               xbar_delay, xbar_delay, crsq_slots);
+      }
+    }
+    if (bank_core_xbar_) {
+      for (uint32_t bank = 0; bank < num_banks; ++bank) {
+        auto& queue = (num_banks == 1 && config_.num_inputs == 1)
+                    ? bank_core_xbar_->RspOut[0] : bank_core_xbar_->RspIn[bank];
+        queue.set_capacity(crsq_slots);
+        queue.set_registered_ready(true);
       }
     }
     if (params_.slice_map) {
@@ -3678,7 +3918,7 @@ public:
         snprintf(sname, 100, "%s-core_rsp_switch", simobject->name().c_str());
         core_rsp_switch_ = CacheCoreRspSwitch::Create(sname, config_.num_inputs, config_.mem_ports, config_.core_out_buf);
         for (uint32_t i = 0; i < config_.mem_ports; ++i) {
-          nc_mem_arbs_.at(i)->RspOut.at(1).bind(&core_rsp_switch_->NcIn.at(i));
+          nc_rsp_in_.at(i).bind(&core_rsp_switch_->NcIn.at(i));
         }
         for (uint32_t i = 0; i < config_.num_inputs; ++i) {
           core_rsp_switch_->Out.at(i).bind(&simobject->core_rsp_out.at(i));
@@ -3716,9 +3956,16 @@ public:
       port_arb_->attach_bank(i, &banks_.at(i)->core_req_in);
       banks_.at(i)->core_rsp_out.bind(rsp_mcast_ ? &rsp_mcast_->RspIn.at(i) : &bank_core_xbar_->RspIn.at(i));
 
-      // bind memory ports
-      banks_.at(i)->mem_req_out.bind(&bank_mem_arb->ReqIn.at(this->bank_lane(i)));
-      bank_mem_arb->RspOut.at(this->bank_lane(i)).bind(&banks_.at(i)->mem_rsp_in);
+      banks_[i]->mem_req_out.bind(&mem_req_net_->input(i));
+      if (!params_.slice_map) {
+        mem_rsp_net_->Out[i].bind(&banks_[i]->memory_return.In);
+      }
+      if (i < config_.mem_ports) {
+        auto& port = params_.slice_map ? banks_[i]->memory_return : mem_rsp_net_->ports[i];
+        simobject->mem_rsp_in[i].bind(&port.In);
+        port.NcOut.bind(&nc_rsp_in_[i]);
+        mem_req_net_->FlushResponse[i].bind(&port.Flush);
+      }
     }
   }
 
@@ -3757,7 +4004,7 @@ public:
     uint64_t nc_rsp_waiting = 0;
     for (uint32_t i = 0, n = core_rsp_switch_ ? 0 : config_.mem_ports; i < n; ++i) {
       // Forward non-cacheable arbiter's output (1) to core response ports
-      auto &bypass = nc_mem_arbs_.at(i)->RspOut.at(1);
+      auto &bypass = nc_rsp_in_.at(i);
       if (!bypass.empty()) {
         if (params_.slice_map) {
           nc_rsp_waiting |= 1ull << i;
@@ -3771,14 +4018,6 @@ public:
     }
 
     this->flush_step();
-
-    // bank memory requests through the memory-side network's deeper levels
-    for (uint32_t i = 0, n = mem_req_net_.size(); i < n; ++i) {
-      auto &net = mem_req_net_.at(i);
-      if (!net.empty() && nc_mem_arbs_.at(i)->ReqIn.at(0).try_send(net.peek(), 0)) {
-        net.pop();
-      }
-    }
 
     // schedule core responses
     for (uint32_t req_id = 0, n = rsp_mcast_ ? 0 : config_.num_inputs; req_id < n; ++req_id) {
@@ -3877,29 +4116,18 @@ public:
       break;
     }
     case FlushState::Forward: {
-      bool mem_req_empty = true;
-      for (auto &lane : bank_arb_->ReqIn) {
-        mem_req_empty &= (lane.size() == 0);
-      }
-      for (auto &net : mem_req_net_) {
-        mem_req_empty &= (net.size() == 0);
-      }
-      // an IO token also waits for the non-cacheable path, which carries the
-      // IO writes it orders, including the channel crossbar's output stage
-      if ((fwd_op_ & VX_FENCE_IO) && mem_req_empty) {
-        for (auto& out : port_arb_->IoOut) {
-          mem_req_empty &= (out.size() == 0);
+      bool nc_drained = true;
+      if (fwd_op_ & VX_FENCE_IO) {
+        for (const auto& out : port_arb_->IoOut) {
+          nc_drained &= out.size() == 0;
         }
-        for (auto &arb : nc_mem_arbs_) {
-          mem_req_empty &= (arb->ReqIn.at(0).size() == 0) && (arb->ReqIn.at(1).size() == 0);
-        }
-        if (params_.slice_map) {
-          for (auto& out : simobject_->mem_req_out) {
-            mem_req_empty &= (out.size() == 0);
+        if (!params_.slice_map) {
+          for (const auto& arb : nc_mem_arbs_) {
+            nc_drained &= arb->ReqIn[1].size() == 0;
           }
         }
       }
-      fwd_go_ |= mem_req_empty;
+      fwd_go_ |= nc_drained;
       for (uint32_t i = 0, n = config_.mem_ports; i < n && fwd_go_; ++i) {
         if (fwd_sent_ & (1ull << i)) {
           continue;
@@ -3911,14 +4139,13 @@ public:
         token.flags.flush = 1;
         token.flags.fence_op = fwd_op_;
         token.tag = 0;
-        if (bank_arb_->ReqIn.at(this->bank_lane(i)).try_send(token, 1)) {
+        if (mem_req_net_->Flush[i].try_send(token, 0)) {
           DT(3, simobject_->name() << " flush-fwd: " << token);
-          flush_taps_.at(i)->arm();
           fwd_sent_ |= 1ull << i;
         }
       }
       for (uint32_t i = 0, n = config_.mem_ports; i < n; ++i) {
-        if (flush_taps_.at(i)->take_answer()) {
+        if ((fwd_sent_ & (1ull << i)) && !mem_req_net_->Flush[i].size() && !mem_req_net_->FlushResponse[i].size()) {
           fwd_done_ |= 1ull << i;
         }
       }
@@ -3992,6 +4219,14 @@ public:
   // a walk, or a drain without one
   bool owes_work(uint32_t op) const {
     return ((op & (VX_FENCE_ACQ | VX_FENCE_REL)) && this->above_poc(op)) || (op & VX_FENCE_IO);
+  }
+
+  bool bind_response_peer(unsigned port, SimChannel<MemRsp>& peer) {
+    if (!mem_rsp_net_) {
+      return false;
+    }
+    mem_rsp_net_->ports.at(port).bind_peer(peer);
+    return true;
   }
 
   PerfStats perf_stats() const {
@@ -4096,7 +4331,7 @@ private:
     while (waiting != 0) {
       uint32_t lane = __builtin_ctzll(waiting);
       waiting &= waiting - 1;
-      auto req_id = bypass_requester(nc_mem_arbs_.at(lane)->RspOut.at(1).peek(), params_.log2_num_inputs);
+      auto req_id = bypass_requester(nc_rsp_in_.at(lane).peek(), params_.log2_num_inputs);
       nc_rsp_requests_.at(req_id).set(lane);
     }
     for (uint32_t req_id = 0; req_id < config_.num_inputs; ++req_id) {
@@ -4106,7 +4341,7 @@ private:
       auto& arb = nc_rsp_arbs_.at(req_id);
       uint32_t lane = arb.select(requests);
       requests.reset();
-      auto& bypass = nc_mem_arbs_.at(lane)->RspOut.at(1);
+      auto& bypass = nc_rsp_in_.at(lane);
       if (nc_rsp_stage_.at(req_id).try_send(bypass.peek(), 1)) {
         bypass.pop();
         arb.commit(lane);
@@ -4127,9 +4362,10 @@ private:
 
   bool processBypassRequest(const MemReq &core_req, uint32_t req_id, uint32_t mem) {
     // Push core request to non-cacheable arbiter's input (1)
-    auto& stage = nc_mem_arbs_.at(mem)->ReqIn.at(1);
-    if (stage.full())
-      return false; // stall
+    auto& stage = params_.slice_map ? mem_req_net_->NcIn.at(mem) : nc_mem_arbs_.at(mem)->ReqIn.at(1);
+    if (stage.full()) {
+      return false;
+    }
     MemReq mem_req(core_req);
     mem_req.tag = (core_req.tag << params_.log2_num_inputs) + req_id;
     stage.send(mem_req, 0);
@@ -4141,8 +4377,9 @@ private:
   Config config_;
   params_t params_;
   std::vector<CacheBank::Ptr> banks_;
-  MemArbiter::Ptr bank_arb_;
+  CacheMemReqNetwork::Ptr mem_req_net_;
   std::vector<MemArbiter::Ptr> nc_mem_arbs_;
+  std::vector<SimChannel<MemRsp>> nc_rsp_in_;
   std::vector<Arbiter> nc_rsp_arbs_;
   std::vector<BitVector<>> nc_rsp_requests_;
   std::vector<SimChannel<MemRsp>> nc_rsp_stage_;
@@ -4162,16 +4399,7 @@ private:
   bool fwd_go_ = false;   // nothing is left ahead of the forwarded tokens
   uint32_t fwd_op_ = 0;   // the forwarded tokens' operation
   bool walk_skip_ = false;  // the banks only quiesce: no walk is owed
-  std::vector<SimChannel<MemReq>> mem_req_net_;
-  std::vector<FlushTap::Ptr> flush_taps_;
-
-  // Bank i drives memory port i mod mem_ports: its lane into the bank-to-port
-  // arbiter, which serves each port from a contiguous range of lanes.
-  uint32_t bank_lane(uint32_t bank_id) const {
-    uint32_t num_banks = 1 << config_.B;
-    uint32_t banks_per_port = num_banks / config_.mem_ports;
-    return (bank_id % config_.mem_ports) * banks_per_port + bank_id / config_.mem_ports;
-  }
+  CacheMemRspNetwork::Ptr mem_rsp_net_;
   uint32_t init_cycles_;
 };
 
@@ -4190,6 +4418,10 @@ void Cache::on_reset() {
 
 void Cache::on_tick() {
   impl_->tick();
+}
+
+bool Cache::bind_response_peer(unsigned port, SimChannel<MemRsp>& peer) {
+  return impl_->bind_response_peer(port, peer);
 }
 
 Cache::PerfStats Cache::perf_stats() const {

@@ -31,6 +31,7 @@ public:
 							const Cache::Config& cache_config);
 	~CacheCluster();
 
+	bool bind_response_peer(unsigned port, SimChannel<MemRsp>& peer);
 	Cache::PerfStats perf_stats() const;
 
 	void flush_begin(uint32_t fence_op = VX_FENCE_ACQ | VX_FENCE_REL | VX_FENCE_SYS);
@@ -38,6 +39,7 @@ public:
 
 private:
 	std::vector<Cache::Ptr> caches_;
+	std::vector<MemArbiter::Ptr> mem_arbs_;
 
 	friend class SimObject<CacheCluster>;
 };

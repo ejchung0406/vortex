@@ -115,7 +115,7 @@ public:
 		for (uint32_t channel = 0; channel < completed_reads_.size(); ++channel) {
 			auto& reads = completed_reads_.at(channel);
 			if (!reads.empty() && reads.front().ready_cycle <= now
-			 && simobject_->mem_rsp_out.at(channel).try_send(reads.front().response, 1)) {
+			 && simobject_->mem_rsp_out.at(channel).try_send(reads.front().response, 0)) {
 				DT(3, simobject_->name() << " mem-rsp" << channel << ": " << reads.front().response);
 				reads.pop_front();
 			}
@@ -183,7 +183,7 @@ public:
 						uint32_t channel = rsp_args->bank_id;
 						if (memory.config_.dram.slice_bind) {
 							// The native harness retires DRAM completions before waiting on the device.
-							uint64_t ready = SimPlatform::instance().cycles() + RSP_BOUNDARY_DELAY - 1;
+							uint64_t ready = SimPlatform::instance().cycles() + RSP_BOUNDARY_DELAY;
 							memory.completed_reads_.at(channel).push_back({std::move(mem_rsp), ready});
 							delete rsp_args;
 							return true;

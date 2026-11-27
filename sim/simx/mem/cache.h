@@ -50,15 +50,15 @@ public:
 		bool    core_out_buf = false; // registered core-response port
 		uint8_t read_merge = 0;	// merge same-word reads within groups of this many adjacent ports (0: off)
 		bool    write_around = false; // a no-allocate write miss goes to memory (write-back only)
-		bool    mem_rsp_queue = false; // memory responses enter through a response queue
-		bool    mem_rsp_slice = false; // a registered boundary ahead of the memory-response port stands for that queue's register
+		uint32_t mrsq_size = 0;        // entries in each memory port response queue
+		bool    mem_rsp_slice = false; // a registered socket link feeds the memory-response port
 		bool    next_is_poc = true;    // the next level is the point of coherence: an acquire alone stops here
 		bool    merge_line = false;    // read merging takes any read of the same line, each merged port keeping its own tag and word
 		bool    core_req_skid = false; // banks behind a combinational request crossbar take requests through a skid register
 		bool    set_hash = false;      // hashed set index
 		uint16_t crsq_size = 0;        // extra slots in a bank's core-response queue, over the registered skid's two
-		bool    fwd_hold = false;      // a forwardable chain head waits on a full response queue instead of replaying
 		uint32_t slice_granule = 0;     // nonzero when each bank owns one memory channel
+		uint32_t mreq_size = 0;        // extra slots above the bank request FIFO minimum
 	};
 
 	struct PerfStats {
@@ -92,6 +92,7 @@ public:
 	Cache(const SimContext& ctx, const char* name, const Config& config);
 	~Cache();
 
+	bool bind_response_peer(unsigned port, SimChannel<MemRsp>& peer);
 	PerfStats perf_stats() const;
 
 	// Flush API: arm a walk that emits dirty lines via mem_req_out, then drops

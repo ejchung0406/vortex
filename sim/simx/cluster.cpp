@@ -84,7 +84,7 @@ public:
       // the CP writes into this cache when it is the last level: its state
       // and a transfer's fills carry across the launch reset
       SimPlatform::LaunchKeepScope keep(CP_ON_L2 != 0);
-      l2cache_ = Cache::Create(sname, Cache::Config{
+      Cache::Config l2_config{
         !VX_CFG_L2_ENABLED,
         VX_CFG_L2_SIZE,          // size
         log2ceil(VX_CFG_L2_LINE_SIZE),// L
@@ -108,16 +108,17 @@ public:
         true,                          // core-response register (behind the bypass layer)
         0,                             // read_merge
         CP_ON_L2 != 0,                 // write_around
-        VX_CFG_L2_MRSQ_SIZE != 0,      // memory-response queue
+        VX_CFG_L2_MRSQ_SIZE,      // memory-response queue
         false,                         // memory-response slice
         true,                          // next_is_poc
         false,                         // line merging
         true,                          // core-request skid
         false,                         // set_hash
         VX_CFG_L2_CRSQ_SIZE,           // crsq_size
-        VX_CFG_L2_FWD_HOLD != 0,       // fwd_hold
         VX_CFG_L2_SLICE_BIND ? VX_CFG_L2_SLICE_GRANULE : 0, // slice_granule
-      });
+      };
+      l2_config.mreq_size = VX_CFG_L2_MREQ_SIZE;
+      l2cache_ = Cache::Create(sname, l2_config);
     }
 
 
@@ -297,7 +298,7 @@ public:
     constexpr uint32_t kOcacheWordSize = 4;
     constexpr uint32_t kOcacheNumReqs  = VX_CFG_OCACHE_NUM_BANKS;
     constexpr uint32_t kOcacheMemPorts = 1;
-    auto ocache = Cache::Create(sname, Cache::Config{
+    Cache::Config ocache_config{
       false,                        // bypass
       VX_CFG_OCACHE_SIZE,                  // size
       log2ceil(kOcacheLineSize),    // L
@@ -315,7 +316,11 @@ public:
       2,                            // pipeline latency
       uint8_t(VX_CFG_L2_REPL_POLICY),      // replacement policy
       false,                        // is_llc (OCACHE is auxiliary, not LLC)
-    });
+    };
+    ocache_config.crsq_size = VX_CFG_OCACHE_CRSQ_SIZE;
+    ocache_config.mrsq_size = VX_CFG_OCACHE_MRSQ_SIZE;
+    ocache_config.mreq_size = VX_CFG_OCACHE_MREQ_SIZE;
+    auto ocache = Cache::Create(sname, ocache_config);
     ocache_ = ocache;
 
     // om_core ↔ ocache (per-port).
@@ -361,7 +366,7 @@ public:
     constexpr uint32_t kRcacheWordSize = 4;
     constexpr uint32_t kRcacheNumReqs  = VX_CFG_RCACHE_NUM_BANKS;
     constexpr uint32_t kRcacheMemPorts = 1;
-    auto rcache = Cache::Create(sname, Cache::Config{
+    Cache::Config rcache_config{
       false,                        // bypass
       VX_CFG_RCACHE_SIZE,                  // size
       log2ceil(kRcacheLineSize),    // L
@@ -378,7 +383,11 @@ public:
       2,                            // pipeline latency
       uint8_t(VX_CFG_L2_REPL_POLICY),      // replacement policy
       false,                        // is_llc (RCACHE is auxiliary, not LLC)
-    });
+    };
+    rcache_config.crsq_size = VX_CFG_RCACHE_CRSQ_SIZE;
+    rcache_config.mrsq_size = VX_CFG_RCACHE_MRSQ_SIZE;
+    rcache_config.mreq_size = VX_CFG_RCACHE_MREQ_SIZE;
+    auto rcache = Cache::Create(sname, rcache_config);
     rcache_ = rcache;
 
     // raster_core ↔ rcache (per-port).

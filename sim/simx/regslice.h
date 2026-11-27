@@ -56,6 +56,10 @@ protected:
   }
 
   void on_tick() {
+    if (transport_input_) {
+      this->tick_sleep();
+      return;
+    }
     __assert(credits_ >= 0, "boundary credit underflow");
     if (!In.empty() && credits_ > 0) {
       Out.send(In.peek(), delay_);
@@ -80,11 +84,24 @@ private:
     // A full credit refill assumes no stale packets hold downstream slots.
     __assert(endpoint->size() == 0, "boundary refill with stale downstream packets");
     credits_ = static_cast<int32_t>(Out.capacity());
+    transport_input_ = endpoint->retains_boundary_source();
+    if (transport_input_) {
+      // The upstream skid write crosses the boundary. Its credit returns
+      // when the consumer accepts that entry, one registered-ready clock later.
+      In.move_register_to_boundary();
+      In.tx_callback([this](const Type& pkt, uint64_t) {
+        Out.send(pkt, delay_);
+      });
+    }
     endpoint->pop_callback([this]() {
       // Credit returns to the producing domain with one cycle of latency
       // (a registered ready), delivered by the producer's own thread.
       SimPlatform::instance().cross_call(this->domain(), [this]() {
-        ++credits_;
+        if (transport_input_) {
+          In.pop();
+        } else {
+          ++credits_;
+        }
         this->tick_wake();
       });
     });
@@ -92,6 +109,7 @@ private:
 
   uint32_t delay_;
   int32_t credits_;
+  bool transport_input_ = false;
 
   friend class SimObject<RegSlice<Type>>;
 };
