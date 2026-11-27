@@ -97,6 +97,7 @@ public:
 
 	// Returns true when all LSU blocks have no in-flight requests.
 	bool drained() const;
+	bool drained_on_edge() const;
 	// no block holds a request not yet sent; reads may await their response
 	bool sent() const;
 
@@ -208,6 +209,7 @@ private:
 	void arbitrate_results(uint32_t b);
 
 	uint64_t pending_loads_;
+	uint64_t sched_valid_cycle_ = UINT64_MAX;
 };
 
 }

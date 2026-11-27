@@ -757,6 +757,16 @@ tests:
   xlen: [64]
   args: -w4
   configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=4 -DVX_CFG_NUM_ALU_LANES=16 -DVX_CFG_NUM_FPU_LANES=32 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_NUM_GPR_BANKS=8 -DVX_CFG_DISPATCH_QUEUE_SIZE=8 -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_FETCH_INFLIGHT=4 -DVX_CFG_FFLAGS_ACCUM=1 -DVX_CFG_BRANCH_REG=0 -DVX_CFG_BAR_DRAIN_SCOPE=1 -DVX_CFG_FETCH_REQ_BUF=0 -DVX_CFG_FLUSH_REQ_BUF=0 -DVX_CFG_OPC_MERGE_BUF=0 -DVX_CFG_LANE_DISPATCH_GAPLESS=1
+# A core-wide barrier waits through the cycle the LSU scheduler releases its
+# last load tag. The cold first packet stays outstanding after the warm ones.
+- id: parity-bar-vis-lsu-drain
+  check: model_parity
+  tolerance: 0.002
+  via: blackbox
+  app: bar_vis
+  xlen: [64]
+  args: -b -g1 -w4 -r64 -n1048576
+  configs: -DVX_CFG_NUM_WARPS=8 -DVX_CFG_NUM_THREADS=32 -DVX_CFG_ISSUE_WIDTH=2 -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_NUM_ALU_LANES=16
 # A lone warp fetching ahead of its decode (VX_CFG_FETCH_INFLIGHT) with FP
 # flags accumulated (VX_CFG_FFLAGS_ACCUM): independent integer adds and
 # fmadds, a taken branch every four instructions, and shared-memory loads,

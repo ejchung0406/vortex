@@ -1590,7 +1590,8 @@ public:
   // The LSU drained, and under VM no request in the core's data or
   // instruction MMU: the RTL's barrier gate takes the socket MMUs' empty.
   bool lsu_core_drained() const {
-    if (!this->lsu_drained()) {
+    const auto* lsu = static_cast<const LsuUnit*>(func_units_.at((int)FUType::LSU).get());
+    if (!lsu->drained_on_edge()) {
       return false;
     }
   #ifdef VX_CFG_VM_ENABLE
