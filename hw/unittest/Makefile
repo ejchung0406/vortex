@@ -2,6 +2,7 @@ all:
 	$(MAKE) -C generic_queue
 	$(MAKE) -C mem_scheduler
 	$(MAKE) -C mmu_park
+	$(MAKE) -C tlb_walk
 	$(MAKE) -C cache
 	$(MAKE) -C core
 	$(MAKE) -C issue
@@ -38,6 +39,7 @@ run:
 	$(MAKE) -C generic_queue run
 	$(MAKE) -C mem_scheduler run
 	$(MAKE) -C mmu_park run
+	$(MAKE) -C tlb_walk run
 	$(MAKE) -C cache run
 	$(MAKE) -C core run
 	$(MAKE) -C issue run
@@ -200,6 +202,7 @@ clean:
 	$(MAKE) -C generic_queue clean
 	$(MAKE) -C mem_scheduler clean
 	$(MAKE) -C mmu_park clean
+	$(MAKE) -C tlb_walk clean
 	$(MAKE) -C cache clean
 	$(MAKE) -C core clean
 	$(MAKE) -C issue clean
