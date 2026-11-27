@@ -332,9 +332,8 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
 
     if (`VX_CFG_NOC_GROUP_SIZE != 0) begin : g_noc
 
-        // SM groups: a group's socket ports reach its switch over the SM link,
-        // and the switch reaches the L2 over the group's uplink lanes, through
-        // the byte gate on the side it counts.
+        // SM groups: a group's socket ports reach its switch, and the switch
+        // reaches the L2 over the group's uplink lanes.
         `STATIC_ASSERT(`IS_DIVISBLE(NUM_SOCKETS, `VX_CFG_NOC_GROUP_SIZE), ("NOC_GROUP_SIZE must divide the socket count"))
         `STATIC_ASSERT(L2_GFX_REQS == 0, ("SM groups do not carry the cluster-resident graphics caches"))
 
@@ -354,33 +353,10 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
                 .TAG_WIDTH (L2_TAG_WIDTH)
             ) lane_bus_if[NOC_LANES]();
 
-            VX_mem_bus_if #(
-                .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
-                .TAG_WIDTH (L2_TAG_WIDTH)
-            ) uplink_bus_if[NOC_LANES]();
+            wire switch_req_empty, switch_rsp_empty;
 
-            wire [NOC_GROUP_PORTS-1:0] sm_link_empty;
-            wire [NOC_LANES-1:0]       uplink_empty;
-            wire switch_req_empty, switch_rsp_empty, gate_empty;
-
-            for (genvar p = 0; p < NOC_GROUP_PORTS; ++p) begin : g_sm_link
-                if (`VX_CFG_NOC_SM_LATENCY != 0) begin : g_delay
-                    VX_mem_bus_delay #(
-                        .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
-                        .TAG_WIDTH (SOCKET_MEM_ARB_TAG_WIDTH),
-                        .LATENCY   (`VX_CFG_NOC_SM_LATENCY)
-                    ) link (
-                        .clk        (clk),
-                        .reset      (reset),
-                        .bus_in_if  (l2_link_bus_if[g * NOC_GROUP_PORTS + p]),
-                        .bus_out_if (sm_bus_if[p]),
-                        .empty      (sm_link_empty[p]),
-                        `UNUSED_PIN (req_empty)
-                    );
-                end else begin : g_wire
-                    `ASSIGN_VX_MEM_BUS_IF (sm_bus_if[p], l2_link_bus_if[g * NOC_GROUP_PORTS + p]);
-                    assign sm_link_empty[p] = 1'b1;
-                end
+            for (genvar p = 0; p < NOC_GROUP_PORTS; ++p) begin : g_sm_ports
+                `ASSIGN_VX_MEM_BUS_IF (sm_bus_if[p], l2_link_bus_if[g * NOC_GROUP_PORTS + p]);
             end
 
             wire [NOC_LANES-1:0]                          deliver_valid;
@@ -404,53 +380,15 @@ module VX_cluster import VX_gpu_pkg::*, VX_tlb_pkg::*;
                 .rsp_empty     (switch_rsp_empty)
             );
 
-            if (`VX_CFG_NOC_UPLINK_BYTES != 0) begin : g_gate
-                VX_mem_bus_gate #(
-                    .NUM_PORTS (NOC_LANES),
-                    .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
-                    .TAG_WIDTH (L2_TAG_WIDTH),
-                    .RATE      (`VX_CFG_NOC_UPLINK_BYTES),
-                    .COUNT_REQ (`VX_CFG_NOC_UPLINK_GATE_REQ)
-                ) uplink_gate (
-                    .clk        (clk),
-                    .reset      (reset),
-                    .bus_in_if  (lane_bus_if),
-                    .bus_out_if (uplink_bus_if),
-                    .empty      (gate_empty)
-                );
-            end else begin : g_no_gate
-                for (genvar l = 0; l < NOC_LANES; ++l) begin : g_lanes
-                    `ASSIGN_VX_MEM_BUS_IF (uplink_bus_if[l], lane_bus_if[l]);
-                end
-                assign gate_empty = 1'b1;
-            end
-
             for (genvar l = 0; l < NOC_LANES; ++l) begin : g_uplink
                 localparam LANE = g * NOC_LANES + l;
-                if (`VX_CFG_NOC_UPLINK_LATENCY != 0) begin : g_delay
-                    VX_mem_bus_delay #(
-                        .DATA_SIZE (`VX_CFG_L1_LINE_SIZE),
-                        .TAG_WIDTH (L2_TAG_WIDTH),
-                        .LATENCY   (`VX_CFG_NOC_UPLINK_LATENCY)
-                    ) link (
-                        .clk        (clk),
-                        .reset      (reset),
-                        .bus_in_if  (uplink_bus_if[l]),
-                        .bus_out_if (per_socket_mem_bus_if[LANE]),
-                        .empty      (uplink_empty[l]),
-                        `UNUSED_PIN (req_empty)
-                    );
-                end else begin : g_wire
-                    `ASSIGN_VX_MEM_BUS_IF (per_socket_mem_bus_if[LANE], uplink_bus_if[l]);
-                    assign uplink_empty[l] = 1'b1;
-                end
+                `ASSIGN_VX_MEM_BUS_IF (per_socket_mem_bus_if[LANE], lane_bus_if[l]);
                 assign deliver_valid[l] = per_socket_mem_bus_if[LANE].req_valid && per_socket_mem_bus_if[LANE].req_ready;
                 assign deliver_port[l]  = `UP(NOC_PORT_BITS)'(per_socket_mem_bus_if[LANE].req_data.tag);
                 assign deliver_token[l] = per_socket_mem_bus_if[LANE].req_data.attr[MEM_ATTR_FLUSH_OFFS];
             end
 
-            assign group_busy[g] = ~((& sm_link_empty) && (& uplink_empty)
-                                  && switch_req_empty && switch_rsp_empty && gate_empty);
+            assign group_busy[g] = ~(switch_req_empty && switch_rsp_empty);
         end
 
         assign l2_link_busy = (| group_busy);

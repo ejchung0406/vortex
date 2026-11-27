@@ -660,8 +660,8 @@ tests:
   shape:
     cores: 2
     l2cache: true
-# The same orders through SM groups: two groups of two cores, two lanes each
-# and a return gate. A port's requests take different lanes by address, and
+# The same orders through SM groups: two groups of two cores, two lanes
+# each. A port's requests take different lanes by address, and
 # its fence token must still reach the L2 behind every earlier one and ahead
 # of every later one; atomics and same-word order ride one lane.
 - id: fence-noc
@@ -671,7 +671,7 @@ tests:
   - simx
   - rtlsim
   app: fence
-  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2
   shape:
     cores: 4
     l2cache: true
@@ -683,7 +683,7 @@ tests:
   - rtlsim
   app: fence_mp
   args: -n64 -m1
-  configs: -DVX_CFG_EXT_A_ENABLE -DDBG_MEM_BANK0_WDELAY -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  configs: -DVX_CFG_EXT_A_ENABLE -DDBG_MEM_BANK0_WDELAY -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2
   shape:
     cores: 4
     l2cache: true
@@ -695,7 +695,7 @@ tests:
   - rtlsim
   app: fence_mp
   args: -n64 -m2
-  configs: -DVX_CFG_EXT_A_ENABLE -DDBG_MEM_BANK0_WDELAY -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  configs: -DVX_CFG_EXT_A_ENABLE -DDBG_MEM_BANK0_WDELAY -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2
   shape:
     cores: 4
     l2cache: true
@@ -707,7 +707,7 @@ tests:
   - rtlsim
   app: flush_coherence
   args: -n2048 -r16 -c
-  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2
   shape:
     cores: 4
     l2cache: true
@@ -718,7 +718,7 @@ tests:
   - simx
   - rtlsim
   app: amo
-  configs: -DVX_CFG_EXT_A_ENABLE -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  configs: -DVX_CFG_EXT_A_ENABLE -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2
   shape:
     cores: 4
     l2cache: true
@@ -729,7 +729,7 @@ tests:
   - simx
   - rtlsim
   app: war_order
-  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2
   shape:
     cores: 4
     l2cache: true
@@ -745,31 +745,16 @@ tests:
   configs: -DVX_CFG_DCACHE_NUM_BANKS=1 -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=1 -DVX_CFG_NOC_UPLINK_PORTS=2
   shape:
     l2cache: true
-# Atomics under a request-side gate far below what the groups ask for: an
-# atomic takes a line back and is charged as a load is.
-- id: amo-noc-gate-req
-  xlen: [64]
-  via: blackbox
-  drivers:
-  - simx
-  - rtlsim
-  app: amo
-  configs: -DVX_CFG_EXT_A_ENABLE -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=8 -DVX_CFG_NOC_UPLINK_GATE_REQ=1
-  shape:
-    cores: 4
-    l2cache: true
 # A fence inside a kernel, on a small dcache, with the L2's inputs stalled at
-# random (DBG_FLUSH_STALL) at the end of a 48-cycle lane: the port's stores
-# are still on one lane when its token arrives on another. Without the
-# switch's hold the token enters the L2 ahead of them and the switch's
-# assertion stops the run.
+# random (DBG_FLUSH_STALL): the switch's hold keeps the token behind the
+# port's stores on another lane, or the switch's assertion stops the run.
 - id: fence-noc-stress
   xlen: [64]
   via: blackbox
   drivers:
   - rtlsim
   app: fence
-  configs: -DDBG_FLUSH_STALL -DVX_CFG_EXT_A_ENABLE -DVX_CFG_DCACHE_SIZE=4096 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_SM_LATENCY=0 -DVX_CFG_NOC_UPLINK_LATENCY=48
+  configs: -DDBG_FLUSH_STALL -DVX_CFG_EXT_A_ENABLE -DVX_CFG_DCACHE_SIZE=4096 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2
   shape:
     cores: 4
     l2cache: true
@@ -783,7 +768,7 @@ tests:
   - rtlsim
   app: flush_coherence
   args: -n2048 -r8 -b16
-  configs: -DDBG_FLUSH_STALL -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=96
+  configs: -DDBG_FLUSH_STALL -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2
   shape:
     cores: 4
     l2cache: true

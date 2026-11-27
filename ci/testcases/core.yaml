@@ -231,8 +231,8 @@ tests:
     -DVX_CFG_DCACHE_DISABLE -DVX_CFG_L2_NUM_BANKS=1 -DVX_CFG_L2_NUM_WAYS=3
     -DVX_CFG_L2_SIZE=768 -DVX_CFG_L2_REPL_POLICY=2 -DVX_CFG_PLATFORM_MEMORY_LATENCY=100
   shape: {l2cache: true}
-# L2-hit latency through an SM group's switch in place of the private link: the
-# two halves of the link, the switch's cycle each way.
+# L2-hit latency through an SM group's switch in place of the private link:
+# the switch's cycle each way.
 - id: parity-chase-noc
   check: model_parity
   xlen: [64]
@@ -250,44 +250,24 @@ tests:
   args: -b262144 -w1 -i512
   configs: -DVX_CFG_VM_ENABLE -DVX_CFG_DCACHE_NUM_BANKS=1 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2
   shape: {cores: 4, l2cache: true}
-# Two groups of two cores streaming loads over two lanes each, with the
-# groups' return gate far below what they ask for (a line per 8 cycles): the
-# backlog fills the lanes' delay buffers and the L2's response queues.
-- id: parity-bwstream-noc-gate
-  check: model_parity
-  xlen: [64]
-  via: blackbox
-  app: bwstream
-  args: -n256 -u4 -b4
-  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=8
-  shape: {cores: 4, l2cache: true}
-# The same with the gate on the requests, which holds the excess in the group.
-- id: parity-bwstream-noc-gate-req
-  check: model_parity
-  xlen: [64]
-  via: blackbox
-  app: bwstream
-  args: -n256 -u4 -b4
-  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=8 -DVX_CFG_NOC_UPLINK_GATE_REQ=1
-  shape: {cores: 4, l2cache: true}
-# The arbitration and credit state persists through repeated launches.
+# The arbitration state persists through repeated launches.
 - id: parity-bwstream-noc-relaunch
   check: model_parity
   xlen: [64]
   via: blackbox
   app: bwstream
   args: -n128 -u4 -g5 -R3
-  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2 -DVX_CFG_NOC_UPLINK_BYTES=32
+  configs: -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=2 -DVX_CFG_NOC_UPLINK_PORTS=2
   shape: {cores: 4, l2cache: true}
 # Two groups of four cores with four memory ports each: 16 ports per switch,
-# which each lane arbitrates in two registered slices, and a gate with room.
+# which each lane arbitrates in two registered slices.
 - id: parity-bwstream-noc-slices
   check: model_parity
   xlen: [64]
   via: blackbox
   app: bwstream
   args: -n256 -u4 -b4
-  configs: -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=4 -DVX_CFG_NOC_UPLINK_PORTS=4 -DVX_CFG_NOC_UPLINK_BYTES=160
+  configs: -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_L2_LINK_LATENCY=20 -DVX_CFG_NOC_GROUP_SIZE=4 -DVX_CFG_NOC_UPLINK_PORTS=4
   shape: {cores: 8, l2cache: true}
 # Four ports per socket give 72 inputs and 128 default uplink lanes.
 - id: noc-recursive-fanin
@@ -297,15 +277,6 @@ tests:
   app: demo
   configs: -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_NOC_GROUP_SIZE=18
   shape: {cores: 18, l2cache: true}
-# A socket's issue limit below what its four ports ask for (a line per 4 cycles).
-- id: parity-bwstream-ingress
-  check: model_parity
-  xlen: [64]
-  via: blackbox
-  app: bwstream
-  args: -n256 -u4 -b4
-  configs: -DVX_CFG_DCACHE_NUM_BANKS=4 -DVX_CFG_PLATFORM_MEMORY_NUM_BANKS=4 -DVX_CFG_SM_INGRESS_BYTES=16
-  shape: {l2cache: true}
 # The same shape behind a 20-cycle link between each core and the dcache, each
 # way: both cores' lanes, their stores and the dcache back-pressure cross the
 # link's delay buffers, and each core's dcache flush waits for its lanes.
