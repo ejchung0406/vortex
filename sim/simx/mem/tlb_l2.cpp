@@ -42,6 +42,7 @@ void L2Tlb::on_reset() {
   pipe_ = {};
   rsp_q_ = {};
   rr_client_ = 0;
+  next_walk_ = 0;
 }
 
 bool L2Tlb::busy() const {
@@ -207,25 +208,26 @@ void L2Tlb::on_tick() {
     }
   }
 
-  // 4) Issue one pending walk request.
-  for (size_t i = 0; i < mshr_.size(); ++i) {
-    auto& e = mshr_[i];
-    if (!e.valid || e.issued) {
-      continue;
-    }
-    if (PtwReqOut.full()) {
+  // 4) Issue one pending walk, starting after the last admitted slot.
+  if (!PtwReqOut.full()) {
+    for (uint32_t n = 0; n < VX_CFG_L2_TLB_MSHR_SIZE; ++n) {
+      uint32_t i = (next_walk_ + n) % VX_CFG_L2_TLB_MSHR_SIZE;
+      auto& e = mshr_[i];
+      if (!e.valid || e.issued) {
+        continue;
+      }
+      TlbReq walk;
+      walk.vpn = e.vpn;
+      walk.access = e.access;
+      walk.amo = e.amo;
+      walk.client_id = 0;
+      walk.slot = i;
+      PtwReqOut.send(walk, 1);
+      DT(4, this->name() << " walk-req: " << walk);
+      e.issued = true;
+      next_walk_ = i + 1;
       break;
     }
-    TlbReq walk;
-    walk.vpn = e.vpn;
-    walk.access = e.access;
-    walk.amo = e.amo;
-    walk.client_id = 0;
-    walk.slot = (uint32_t)i;
-    PtwReqOut.send(walk, 1);
-    DT(4, this->name() << " walk-req: " << walk);
-    e.issued = true;
-    break;
   }
 
   // 5) Accept one new lookup (round-robin over clients).

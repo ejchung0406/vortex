@@ -266,6 +266,23 @@ module VX_tlb_l2 import VX_gpu_pkg::*, VX_tlb_pkg::*; #(
     `UNUSED_VAR (mshr_fault_vpn)
     `UNUSED_VAR (mshr_fault_access)
 
+    wire [MSHR_SIZE-1:0] issue_pending;
+    wire [SLOT_W-1:0]    issue_sel;
+    wire                 has_issue;
+    wire                 issue_accept;
+
+    VX_rr_arbiter #(
+        .NUM_REQS (MSHR_SIZE)
+    ) walk_arb (
+        .clk          (clk),
+        .reset        (reset || flush_clear),
+        .requests     (issue_pending),
+        .grant_index  (issue_sel),
+        `UNUSED_PIN   (grant_onehot),
+        .grant_valid  (has_issue),
+        .grant_ready  (issue_accept)
+    );
+
     VX_tlb_mshr #(
         .NUM_REQS  (1),
         .MSHR_SIZE (MSHR_SIZE),
@@ -286,6 +303,10 @@ module VX_tlb_l2 import VX_gpu_pkg::*, VX_tlb_pkg::*; #(
         .alloc_lane    (alloc_lane),
         .alloc_qdata   (t_id),
         .alloc_ready   (alloc_ready),
+        .issue_pending (issue_pending),
+        .issue_sel     (issue_sel),
+        .has_issue     (has_issue),
+        .issue_accept  (issue_accept),
         .issue_valid   (ptw_if.req_valid),
         .issue_slot    (ptw_req_slot),
         .issue_access  (ptw_req_acc),

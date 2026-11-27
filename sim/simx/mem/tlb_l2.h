@@ -91,6 +91,7 @@ private:
   uint32_t num_clients_;
   uint32_t num_sets_;
   uint32_t rr_client_ = 0;
+  uint32_t next_walk_ = 0;
 
   std::vector<std::vector<Entry>> sets_;   // [set][way], 4KB entries
   Tlb                             mega_;   // megapage side array
