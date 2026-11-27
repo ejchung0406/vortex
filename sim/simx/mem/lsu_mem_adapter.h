@@ -27,11 +27,7 @@ public:
   std::vector<SimChannel<MemReq>> ReqOut;
   std::vector<SimChannel<MemRsp>> RspIn;
 
-  // Past the bank, the cache holds up to three responses per port in its two
-  // output stages (one, then two entries), and each channel stands for both
-  // stages: with fewer slots the responses in flight fill it and the cache
-  // stalls a port that delivers a response every cycle.
-  static constexpr uint32_t kRspInSize = 3;
+  static constexpr uint32_t kRspInSize = DCACHE_CLIENT_RSP_SLOTS;
 
   LsuMemAdapter(
     const SimContext& ctx,
