@@ -61,6 +61,9 @@ Mmu::Mmu(const SimContext& ctx,
 Mmu::~Mmu() {}
 
 void Mmu::on_reset() {
+  for (auto& out : ReqOut) {
+    out.track_pop_cycle();
+  }
   for (auto& e : mshr_) {
     e = MshrEntry();
   }
@@ -124,8 +127,11 @@ bool Mmu::empty() const {
 }
 
 bool Mmu::drained() const {
+  // The outgoing request stays valid on the edge the cache takes it.
+  // The receiver may have popped it before the barrier samples the MMU.
   for (uint32_t p = 0; p < num_ports_; ++p) {
-    if (ReqIn.at(p).size() != 0 || ReqOut.at(p).size() != 0) {
+    const auto& out = ReqOut.at(p);
+    if (ReqIn.at(p).size() != 0 || out.size() != 0 || out.popped_this_cycle()) {
       return false;
     }
   }

@@ -144,6 +144,10 @@ public:
     pop_cb_ = std::move(callback);
   }
 
+  // Handshake visibility is only needed by the timing model.
+  void track_pop_cycle() {}
+  bool popped_this_cycle() const { return false; }
+
   virtual bool empty() const = 0;
   virtual bool full() const = 0;
   virtual uint32_t size() const = 0;

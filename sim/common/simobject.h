@@ -139,6 +139,11 @@ public:
     pop_cb_ = std::move(callback);
   }
 
+  // After binding, enable same-domain observation of a handshake through
+  // the end of its cycle, independently of the receiving queue's ready.
+  void track_pop_cycle();
+  bool popped_this_cycle() const;
+
   virtual bool empty() const = 0;
   virtual bool full() const = 0;
   virtual uint32_t size() const = 0;
@@ -174,6 +179,13 @@ protected:
   int64_t& resolve_inflight();
   bool boundary_stage_ = false;
   SmallFunction<void(), 48> pop_cb_;
+  bool track_pop_cycle_ = false;
+  uint64_t pop_cycle_ = ~uint64_t(0);
+  uint64_t pop_gen_ = 0;
+  uint32_t pop_count_ = 0;
+
+  uint32_t pop_count_this_cycle() const;
+  void record_pop();
 
   // Terminal endpoint of the bind chain (cached: bindings are immutable
   // after construction).
@@ -895,8 +907,10 @@ public:
       storage_ = RingQueue<Pkt>(other.storage_.capacity());
       pending_count_ = 0;
       reg_ready_ = other.reg_ready_;
-      freed_cycle_ = ~uint64_t(0);
-      freed_count_ = 0;
+      track_pop_cycle_ = false;
+      pop_cycle_ = ~uint64_t(0);
+      pop_gen_ = 0;
+      pop_count_ = 0;
       convert_fn_ = other.convert_fn_;
       tx_cb_ = other.tx_cb_;
     }
@@ -1119,19 +1133,11 @@ private:
   uint32_t queue_size() const { return storage_.size(); }
   const Pkt& queue_front() const { return storage_.front(); }
   uint32_t freed_now() const {
-    auto& platform = SimPlatform::instance();
-    return (reg_ready_ && freed_cycle_ == platform.cycles() && freed_gen_ == platform.reset_gen())
-         ? freed_count_ : 0;
+    return reg_ready_ ? this->pop_count_this_cycle() : 0;
   }
   void queue_pop() {
-    if (reg_ready_) {
-      auto& platform = SimPlatform::instance();
-      if (freed_cycle_ != platform.cycles() || freed_gen_ != platform.reset_gen()) {
-        freed_cycle_ = platform.cycles();
-        freed_gen_ = platform.reset_gen();
-        freed_count_ = 0;
-      }
-      ++freed_count_;
+    if (reg_ready_ || track_pop_cycle_) {
+      this->record_pop();
     }
     storage_.pop();
     --this->inflight();
@@ -1144,9 +1150,6 @@ private:
   RingQueue<Pkt> storage_;
   uint32_t pending_count_;
   bool reg_ready_ = false;
-  uint64_t freed_cycle_ = ~uint64_t(0);
-  uint64_t freed_gen_ = 0;
-  uint32_t freed_count_ = 0;
   SmallFunction<void(const Pkt&), 48> convert_fn_;
   TxCallback tx_cb_;
 
@@ -1657,6 +1660,36 @@ inline SimChannelBase::SimChannelBase(SimObjectBase* module)
     , sink_(nullptr)
     , source_(nullptr) {
   SimPlatform::instance().register_channel(this);
+}
+
+inline uint32_t SimChannelBase::pop_count_this_cycle() const {
+  auto& platform = SimPlatform::instance();
+  return (pop_cycle_ == platform.cycles() && pop_gen_ == platform.reset_gen())
+       ? pop_count_ : 0;
+}
+
+inline void SimChannelBase::record_pop() {
+  auto& platform = SimPlatform::instance();
+  const auto cycle = platform.cycles();
+  const auto generation = platform.reset_gen();
+  if (pop_cycle_ != cycle || pop_gen_ != generation) {
+    pop_cycle_ = cycle;
+    pop_gen_ = generation;
+    pop_count_ = 0;
+  }
+  ++pop_count_;
+}
+
+inline void SimChannelBase::track_pop_cycle() {
+  auto* end = this->endpoint();
+  assert(!SimPlatform::instance().mt_cross_access(end->module_));
+  end->track_pop_cycle_ = true;
+}
+
+inline bool SimChannelBase::popped_this_cycle() const {
+  auto* end = this->endpoint();
+  assert(!SimPlatform::instance().mt_cross_access(end->module_));
+  return end->pop_count_this_cycle() != 0;
 }
 
 inline int64_t& SimChannelBase::resolve_inflight() {
