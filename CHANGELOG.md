@@ -200,6 +200,13 @@ follows the version pins recorded in [VERSION](VERSION) (`VORTEX_VERSION`,
 
 ### Fixed
 
+- **SimX cache core-response network holds its responses.** A cache with a registered core-response network sent each
+  response with the network's whole delay into the port's consumer, so the network had no slots of its own and a port took
+  at most two responses per network delay plus one cycle: with the 16-bank L2 bound directly to the socket (no link delay),
+  a third of a line per cycle per port. Each level is now a stage of its own, as in the RTL's omega network: a one-entry
+  pipe register per level behind the non-cacheable bypass layer, or a two-entry buffer per level without the layer; only the
+  last register sends into the port, a cycle on. The delay is unchanged. New parity cases `parity-ldstream-l2rsp` and
+  `parity-ldstream-l2rsp-link`. [sim/simx/mem/cache.cpp](sim/simx/mem/cache.cpp).
 - **Fetch-ahead instruction-buffer credits.** With `VX_CFG_FETCH_INFLIGHT > 1`, RTL and SimX reserve an instruction-buffer
   slot for each fetch pick and release it when the instruction leaves the buffer or decode drops the response. This prevents
   a response for a full buffer from holding up other warps in the same frontend slice.
