@@ -3593,6 +3593,26 @@ public:
         stage.set_registered_ready(true);
       }
       last_rsp_nc_.resize(config_.num_inputs);
+    } else if (config_.core_out_buf && port_arb_->merge_bits() == 0) {
+      // The registered network's levels hold the responses crossing it, as
+      // the RTL's omega switches do (VX_cache.sv core_rsp_xbar): a one-entry
+      // pipe register per level behind the bypass layer (VX_cache_wrap passes
+      // CORE_OUT_BUF=1 to the cache), whose arbiter then registers the
+      // response into its output buffer (VX_cache_bypass RSP_OUT_BUF=3); a
+      // two-entry buffer with a registered ready per level without the layer.
+      // The last register's slots are the port's, which it sends to a cycle
+      // on, so the levels before it are stages here.
+      const uint32_t level_slots = config_.nc_enable ? 1 : 2;
+      if (config_.nc_enable) {
+        ++core_rsp_delay_;
+      }
+      cached_rsp_pipe_.resize(core_rsp_delay_ - 1, std::vector<SimChannel<MemRsp>>(
+          config_.num_inputs, SimChannel<MemRsp>(simobject, level_slots)));
+      for (auto& level : cached_rsp_pipe_) {
+        for (auto& stage : level) {
+          stage.set_registered_ready(level_slots == 2);
+        }
+      }
     } else if (config_.nc_enable) {
       ++core_rsp_delay_;
     }
@@ -3648,6 +3668,8 @@ public:
 
     if (params_.slice_map) {
       this->processBoundCoreResponses();
+    } else if (!cached_rsp_pipe_.empty()) {
+      this->processCachedResponseNetwork();
     }
 
     uint64_t nc_rsp_waiting = 0;
@@ -3932,11 +3954,29 @@ public:
 private:
 
   SimChannel<MemRsp>& cached_response_target(uint32_t req_id) {
-    return params_.slice_map ? cached_rsp_pipe_.front().at(req_id) : simobject_->core_rsp_out.at(req_id);
+    return cached_rsp_pipe_.empty() ? simobject_->core_rsp_out.at(req_id) : cached_rsp_pipe_.front().at(req_id);
   }
 
   bool sendCachedResponse(uint32_t req_id, const MemRsp& rsp) {
-    return this->cached_response_target(req_id).try_send(rsp, params_.slice_map ? 1 : core_rsp_delay_);
+    return this->cached_response_target(req_id).try_send(rsp, cached_rsp_pipe_.empty() ? core_rsp_delay_ : 1);
+  }
+
+  // A response advances one level of the registered network per cycle and
+  // leaves the last one for the core port.
+  void processCachedResponseNetwork() {
+    for (uint32_t i = 0; i < config_.num_inputs; ++i) {
+      auto& last = cached_rsp_pipe_.back().at(i);
+      if (!last.empty() && simobject_->core_rsp_out.at(i).try_send(last.peek(), 1)) {
+        last.pop();
+      }
+      for (auto stage = cached_rsp_pipe_.size() - 1; stage != 0; --stage) {
+        auto& prev = cached_rsp_pipe_.at(stage - 1).at(i);
+        auto& next = cached_rsp_pipe_.at(stage).at(i);
+        if (!prev.empty() && next.try_send(prev.peek(), 1)) {
+          prev.pop();
+        }
+      }
+    }
   }
 
   void processBoundCoreResponses() {

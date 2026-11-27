@@ -219,6 +219,32 @@ tests:
   args: -b262144 -w1 -i512
   configs: -DVX_CFG_L2_LINK_LATENCY=20
   shape: {l2cache: true}
+# A load stream whose lines come back through the L2's 16-bank response
+# network faster than a third of a line per cycle, with no link to the L2 and
+# behind a 94-cycle one: each level of the network holds the responses
+# crossing it, so the rate does not depend on the slots past the network.
+- id: parity-ldstream-l2rsp
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: ldstream
+  args: -t512 -b8 -u8 -m2 -a -l
+  configs: >-
+    -DVX_CFG_L2_NUM_BANKS=16 -DVX_CFG_DCACHE_MSHR_SIZE=128 -DVX_CFG_L2_MSHR_SIZE=64
+    -DVX_CFG_LSU_PENDING_LIMIT=256 -DVX_CFG_LSU_PENDING_SIZE=256
+    -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_DCACHE_WORD_SIZE=64
+  shape: {warps: 16, threads: 32, l2cache: true}
+- id: parity-ldstream-l2rsp-link
+  check: model_parity
+  xlen: [64]
+  via: blackbox
+  app: ldstream
+  args: -t512 -b8 -u8 -m2 -a -l
+  configs: >-
+    -DVX_CFG_L2_NUM_BANKS=16 -DVX_CFG_DCACHE_MSHR_SIZE=128 -DVX_CFG_L2_MSHR_SIZE=64
+    -DVX_CFG_LSU_PENDING_LIMIT=256 -DVX_CFG_LSU_PENDING_SIZE=256
+    -DVX_CFG_NUM_LSU_LANES=8 -DVX_CFG_DCACHE_WORD_SIZE=64 -DVX_CFG_L2_LINK_LATENCY=94
+  shape: {warps: 16, threads: 32, l2cache: true}
 # Two dependent lines per set fit in a three-way L2. They must stay resident
 # even when fill forwarding bypasses the replay lookup.
 - id: parity-chase-l2-plru
