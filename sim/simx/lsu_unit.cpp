@@ -228,11 +228,21 @@ bool LsuUnit::drained() const {
 	return true;
 }
 
+bool LsuUnit::drained_on_edge() const {
+#ifndef SIMX_FUNCTIONAL
+	if (sched_valid_cycle_ == SimPlatform::instance().cycles()) {
+		return false;
+	}
+#endif
+	return this->drained();
+}
+
 void LsuUnit::on_reset() {
 	for (auto& state : states_) {
 		state.reset();
 	}
 	pending_loads_ = 0;
+	sched_valid_cycle_ = UINT64_MAX;
 }
 
 void LsuUnit::compute_addrs(uint32_t b, instr_trace_t* trace) {
@@ -863,7 +873,15 @@ void LsuUnit::on_tick() {
 		// full flags: a slot freed this cycle takes a new request next cycle.
 		auto& state = states_.at(b);
 		bool queue_room = !state.req_queue.full();
-		uint32_t reads_held = state.pending_reqs.size() + state.staged_reads;
+		auto pending_reads = state.pending_reqs.size();
+		uint32_t reads_held = pending_reads + state.staged_reads;
+#ifndef SIMX_FUNCTIONAL
+		// The request queue and pending tags stay valid on their consuming
+		// edge. The SFU samples them after this tick may have emptied them.
+		if (!state.req_queue.empty() || pending_reads != 0) {
+			sched_valid_cycle_ = SimPlatform::instance().cycles();
+		}
+#endif
 		this->arbitrate_results(b);
 		this->process_response_step(b);
 		this->process_request_step(b);
