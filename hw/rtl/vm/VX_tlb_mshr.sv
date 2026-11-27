@@ -65,6 +65,12 @@ module VX_tlb_mshr import VX_tlb_pkg::*; #(
     input  wire [QDATA_W-1:0]               alloc_qdata,
     output wire                             alloc_ready,
 
+    // Slot arbitration before the registered issue port.
+    output wire [MSHR_SIZE-1:0]       issue_pending,
+    input  wire [`CLOG2(MSHR_SIZE)-1:0] issue_sel,
+    input  wire                       has_issue,
+    output wire                       issue_accept,
+
     // Walk issue.
     output wire                       issue_valid,
     output wire [`UP(ID_WIDTH)-1:0]   issue_slot,
@@ -233,21 +239,9 @@ module VX_tlb_mshr import VX_tlb_pkg::*; #(
     // ---------------------------------------------------------------------
     // Issue
     // ---------------------------------------------------------------------
-    wire [MSHR_SIZE-1:0] issue_pend = valid_r & ~issued_r;
-    wire             has_issue;
-    wire [IDX_W-1:0] issue_sel;
-    VX_priority_encoder #(
-        .N (MSHR_SIZE)
-    ) issue_enc (
-        .data_in    (issue_pend),
-        `UNUSED_PIN (onehot_out),
-        .index_out  (issue_sel),
-        .valid_out  (has_issue)
-    );
+    assign issue_pending = valid_r & ~issued_r;
 
-    // Register the outgoing issue interface; the entry selection above is combinational.
     localparam ISSUE_W = `UP(ID_WIDTH) + $bits(tlb_access_e) + 1 + TLB_VPN_WIDTH;
-    wire               issue_accept;
     wire [ISSUE_W-1:0] issue_din = {`UP(ID_WIDTH)'(issue_sel), access_r[issue_sel], amo_r[issue_sel], vpn_r[issue_sel]};
     wire [ISSUE_W-1:0] issue_dout;
     VX_pipe_buffer #(

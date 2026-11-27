@@ -136,6 +136,19 @@ module VX_tlb_l1 import VX_gpu_pkg::*, VX_tlb_pkg::*; #(
     assign kill_valid     = drain_valid && drain_fault;
     wire drain_ready = drain_fault ? kill_ready : replay_ready;
 
+    wire [MSHR_SIZE-1:0]         issue_pending;
+    wire [`CLOG2(MSHR_SIZE)-1:0] issue_sel;
+    wire                         has_issue;
+
+    VX_priority_encoder #(
+        .N (MSHR_SIZE)
+    ) issue_enc (
+        .data_in    (issue_pending),
+        `UNUSED_PIN (onehot_out),
+        .index_out  (issue_sel),
+        .valid_out  (has_issue)
+    );
+
     VX_tlb_mshr #(
         .NUM_REQS  (NUM_REQS),
         .MSHR_SIZE (MSHR_SIZE),
@@ -157,6 +170,10 @@ module VX_tlb_l1 import VX_gpu_pkg::*, VX_tlb_pkg::*; #(
         .alloc_lane    (park_lane),
         .alloc_qdata   (park_payload),
         .alloc_ready   (park_ready),
+        .issue_pending (issue_pending),
+        .issue_sel     (issue_sel),
+        .has_issue     (has_issue),
+        `UNUSED_PIN    (issue_accept),
         .issue_valid   (tlb_bus_if.req_valid),
         .issue_slot    (tlb_req_id),
         .issue_access  (tlb_req_access),
