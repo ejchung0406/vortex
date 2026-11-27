@@ -1944,6 +1944,12 @@ public:
       ((num_inputs > 2) || (num_outputs > 2)) ? 1 : 0)
   {}
 
+  // A combinational peer select precedes this response demux on a shared port.
+  void bind_response_peer(SimChannel<Rsp>& peer) {
+    response_peer_ = std::make_unique<SimChannel<Rsp>>(this);
+    response_peer_->bind(&peer);
+  }
+
 protected:
   void on_reset() {
     //--
@@ -1953,6 +1959,7 @@ protected:
   typedef TxArbiter<Req> ReqArb;
 
   typename ReqArb::Ptr arbiter_;
+  std::unique_ptr<SimChannel<Rsp>> response_peer_;
   uint32_t rsp_delay_;
   uint32_t lg2_num_reqs_;
 
@@ -1976,14 +1983,17 @@ void TxRxArbiter<Req, Rsp>::on_tick() {
     auto& rsp_in = RspIn.at(o);
     if (!rsp_in.empty()) {
       auto& rsp = rsp_in.peek();
-      uint32_t r = 0;
       Rsp out_rsp(rsp);
-      if (lg2_num_reqs_ != 0) {
-        r = rsp.tag & (R-1);
-        out_rsp.tag = rsp.tag >> lg2_num_reqs_;
+      const bool peer = response_peer_ && (out_rsp.tag & 1);
+      if (response_peer_) {
+        out_rsp.tag >>= 1;
       }
-      uint32_t i = o * R + r;
-      if (RspOut.at(i).try_send(out_rsp, rsp_delay_)) {
+      uint32_t i = o * R + (out_rsp.tag & (R - 1));
+      if (!peer) {
+        out_rsp.tag >>= lg2_num_reqs_;
+      }
+      auto& out = peer ? *response_peer_ : RspOut.at(i);
+      if (out.try_send(out_rsp, peer ? 0 : rsp_delay_)) {
         DT(4, this->name() << " rsp" << o << "_" << i << ": " << out_rsp);
         rsp_in.pop();
       }

@@ -19,6 +19,20 @@ tests:
     via: script
     run: "make -C tests/unittest/cache_nc_rsp run"
     touches: [sim/simx/mem/cache.cpp, tests/unittest/cache_simx.mk, tests/unittest/cache_nc_rsp]
+  - id: cache-queue-boundaries
+    via: script
+    run: "make -C tests/unittest/cache_queues run"
+    touches:
+      - sim/common/simobject.h
+      - sim/simx/mem/cache.cpp
+      - sim/simx/mem/cache.h
+      - sim/simx/mem/cache_cluster.cpp
+      - sim/simx/mem/noc.h
+      - sim/simx/regslice.h
+      - sim/simx/socket.cpp
+      - sim/simx/types.h
+      - tests/unittest/cache_simx.mk
+      - tests/unittest/cache_queues
   - id: dcache-client-slots
     via: script
     run: "make -C tests/unittest/dcache_client_slots run"

@@ -53,12 +53,21 @@ CacheCluster::CacheCluster(const SimContext& ctx,
 	}
 
 	// Arbitrate outgoing memory interfaces
-	std::vector<MemArbiter::Ptr> mem_arbs(cache_config.mem_ports);
+	mem_arbs_.resize(cache_config.mem_ports);
 	for (uint32_t i = 0; i < cache_config.mem_ports; ++i) {
 		snprintf(sname, 100, "%s-mem-arb%d", name, i);
-		mem_arbs.at(i) = MemArbiter::Create(sname, ArbiterType::RoundRobin, num_units, 1);
-		mem_arbs.at(i)->ReqOut.at(0).bind(&this->mem_req_out.at(i));
-		this->mem_rsp_in.at(i).bind(&mem_arbs.at(i)->RspIn.at(0));
+		auto& arb = mem_arbs_.at(i);
+		arb = MemArbiter::Create(sname, ArbiterType::RoundRobin, num_units, 1,
+		                         unsigned(num_units > 2), unsigned(num_units > 1));
+		arb->ReqOut.at(0).bind(&this->mem_req_out.at(i));
+		this->mem_rsp_in.at(i).bind(&arb->RspIn.at(0));
+		if (num_units > 1) {
+			if (cache_config.mem_rsp_slice && i != 0) {
+				arb->RspIn[0].retain_boundary_source();
+			} else {
+				arb->RspIn[0].set_registered_ready(true);
+			}
+		}
 	}
 
 	// Connect caches
@@ -72,13 +81,29 @@ CacheCluster::CacheCluster(const SimContext& ctx,
 		}
 
 		for (uint32_t j = 0; j < cache_config.mem_ports; ++j) {
-			caches_.at(i)->mem_req_out.at(j).bind(&mem_arbs.at(j)->ReqIn.at(i));
-			mem_arbs.at(j)->RspOut.at(i).bind(&caches_.at(i)->mem_rsp_in.at(j));
+			caches_.at(i)->mem_req_out.at(j).bind(&mem_arbs_.at(j)->ReqIn.at(i));
+			auto& out = mem_arbs_.at(j)->RspOut.at(i);
+			out.bind(&caches_.at(i)->mem_rsp_in.at(j));
+			if (num_units > 1) {
+				auto* sink = &out;
+				while (sink->sink()) {
+					sink = static_cast<SimChannel<MemRsp>*>(sink->sink());
+				}
+				sink->set_registered_ready(true);
+			}
 		}
 	}
 }
 
 CacheCluster::~CacheCluster() {}
+
+bool CacheCluster::bind_response_peer(unsigned port, SimChannel<MemRsp>& peer) {
+  if (caches_.size() == 1) {
+    return caches_.front()->bind_response_peer(port, peer);
+  }
+  mem_arbs_.at(port)->bind_response_peer(peer);
+  return true;
+}
 
 Cache::PerfStats CacheCluster::perf_stats() const {
 	Cache::PerfStats perf;

@@ -138,6 +138,11 @@ public:
   // crosses an execution-domain boundary; only boundary stages call this.
   void mark_boundary() { boundary_stage_ = true; }
 
+  // The boundary transports an offer that occupies its source until accepted.
+  void retain_boundary_source() { retain_boundary_source_ = true; }
+  bool retains_boundary_source() const { return retain_boundary_source_; }
+  bool register_at_boundary() const { return register_at_boundary_; }
+
   // Invoked on every endpoint pop; a boundary stage installs this on its
   // downstream endpoint to return a flow-control credit.
   void pop_callback(SmallFunction<void(), 48>&& callback) {
@@ -182,6 +187,8 @@ protected:
   }
   int64_t& resolve_inflight();
   bool boundary_stage_ = false;
+  bool retain_boundary_source_ = false;
+  bool register_at_boundary_ = false;
   SmallFunction<void(), 48> pop_cb_;
 
   // Terminal endpoint of the bind chain (cached: bindings are immutable
@@ -914,9 +921,16 @@ public:
   // Ready timing is a timing-model property; accepted for API compatibility
   // and ignored.
   void set_registered_ready(bool /*enable*/) {}
+  void set_capacity(uint32_t /*slots*/) {}
 
   // Back-pressure is disabled: producers never stall.
   bool full() const override { return false; }
+
+  void move_register_to_boundary() {
+    this->assert_endpoint();
+    register_at_boundary_ = true;
+    set_registered_ready(false);
+  }
 
   void send(const Pkt& pkt, uint64_t delay = 1) {
     // Unit latency: any registered delay delivers next cycle; delay 0 keeps
@@ -937,6 +951,9 @@ public:
     if (platform.audit_enabled()) {
       platform.audit_send(this, delay);
     }
+    if (delay && this->endpoint()->register_at_boundary()) {
+      --delay;
+    }
     this->reserve();
     platform.schedule(this, pkt, delay);
   }
@@ -953,6 +970,9 @@ public:
     }
     if (platform.audit_enabled()) {
       platform.audit_send(this, delay);
+    }
+    if (delay && this->endpoint()->register_at_boundary()) {
+      --delay;
     }
     this->reserve();
     platform.schedule(this, std::move(pkt), delay);

@@ -57,7 +57,7 @@ public:
     char sname[100];
 
     snprintf(sname, 100, "%s-icache", name.c_str());
-    icaches_ = CacheCluster::Create(sname, cores_per_socket, VX_CFG_NUM_ICACHES, Cache::Config{
+    Cache::Config icache_config{
       !VX_CFG_ICACHE_ENABLED,
       VX_CFG_ICACHE_SIZE,            // size
       log2ceil(VX_CFG_L1_LINE_SIZE), // L
@@ -81,15 +81,18 @@ public:
       true,                   // core-response register
       (VX_CFG_ICACHE_READ_MERGE != 0) ? ICACHE_NUM_REQS : 0, // read_merge: the core's fetch slices
       false,                  // write_around
-      VX_CFG_ICACHE_MRSQ_SIZE != 0, // memory-response queue
+      VX_CFG_ICACHE_MRSQ_SIZE, // memory-response queue
       true,                   // the socket's registered memory port
       true,                   // next_is_poc
       true,                   // merge_line: slices fetch different words of a line
-    });
+    };
+    icache_config.crsq_size = VX_CFG_ICACHE_CRSQ_SIZE;
+    icache_config.mreq_size = VX_CFG_ICACHE_MREQ_SIZE;
+    icaches_ = CacheCluster::Create(sname, cores_per_socket, VX_CFG_NUM_ICACHES, icache_config);
 
     snprintf(sname, 100, "%s-dcache", name.c_str());
     // L1 dcache is the LLC iff neither L2 nor L3 is enabled.
-    dcaches_ = CacheCluster::Create(sname, cores_per_socket, VX_CFG_NUM_DCACHES, Cache::Config{
+    Cache::Config dcache_config{
       !VX_CFG_DCACHE_ENABLED,
       VX_CFG_DCACHE_SIZE,            // size
       log2ceil(VX_CFG_DCACHE_LINE_SIZE), // L
@@ -113,15 +116,16 @@ public:
       true,                          // core-response register
       (VX_CFG_DCACHE_READ_MERGE != 0) ? DCACHE_CHANNELS : 0, // read_merge
       false,                         // write_around
-      VX_CFG_DCACHE_MRSQ_SIZE != 0,  // memory-response queue
+      VX_CFG_DCACHE_MRSQ_SIZE,  // memory-response queue
       true,                          // the socket's registered memory port
       DCACHE_NEXT_IS_POC,            // next_is_poc
       false,                         // line merging
       false,                         // core-request skid
       VX_CFG_DCACHE_SET_HASH != 0,   // set_hash
       VX_CFG_DCACHE_CRSQ_SIZE,       // crsq_size
-      VX_CFG_DCACHE_FWD_HOLD != 0,   // fwd_hold
-    });
+    };
+    dcache_config.mreq_size = VX_CFG_DCACHE_MREQ_SIZE;
+    dcaches_ = CacheCluster::Create(sname, cores_per_socket, VX_CFG_NUM_DCACHES, dcache_config);
 
 #ifdef VX_CFG_EXT_TEX_ENABLE
     // ── Socket-resident TEX engine + tcache ─────────────────────────────
@@ -151,8 +155,10 @@ public:
       uint8_t(VX_CFG_L2_REPL_POLICY),     // replacement policy (use L2 policy as default)
       false,                       // is_llc (TCACHE is auxiliary, not LLC)
     };
-    tcache_config.mem_rsp_queue = (VX_CFG_TCACHE_MRSQ_SIZE != 0);
+    tcache_config.mrsq_size = VX_CFG_TCACHE_MRSQ_SIZE;
+    tcache_config.crsq_size = VX_CFG_TCACHE_CRSQ_SIZE;
     tcache_config.mem_rsp_slice = true;
+    tcache_config.mreq_size = VX_CFG_TCACHE_MREQ_SIZE;
     auto tcache = Cache::Create(sname, tcache_config);
     tcache_ = tcache;
 
@@ -194,8 +200,10 @@ public:
       uint8_t(VX_CFG_L2_REPL_POLICY),     // replacement policy
       false,                              // is_llc
     };
-    rtcache_config.mem_rsp_queue = (VX_CFG_RTCACHE_MRSQ_SIZE != 0);
+    rtcache_config.mrsq_size = VX_CFG_RTCACHE_MRSQ_SIZE;
+    rtcache_config.crsq_size = VX_CFG_RTCACHE_CRSQ_SIZE;
     rtcache_config.mem_rsp_slice = true;
+    rtcache_config.mreq_size = VX_CFG_RTCACHE_MREQ_SIZE;
     auto rtcache = Cache::Create(sname, rtcache_config);
     rtcache_ = rtcache;
 
@@ -247,6 +255,11 @@ public:
       req_src.bind(&breq->In);
       breq->Out.bind(&simobject_->mem_req_out.at(port));
       simobject_->mem_rsp_in.at(port).bind(&brsp->In);
+      if (port == 0) {
+        // The socket demux registers its outputs. Its common input is the
+        // upstream producer's skid, transported across the domain boundary.
+        rsp_dst.retain_boundary_source();
+      }
       brsp->Out.bind(&rsp_dst);
     };
 
@@ -304,24 +317,28 @@ public:
         snprintf(sname, 100, "%s-breq%d", name.c_str(), i);
         auto breq = MemReqMerge::Create(sname, 2, 1);
         snprintf(sname, 100, "%s-brsp%d", name.c_str(), i);
-        MemRspSplit::Ptr brsp;
-        {
-          SimPlatform::DomainScope uncore_scope(0u);
-          brsp = MemRspSplit::Create(sname, 2, 1);
-        }
         dcaches_->mem_req_out.at(i).bind(&breq->In.at(0));
-        brsp->Out.at(0).bind(&dcaches_->mem_rsp_in.at(i));
       #ifdef SIMX_SOCKET_UNIT_MMU
         dxa_core_->gmem_req_out.at(i).bind(&unit_mmu_->ReqIn.at(UMMU_DXA_IDX + i));
         unit_mmu_->RspOut.at(UMMU_DXA_IDX + i).bind(&dxa_core_->gmem_rsp_in.at(i));
         unit_mmu_->ReqOut.at(UMMU_DXA_IDX + i).bind(&breq->In.at(1));
-        brsp->Out.at(1).bind(&unit_mmu_->RspIn.at(UMMU_DXA_IDX + i));
+        auto& dxa_rsp = unit_mmu_->RspIn.at(UMMU_DXA_IDX + i);
       #else
         dxa_core_->gmem_req_out.at(i).bind(&breq->In.at(1));
-        brsp->Out.at(1).bind(&dxa_core_->gmem_rsp_in.at(i));
+        auto& dxa_rsp = dxa_core_->gmem_rsp_in.at(i);
       #endif
         breq->Out.bind(&simobject_->mem_req_out.at(i));
-        simobject_->mem_rsp_in.at(i).bind(&brsp->In);
+        SimPlatform::DomainScope uncore_scope(0u);
+        if (dcaches_->bind_response_peer(i, dxa_rsp)) {
+          auto brsp = MemRspSlice::Create(sname, 1);
+          simobject_->mem_rsp_in.at(i).bind(&brsp->In);
+          brsp->Out.bind(&dcaches_->mem_rsp_in.at(i));
+        } else {
+          auto brsp = MemRspSplit::Create(sname, 2, 1);
+          simobject_->mem_rsp_in.at(i).bind(&brsp->In);
+          brsp->Out.at(0).bind(&dcaches_->mem_rsp_in.at(i));
+          brsp->Out.at(1).bind(&dxa_rsp);
+        }
         continue;
       }
     #endif

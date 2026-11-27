@@ -123,7 +123,7 @@ ProcessorImpl::ProcessorImpl()
   // transparent bypass arbiter and the L2 (or L1) is the LLC.
   {
     SimPlatform::LaunchKeepScope keep(CP_ON_L2 != 0 || CP_ON_L3 != 0);
-    l3cache_ = Cache::Create("l3cache", Cache::Config{
+    Cache::Config l3_config{
       !VX_CFG_L3_ENABLED,
       VX_CFG_L3_SIZE,            // size
       log2ceil(VX_CFG_L3_LINE_SIZE),   // L
@@ -147,9 +147,11 @@ ProcessorImpl::ProcessorImpl()
       true,                            // core-response register (behind the bypass layer)
       0,                               // read_merge
       CP_ON_L3 != 0,                   // write_around
-      VX_CFG_L3_MRSQ_SIZE != 0,        // memory-response queue
-      }
-    );
+      VX_CFG_L3_MRSQ_SIZE,        // memory-response queue
+    };
+    l3_config.crsq_size = VX_CFG_L3_CRSQ_SIZE;
+    l3_config.mreq_size = VX_CFG_L3_MREQ_SIZE;
+    l3cache_ = Cache::Create("l3cache", l3_config);
   }
 
 #if VX_CFG_EXT_A_ENABLED
