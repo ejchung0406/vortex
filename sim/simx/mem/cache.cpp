@@ -1071,6 +1071,7 @@ protected:
       this->invalidate();
     }
     mshr_.reset();
+    prefer_lazy_ = false;
     fwd_active_ = false;
     fwd_set_    = 0;
     fwd_tag_    = 0;
@@ -1225,7 +1226,8 @@ private:
     bool fill_held = false;
     uint32_t held_set_id = 0;
     uint64_t held_addr_tag = 0;
-    if (!this->mem_rsp_in.empty() && !fwd_active_) {
+    const bool lazy_turn = prefer_lazy_ && !lazy_q_->empty();
+    if (!this->mem_rsp_in.empty() && !lazy_turn && !fwd_active_) {
       auto &mem_rsp = this->mem_rsp_in.peek();
 #if VX_CFG_EXT_A_ENABLED
       // Non-LLC AMO passthrough response: forward straight to core
@@ -1247,6 +1249,7 @@ private:
         DT(3, this->name() << " amo-passthru-rsp: " << core_rsp);
         e.valid = false;
         this->mem_rsp_in.pop();
+        prefer_lazy_ = true;
         --pending_fill_reqs_;
         return;
       }
@@ -1290,13 +1293,12 @@ private:
         }
         DT(3, this->name() << " fill-rsp: " << mem_rsp);
         this->mem_rsp_in.pop();
+        prefer_lazy_ = true;
         --pending_fill_reqs_;
         return;
       }
     } else if (!lazy_q_->empty() && !fwd_active_) {
-      // A data-less fill through the same path, below memory fills in
-      // priority: the allocation of a write-miss root, or the refetch of a
-      // sector every store has covered.
+      // A write-miss root or a fully written refetch takes a data-less fill.
       uint32_t mshr_id = lazy_q_->peek();
       const auto &root_peek = mshr_.peek(mshr_id);
       const uint32_t set_id    = root_peek.set_id;
@@ -1328,6 +1330,7 @@ private:
         }
         DT(3, this->name() << " lazy-fill: " << bank_req);
         lazy_q_->pop();
+        prefer_lazy_ = false;
         return;
       }
     }
@@ -2540,6 +2543,7 @@ private:
 
   TFifo<bank_req_t>::Ptr pipe_req_;
   TFifo<uint32_t>::Ptr   lazy_q_;   // roots awaiting a data-less fill: write misses and written refetches
+  bool prefer_lazy_;
 
   Cache::PerfStats perf_stats_;
 

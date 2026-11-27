@@ -352,7 +352,7 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
 
     // ========================================================================
     // Input arbitration
-    //   priority: init > replay > fill(mem_rsp) > flush > core-req
+    //   priority: init > replay > fill > flush > core-req
     // replay maximizes utilization (guaranteed hit); fill precedes flush/creq to
     // avoid deadlock on a miss; flush precedes creq for consistency.
     // ========================================================================
@@ -381,7 +381,7 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
                          && (replay_wsel == st0.req.word_idx);
 
     // Lazy fetch: a write-miss root's fill loops back (lazyq) as a data-less
-    // fill below memory fills. A load/AMO head of a partial chain parks and
+    // fill. A load/AMO head of a partial chain parks and
     // refetches. A refetch merges into its resident sector one stage late, at
     // stC; one whose sector was evicted installs nothing and retries as a
     // plain fill (nothing can dirty an absent sector, so its data is current).
@@ -389,7 +389,9 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
     // loops back as a data-less refetch instead of going to memory.
     wire lazyq_valid = ~lazyq_empty;
     wire [MSHR_ADDR_WIDTH-1:0] lazyq_id;
-    wire lazy_sel    = ~mem_rsp_valid && lazyq_valid;
+    wire prefer_lazy;
+    wire lazy_turn = lazyq_valid && prefer_lazy;
+    wire lazy_sel  = lazy_turn || (lazyq_valid && ~mem_rsp_valid);
     wire chain_partial, chain_retry;
     // Lazy-fetch request flavors, folded to constants when the feature is off.
     lazy_req_t lz_sel, lz_st0, lz_st1, lz_stc;
@@ -432,8 +434,9 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
     wire creq_enable   = creq_grant && (amo_creq_path || amo_wb_path);
 
     assign replay_ready   = replay_grant && ~fwd_head && ~replay_link_hold && ~(!WRITEBACK && replay_rw && mreq_queue_alm_full) && ~pipe_stall;
-    assign mem_rsp_ready  = fill_grant && ~fwd_pending && ~replay_link_hold && ~amo_wbq_full && ~refetch_inflight
+    wire   fill_ready     = fill_grant && ~fwd_pending && ~replay_link_hold && ~amo_wbq_full && ~refetch_inflight
                          && ~replay_block && ~(WRITEBACK && mreq_queue_alm_full) && ~pipe_stall;
+    assign mem_rsp_ready  = fill_ready && ~lazy_turn;
     assign flush_ready    = flush_grant && ~(WRITEBACK && mreq_queue_alm_full) && ~pipe_stall;
     // a core request may become a write-miss root, which pushes to lazyq.
     wire   creq_alm_full  = mreq_queue_alm_full || lazyq_alm_full || replay_block;
@@ -450,8 +453,8 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
     wire init_fire    = init_valid;
     wire replay_fire  = replay_valid && replay_ready;
     wire mem_rsp_fire = mem_rsp_valid && mem_rsp_ready;
-    wire lazy_fire    = lazy_sel && mem_rsp_ready;
-    wire fill_fire    = mem_rsp_fire || lazy_fire;
+    wire lazy_fire    = lazy_sel && fill_ready;
+    wire fill_fire    = (mem_rsp_valid || lazyq_valid) && fill_ready;
     wire park_fire    = replay_fire && park_sel;
     wire flush_fire   = flush_valid && flush_ready;
     // amo_wb_path already excludes the cycle a fresh AMO commits at S1, so the
@@ -1267,7 +1270,7 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
             .mem_rsp_fire           (mem_rsp_fire),
             .mem_rsp_id             (mem_rsp_id),
             .mem_rsp_data           (mem_rsp_data),
-            .is_fill_sel            (fill_enable),
+            .is_fill_sel            (fill_enable && ~lazy_sel),
             .core_req_valid         (core_req_valid),
             .core_req_is_amo        (core_req_amo.amo_valid),
             .core_req_rw            (core_req_rw),
@@ -1679,6 +1682,16 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
     // Sized like the memory request queue's reservation: a core request is
     // admitted only while every request already in the pipe still fits.
     if (LAZY_FETCH != 0) begin : g_lazyq
+        reg prefer_lazy_r;
+        always @(posedge clk) begin
+            if (reset) begin
+                prefer_lazy_r <= 1'b0;
+            end else if (fill_fire) begin
+                prefer_lazy_r <= ~lazy_sel;
+            end
+        end
+        assign prefer_lazy = prefer_lazy_r;
+
         // Room for twice the pipe, so a few queued entries leave the
         // reservation (and the refetch loopback, which needs it) open.
         localparam LAZYQ_SIZE = 1 << `CLOG2(2 * PIPELINE_STAGES);
@@ -1751,6 +1764,7 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
         `RUNTIME_ASSERT (~(do_fill_st0 && ~refetch_first_st0 && ~st0.req.is_passthru_fill && fill_resident_st0),
             ("%t: %s fill into a resident sector: addr=0x%0h", $time, INSTANCE_ID, `CS_BANK_TO_FULL_ADDR(st0.req.addr, BANK_ID)))
     end else begin : g_no_lazyq
+        assign prefer_lazy    = 1'b0;
         assign lazyq_id       = '0;
         assign lazyq_empty    = 1'b1;
         assign lazyq_alm_full = 1'b0;
@@ -1774,8 +1788,8 @@ module VX_cache_bank import VX_gpu_pkg::*; #(
 
 `ifdef DBG_TRACE_CACHE
     wire crsp_queue_fire = crsp_queue_valid && crsp_queue_ready;
-    wire input_stall = (replay_valid || mem_rsp_valid || core_req_valid || flush_valid)
-                   && ~(replay_fire || mem_rsp_fire || core_req_fire || flush_fire);
+    wire input_stall = (replay_valid || mem_rsp_valid || lazyq_valid || core_req_valid || flush_valid)
+                   && ~(replay_fire || fill_fire || core_req_fire || flush_fire);
 
     wire [`VX_CFG_XLEN-1:0] mem_rsp_full_addr = `CS_BANK_TO_FULL_ADDR(mem_rsp_addr, BANK_ID);
     wire [`VX_CFG_XLEN-1:0] replay_full_addr = `CS_BANK_TO_FULL_ADDR(replay_addr, BANK_ID);

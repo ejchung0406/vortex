@@ -11,6 +11,10 @@ tests:
   - id: hw
     via: script
     run: "make -C hw/unittest"
+  - id: cache-lazy-fair
+    via: script
+    run: "make -C tests/unittest/cache_lazy_fair run-simx run-rtl"
+    touches: [hw/rtl/cache, hw/unittest/cache, sim/simx/mem/cache.cpp, tests/unittest/cache_lazy_fair]
   - id: hw-mmu-park
     via: script
     run: "make -C hw/unittest/mmu_park run"
